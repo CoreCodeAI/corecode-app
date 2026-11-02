@@ -150,7 +150,10 @@ export function RiskTab(props: {
         ) : (
           <ul className='grid gap-3'>
             {clusters.map((cluster) => (
-              <li key={cluster.ip} className='rounded-md border p-3'>
+              <li
+                key={cluster.ip}
+                className='min-w-0 rounded-md border px-4 py-3'
+              >
                 <div className='mb-2 flex flex-wrap items-center gap-2 text-sm'>
                   <span className='font-mono'>{cluster.ip}</span>
                   <Badge variant='outline'>

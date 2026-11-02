@@ -307,6 +307,7 @@ export function PoolTab(props: { data: EnginePool | undefined }) {
           <ToggleGroup
             variant='outline'
             size='sm'
+            className='max-w-full overflow-x-auto'
             value={[group]}
             onValueChange={(value: string[]) => setGroup(value.at(-1) ?? 'all')}
           >
@@ -355,7 +356,7 @@ export function PoolTab(props: { data: EnginePool | undefined }) {
               key: 'status',
               label: t('Status'),
               render: (row) => (
-                <span className='grid gap-0.5'>
+                <span className='flex flex-col items-start gap-0.5'>
                   <Badge variant={statusVariant(row)}>
                     {statusLabel(row.status)}
                   </Badge>
