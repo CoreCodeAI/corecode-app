@@ -2,6 +2,7 @@ package model
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -170,4 +171,26 @@ func openTopUpBonusTestDB(t *testing.T, dialect string) *gorm.DB {
 		initCol()
 	})
 	return db
+}
+
+func TestTopUpBonusCampaign(t *testing.T) {
+	setting := operation_setting.GetPaymentSetting()
+	previous := setting.BonusCampaign
+	t.Cleanup(func() { setting.BonusCampaign = previous })
+
+	// The headline loads from the option row, and an empty row clears it, so
+	// writing "" at the end of a sale removes the wallet banner.
+	headline := "双 11 特惠：单笔 ¥10 起送 11%，最高送 18%"
+	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{
+		"payment_setting.bonus_campaign": headline,
+	}))
+	assert.Equal(t, headline, setting.BonusCampaign)
+	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{
+		"payment_setting.bonus_campaign": "",
+	}))
+	assert.Equal(t, "", setting.BonusCampaign)
+
+	assert.NoError(t, operation_setting.ValidateBonusCampaign(""))
+	assert.NoError(t, operation_setting.ValidateBonusCampaign(strings.Repeat("双", operation_setting.MaxBonusCampaignLength)))
+	assert.Error(t, operation_setting.ValidateBonusCampaign(strings.Repeat("双", operation_setting.MaxBonusCampaignLength+1)))
 }

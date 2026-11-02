@@ -119,6 +119,7 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 Your Company. 全著作権所有。",
     "+{{count}} more": "他 {{count}} 件",
     "+{{percent}}% bonus": "+{{percent}}%ボーナス",
+    "Up to {{percent}}% bonus, credited with the payment.": "最大{{percent}}%ボーナス、お支払いと同時に付与されます。",
     "× ratio": "× 倍率",
     "| Based on": "| に基づく",
     "≈{{tenths}} of official price": "公式の≈{{percent}}",

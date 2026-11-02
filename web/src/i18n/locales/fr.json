@@ -119,6 +119,7 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 Votre entreprise. Tous droits réservés.",
     "+{{count}} more": "+{{count}} de plus",
     "+{{percent}}% bonus": "+{{percent}} % de bonus",
+    "Up to {{percent}}% bonus, credited with the payment.": "Jusqu'à {{percent}} % de bonus, crédité avec le paiement.",
     "× ratio": "× ratio",
     "| Based on": "| Basé sur",
     "≈{{tenths}} of official price": "≈{{percent}} du prix officiel",

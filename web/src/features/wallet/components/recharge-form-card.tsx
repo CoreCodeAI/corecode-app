@@ -20,7 +20,7 @@ import { Gift, ExternalLink, Loader2, Receipt, WalletCards } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { IconBadge } from '@/components/ui/icon-badge'
@@ -164,6 +164,14 @@ export function RechargeFormCard({
   const nextBonusTier = bonusAvailable
     ? findNextBonusTier(bonusTiers, topupAmount)
     : null
+  // A limited-time sale: the operator's headline and the highest rate, so the
+  // banner's figure always matches the tiers the server applies.
+  const bonusCampaign = bonusAvailable
+    ? (topupInfo?.bonus_campaign?.trim() ?? '')
+    : ''
+  const topBonusTier = bonusCampaign
+    ? findBonusTier(bonusTiers, Number.POSITIVE_INFINITY)
+    : null
   const redemptionEnabled = topupInfo?.enable_redemption !== false
 
   // CoreCode fork: say what this card can do today instead of describing a
@@ -253,6 +261,22 @@ export function RechargeFormCard({
         <div className='space-y-4 sm:space-y-6'>
           {hasConfigurableTopup && (
             <>
+              {bonusCampaign && (
+                <Alert className='border-red-500/30 bg-red-500/5 text-red-700 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-300'>
+                  <Gift />
+                  <AlertTitle className='font-semibold'>
+                    {bonusCampaign}
+                  </AlertTitle>
+                  {topBonusTier && (
+                    <AlertDescription className='text-red-700/90 dark:text-red-300/90'>
+                      {t(
+                        'Up to {{percent}}% bonus, credited with the payment.',
+                        { percent: bonusRateToPercent(topBonusTier.rate) }
+                      )}
+                    </AlertDescription>
+                  )}
+                </Alert>
+              )}
               {presetAmounts.length > 0 && (
                 <div className='space-y-2.5 sm:space-y-3'>
                   <Label className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
@@ -294,7 +318,7 @@ export function RechargeFormCard({
                           )}
                           onClick={() => onSelectPreset(preset)}
                         >
-                          <div className='flex w-full items-center justify-between'>
+                          <div className='flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-1'>
                             <div className='text-base font-semibold sm:text-lg'>
                               {formatNumber(displayValue, locale)}
                             </div>
@@ -304,7 +328,12 @@ export function RechargeFormCard({
                                   <span>{getDiscountLabel(discount, t)}</span>
                                 )}
                                 {bonusTier && (
-                                  <span>
+                                  <span
+                                    className={cn(
+                                      bonusCampaign &&
+                                        'rounded bg-red-500/10 px-1.5 py-0.5 whitespace-nowrap text-red-600 dark:bg-red-400/15 dark:text-red-300'
+                                    )}
+                                  >
                                     {getBonusLabel(bonusTier.rate, t)}
                                   </span>
                                 )}

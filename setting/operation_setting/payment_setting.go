@@ -3,6 +3,7 @@ package operation_setting
 import (
 	"fmt"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/config"
@@ -15,6 +16,11 @@ type PaymentSetting struct {
 	// at least the key amount gets the value's fraction of its quota on top,
 	// for example {"1000": 0.1} credits 1100 for a top-up of 1000.
 	AmountBonus map[int]float64 `json:"amount_bonus"`
+	// BonusCampaign is the operator's headline for a limited-time bonus, for
+	// example a holiday sale. The wallet shows it above the amounts while it is
+	// set; clearing it ends the banner. It changes no price: the tiers are
+	// still amount_bonus.
+	BonusCampaign string `json:"bonus_campaign"`
 
 	ComplianceConfirmed    bool   `json:"compliance_confirmed"`
 	ComplianceTermsVersion string `json:"compliance_terms_version"`
@@ -70,6 +76,18 @@ func ValidateAmountBonus(value string) error {
 		if rate <= 0 || rate > 1 {
 			return fmt.Errorf("Top-up bonus for %s must be above 0 and at most 1", amount)
 		}
+	}
+	return nil
+}
+
+// MaxBonusCampaignLength caps the wallet banner at one or two lines.
+const MaxBonusCampaignLength = 120
+
+// ValidateBonusCampaign checks a payment_setting.bonus_campaign value before
+// it is saved. An empty value is allowed and removes the banner.
+func ValidateBonusCampaign(value string) error {
+	if utf8.RuneCountInString(value) > MaxBonusCampaignLength {
+		return fmt.Errorf("Top-up campaign text must be at most %d characters", MaxBonusCampaignLength)
 	}
 	return nil
 }
