@@ -71,7 +71,7 @@ func TestFetchEnginePool(t *testing.T) {
 	assert.Equal(t, 3, pool.EligibleAccounts, "the cooling account and the disabled group's account are not eligible")
 	assert.Equal(t, 5+8, pool.EffectiveSlots, "team-01's two accounts give ten slots, capped at its limit of eight")
 	require.Len(t, pool.Groups, 3)
-	assert.Equal(t, EngineGroup{ID: 7, Name: "team-01", Channel: "claude", Enabled: true, EffectiveLimit: 8, OverrideLimit: pool.Groups[1].OverrideLimit,
+	assert.Equal(t, EngineGroup{ID: 7, Name: "team-01", Channel: "claude", Provider: "claude", Enabled: true, EffectiveLimit: 8, OverrideLimit: pool.Groups[1].OverrideLimit,
 		Accounts: 3, Eligible: 2, Slots: 8, Counts: map[string]int{"total": 3, "available": 2, "cooldown": 1},
 		QuotaBudget: true, FiveHourBudget: 90, SevenDayBudget: 95}, pool.Groups[1])
 	assert.Equal(t, 8, *pool.Groups[1].OverrideLimit)

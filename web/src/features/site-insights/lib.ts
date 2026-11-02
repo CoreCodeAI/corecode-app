@@ -25,7 +25,7 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import type { InsightsView } from './api'
 import type { Tone } from './components/shared'
-import type { FinanceInsights, RiskInsights } from './types'
+import type { FinanceInsights, PoolProvider, RiskInsights } from './types'
 
 /** A tab of the page: one view, or the overview that reads several. */
 export type InsightsTab = 'overview' | InsightsView
@@ -130,7 +130,9 @@ export function accountPrice(plan: string, tier: string) {
  * exchange rate. The finance response carries the rate; the status's rate
  * serves until the server sends it.
  */
-export function useChargeFormat(data: FinanceInsights | undefined) {
+export function useChargeFormat(
+  data: Pick<FinanceInsights, 'usd_exchange_rate'> | undefined
+) {
   const fmt = useInsightsFormat()
   const statusRate = useSystemConfigStore(
     (state) => state.config.currency.usdExchangeRate
@@ -256,4 +258,20 @@ export function useSignupMethodLabel() {
       organic: t('Organic'),
       invited: t('Invited'),
     })[name] ?? name
+}
+
+export const PROVIDER_LABELS: Record<PoolProvider, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  grok: 'Grok',
+  gemini: 'Gemini',
+}
+
+// Engine channels whose vendor differs from their name, for a server that
+// does not yet send each group's provider.
+const CHANNEL_PROVIDERS: Record<string, string> = { antigravity: 'gemini' }
+
+/** The vendor a pool group's channel serves. */
+export function groupProvider(group: { channel: string; provider?: string }) {
+  return group.provider ?? CHANNEL_PROVIDERS[group.channel] ?? group.channel
 }

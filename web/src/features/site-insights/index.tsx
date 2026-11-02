@@ -28,7 +28,12 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
-import { getInsights, VIEW_MAX_DAYS, type InsightsView } from './api'
+import {
+  getInsights,
+  getPoolUsage,
+  VIEW_MAX_DAYS,
+  type InsightsView,
+} from './api'
 import { CapacityTab } from './components/capacity-tab'
 import { FinanceTab } from './components/finance-tab'
 import { ActivityTab, GrowthTab } from './components/growth-tab'
@@ -42,6 +47,7 @@ import {
   OVERVIEW_VIEWS,
   type InsightsTab,
 } from './lib'
+import type { PoolProvider, PoolUsage } from './types'
 
 const route = getRouteApi('/_authenticated/site-insights/')
 
@@ -110,6 +116,16 @@ export function SiteInsights() {
     // the same tab's data fits its component, so another tab starts empty.
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[1] === view ? previous : undefined,
+  })
+  // The pool tab's use on both sides moves slowly; the server shares a
+  // read for a minute.
+  const provider: PoolProvider = search.provider ?? 'claude'
+  const usage = useQuery({
+    queryKey: ['site-insights', 'pool-usage', provider],
+    queryFn: () => getPoolUsage(provider),
+    enabled: tab === 'pool',
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   })
   // The pool is live and has no earlier period.
   const previous = useQuery({
@@ -264,6 +280,18 @@ export function SiteInsights() {
               view={view}
               data={query.data}
               previous={previous.data}
+              pool={{
+                provider,
+                onProvider: (next) =>
+                  navigate({
+                    search: (prev) => ({ ...prev, provider: next }),
+                  }),
+                usage: usage.data,
+                usageError:
+                  usage.error instanceof Error
+                    ? usage.error.message
+                    : undefined,
+              }}
             />
           ) : (
             <OverviewTab
@@ -285,6 +313,12 @@ function InsightsView(props: {
   view: InsightsView
   data: unknown
   previous: unknown
+  pool: {
+    provider: PoolProvider
+    onProvider: (provider: PoolProvider) => void
+    usage: PoolUsage | undefined
+    usageError: string | undefined
+  }
 }) {
   // Each query key includes the view, so data always matches it. The
   // previous period's key does too, and is undefined until it loads.
@@ -305,6 +339,6 @@ function InsightsView(props: {
     case 'business':
       return <BusinessTab data={props.data as never} previous={previous} />
     case 'pool':
-      return <PoolTab data={props.data as never} />
+      return <PoolTab data={props.data as never} {...props.pool} />
   }
 }

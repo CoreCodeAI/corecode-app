@@ -25,15 +25,31 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
-import { ATTENTION, useInsightsFormat } from '../lib'
-import type {
-  EngineAccount,
-  EngineGroup,
-  EngineHorizon,
-  EnginePool,
-  EngineRunway,
+import {
+  ATTENTION,
+  groupProvider,
+  PROVIDER_LABELS,
+  useInsightsFormat,
+} from '../lib'
+import {
+  POOL_PROVIDERS,
+  type EngineAccount,
+  type EngineGroup,
+  type EngineHorizon,
+  type EnginePool,
+  type EngineRunway,
+  type PoolProvider,
+  type PoolUsage,
 } from '../types'
-import { MetricGrid, Meter, Panel, SimpleTable, type Tone } from './shared'
+import { CapacityVerdict, PoolUsagePanel } from './pool-usage'
+import {
+  MetricGrid,
+  Meter,
+  Panel,
+  SimpleTable,
+  type MetricItem,
+  type Tone,
+} from './shared'
 
 function statusVariant(account: EngineAccount) {
   if (account.eligible) return 'outline'
@@ -61,7 +77,18 @@ function useStatusLabel() {
  * own capacity page shows, read from its control API. Read-only; limits and
  * budgets are still set in the engine.
  */
-export function PoolTab(props: { data: EnginePool | undefined }) {
+/**
+ * The engine's pool for one provider at a time, Claude by default: its
+ * accounts and groups, its use on new-api and gpt-load, and for Claude,
+ * whose quota the engine measures, whether the pool keeps up.
+ */
+export function PoolTab(props: {
+  data: EnginePool | undefined
+  provider?: PoolProvider
+  onProvider?: (provider: PoolProvider) => void
+  usage?: PoolUsage
+  usageError?: string
+}) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const statusLabel = useStatusLabel()
@@ -88,7 +115,23 @@ export function PoolTab(props: { data: EnginePool | undefined }) {
     )
   }
 
-  const accounts = pool?.accounts ?? []
+  const provider = props.provider ?? 'claude'
+  const claude = provider === 'claude'
+  const providerGroups = (pool?.groups ?? []).filter(
+    (row) => groupProvider(row) === provider
+  )
+  const groupIds = new Set(providerGroups.map((row) => row.id))
+  const accounts = (pool?.accounts ?? []).filter((account) =>
+    groupIds.has(account.group_id)
+  )
+  const accountCounts = new Map<string, number>()
+  for (const row of pool?.groups ?? []) {
+    const key = groupProvider(row)
+    accountCounts.set(key, (accountCounts.get(key) ?? 0) + row.accounts)
+  }
+  const eligible = providerGroups.reduce((sum, row) => sum + row.eligible, 0)
+  const slots = providerGroups.reduce((sum, row) => sum + row.slots, 0)
+  const inFlight = providerGroups.reduce((sum, row) => sum + row.in_flight, 0)
   const attention = accounts.filter((account) => ATTENTION.has(account.status))
   const five = pool?.five_hour_estimate
   const week = pool?.week_estimate
@@ -109,93 +152,139 @@ export function PoolTab(props: { data: EnginePool | undefined }) {
       ? (pool?.five_hour_budget ?? 0)
       : (pool?.seven_day_budget ?? 0)
   }
-  const emptyGroups = (pool?.groups ?? []).filter(
+  const emptyGroups = providerGroups.filter(
     (row) => row.enabled && row.accounts > 0 && row.eligible === 0
   )
+  // A group picked under another provider is not one of these.
+  const pickedGroup = groupIds.has(Number(group)) ? group : 'all'
   const shown = accounts.filter(
     (account) =>
-      (group === 'all' || String(account.group_id) === group) &&
+      (pickedGroup === 'all' || String(account.group_id) === pickedGroup) &&
       (!attentionOnly || ATTENTION.has(account.status) || !account.eligible)
   )
 
+  const summary: MetricItem[] = [
+    {
+      label: t('Schedulable accounts'),
+      value: `${eligible} / ${accounts.length}`,
+      hint: t('{{count}} groups', { count: providerGroups.length }),
+      // Only Claude carries the site's volume; a smaller pool is expected
+      // to be one or two accounts.
+      tone: claude && eligible <= 2 ? 'danger' : 'default',
+    },
+    {
+      label: t('Effective concurrency'),
+      value: fmt.num(slots),
+      hint: t('{{count}} per account', {
+        count: pool?.credential_concurrency ?? 0,
+      }),
+    },
+    {
+      label: t('In flight'),
+      value: fmt.num(inFlight),
+      tone: slots > 0 && inFlight >= slots * 0.8 ? 'warning' : 'default',
+    },
+    {
+      label: t('Needs attention'),
+      value: fmt.num(attention.length),
+      tone: attention.length > 0 ? 'danger' : 'default',
+    },
+  ]
+  // The engine estimates quota for Claude subscription accounts only.
+  if (claude) {
+    summary.push(
+      {
+        label: t('5-hour left'),
+        value: five ? `≈ ${usd(five.remaining_usd)}` : '-',
+        help: t(
+          'Dollars schedulable accounts can still spend before their 5-hour budget line, estimated from their usage and calibrated capacity.'
+        ),
+        meter: five
+          ? {
+              value: share(five),
+              tone: remainingTone(share(five)),
+              label: t('5-hour left'),
+            }
+          : undefined,
+        hint: five
+          ? t('{{share}} of {{capacity}}', {
+              share: fmt.pct(share(five)),
+              capacity: usd(five.capacity_usd),
+            })
+          : pool?.estimate_error,
+      },
+      {
+        label: t('7-day left'),
+        value: week ? `≈ ${usd(week.remaining_usd)}` : '-',
+        help: t(
+          'Dollars schedulable accounts can still spend before their 7-day budget line, estimated from their usage and calibrated capacity.'
+        ),
+        meter: week
+          ? {
+              value: share(week),
+              tone: remainingTone(share(week)),
+              label: t('7-day left'),
+            }
+          : undefined,
+        hint: week
+          ? t('{{share}} of {{capacity}}', {
+              share: fmt.pct(share(week)),
+              capacity: usd(week.capacity_usd),
+            })
+          : undefined,
+      }
+    )
+  }
+
   return (
     <div className='grid gap-4'>
-      <MetricGrid
-        loading={!pool}
-        items={[
-          {
-            label: t('Schedulable accounts'),
-            value: `${pool?.eligible_accounts ?? 0} / ${accounts.length}`,
-            hint: t('{{count}} groups', { count: pool?.groups.length ?? 0 }),
-            tone: (pool?.eligible_accounts ?? 0) <= 2 ? 'danger' : 'default',
-          },
-          {
-            label: t('Effective concurrency'),
-            value: fmt.num(pool?.effective_slots ?? 0),
-            hint: t('{{count}} per account', {
-              count: pool?.credential_concurrency ?? 0,
-            }),
-          },
-          {
-            label: t('In flight'),
-            value: fmt.num(pool?.in_flight ?? 0),
-            tone:
-              pool &&
-              pool.effective_slots > 0 &&
-              pool.in_flight >= pool.effective_slots * 0.8
-                ? 'warning'
-                : 'default',
-          },
-          {
-            label: t('Needs attention'),
-            value: fmt.num(attention.length),
-            tone: attention.length > 0 ? 'danger' : 'default',
-          },
-          {
-            label: t('5-hour left'),
-            value: five ? `≈ ${usd(five.remaining_usd)}` : '-',
-            help: t(
-              'Dollars schedulable accounts can still spend before their 5-hour budget line, estimated from their usage and calibrated capacity.'
-            ),
-            meter: five
-              ? {
-                  value: share(five),
-                  tone: remainingTone(share(five)),
-                  label: t('5-hour left'),
-                }
-              : undefined,
-            hint: five
-              ? t('{{share}} of {{capacity}}', {
-                  share: fmt.pct(share(five)),
-                  capacity: usd(five.capacity_usd),
-                })
-              : pool?.estimate_error,
-          },
-          {
-            label: t('7-day left'),
-            value: week ? `≈ ${usd(week.remaining_usd)}` : '-',
-            help: t(
-              'Dollars schedulable accounts can still spend before their 7-day budget line, estimated from their usage and calibrated capacity.'
-            ),
-            meter: week
-              ? {
-                  value: share(week),
-                  tone: remainingTone(share(week)),
-                  label: t('7-day left'),
-                }
-              : undefined,
-            hint: week
-              ? t('{{share}} of {{capacity}}', {
-                  share: fmt.pct(share(week)),
-                  capacity: usd(week.capacity_usd),
-                })
-              : undefined,
-          },
-        ]}
+      <ToggleGroup
+        variant='outline'
+        size='sm'
+        className='max-w-full justify-start overflow-x-auto'
+        aria-label={t('Provider')}
+        value={[provider]}
+        onValueChange={(value: string[]) => {
+          const next = value.at(-1) as PoolProvider | undefined
+          if (next && next !== provider) props.onProvider?.(next)
+        }}
+      >
+        {POOL_PROVIDERS.map((key) => (
+          <ToggleGroupItem key={key} value={key}>
+            {PROVIDER_LABELS[key]}
+            <span className='text-muted-foreground tabular-nums'>
+              {accountCounts.get(key) ?? 0}
+            </span>
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+
+      <MetricGrid loading={!pool} items={summary} />
+
+      {claude && pool?.runway?.sustainable_usd_per_hour != null && (
+        <CapacityVerdict
+          runway={pool.runway}
+          five={pool.five_hour_estimate}
+          usage={props.usage}
+        />
+      )}
+
+      <PoolUsagePanel
+        provider={provider}
+        usage={props.usage?.provider === provider ? props.usage : undefined}
+        error={props.usageError}
       />
+      {!claude && (
+        <p className='text-muted-foreground text-xs'>
+          {t(
+            'The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here.',
+            { provider: PROVIDER_LABELS[provider] }
+          )}
+        </p>
+      )}
 
       {/* A server before the supply figures sends a runway without them. */}
-      {pool?.runway?.sustainable_usd_per_hour != null && (
+      {claude && pool?.runway?.sustainable_usd_per_hour != null && (
         <RunwayPanel runway={pool.runway} observedAt={pool.observed_at_ms} />
       )}
 
@@ -217,7 +306,7 @@ export function PoolTab(props: { data: EnginePool | undefined }) {
         )}
       >
         <SimpleTable<EngineGroup>
-          rows={pool?.groups}
+          rows={providerGroups}
           rowKey={(row) => row.id}
           empty={t('No groups')}
           columns={[
@@ -311,11 +400,11 @@ export function PoolTab(props: { data: EnginePool | undefined }) {
             variant='outline'
             size='sm'
             className='max-w-full overflow-x-auto'
-            value={[group]}
+            value={[pickedGroup]}
             onValueChange={(value: string[]) => setGroup(value.at(-1) ?? 'all')}
           >
             <ToggleGroupItem value='all'>{t('All groups')}</ToggleGroupItem>
-            {(pool?.groups ?? []).map((row) => (
+            {providerGroups.map((row) => (
               <ToggleGroupItem key={row.id} value={String(row.id)}>
                 {row.name}
               </ToggleGroupItem>

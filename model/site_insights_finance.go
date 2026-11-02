@@ -34,6 +34,17 @@ var vendorPrefixes = []struct{ prefix, vendor string }{
 	{"gemini-", VendorGemini},
 }
 
+// VendorPrefixes lists the model name prefixes sold under vendor.
+func VendorPrefixes(vendor string) []string {
+	var prefixes []string
+	for _, entry := range vendorPrefixes {
+		if entry.vendor == vendor {
+			prefixes = append(prefixes, entry.prefix)
+		}
+	}
+	return prefixes
+}
+
 // ModelVendor names the vendor a model is sold under, or VendorOther.
 func ModelVendor(model string) string {
 	for _, entry := range vendorPrefixes {

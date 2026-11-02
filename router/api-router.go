@@ -440,6 +440,7 @@ func SetApiRouter(router *gin.Engine) {
 			siteInsightsRoute.GET("/quality", controller.GetQualityInsights)
 			siteInsightsRoute.GET("/business", controller.GetBusinessInsights)
 			siteInsightsRoute.GET("/pool", controller.GetEnginePool)
+			siteInsightsRoute.GET("/pool-usage", controller.GetPoolUsage)
 		}
 
 		dataRoute := apiRouter.Group("/data")

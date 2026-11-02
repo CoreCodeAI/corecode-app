@@ -66,6 +66,8 @@ export type EngineGroup = {
   name: string
   /** The engine channel, such as claude or codex; Claude groups come first. */
   channel: string
+  /** The vendor new-api sells the channel under; absent before the server's release. */
+  provider?: string
   enabled: boolean
   in_flight: number
   /** 0 means no group limit. */
@@ -148,6 +150,8 @@ export type EngineRunway = {
   low?: EngineRunwayScenario | null
   high?: EngineRunwayScenario | null
   band_forecasts?: number
+  /** Accounts of one plan that would close the gap; absent before the server's release. */
+  addition?: EngineRunwayAddition | null
 }
 
 export type EngineRunwayScenario = {
@@ -157,6 +161,62 @@ export type EngineRunwayScenario = {
   week_hours: number | null
   first_short_hours: number | null
   curve: number[] | null
+}
+
+/** How many accounts of one plan the Claude pool needs added. */
+export type EngineRunwayAddition = {
+  plan: string
+  tier: string
+  /** One account's weekly capacity up to its budget line. */
+  week_usd: number
+  budget_percent: number
+  measured: number
+  /** Accounts for a weekly load of 100% now, and at the trend's demand in 7 days. */
+  for_load: number
+  for_trend: number
+  /** Accounts for no gap in the next 7 days; null when even 30 do not. */
+  for_week: number | null
+}
+
+/** The vendors the pool tab switches between, Claude first. */
+export const POOL_PROVIDERS = ['claude', 'codex', 'grok', 'gemini'] as const
+export type PoolProvider = (typeof POOL_PROVIDERS)[number]
+
+/**
+ * One provider's use on both sides. quota is new-api's charge in quota
+ * dollars, which customers pay ¥1 each for, so yuan; engine_usd is
+ * gpt-load's spend at official prices, the unit the pool's capacity is in.
+ */
+export type PoolUsage = {
+  provider: PoolProvider
+  observed_at: number
+  usd_exchange_rate: number
+  channels: string[]
+  engine_configured: boolean
+  engine_error?: string
+  windows: {
+    hours: number
+    quota: number
+    engine_usd: number
+    engine_requests: number
+    engine_unpriced: number
+  }[]
+  /** gpt-load dollars per new-api yuan over the last week; 0 without both. */
+  official_per_quota: number
+  /** The last 48 clock hours, the last one open. */
+  hourly: { hour: number; quota: number; engine_usd: number }[]
+  forecast: {
+    next_5h_usd: number
+    next_24h_usd: number
+    next_24h_trend_usd: number
+    next_24h_low_usd: number | null
+    next_24h_high_usd: number | null
+    next_5h_quota: number
+    next_24h_quota: number
+    profile_hours: number
+    growth_per_day: number
+    band_forecasts: number
+  }
 }
 
 export type CapacityInsights = {
