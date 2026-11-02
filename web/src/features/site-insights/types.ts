@@ -109,19 +109,30 @@ export type EnginePool = {
   estimate_error?: string
 }
 
-/** How long one channel's pool lasts at the last 24 hours' spend. */
+/** One channel's quota supply against the last 24 hours' demand. */
 export type EngineRunway = {
   channel: string
   burn_usd_per_hour: number
+  /** Used since each account's weekly reset, per hour: a check on burn. */
+  week_to_date_usd_per_hour: number
+  /** What the weekly resets bring back per hour. */
+  sustainable_usd_per_hour: number
+  /** The most fresh 5-hour windows serve in an hour. */
+  peak_usd_per_hour: number
   week_remaining_usd: number
   week_capacity_usd: number
-  /** A week of demand over a week of capacity; under 1 the pool keeps up. */
+  /** Demand over sustainable supply; under 1 the pool keeps up. */
   week_load: number
-  /** null when the pool still serves at horizon_hours, or nothing was spent. */
-  week_hours: number | null
+  /** Over horizon_hours: hours with no quota, and the share served. */
+  short_hours: number
+  served_share: number
   horizon_hours: number
-  five_hour_remaining_usd: number
-  five_hour_hours: number | null
+  /** The least quota left over the horizon, and when. */
+  lowest_usd: number
+  lowest_hours: number
+  /** When the first gap starts and how long it lasts; null without one. */
+  week_hours: number | null
+  first_short_hours: number | null
   counted: number
   unknown: number
 }

@@ -197,7 +197,8 @@ export function PoolTab(props: { data: EnginePool | undefined }) {
         ]}
       />
 
-      {pool?.runway && (
+      {/* A server before the supply figures sends a runway without them. */}
+      {pool?.runway?.sustainable_usd_per_hour != null && (
         <RunwayPanel runway={pool.runway} observedAt={pool.observed_at_ms} />
       )}
 
@@ -438,67 +439,95 @@ export function PoolTab(props: { data: EnginePool | undefined }) {
 }
 
 /**
- * How long the Claude accounts last at the last 24 hours' spend: the weekly
- * quota, with each account refilling at its own weekly reset, and the 5-hour
- * quota left now.
+ * The Claude accounts' quota supply against their recent demand: whether the
+ * weekly resets keep up, and over the next week whether the remainder covers
+ * the difference, where it is tightest, and how high a burst can go.
  */
 function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const { runway } = props
-  const spending = runway.burn_usd_per_hour > 0
-  const duration = (hours: number) =>
-    hours < 48
-      ? t('{{hours}} hours', { hours: hours.toFixed(1) })
-      : t('{{days}} days', { days: (hours / 24).toFixed(1) })
-  const dryAt = (hours: number) =>
+  const burn = runway.burn_usd_per_hour
+  const duration = (hours: number) => {
+    if (hours < 1) {
+      return t('{{minutes}} minutes', { minutes: Math.round(hours * 60) })
+    }
+    if (hours < 48) {
+      return t('{{hours}} hours', { hours: hours.toFixed(1) })
+    }
+    return t('{{days}} days', { days: (hours / 24).toFixed(1) })
+  }
+  const at = (hours: number) =>
     fmt.time(Math.floor((props.observedAt + hours * 3_600_000) / 1000))
-  const week = runway.week_hours
-  const five = runway.five_hour_hours
-  let weekValue = '-'
-  if (spending) {
-    weekValue =
-      week == null
-        ? `> ${duration(runway.horizon_hours)}`
-        : `≈ ${duration(week)}`
-  }
-  let description = t('No Claude spend logged in the last 24 hours.')
-  if (spending && week != null) {
-    description = t(
-      'At the last 24 hours’ spend, the weekly quota runs out around {{time}}.',
-      { time: dryAt(week) }
-    )
-  } else if (spending) {
-    description = t(
-      'At the last 24 hours’ spend, weekly resets keep up with demand for at least {{duration}}.',
-      { duration: duration(runway.horizon_hours) }
+  const gapStart = runway.week_hours
+  const gapLength = runway.first_short_hours
+  const lowestCovers = burn > 0 ? runway.lowest_usd / burn : null
+
+  if (burn <= 0) {
+    return (
+      <Panel title={t('Claude pool supply')}>
+        <p className='text-muted-foreground text-sm'>
+          {t('No Claude spend logged in the last 24 hours.')}
+        </p>
+      </Panel>
     )
   }
+
+  const supply =
+    runway.week_load >= 1
+      ? t(
+          'Demand of {{demand}}/h is above the {{supply}}/h the weekly resets bring back; closing the gap takes about {{capacity}} more weekly capacity.',
+          {
+            demand: fmt.usd(burn),
+            supply: fmt.usd(runway.sustainable_usd_per_hour),
+            capacity: fmt.usdWhole(
+              (burn - runway.sustainable_usd_per_hour) * 168
+            ),
+          }
+        )
+      : t(
+          'Demand of {{demand}}/h is below the {{supply}}/h the weekly resets bring back.',
+          {
+            demand: fmt.usd(burn),
+            supply: fmt.usd(runway.sustainable_usd_per_hour),
+          }
+        )
+  let week = t(
+    'Over the next 7 days the quota is tightest around {{time}}, with {{amount}} left.',
+    { time: at(runway.lowest_hours), amount: fmt.usdWhole(runway.lowest_usd) }
+  )
+  if (gapStart != null && gapLength != null) {
+    week = t(
+      'Over the next 7 days the quota first runs out around {{time}} for {{length}}; {{total}} without quota in all.',
+      {
+        time: at(gapStart),
+        length: duration(gapLength),
+        total: duration(runway.short_hours),
+      }
+    )
+  }
+
+  let lowestTone: Tone = 'default'
+  if (gapStart != null) {
+    lowestTone = 'danger'
+  } else if (lowestCovers != null && lowestCovers < 3) {
+    lowestTone = 'warning'
+  }
+
   return (
     <Panel
-      title={t('Claude pool runway')}
-      description={description}
+      title={t('Claude pool supply')}
+      description={[supply, week].join(' ')}
       help={t(
-        'Demand is every Claude account’s logged spend over the last 24 hours, per hour. The projection spreads it over the counted accounts in proportion to what each has left, and refills each account to its 7-day budget line at its weekly reset; what an account has left at its reset is lost. Accounts without a weekly estimate are not counted. Spend that was turned away is not in the demand, so a saturated pool lasts less than shown.'
+        'Demand is every Claude account’s spend over the last 24 hours, per hour. Supply is each counted account’s weekly capacity up to its budget line, refilled at its weekly reset; quota left at a reset is lost. Turned-away requests are not in the demand.'
       )}
     >
       <MetricGrid
         items={[
           {
-            label: t('7-day quota lasts'),
-            value: weekValue,
-            tone: runwayTone(spending ? week : null),
-            hint:
-              spending && week != null
-                ? t('Runs out {{time}}', { time: dryAt(week) })
-                : t('{{amount}} left', {
-                    amount: fmt.usdWhole(runway.week_remaining_usd),
-                  }),
-          },
-          {
             label: t('Weekly load'),
             help: t(
-              'A week of demand over a week of the counted accounts’ capacity up to their budget lines. Under 100% the pool refills faster than it is spent.'
+              'Demand over what weekly resets bring back. Above 100% the pool spends its remainder.'
             ),
             value: fmt.pct(runway.week_load),
             tone: loadShareTone(runway.week_load),
@@ -507,47 +536,84 @@ function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
               tone: loadShareTone(runway.week_load),
               label: t('Weekly load'),
             },
-            hint: t('{{demand}} of {{capacity}} a week', {
-              demand: fmt.usdWhole(runway.burn_usd_per_hour * 168),
-              capacity: fmt.usdWhole(runway.week_capacity_usd),
+            hint: t('{{demand}}/h of {{supply}}/h', {
+              demand: fmt.usd(burn),
+              supply: fmt.usd(runway.sustainable_usd_per_hour),
             }),
           },
           {
-            label: t('5-hour quota lasts'),
+            label: t('Without quota, 7 days'),
             help: t(
-              'The counted accounts’ 5-hour remainder at the 24-hour average spend. Daytime peaks spend faster, and each 5-hour window refills at its own reset.'
+              'Hours in the next 7 days with no weekly quota left on any counted account.'
             ),
-            value: five == null ? '-' : `≈ ${duration(five)}`,
-            tone: five != null && five < 1 ? 'warning' : 'default',
-            hint: t('{{amount}} left', {
-              amount: fmt.usdWhole(runway.five_hour_remaining_usd),
-            }),
+            value:
+              runway.short_hours > 0
+                ? ['≈', duration(runway.short_hours)].join(' ')
+                : t('None'),
+            tone: runway.short_hours > 0 ? 'danger' : 'default',
+            hint:
+              gapStart != null
+                ? t('From {{time}} · {{share}} of demand served', {
+                    time: at(gapStart),
+                    share: fmt.pct(runway.served_share),
+                  })
+                : t('{{amount}} left now', {
+                    amount: fmt.usdWhole(runway.week_remaining_usd),
+                  }),
+          },
+          {
+            label: t('Tightest point'),
+            help: t(
+              'The least weekly quota left in the next 7 days. A small figure means the pool nearly runs dry before a reset.'
+            ),
+            value: fmt.usdWhole(runway.lowest_usd),
+            tone: lowestTone,
+            hint:
+              lowestCovers != null && runway.lowest_usd > 0
+                ? t('{{time}} · {{length}} of demand', {
+                    time: at(runway.lowest_hours),
+                    length: duration(lowestCovers),
+                  })
+                : at(runway.lowest_hours),
+          },
+          {
+            label: t('Peak throughput'),
+            help: t(
+              '5-hour capacity up to the budget line, per hour: the most a burst can draw.'
+            ),
+            value: runway.peak_usd_per_hour
+              ? t('{{amount}}/h', {
+                  amount: fmt.usdWhole(runway.peak_usd_per_hour),
+                })
+              : '-',
+            hint: runway.peak_usd_per_hour
+              ? t('{{multiple}} the demand', {
+                  multiple: fmt.multiple(runway.peak_usd_per_hour / burn),
+                })
+              : undefined,
           },
           {
             label: t('Demand per hour'),
-            value: fmt.usd(runway.burn_usd_per_hour),
-            hint: runway.unknown
-              ? t(
-                  '{{counted}} accounts counted, {{unknown}} without an estimate',
-                  {
-                    counted: runway.counted,
-                    unknown: runway.unknown,
-                  }
-                )
-              : t('{{counted}} accounts counted', { counted: runway.counted }),
+            help: t(
+              'The last 24 hours’ spend per hour, used for the projection. Week to date is use since each account’s weekly reset; close figures mean the last day was typical.'
+            ),
+            value: fmt.usd(burn),
+            hint: t('Week to date {{amount}}/h · {{counted}} accounts', {
+              amount: fmt.usd(runway.week_to_date_usd_per_hour),
+              counted: runway.counted,
+            }),
           },
         ]}
       />
+      {runway.unknown > 0 && (
+        <p className='text-muted-foreground mt-2 text-xs'>
+          {t('{{count}} accounts without an estimate are not counted.', {
+            count: runway.unknown,
+          })}
+        </p>
+      )}
     </Panel>
   )
-}
-
-// A weekly quota that runs out within a day, or within three, needs accounts.
-function runwayTone(hours: number | null): Tone {
-  if (hours == null) return 'default'
-  if (hours < 24) return 'danger'
-  if (hours < 72) return 'warning'
-  return 'default'
 }
 
 function loadShareTone(load: number): Tone {

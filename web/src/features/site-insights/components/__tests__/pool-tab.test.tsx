@@ -145,61 +145,96 @@ describe('pool account quota meters', () => {
 function runway(overrides: Partial<EngineRunway>): EngineRunway {
   return {
     channel: 'claude',
-    burn_usd_per_hour: 10,
-    week_remaining_usd: 300,
-    week_capacity_usd: 2000,
-    week_load: 0.84,
-    week_hours: 30,
-    horizon_hours: 336,
-    five_hour_remaining_usd: 25,
-    five_hour_hours: 2.5,
-    counted: 4,
-    unknown: 1,
+    burn_usd_per_hour: 40,
+    week_to_date_usd_per_hour: 44,
+    sustainable_usd_per_hour: 32,
+    peak_usd_per_hour: 120,
+    week_remaining_usd: 2000,
+    week_capacity_usd: 5376,
+    week_load: 1.25,
+    short_hours: 0,
+    served_share: 1,
+    horizon_hours: 168,
+    lowest_usd: 50,
+    lowest_hours: 100,
+    week_hours: null,
+    first_short_hours: null,
+    counted: 8,
+    unknown: 0,
     ...overrides,
   }
 }
 
-describe('pool runway', () => {
-  it('reads out when the weekly quota runs dry and the load behind it', () => {
-    render(
-      <PoolTab
-        data={{ ...pool([group({})], [account({})]), runway: runway({}) }}
-      />
-    )
+function renderRunway(overrides: Partial<EngineRunway>) {
+  render(
+    <PoolTab
+      data={{
+        ...pool([group({})], [account({})]),
+        runway: runway(overrides),
+      }}
+    />
+  )
+}
 
-    expect(screen.getByText('≈ 30.0 hours')).toBeInTheDocument()
-    expect(screen.getByText('≈ 2.5 hours')).toBeInTheDocument()
-    expect(screen.getByText('84%')).toBeInTheDocument()
+describe('pool supply', () => {
+  it('sets demand against what the resets bring back', () => {
+    renderRunway({})
+
+    expect(screen.getByText('125%')).toBeInTheDocument()
     expect(screen.getByRole('meter', { name: 'Weekly load' })).toHaveAttribute(
       'aria-valuenow',
-      '84'
+      '100'
     )
+    // $8/h short for a week.
     expect(
-      screen.getByText('4 accounts counted, 1 without an estimate')
+      screen.getByText(/about \$1,344 more weekly capacity/)
+    ).toBeInTheDocument()
+    expect(screen.getByText('None')).toBeInTheDocument()
+    expect(screen.getByText('$120/h')).toBeInTheDocument()
+    expect(screen.getByText('3.00× the demand')).toBeInTheDocument()
+  })
+
+  it('reads a near miss as the tightest point, not as running out', () => {
+    renderRunway({})
+
+    expect(screen.getByText('$50')).toBeInTheDocument()
+    expect(screen.getByText(/· 1.3 hours of demand$/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/tightest around .* with \$50 left/)
     ).toBeInTheDocument()
   })
 
-  it('says the pool keeps up when it lasts past the horizon', () => {
-    render(
-      <PoolTab
-        data={{
-          ...pool([group({})], [account({})]),
-          runway: runway({ week_hours: null, week_load: 0.4 }),
-        }}
-      />
-    )
+  it('reports a gap with its start, length and total', () => {
+    renderRunway({
+      week_hours: 30,
+      first_short_hours: 0.25,
+      short_hours: 20,
+      served_share: 0.88,
+      lowest_usd: 0,
+      lowest_hours: 30,
+    })
 
-    expect(screen.getByText('> 14.0 days')).toBeInTheDocument()
+    expect(screen.getByText('≈ 20.0 hours')).toBeInTheDocument()
+    expect(screen.getByText(/· 88% of demand served$/)).toBeInTheDocument()
     expect(
       screen.getByText(
-        /weekly resets keep up with demand for at least 14.0 days/
+        /first runs out around .* for 15 minutes; 20.0 hours without quota in all/
       )
     ).toBeInTheDocument()
   })
 
-  it('stays hidden before the server sends it', () => {
-    render(<PoolTab data={pool([group({})], [account({})])} />)
-    expect(screen.queryByText('Claude pool runway')).toBeNull()
+  it('stays hidden for a server that sends the first runway', () => {
+    const first = { ...runway({}) } as Partial<EngineRunway>
+    delete first.sustainable_usd_per_hour
+    render(
+      <PoolTab
+        data={{
+          ...pool([group({})], [account({})]),
+          runway: first as EngineRunway,
+        }}
+      />
+    )
+    expect(screen.queryByText('Claude pool supply')).toBeNull()
   })
 })
 

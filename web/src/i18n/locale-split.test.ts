@@ -57,6 +57,14 @@ describe('the locale split for the boot and core pages', () => {
     expect(parts.get('I confirm enabling high-risk retry')).toBe('rest')
   })
 
+  test('reads keys after and inside template literals with substitutions', () => {
+    // The pool tab names this after several `${...}` templates; their closing
+    // backticks once opened matches that swallowed it, so it went to core.
+    expect(parts.get('Peak throughput')).toBe('rest')
+    // The error page names this inside one: `${t('...')} ...`.
+    expect(parts.get('Oops! Something went wrong')).toBe('boot')
+  })
+
   test('puts keys no console source names, which the server may send, in core', () => {
     const unnamed = 'A message only the server sends'
     const signIn = 'Sign-in code sent, please check your inbox'
