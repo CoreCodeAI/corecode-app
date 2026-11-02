@@ -7593,6 +7593,23 @@
     "Security verification code email": "发送安全验证码邮件",
     "Email verification is unavailable because outbound mail is not configured.": "站点未配置发信服务，暂时无法通过邮箱验证。",
     "The email verification code is incorrect or has expired.": "邮箱验证码错误或已失效。",
-    "The verification email could not be sent. Try again later.": "验证邮件发送失败，请稍后重试。"
+    "The verification email could not be sent. Try again later.": "验证邮件发送失败，请稍后重试。",
+    "{{hours}} hours": "{{hours}} 小时",
+    "{{days}} days": "{{days}} 天",
+    "No Claude spend logged in the last 24 hours.": "近 24 小时没有 Claude 消耗记录。",
+    "At the last 24 hours’ spend, the weekly quota runs out around {{time}}.": "按近 24 小时的消耗，7 天额度约在 {{time}} 耗尽。",
+    "At the last 24 hours’ spend, weekly resets keep up with demand for at least {{duration}}.": "按近 24 小时的消耗，每周重置补回的额度至少在 {{duration}} 内跟得上需求。",
+    "Claude pool runway": "Claude 号池可用时长",
+    "Demand is every Claude account’s logged spend over the last 24 hours, per hour. The projection spreads it over the counted accounts in proportion to what each has left, and refills each account to its 7-day budget line at its weekly reset; what an account has left at its reset is lost. Accounts without a weekly estimate are not counted. Spend that was turned away is not in the demand, so a saturated pool lasts less than shown.": "需求是所有 Claude 号近 24 小时记录的消耗，折算为每小时。推算时按各号剩余额度的比例分摊需求；每个号在自己的 7 天重置时恢复到预算线，重置前没用完的部分作废。没有 7 天估算的号不计入。被拒绝的请求不在需求里，所以号池打满时实际可用时长比显示的短。",
+    "7-day quota lasts": "7 天额度可用",
+    "Runs out {{time}}": "{{time}} 耗尽",
+    "Weekly load": "周负载",
+    "A week of demand over a week of the counted accounts’ capacity up to their budget lines. Under 100% the pool refills faster than it is spent.": "一周的需求 ÷ 计入的号到预算线为止的一周容量。低于 100% 表示补回比消耗快。",
+    "{{demand}} of {{capacity}} a week": "每周 {{demand}} / {{capacity}}",
+    "5-hour quota lasts": "5 小时额度可用",
+    "The counted accounts’ 5-hour remainder at the 24-hour average spend. Daytime peaks spend faster, and each 5-hour window refills at its own reset.": "计入的号当前 5 小时剩余额度 ÷ 24 小时平均消耗。白天高峰消耗更快；每个 5 小时窗口在各自重置时补回。",
+    "{{counted}} accounts counted, {{unknown}} without an estimate": "计入 {{counted}} 个号，{{unknown}} 个无估算",
+    "{{counted}} accounts counted": "计入 {{counted}} 个号",
+    "Demand per hour": "每小时需求"
   }
 }

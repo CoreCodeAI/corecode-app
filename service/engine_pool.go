@@ -112,7 +112,10 @@ type EnginePool struct {
 	FiveHour       *EngineHorizon  `json:"five_hour_estimate"`
 	Week           *EngineHorizon  `json:"week_estimate"`
 	Refills        []EngineRefill  `json:"refills"`
-	EstimateError  string          `json:"estimate_error,omitempty"`
+	// Runway is how long the Claude accounts last at their recent spend; nil
+	// without an estimate or without Claude accounts.
+	Runway        *EngineRunway `json:"runway"`
+	EstimateError string        `json:"estimate_error,omitempty"`
 }
 
 type engineEnvelope[T any] struct {
@@ -449,5 +452,6 @@ func readEnginePool(base, key string) EnginePool {
 			pool.Accounts[i].SevenDayCapacitySource = row.SevenDay.Source
 		}
 	}
+	pool.Runway = poolRunway(pool, "claude", pool.ObservedAt)
 	return pool
 }
