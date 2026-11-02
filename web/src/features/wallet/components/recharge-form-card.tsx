@@ -34,15 +34,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { toIntlLocale } from '@/i18n/languages'
-import { formatNumber } from '@/lib/format'
+import { formatCurrencyFromUSD } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 
 import {
   bonusRateToPercent,
   findBonusTier,
   findNextBonusTier,
-  formatCurrency,
+  formatPaymentMoney,
   getBonusLabel,
   getDiscountLabel,
   isBonusEligiblePayment,
@@ -119,8 +118,7 @@ export function RechargeFormCard({
   onWaffoMethodSelect,
   enableWaffoPancakeTopup,
 }: RechargeFormCardProps) {
-  const { t, i18n } = useTranslation()
-  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const { t } = useTranslation()
   const [localAmount, setLocalAmount] = useState(topupAmount.toString())
 
   useEffect(() => {
@@ -288,17 +286,13 @@ export function RechargeFormCard({
                         preset.discount ||
                         topupInfo?.discount?.[preset.value] ||
                         1.0
-                      const {
-                        displayValue,
-                        actualPrice,
-                        savedAmount,
-                        hasDiscount,
-                      } = calculatePresetPricing(
-                        preset.value,
-                        priceRatio,
-                        discount,
-                        usdExchangeRate
-                      )
+                      const { actualPrice, savedAmount, hasDiscount } =
+                        calculatePresetPricing(
+                          preset.value,
+                          priceRatio,
+                          discount,
+                          usdExchangeRate
+                        )
                       const bonusTier = bonusAvailable
                         ? findBonusTier(bonusTiers, preset.value)
                         : null
@@ -320,7 +314,7 @@ export function RechargeFormCard({
                         >
                           <div className='flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-1'>
                             <div className='text-base font-semibold sm:text-lg'>
-                              {formatNumber(displayValue, locale)}
+                              {formatCurrencyFromUSD(preset.value)}
                             </div>
                             {(hasDiscount || bonusTier) && (
                               <div className='flex flex-col items-end text-xs font-medium text-green-600'>
@@ -346,8 +340,8 @@ export function RechargeFormCard({
                                 t={t}
                                 i18nKey='Pay {{amount}} <savings>• Save {{saved}}</savings>'
                                 values={{
-                                  amount: formatCurrency(actualPrice),
-                                  saved: formatCurrency(savedAmount),
+                                  amount: formatPaymentMoney(actualPrice),
+                                  saved: formatPaymentMoney(savedAmount),
                                 }}
                                 components={{
                                   savings: <span className='text-green-600' />,
@@ -355,16 +349,15 @@ export function RechargeFormCard({
                               />
                             ) : (
                               t('Pay {{amount}}', {
-                                amount: formatCurrency(actualPrice),
+                                amount: formatPaymentMoney(actualPrice),
                               })
                             )}
                           </div>
                           {bonusTier && (
                             <div className='mt-0.5 w-full text-xs text-green-600'>
                               {t('Bonus {{amount}}', {
-                                amount: formatNumber(
-                                  displayValue * bonusTier.rate,
-                                  locale
+                                amount: formatCurrencyFromUSD(
+                                  preset.value * bonusTier.rate
                                 ),
                               })}
                             </div>
@@ -408,7 +401,7 @@ export function RechargeFormCard({
                       <Skeleton className='h-5 w-16' />
                     ) : (
                       <span className='text-sm font-semibold'>
-                        {formatCurrency(paymentAmount)}
+                        {formatPaymentMoney(paymentAmount)}
                       </span>
                     )}
                   </div>
@@ -416,9 +409,8 @@ export function RechargeFormCard({
                 {customBonusTier && (
                   <p className='text-xs font-medium text-green-600'>
                     {t('Bonus {{amount}}', {
-                      amount: formatNumber(
-                        topupAmount * usdExchangeRate * customBonusTier.rate,
-                        locale
+                      amount: formatCurrencyFromUSD(
+                        topupAmount * customBonusTier.rate
                       ),
                     })}{' '}
                     ({getBonusLabel(customBonusTier.rate, t)})
@@ -427,10 +419,8 @@ export function RechargeFormCard({
                 {nextBonusTier && (
                   <p className='text-muted-foreground text-xs'>
                     {t('Top up {{amount}} more to get {{rate}}% bonus', {
-                      amount: formatNumber(
-                        (nextBonusTier.threshold - topupAmount) *
-                          usdExchangeRate,
-                        locale
+                      amount: formatCurrencyFromUSD(
+                        nextBonusTier.threshold - topupAmount
                       ),
                       rate: bonusRateToPercent(nextBonusTier.rate),
                     })}
