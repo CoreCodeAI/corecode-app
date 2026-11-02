@@ -162,7 +162,7 @@ export function SiteInsights() {
                 })
               }
             >
-              <TabsList className='h-auto flex-wrap'>
+              <TabsList className='h-auto flex-wrap group-data-horizontal/tabs:h-auto'>
                 {INSIGHTS_TAB_GROUPS.map((group, index) => (
                   <Fragment key={group.key}>
                     {index > 0 && (
@@ -180,7 +180,7 @@ export function SiteInsights() {
                       <TabsTrigger
                         key={item}
                         value={item}
-                        className='flex-none px-2'
+                        className='h-7 flex-none px-2'
                         onPointerEnter={() => prefetch(item)}
                         onFocus={() => prefetch(item)}
                       >

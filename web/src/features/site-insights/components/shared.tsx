@@ -63,7 +63,10 @@ export function Panel(props: {
   children: ReactNode
 }) {
   return (
-    <Card data-card-hover='false' className={cn('gap-0 py-0', props.className)}>
+    <Card
+      data-card-hover='false'
+      className={cn('min-w-0 gap-0 py-0', props.className)}
+    >
       <div className='flex items-start justify-between gap-2 border-b px-4 py-3'>
         <div className='min-w-0'>
           <h3 className='flex items-center gap-1.5 text-sm font-semibold'>
@@ -588,6 +591,10 @@ const AXIS_LABELS = 7
 const LABELLED_BARS = 14
 // A series up to this long keeps a gap between its bars.
 const SPACED_BARS = 60
+// A phone-width chart's plot area, and the width a bar label's character
+// takes at its 10px size; labels that would not fit are left to the tooltip.
+const NARROW_PLOT_PX = 280
+const LABEL_CHAR_PX = 6
 
 /** The smallest round step (1, 2, 2.5 or 5 × 10^n) at least value. */
 function niceStep(value: number) {
@@ -640,6 +647,12 @@ export function BarSeries(props: {
   const short = count <= LABELLED_BARS
   // A grouped bar has no single total to print above it.
   const barLabels = short && !props.grouped
+  const labelChars = Math.max(
+    0,
+    ...props.points.map((point) => axisFormat(sum(point.values)).length)
+  )
+  const labelsCrowdNarrow =
+    count * (labelChars * LABEL_CHAR_PX + 4) > NARROW_PLOT_PX
   // The space between bars sits inside each bar's hover area, so every point
   // across the chart answers the pointer. A dense series, such as a week of
   // hours in a narrow panel, has no room for it and draws bars edge to edge.
@@ -658,7 +671,7 @@ export function BarSeries(props: {
       : DOT_COLORS[index % DOT_COLORS.length]
   return (
     <div className={cn('grid gap-2', props.className)}>
-      <div className='grid grid-cols-[auto_1fr] gap-x-2'>
+      <div className='grid grid-cols-[auto_minmax(0,1fr)] gap-x-2'>
         <div
           aria-hidden
           className={cn(
@@ -745,7 +758,7 @@ export function BarSeries(props: {
                             tabIndex={0}
                             aria-label={ariaLabel}
                             className={cn(
-                              'group/bar focus-visible:ring-ring/50 hover:bg-muted/40 flex flex-1 flex-col-reverse items-stretch justify-start rounded-sm outline-none focus-visible:ring-3',
+                              'group/bar focus-visible:ring-ring/50 hover:bg-muted/40 flex min-w-0 flex-1 flex-col-reverse items-stretch justify-start rounded-sm outline-none focus-visible:ring-3',
                               spaced && 'px-px sm:px-[3px]'
                             )}
                           />
@@ -780,7 +793,10 @@ export function BarSeries(props: {
                         {barLabels && total > 0 && (
                           <span
                             aria-hidden
-                            className='text-muted-foreground truncate pb-0.5 text-center text-[10px] leading-none tabular-nums'
+                            className={cn(
+                              'text-muted-foreground truncate pb-0.5 text-center text-[10px] leading-none tabular-nums',
+                              labelsCrowdNarrow && 'max-sm:hidden'
+                            )}
                           >
                             {axisFormat(total)}
                           </span>
@@ -897,14 +913,14 @@ export function Breakdown(props: {
           const name = props.label ? props.label(item.name) : item.name
           const share = total ? item.count / total : 0
           return (
-            <li key={item.name}>
+            <li key={item.name} className='min-w-0'>
               <Tooltip>
                 <TooltipTrigger
                   render={
                     <div
                       tabIndex={0}
                       aria-label={`${name}: ${fmt.num(item.count)}, ${fmt.pct(share)}`}
-                      className='group/row hover:bg-muted/50 focus-visible:ring-ring/50 grid gap-1 rounded-md px-1.5 py-1 outline-none focus-visible:ring-2'
+                      className='group/row hover:bg-muted/50 focus-visible:ring-ring/50 grid grid-cols-1 gap-1 rounded-md px-1.5 py-1 outline-none focus-visible:ring-2'
                     />
                   }
                 >
