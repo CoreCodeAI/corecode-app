@@ -135,6 +135,8 @@ export type EngineRunway = {
   first_short_hours: number | null
   counted: number
   unknown: number
+  /** Quota left at each whole hour from now through the horizon. */
+  curve?: number[] | null
 }
 
 export type CapacityInsights = {

@@ -50,6 +50,14 @@ quota left. On production data that read as unreliable:
     gap of a few minutes reads as a few minutes;
   - `lowest_usd` and `lowest_hours`, the tightest point. It moves smoothly where the
     first gap jumps.
+- **`curve`** is the projected weekly quota left at each whole hour of the horizon, 169
+  points. The panel draws it as an area under a dated axis, shades hours with nothing
+  left, and reads out the hour under the pointer. The figures say when the pool runs
+  short; the curve shows why: how each reset lifts it and how fast demand draws it down.
+  A reset on the hour reads as refilled, and a gap shorter than an hour between two
+  samples does not show on it.
+- **One gap reads once.** When the first gap is the only one, the description gives its
+  start and length without repeating the length as the total.
 - **`peak_usd_per_hour`** replaces the 5-hour runway. It is the counted accounts' 5-hour
   capacity up to the budget line, over five hours: the most a burst can draw.
 - **The panel**, "Claude pool supply", states demand against sustainable supply and the
@@ -89,7 +97,9 @@ quota left. On production data that read as unreliable:
   - no spend;
   - gaps measured to the next reset across a week;
   - a six-minute grazing gap read as six minutes;
-  - peak throughput and the week-to-date rate.
+  - peak throughput and the week-to-date rate;
+  - the hourly curve through gaps and resets.
+- `pool-tab.test.tsx` reads the curve hour by hour from the keyboard.
 - `TestFetchEnginePool` checks the field is joined.
 - Production data from 2026-11-02, read through a read-only proxy and run through
   `poolRunway`, gave these figures. The peak figure here uses 5-hour capacities backed
@@ -108,3 +118,8 @@ quota left. On production data that read as unreliable:
 
   The same snapshot projected from 30, 60 and 120 minutes later gave the same figures.
   Each card's help opened on hover, and the page did not overflow at 390 px.
+
+  The curve, on production data later the same day: $1,829 now, a gap of 5.8 hours from
+  11/6 10:09, and a rise at each weekly reset. A pointer swept across it at 40 positions
+  read out an hour at every one, at full width and at 390 px. It was also checked in the
+  dark theme.

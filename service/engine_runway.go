@@ -1,6 +1,9 @@
 package service
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 const (
 	// runwayHorizon is how far the projection looks ahead. It runs on the last
@@ -72,6 +75,9 @@ type EngineRunway struct {
 	// Unknown ones could serve but lack one of them and add no supply.
 	Counted int `json:"counted"`
 	Unknown int `json:"unknown"`
+	// Curve is the weekly quota left at each whole hour of the horizon,
+	// from now: HorizonHours+1 points, cents. Empty without demand.
+	Curve []float64 `json:"curve"`
 }
 
 type runwayAccount struct {
@@ -154,6 +160,20 @@ func poolRunway(pool EnginePool, channel string, nowMS int64) *EngineRunway {
 	endMS := nowMS + runwayHorizon.Milliseconds()
 	atMS, left, served := nowMS, runway.WeekRemainingUSD, 0.0
 	runway.LowestUSD = left
+	runway.Curve = make([]float64, 0, int(runwayHorizon.Hours())+1)
+	// sample records the hours from the next unsampled one up to untilMS
+	// (through it at the horizon's end), draining from left at atMS.
+	sample := func(untilMS int64, last bool) {
+		for {
+			hour := len(runway.Curve)
+			sampleMS := nowMS + int64(hour)*time.Hour.Milliseconds()
+			if sampleMS > untilMS || (sampleMS == untilMS && !last) {
+				return
+			}
+			usd := max(left-burn*float64(sampleMS-atMS)/hourMS, 0)
+			runway.Curve = append(runway.Curve, math.Round(usd*100)/100)
+		}
+	}
 	for {
 		next := -1
 		for i, account := range accounts {
@@ -167,6 +187,7 @@ func poolRunway(pool EnginePool, channel string, nowMS int64) *EngineRunway {
 		}
 		span := float64(untilMS-atMS) / hourMS
 		need := burn * span
+		sample(untilMS, untilMS == endMS)
 		switch {
 		case span <= 0:
 		case need >= left:

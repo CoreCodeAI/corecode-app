@@ -107,6 +107,7 @@ func TestPoolRunwayWithoutSpend(t *testing.T) {
 	assert.Nil(t, runway.FiveHourHours)
 	assert.Zero(t, runway.WeekLoad)
 	assert.Equal(t, 1.0, runway.ServedShare)
+	assert.Empty(t, runway.Curve)
 }
 
 func TestPoolRunwayMeasuresEachGapUntilTheNextReset(t *testing.T) {
@@ -125,6 +126,11 @@ func TestPoolRunwayMeasuresEachGapUntilTheNextReset(t *testing.T) {
 	assert.InDelta(t, 15, *runway.FirstShortHours, 1e-9)
 	assert.InDelta(t, 15+60+48, runway.ShortHours, 1e-9)
 	assert.InDelta(t, (50+200+200)/(10*168.0), runway.ServedShare, 1e-9)
+
+	require.Len(t, runway.Curve, 169, "every whole hour from now to the horizon")
+	for hour, want := range map[int]float64{0: 50, 3: 20, 5: 0, 19: 0, 20: 200, 30: 100, 40: 0, 99: 0, 100: 200, 110: 100, 120: 0, 168: 0} {
+		assert.InDelta(t, want, runway.Curve[hour], 1e-9, "hour %d; a reset on the hour shows refilled", hour)
+	}
 }
 
 func TestPoolRunwayReportsAGrazingGapAsShort(t *testing.T) {
