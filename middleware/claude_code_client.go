@@ -126,8 +126,8 @@ func enforceClaudeCodeOnlyGroup(c *gin.Context, userGroup string) bool {
 // failed check aborts the request when reject is set and only returns false
 // when it is not.
 func admitClaudeCode(c *gin.Context, group string, reject bool) bool {
-	if isClaudeDesktopProbe(c) {
-		logger.LogInfo(c.Request.Context(), "claude code only group "+group+": admitted the Claude Desktop probe")
+	if check := clientCheck(c); check != "" {
+		logger.LogInfo(c.Request.Context(), "claude code only group "+group+": admitted "+check)
 		return true
 	}
 	version, failedCheck, bodyErr := detectClaudeCodeClient(c)
@@ -215,41 +215,52 @@ func detectClaudeCodeClient(c *gin.Context) (version string, failedCheck string,
 	return version, "", nil
 }
 
-// claudeDesktopProbeFields are the only top-level fields the probe may carry.
-var claudeDesktopProbeFields = map[string]bool{"model": true, "max_tokens": true, "messages": true, "stream": true}
+// clientCheckFields are the only top-level fields a client check may carry.
+var clientCheckFields = map[string]bool{"model": true, "max_tokens": true, "messages": true, "stream": true}
 
-// isClaudeDesktopProbe reports the fixed request Claude Desktop sends to check
-// a gateway: {"max_tokens":16,"messages":[{"role":"user","content":"."}],
-// "model":...}. It has no claude-cli User-Agent and no Claude Code prompt. With
-// no system prompt, no tools and "." as the only input, its at most 16 output
-// tokens are worth nothing to anyone else, so it passes as the max_tokens=1
-// probe does. Any other field, message or content fails the match, and the
-// request is then judged as usual.
-func isClaudeDesktopProbe(c *gin.Context) bool {
+// clientCheckPrompts maps the only input a client check may send to the check
+// it is. Both come through Magpie: "." is Claude Desktop's connection check,
+// which Magpie's gateway relays, and "hi" is the Messages request of Magpie's
+// "Detect APIs".
+var clientCheckPrompts = map[string]string{
+	".":  "the Claude Desktop connection check",
+	"hi": "Magpie's Messages API check",
+}
+
+// clientCheck names the fixed request a client sends to check a gateway, such
+// as {"max_tokens":16,"messages":[{"role":"user","content":"."}],"model":...},
+// or returns "". Such a request has no claude-cli User-Agent and no Claude
+// Code prompt. With no system prompt, no tools and one short word as the only
+// input, its at most 16 output tokens are worth nothing to anyone else, so it
+// passes as the max_tokens=1 probe does. Any other field, message or content
+// fails the match, and the request is then judged as usual. Only Messages
+// requests match: a Claude-Code-only group serves no other API, so checks of
+// the others are refused and the client learns which API works.
+func clientCheck(c *gin.Context) string {
 	if !strings.HasSuffix(c.Request.URL.Path, "/messages") {
-		return false
+		return ""
 	}
 	var fields map[string]json.RawMessage
 	if common.UnmarshalBodyReusable(c, &fields) != nil {
-		return false
+		return ""
 	}
 	for name := range fields {
-		if !claudeDesktopProbeFields[name] {
-			return false
+		if !clientCheckFields[name] {
+			return ""
 		}
 	}
 	var maxTokens int
 	if common.Unmarshal(fields["max_tokens"], &maxTokens) != nil || maxTokens < 1 || maxTokens > 16 {
-		return false
+		return ""
 	}
 	var messages []struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
 	}
-	if common.Unmarshal(fields["messages"], &messages) != nil || len(messages) != 1 {
-		return false
+	if common.Unmarshal(fields["messages"], &messages) != nil || len(messages) != 1 || messages[0].Role != "user" {
+		return ""
 	}
-	return messages[0].Role == "user" && messages[0].Content == "."
+	return clientCheckPrompts[messages[0].Content]
 }
 
 func hasClaudeCodeSystemPrompt(raw json.RawMessage) bool {
