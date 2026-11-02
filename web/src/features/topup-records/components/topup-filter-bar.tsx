@@ -82,6 +82,100 @@ export function TopupFilterBar<TData>(props: TopupFilterBarProps<TData>) {
     })),
   ]
 
+  // On a phone the range stays in view and the rest open in a drawer.
+  const dateFilter = (
+    <LogsFilterField wide>
+      <CompactDateTimeRangePicker
+        start={new Date(draft.start_time * 1000)}
+        end={new Date(draft.end_time * 1000)}
+        onChange={(range) =>
+          set({
+            start_time: range.start
+              ? Math.floor(range.start.getTime() / 1000)
+              : props.defaultRange.start_time,
+            end_time: range.end
+              ? Math.floor(range.end.getTime() / 1000)
+              : props.defaultRange.end_time,
+          })
+        }
+      />
+    </LogsFilterField>
+  )
+  const otherFilters = (
+    <>
+      <LogsFilterField>
+        <LogsFilterInput
+          value={draft.user ?? ''}
+          onChange={(event) => set({ user: event.target.value })}
+          onKeyDown={(event) => event.key === 'Enter' && props.onApply(draft)}
+          placeholder={t('User ID or username')}
+          aria-label={t('User ID or username')}
+        />
+      </LogsFilterField>
+      <LogsFilterField>
+        <LogsFilterInput
+          value={draft.trade_no ?? ''}
+          onChange={(event) => set({ trade_no: event.target.value })}
+          onKeyDown={(event) => event.key === 'Enter' && props.onApply(draft)}
+          placeholder={t('Order number')}
+          aria-label={t('Order number')}
+        />
+      </LogsFilterField>
+      <LogsFilterField>
+        <Select
+          items={statusItems}
+          value={draft.status || ALL}
+          onValueChange={(value) =>
+            set({ status: value === ALL || value === null ? '' : value })
+          }
+        >
+          <SelectTrigger className='h-8' aria-label={t('Status')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectGroup>
+              {statusItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </LogsFilterField>
+      <LogsFilterField>
+        <Select
+          items={methodItems}
+          value={draft.payment_method || ALL}
+          onValueChange={(value) =>
+            set({
+              payment_method: value === ALL || value === null ? '' : value,
+            })
+          }
+        >
+          <SelectTrigger className='h-8' aria-label={t('Payment Method')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectGroup>
+              {methodItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </LogsFilterField>
+    </>
+  )
+  const otherCount = [
+    draft.user,
+    draft.trade_no,
+    draft.status,
+    draft.payment_method,
+  ].filter(Boolean).length
+
   return (
     <LogsFilterToolbar
       table={props.table}
@@ -95,92 +189,13 @@ export function TopupFilterBar<TData>(props: TopupFilterBarProps<TData>) {
       }}
       primaryFilters={
         <>
-          <LogsFilterField wide>
-            <CompactDateTimeRangePicker
-              start={new Date(draft.start_time * 1000)}
-              end={new Date(draft.end_time * 1000)}
-              onChange={(range) =>
-                set({
-                  start_time: range.start
-                    ? Math.floor(range.start.getTime() / 1000)
-                    : props.defaultRange.start_time,
-                  end_time: range.end
-                    ? Math.floor(range.end.getTime() / 1000)
-                    : props.defaultRange.end_time,
-                })
-              }
-            />
-          </LogsFilterField>
-          <LogsFilterField>
-            <LogsFilterInput
-              value={draft.user ?? ''}
-              onChange={(event) => set({ user: event.target.value })}
-              onKeyDown={(event) =>
-                event.key === 'Enter' && props.onApply(draft)
-              }
-              placeholder={t('User ID or username')}
-              aria-label={t('User ID or username')}
-            />
-          </LogsFilterField>
-          <LogsFilterField>
-            <LogsFilterInput
-              value={draft.trade_no ?? ''}
-              onChange={(event) => set({ trade_no: event.target.value })}
-              onKeyDown={(event) =>
-                event.key === 'Enter' && props.onApply(draft)
-              }
-              placeholder={t('Order number')}
-              aria-label={t('Order number')}
-            />
-          </LogsFilterField>
-          <LogsFilterField>
-            <Select
-              items={statusItems}
-              value={draft.status || ALL}
-              onValueChange={(value) =>
-                set({ status: value === ALL || value === null ? '' : value })
-              }
-            >
-              <SelectTrigger className='h-8' aria-label={t('Status')}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent alignItemWithTrigger={false}>
-                <SelectGroup>
-                  {statusItems.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </LogsFilterField>
-          <LogsFilterField>
-            <Select
-              items={methodItems}
-              value={draft.payment_method || ALL}
-              onValueChange={(value) =>
-                set({
-                  payment_method: value === ALL || value === null ? '' : value,
-                })
-              }
-            >
-              <SelectTrigger className='h-8' aria-label={t('Payment Method')}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent alignItemWithTrigger={false}>
-                <SelectGroup>
-                  {methodItems.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </LogsFilterField>
+          {dateFilter}
+          {otherFilters}
         </>
       }
+      mobilePinnedFilters={dateFilter}
+      mobileFilters={otherFilters}
+      mobileFilterCount={otherCount}
     />
   )
 }

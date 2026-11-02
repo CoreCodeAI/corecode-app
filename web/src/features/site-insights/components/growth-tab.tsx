@@ -18,12 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { TapTooltip, TapTooltipTrigger } from '@/components/tap-tooltip'
+import { TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 import { useInsightsFormat, useSignupMethodLabel } from '../lib'
@@ -481,8 +477,8 @@ function RetentionGrid(props: { data: ActivityInsights | undefined }) {
                   return (
                     <td key={day} className='p-0.5'>
                       {value == null ? null : (
-                        <Tooltip>
-                          <TooltipTrigger
+                        <TapTooltip>
+                          <TapTooltipTrigger
                             render={
                               <span
                                 tabIndex={0}
@@ -497,7 +493,7 @@ function RetentionGrid(props: { data: ActivityInsights | undefined }) {
                             }
                           >
                             {Math.round(value * 100)}
-                          </TooltipTrigger>
+                          </TapTooltipTrigger>
                           <TooltipContent>
                             {t(
                               '{{share}} of the {{size}} users who signed up {{day}} sent requests on D{{n}}',
@@ -509,7 +505,7 @@ function RetentionGrid(props: { data: ActivityInsights | undefined }) {
                               }
                             )}
                           </TooltipContent>
-                        </Tooltip>
+                        </TapTooltip>
                       )}
                     </td>
                   )
