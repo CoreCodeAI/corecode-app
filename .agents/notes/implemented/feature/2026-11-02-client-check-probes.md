@@ -25,7 +25,9 @@ names them `connection_check` ("Claude Desktop's") and `api_detect`
 
 - `admitClaudeCode` asks `clientCheck` first. A match is admitted before the
   User-Agent, prompt, header, `metadata.user_id` and version checks, and logs
-  `claude code only group <group>: admitted <check>`. The model name is not
+  `claude code only group <group>: admitted the "<prompt>" check,
+  user-agent="<ua>"`. The line names the prompt, not a client: after release,
+  `"hi"` also came from a client that was not Magpie. The model name is not
   checked.
 - `clientCheck` matches only a `/messages` request whose top-level fields are a
   subset of `model`, `max_tokens`, `messages` and `stream`, with `max_tokens`
@@ -35,6 +37,15 @@ names them `connection_check` ("Claude Desktop's") and `api_detect`
 - Chat Completions, Responses and Gemini checks stay refused. The group serves
   only Claude Code over Messages; admitting the others would tell Magpie they
   work, and its real requests on them would then be refused.
+
+- A refused request's warning line carries its User-Agent (clipped to 120
+  bytes) and the body's shape from `requestShape`: top-level field names (each
+  clipped to 40 bytes, at most 20), `max_tokens`, the message count, and the
+  last message's content kind and length (`string(<characters>)` or
+  `blocks(<n>)`), never any text. Two refusals on 2026-11-02 09:36–09:37 UTC
+  could not be told apart from real work because neither was logged. A request
+  on an auto token that goes on to another group (`rejected=false`) logs only
+  the failed check, so ordinary traffic is not parsed twice.
 
 ## Alternatives considered
 
@@ -49,11 +60,18 @@ names them `connection_check` ("Claude Desktop's") and `api_detect`
   input is one word and their output at most 16 tokens, billed as usual, with no
   system prompt or tools to carry a task.
 - If a client changes its check, the gate rejects it again and the log shows
-  the failed check.
+  the failed check, the User-Agent and the body's shape.
+- The relay log now holds client User-Agents and field names of refused
+  requests; prompt text stays out of it.
 
 ## Verification
 
 - `go test ./middleware/ -count=1`, `go vet ./middleware/`: pass.
+- `TestRequestShape` covers Magpie's check, a conversation ending in blocks
+  (with "secret" text absent from every shape), multibyte content counted in
+  characters, a non-numeric `max_tokens`, a Responses body, a long field name,
+  malformed JSON, a form body and an empty object. `TestClipKeepsValidUTF8`
+  covers clipping inside a multibyte character.
 - Cases admit the `"."` check on a fixed and an auto token and Magpie's `"hi"`
   Messages check. They refuse a check with a system prompt, tools, `max_tokens`
   17, other or longer content, content blocks, a second turn, an assistant

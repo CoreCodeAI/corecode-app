@@ -2,10 +2,13 @@ package middleware
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -126,8 +129,9 @@ func enforceClaudeCodeOnlyGroup(c *gin.Context, userGroup string) bool {
 // failed check aborts the request when reject is set and only returns false
 // when it is not.
 func admitClaudeCode(c *gin.Context, group string, reject bool) bool {
-	if check := clientCheck(c); check != "" {
-		logger.LogInfo(c.Request.Context(), "claude code only group "+group+": admitted "+check)
+	if prompt, ok := clientCheck(c); ok {
+		logger.LogInfo(c.Request.Context(), fmt.Sprintf("claude code only group %s: admitted the %q check, user-agent=%q",
+			group, prompt, clip(c.GetHeader("User-Agent"), 120)))
 		return true
 	}
 	version, failedCheck, bodyErr := detectClaudeCodeClient(c)
@@ -141,11 +145,16 @@ func admitClaudeCode(c *gin.Context, group string, reject bool) bool {
 		return false
 	}
 	if failedCheck != "" {
-		logger.LogWarn(c.Request.Context(), "claude code only group %s: %s check failed, rejected=%t", group, failedCheck, reject)
-		if reject {
-			abortWithOpenAiMessage(c, http.StatusForbidden,
-				i18n.T(c, i18n.MsgAuthClaudeCodeOnly, map[string]any{"Group": group}), types.ErrorCodeAccessDenied)
+		if !reject {
+			// An auto token's request goes on to another group: ordinary
+			// traffic, not worth a second parse of its body.
+			logger.LogWarn(c.Request.Context(), "claude code only group %s: %s check failed, rejected=false", group, failedCheck)
+			return false
 		}
+		logger.LogWarn(c.Request.Context(), "claude code only group %s: %s check failed, rejected=true, user-agent=%q, %s",
+			group, failedCheck, clip(c.GetHeader("User-Agent"), 120), requestShape(c))
+		abortWithOpenAiMessage(c, http.StatusForbidden,
+			i18n.T(c, i18n.MsgAuthClaudeCodeOnly, map[string]any{"Group": group}), types.ErrorCodeAccessDenied)
 		return false
 	}
 
@@ -218,49 +227,103 @@ func detectClaudeCodeClient(c *gin.Context) (version string, failedCheck string,
 // clientCheckFields are the only top-level fields a client check may carry.
 var clientCheckFields = map[string]bool{"model": true, "max_tokens": true, "messages": true, "stream": true}
 
-// clientCheckPrompts maps the only input a client check may send to the check
-// it is. Both come through Magpie: "." is Claude Desktop's connection check,
-// which Magpie's gateway relays, and "hi" is the Messages request of Magpie's
-// "Detect APIs".
-var clientCheckPrompts = map[string]string{
-	".":  "the Claude Desktop connection check",
-	"hi": "Magpie's Messages API check",
-}
+// clientCheckPrompts are the only inputs a client check may send. "." is
+// Claude Desktop's connection check, which Magpie's gateway relays; "hi" is the
+// Messages request of Magpie's "Detect APIs", and other clients send it too.
+// The admitted log line names the prompt and the User-Agent, not a client.
+var clientCheckPrompts = map[string]bool{".": true, "hi": true}
 
-// clientCheck names the fixed request a client sends to check a gateway, such
-// as {"max_tokens":16,"messages":[{"role":"user","content":"."}],"model":...},
-// or returns "". Such a request has no claude-cli User-Agent and no Claude
+// clientCheck returns the prompt of the fixed request a client sends to check
+// a gateway, such as
+// {"max_tokens":16,"messages":[{"role":"user","content":"."}],"model":...},
+// and whether the request is one. Such a request has no claude-cli User-Agent and no Claude
 // Code prompt. With no system prompt, no tools and one short word as the only
 // input, its at most 16 output tokens are worth nothing to anyone else, so it
 // passes as the max_tokens=1 probe does. Any other field, message or content
 // fails the match, and the request is then judged as usual. Only Messages
 // requests match: a Claude-Code-only group serves no other API, so checks of
 // the others are refused and the client learns which API works.
-func clientCheck(c *gin.Context) string {
+func clientCheck(c *gin.Context) (string, bool) {
 	if !strings.HasSuffix(c.Request.URL.Path, "/messages") {
-		return ""
+		return "", false
 	}
 	var fields map[string]json.RawMessage
 	if common.UnmarshalBodyReusable(c, &fields) != nil {
-		return ""
+		return "", false
 	}
 	for name := range fields {
 		if !clientCheckFields[name] {
-			return ""
+			return "", false
 		}
 	}
 	var maxTokens int
 	if common.Unmarshal(fields["max_tokens"], &maxTokens) != nil || maxTokens < 1 || maxTokens > 16 {
-		return ""
+		return "", false
 	}
 	var messages []struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
 	}
 	if common.Unmarshal(fields["messages"], &messages) != nil || len(messages) != 1 || messages[0].Role != "user" {
-		return ""
+		return "", false
 	}
-	return clientCheckPrompts[messages[0].Content]
+	prompt := messages[0].Content
+	return prompt, clientCheckPrompts[prompt]
+}
+
+// requestShape describes a refused request's body without any of its text:
+// the top-level field names, max_tokens, the number of messages, and the kind
+// and length of the last message's content. Logged with each refusal, it tells
+// a client's fixed check apart from real work.
+func requestShape(c *gin.Context) string {
+	var fields map[string]json.RawMessage
+	if common.UnmarshalBodyReusable(c, &fields) != nil || len(fields) == 0 {
+		return "body=unparsed"
+	}
+	names := make([]string, 0, len(fields))
+	for name := range fields {
+		names = append(names, clip(name, 40))
+	}
+	slices.Sort(names)
+	if len(names) > 20 {
+		names = append(names[:20], "…")
+	}
+	shape := fmt.Sprintf("fields=%q", names)
+	if raw, ok := fields["max_tokens"]; ok {
+		var maxTokens int64
+		if common.Unmarshal(raw, &maxTokens) == nil {
+			shape += " max_tokens=" + strconv.FormatInt(maxTokens, 10)
+		} else {
+			shape += " max_tokens=invalid"
+		}
+	}
+	var messages []struct {
+		Content json.RawMessage `json:"content"`
+	}
+	if common.Unmarshal(fields["messages"], &messages) != nil || len(messages) == 0 {
+		return shape
+	}
+	shape += " messages=" + strconv.Itoa(len(messages))
+	content := messages[len(messages)-1].Content
+	var text string
+	var blocks []json.RawMessage
+	switch {
+	case common.Unmarshal(content, &text) == nil:
+		shape += fmt.Sprintf(" last_content=string(%d)", utf8.RuneCountInString(text))
+	case common.Unmarshal(content, &blocks) == nil:
+		shape += fmt.Sprintf(" last_content=blocks(%d)", len(blocks))
+	default:
+		shape += " last_content=other"
+	}
+	return shape
+}
+
+// clip cuts a client-supplied string to at most n bytes for a log line.
+func clip(value string, n int) string {
+	if len(value) <= n {
+		return value
+	}
+	return strings.ToValidUTF8(value[:n], "") + "…"
 }
 
 func hasClaudeCodeSystemPrompt(raw json.RawMessage) bool {

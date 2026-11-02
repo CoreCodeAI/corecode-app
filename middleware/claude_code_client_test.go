@@ -322,3 +322,45 @@ func TestClaudeDesktopProbeIgnoresVersionBounds(t *testing.T) {
 	_, allowed = runClaudeCodeGate(t, "cc", nil, "/v1/messages", claudeCodeCLIHeaders, claudeCodeCLIBody)
 	assert.False(t, allowed)
 }
+
+// A refusal logs the body's shape, never its text.
+func TestRequestShape(t *testing.T) {
+	shape := func(contentType, body string) string {
+		gin.SetMode(gin.TestMode)
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(body))
+		c.Request.Header.Set("Content-Type", contentType)
+		return requestShape(c)
+	}
+	const json = "application/json"
+
+	tests := []struct {
+		name, contentType, body, want string
+	}{
+		{"Magpie's Messages check", json, `{"model":"claude-opus-5-5","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`,
+			`fields=["max_tokens" "messages" "model"] max_tokens=16 messages=1 last_content=string(2)`},
+		{"a conversation ending in blocks", json, `{"model":"m","system":"secret system","messages":[{"role":"user","content":"secret one"},{"role":"assistant","content":"ok"},{"role":"user","content":[{"type":"text","text":"secret two"},{"type":"image"}]}]}`,
+			`fields=["messages" "model" "system"] messages=3 last_content=blocks(2)`},
+		{"multibyte content counted in characters", json, `{"messages":[{"role":"user","content":"你好"}]}`,
+			`fields=["messages"] messages=1 last_content=string(2)`},
+		{"max_tokens that is not a number", json, `{"max_tokens":"16"}`, `fields=["max_tokens"] max_tokens=invalid`},
+		{"Responses body", json, `{"model":"m","input":[{"type":"message"}],"max_output_tokens":16}`, `fields=["input" "max_output_tokens" "model"]`},
+		{"long field name", json, `{"` + strings.Repeat("a", 60) + `":1}`, `fields=["` + strings.Repeat("a", 40) + `…"]`},
+		{"malformed JSON", json, `{"model":`, "body=unparsed"},
+		{"form body", "application/x-www-form-urlencoded", "model=m", `fields=["model"]`},
+		{"empty object", json, `{}`, "body=unparsed"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := shape(test.contentType, test.body)
+			assert.Equal(t, test.want, got)
+			assert.NotContains(t, got, "secret")
+		})
+	}
+}
+
+func TestClipKeepsValidUTF8(t *testing.T) {
+	assert.Equal(t, "claude-cli/2.1.316", clip("claude-cli/2.1.316", 120))
+	assert.Equal(t, "ab…", clip("abcdef", 2))
+	assert.Equal(t, "a…", clip("a你", 2))
+}
