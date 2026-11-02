@@ -25,8 +25,11 @@ For commercial licensing, please contact support@quantumnous.com
  *     #141413, warm gray text #5e5d59, olive/sky/fig accents for charts,
  *     editorial serif headings;
  *   - the Claude Design System notes in Caho1/open-claude-ui
- *     (code-examples/cds-theme.css): white cards on the canvas, 10–12% warm
- *     hairlines instead of hard borders, one clay accent, two-layer shadows.
+ *     (code-examples/cds-theme.css): 10–12% warm hairlines instead of hard
+ *     borders, one clay accent, two-layer shadows.
+ * Light cards are warm parchment #f8f7f2, a shade under the canvas, not
+ * white: pure white read as cold blocks on the cream. Menus and dialogs
+ * float, so popovers stay white.
  * Dark follows Claude's warm charcoal (#1f1e1d sidebar, #262624 canvas,
  * #30302e cards), never pure black.
  *
@@ -34,11 +37,11 @@ For commercial licensing, please contact support@quantumnous.com
  * for titles only.
  *
  * Contrast (WCAG 2.1, measured): light primary #b5532f is 4.95:1 under white
- * and 4.7:1 as text on the canvas (Claude's #c96442 is 3.9:1 under white, so
- * it is kept for the ring and sidebar marks, which need 3:1). Dark primary
- * #e08264 carries #141413 ink (6.6:1) and is 4.75:1 as text on cards. Muted
- * text, status colors and destructive are at least 4.5:1 on canvas and cards
- * in both modes.
+ * and 4.7:1 as text on the canvas, 4.6:1 on cards (Claude's #c96442 is 3.9:1
+ * under white, so it is kept for the ring and sidebar marks, which need
+ * 3:1). Dark primary #e08264 carries #141413 ink (6.6:1) and is 4.75:1 as
+ * text on cards. Muted text, status colors and destructive are at least
+ * 4.5:1 on canvas and cards in both modes.
  */
 :root {
   --radius: 0.625rem;
@@ -49,7 +52,7 @@ For commercial licensing, please contact support@quantumnous.com
 
   --background: #faf9f5;
   --foreground: #141413;
-  --card: #ffffff;
+  --card: #f8f7f2;
   --card-foreground: #141413;
   --popover: #ffffff;
   --popover-foreground: #141413;
