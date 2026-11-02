@@ -38,7 +38,8 @@ import {
  * Whether the Claude pool keeps up, in one sentence, and how many Max 5x
  * accounts would make it: enough to keep up with demand week after week,
  * and enough to last the next 7 days. Beside it, the next 5 and 24 hours'
- * demand against what the pool has left.
+ * demand against what the pool has left, and new-api's forecast charge
+ * over the same hours with its conversion to gpt-load spend.
  */
 export function CapacityVerdict(props: {
   runway: EngineRunway
@@ -47,6 +48,7 @@ export function CapacityVerdict(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const charge = useChargeFormat(props.usage)
   const { runway, five } = props
   const addition = runway.addition
   const forecast = props.usage?.forecast
@@ -110,6 +112,27 @@ export function CapacityVerdict(props: {
   }
   const low = forecast?.next_24h_low_usd
   const high = forecast?.next_24h_high_usd
+  const rate = props.usage?.official_per_quota ?? 0
+  // A forecast new-api charge in yuan: dollars at the site's rate, then
+  // the yuan and, once there is a rate, the gpt-load spend it converts to.
+  const charged = (yuan: number | undefined) => ({
+    value: yuan == null ? '-' : `≈ ${fmt.usdWhole(charge.toUSD(yuan))}`,
+    hint:
+      yuan == null
+        ? undefined
+        : [
+            `¥${fmt.num(Math.round(yuan))}`,
+            rate > 0 &&
+              t('{{amount}} in gpt-load', {
+                amount: `≈ ${fmt.usdWhole(yuan * rate)}`,
+              }),
+          ]
+            .filter(Boolean)
+            .join(' · '),
+  })
+  const chargeHelp = t(
+    'Forecast new-api charge for Claude’s models, in the same way as gpt-load’s: quota dollars that customers pay ¥1 each for, so yuan, shown in dollars at the site’s exchange rate. Below, the yuan and that charge converted to gpt-load spend at the last 7 days’ rate; near the gpt-load forecast when the conversion holds.'
+  )
 
   return (
     <Panel
@@ -123,6 +146,7 @@ export function CapacityVerdict(props: {
         items={[
           {
             label: t('Max 5x to add'),
+            featured: true,
             help: t(
               'The more of two counts: accounts for a weekly load of 100% at today’s demand, and accounts for no gap in the next 7 days.'
             ),
@@ -143,7 +167,7 @@ export function CapacityVerdict(props: {
               : undefined,
           },
           {
-            label: t('Next 5 hours'),
+            label: t('Next 5 hours · gpt-load'),
             help: t(
               'Forecast gpt-load spend over the next 5 hours, against what the accounts’ 5-hour windows have left below their budget line now. Windows reset within the 5 hours, so this comparison is cautious.'
             ),
@@ -157,7 +181,12 @@ export function CapacityVerdict(props: {
                   }),
           },
           {
-            label: t('Next 24 hours'),
+            label: t('Next 5 hours · new-api'),
+            help: chargeHelp,
+            ...charged(forecast?.next_5h_quota),
+          },
+          {
+            label: t('Next 24 hours · gpt-load'),
             help: t(
               'Forecast gpt-load spend over the next 24 hours: the last 24 hours’ spend moved through the day by the last week’s hourly use. The range spans the 10th to 90th percentile of how past forecasts compared with the use that followed.'
             ),
@@ -172,6 +201,11 @@ export function CapacityVerdict(props: {
                     high: fmt.usdWhole(high),
                   })
                 : undefined,
+          },
+          {
+            label: t('Next 24 hours · new-api'),
+            help: chargeHelp,
+            ...charged(forecast?.next_24h_quota),
           },
         ]}
       />

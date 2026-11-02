@@ -13,7 +13,7 @@ pool tab answered part of it:
 
 Three parts were still missing:
 
-- **How fast the site uses quota.** Nothing showed use over the last 1, 3, 6 or 24
+- **How fast the site uses quota.** Nothing showed use over the last 1, 3, 5 or 24
   hours or 7 days, or new-api's charge beside gpt-load's spend. new-api charges in
   quota dollars that customers pay ¥1 each for, so it is in yuan. The pool's quota is
   in gpt-load dollars at official prices.
@@ -37,7 +37,8 @@ Claude's, and the only way to tell them apart was a per-table group filter.
     (`groupSupportsQuotaBudget`), and the other tabs say so.
 - **`GET /api/site-insights/pool-usage?provider=`** (`service/pool_usage.go`, scope
   `ops:read`) returns one provider's use on both sides.
-  - **Windows** of 1, 3, 6 and 24 hours and 7 days.
+  - **Windows** of 1, 3, 5 and 24 hours and 7 days. The 5-hour window, at first 6,
+    matches the 5-hour quota window and the 5-hour forecast.
     - new-api's charge comes from `quota_data` through the existing
       `HourlyQuotaWithPrefix`, over every model prefix the vendor sells under
       (`model.VendorPrefixes`). It is root included, as on the funds view. `quota_data`
@@ -78,6 +79,10 @@ Claude's, and the only way to tell them apart was a per-table group filter.
   - Its cards show the Max 5x count (the larger of `for_load` and `for_week`, with all
     three in the hint), the next 5 hours against the 5-hour windows' remainder, and the
     next 24 hours with its band.
+  - Beside each gpt-load forecast, new-api's forecast charge over the same hours: in
+    dollars at the site's rate, with the yuan and its conversion to gpt-load spend.
+    The owner asked for both sides in one place; the two gpt-load figures, one
+    forecast directly and one converted, check each other.
   - It does not repeat the supply panel's weekly load or dollar shortfall.
 
 ## Alternatives considered
