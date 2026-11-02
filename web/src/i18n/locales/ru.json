@@ -119,6 +119,7 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 Ваша Компания. Все права защищены.",
     "+{{count}} more": "ещё {{count}}",
     "+{{percent}}% bonus": "+{{percent}}% бонус",
+    "Up to {{percent}}% bonus, credited with the payment.": "Бонус до {{percent}}%, начисляется вместе с оплатой.",
     "× ratio": "× множитель",
     "| Based on": "| На основе",
     "≈{{tenths}} of official price": "≈{{percent}} от офиц.",

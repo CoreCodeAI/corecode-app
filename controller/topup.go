@@ -121,6 +121,7 @@ func GetTopUpInfo(c *gin.Context) {
 		"amount_options":          operation_setting.GetPaymentSetting().AmountOptions,
 		"discount":                operation_setting.GetPaymentSetting().AmountDiscount,
 		"bonus":                   operation_setting.GetPaymentSetting().AmountBonus,
+		"bonus_campaign":          operation_setting.GetPaymentSetting().BonusCampaign,
 		"topup_link":              common.TopUpLink,
 		"concurrency":             userConcurrencyInfo(c.GetInt("id"), c.GetString("group")),
 	}

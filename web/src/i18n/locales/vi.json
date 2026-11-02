@@ -119,6 +119,7 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 Công ty của bạn. Mọi quyền được bảo lưu.",
     "+{{count}} more": "thêm {{count}} mục",
     "+{{percent}}% bonus": "+{{percent}}% thưởng",
+    "Up to {{percent}}% bonus, credited with the payment.": "Thưởng tối đa {{percent}}%, cộng ngay khi thanh toán.",
     "× ratio": "× hệ số",
     "| Based on": "| Dựa trên",
     "≈{{tenths}} of official price": "≈{{percent}} giá gốc",

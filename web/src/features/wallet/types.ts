@@ -136,6 +136,8 @@ export interface TopupInfo {
   discount: Record<number, number>
   /** Bonus rates (fractions) by minimum amount; applies to epay topups only */
   bonus?: Record<number, number>
+  /** Operator headline for a limited-time bonus; shown above the amounts while set */
+  bonus_campaign?: string
   /** Optional topup link for purchasing codes */
   topup_link?: string
   /** Whether Creem topup is enabled */
