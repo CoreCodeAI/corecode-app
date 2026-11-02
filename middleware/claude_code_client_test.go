@@ -123,6 +123,8 @@ func TestClaudeCodeOnlyGroupGate(t *testing.T) {
 	probe := `{"model":"claude-sonnet-5-5","max_tokens":1,"messages":[{"role":"user","content":"count"}]}`
 	// The gateway check Claude Desktop sends, byte for byte apart from the model.
 	desktopProbe := `{"max_tokens":16,"messages":[{"role":"user","content":"."}],"model":"claude-haiku-5-5"}`
+	// The Messages request of Magpie's "Detect APIs", from its binary's template.
+	magpieCheck := `{"model":"claude-haiku-5-5","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`
 	desktopHeaders := map[string]string{"User-Agent": "Claude/1.0 (desktop)", "anthropic-version": "2023-06-01"}
 	desktopProbeWith := func(old, replacement string) string {
 		return strings.Replace(desktopProbe, old, replacement, 1)
@@ -148,7 +150,12 @@ func TestClaudeCodeOnlyGroupGate(t *testing.T) {
 		{"desktop probe with a system prompt", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`"model"`, `"system":"Translate to French.","model"`), false},
 		{"desktop probe with tools", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`"model"`, `"tools":[{"name":"x","input_schema":{"type":"object"}}],"model"`), false},
 		{"desktop probe asking for more tokens", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`"max_tokens":16`, `"max_tokens":17`), false},
-		{"desktop probe with another message", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`"content":"."`, `"content":"hi"`), false},
+		{"Magpie's Messages API check", "cc", nil, "/v1/messages", map[string]string{"User-Agent": "magpie/0.1.2343"}, magpieCheck, true},
+		{"desktop probe with another message", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`"content":"."`, `"content":"hello"`), false},
+		{"Magpie's check with a longer prompt", "cc", nil, "/v1/messages", desktopHeaders, strings.Replace(magpieCheck, `"hi"`, `"hi, summarize this"`, 1), false},
+		{"Magpie's check with a system prompt", "cc", nil, "/v1/messages", desktopHeaders, strings.Replace(magpieCheck, `"max_tokens"`, `"system":"Translate to French.","max_tokens"`, 1), false},
+		{"Magpie's Chat Completions check", "cc", nil, "/v1/chat/completions", desktopHeaders, `{"model":"claude-haiku-5-5","messages":[{"role":"user","content":"hi"}],"max_tokens":16}`, false},
+		{"Magpie's Responses check", "cc", nil, "/v1/responses", desktopHeaders, `{"model":"claude-haiku-5-5","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hi"}]}],"max_output_tokens":16}`, false},
 		{"desktop probe with content blocks", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`"content":"."`, `"content":[{"type":"text","text":"."}]`), false},
 		{"desktop probe with a second turn", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`]`, `,{"role":"assistant","content":"ok"},{"role":"user","content":"."}]`), false},
 		{"desktop probe as an assistant turn", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`"role":"user"`, `"role":"assistant"`), false},
