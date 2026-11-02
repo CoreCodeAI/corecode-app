@@ -223,6 +223,44 @@ describe('pool supply', () => {
     ).toBeInTheDocument()
   })
 
+  it('reads one gap once', () => {
+    renderRunway({
+      week_hours: 30,
+      first_short_hours: 6,
+      short_hours: 6,
+      served_share: 0.96,
+      lowest_usd: 0,
+      lowest_hours: 30,
+    })
+
+    expect(
+      screen.getByText(/the quota runs out around .* for 6.0 hours\.$/)
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/without quota in all/)).toBeNull()
+  })
+
+  it('draws the quota left hour by hour and reads out each hour', async () => {
+    const user = userEvent.setup()
+    renderRunway({ curve: [400, 0, 0, 200, 100] })
+
+    const chart = screen.getByRole('img', {
+      name: /\$400 now, least \$0 around/,
+    })
+    expect(screen.getByText('No quota left')).toBeInTheDocument()
+
+    await user.click(chart)
+    expect(screen.getByRole('status')).toHaveTextContent('$400')
+    await user.keyboard('{ArrowRight}')
+    expect(screen.getByRole('status')).toHaveTextContent('No quota left')
+    await user.keyboard('{ArrowRight}{ArrowRight}')
+    expect(screen.getByRole('status')).toHaveTextContent('$200')
+  })
+
+  it('leaves the curve out for a server that sends none', () => {
+    renderRunway({})
+    expect(screen.queryByRole('img', { name: /quota left over/ })).toBeNull()
+  })
+
   it('stays hidden for a server that sends the first runway', () => {
     const first = { ...runway({}) } as Partial<EngineRunway>
     delete first.sustainable_usd_per_hour

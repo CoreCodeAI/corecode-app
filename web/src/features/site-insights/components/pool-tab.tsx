@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState } from 'react'
+import { useState, type PointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { TapTooltip, TapTooltipTrigger } from '@/components/tap-tooltip'
@@ -494,14 +494,21 @@ function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
     { time: at(runway.lowest_hours), amount: fmt.usdWhole(runway.lowest_usd) }
   )
   if (gapStart != null && gapLength != null) {
-    week = t(
-      'Over the next 7 days the quota first runs out around {{time}} for {{length}}; {{total}} without quota in all.',
-      {
-        time: at(gapStart),
-        length: duration(gapLength),
-        total: duration(runway.short_hours),
-      }
-    )
+    // One gap reads once; its length and the total are the same figure.
+    week =
+      runway.short_hours - gapLength < 0.05
+        ? t(
+            'Over the next 7 days the quota runs out around {{time}} for {{length}}.',
+            { time: at(gapStart), length: duration(gapLength) }
+          )
+        : t(
+            'Over the next 7 days the quota first runs out around {{time}} for {{length}}; {{total}} without quota in all.',
+            {
+              time: at(gapStart),
+              length: duration(gapLength),
+              total: duration(runway.short_hours),
+            }
+          )
   }
 
   let lowestTone: Tone = 'default'
@@ -602,6 +609,9 @@ function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
           },
         ]}
       />
+      {runway.curve && runway.curve.length > 1 && (
+        <RunwayCurve curve={runway.curve} observedAt={props.observedAt} />
+      )}
       {runway.unknown > 0 && (
         <p className='text-muted-foreground mt-2 text-xs'>
           {t('{{count}} accounts without an estimate are not counted.', {
@@ -611,6 +621,241 @@ function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
       )}
     </Panel>
   )
+}
+
+const HOUR_MS = 3_600_000
+
+/**
+ * The projected weekly quota left, hour by hour over the next 7 days, with
+ * a tick at each midnight. Hours with nothing left are shaded. Hovering, or
+ * focusing and pressing the arrow keys, reads out the hour under the pointer.
+ */
+function RunwayCurve(props: { curve: number[]; observedAt: number }) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const [active, setActive] = useState<number | null>(null)
+  const { curve, observedAt } = props
+  const last = curve.length - 1
+  const top = niceTop(Math.max(...curve))
+  const xOf = (hours: number) => (hours / last) * 100
+  const yOf = (usd: number) => 100 - (usd / top) * 100
+  const at = (hours: number) =>
+    fmt.time(Math.floor((observedAt + hours * HOUR_MS) / 1000))
+  const path = curve
+    .map(
+      (usd, hour) =>
+        `${hour === 0 ? 'M' : 'L'}${xOf(hour).toFixed(2)},${yOf(usd).toFixed(2)}`
+    )
+    .join(' ')
+
+  // Runs of hours with nothing left, each widened by half an hour a side:
+  // a gap starts and ends between two samples.
+  const gaps: { from: number; to: number }[] = []
+  curve.forEach((usd, hour) => {
+    if (usd > 0) return
+    const previous = gaps.at(-1)
+    if (previous && previous.to === hour - 1) {
+      previous.to = hour
+    } else {
+      gaps.push({ from: hour, to: hour })
+    }
+  })
+
+  // Each local midnight in the range, labelled with the day it starts.
+  const days: { hours: number; label: string }[] = []
+  const midnight = new Date(observedAt)
+  midnight.setHours(24, 0, 0, 0)
+  while (midnight.getTime() < observedAt + last * HOUR_MS) {
+    days.push({
+      hours: (midnight.getTime() - observedAt) / HOUR_MS,
+      label: fmt.day(midnight.getTime() / 1000),
+    })
+    midnight.setDate(midnight.getDate() + 1)
+  }
+
+  const nearest = (event: PointerEvent<HTMLDivElement>) => {
+    const box = event.currentTarget.getBoundingClientRect()
+    const share = (event.clientX - box.left) / Math.max(box.width, 1)
+    return Math.min(last, Math.max(0, Math.round(share * last)))
+  }
+  const lowest = curve.indexOf(Math.min(...curve))
+  const point = active === null ? null : curve[active]
+  const x = active === null ? 0 : xOf(active)
+
+  return (
+    <figure className='mt-4'>
+      <figcaption className='mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs'>
+        <span className='text-muted-foreground'>
+          {t('Weekly quota left, next 7 days')}
+        </span>
+        {gaps.length > 0 && (
+          <span className='text-muted-foreground flex items-center gap-1.5'>
+            <span
+              aria-hidden
+              className='bg-destructive/20 size-2.5 rounded-sm'
+            />
+            {t('No quota left')}
+          </span>
+        )}
+      </figcaption>
+      <div className='flex gap-2'>
+        <div
+          aria-hidden
+          className='text-muted-foreground flex h-28 flex-col justify-between text-right text-[10px] leading-none tabular-nums'
+        >
+          <span>{fmt.usdCompact(top)}</span>
+          <span>{fmt.usdCompact(top / 2)}</span>
+          <span>{fmt.usdCompact(0)}</span>
+        </div>
+        <div className='min-w-0 flex-1'>
+          <div
+            tabIndex={0}
+            role='img'
+            aria-label={t(
+              'Weekly quota left over the next 7 days: {{now}} now, least {{lowest}} around {{time}}',
+              {
+                now: fmt.usdWhole(curve[0]),
+                lowest: fmt.usdWhole(curve[lowest]),
+                time: at(lowest),
+              }
+            )}
+            className='focus-visible:ring-ring/50 relative h-28 cursor-crosshair touch-pan-y rounded-sm outline-none focus-visible:ring-2'
+            onPointerDown={(event) => setActive(nearest(event))}
+            onPointerMove={(event) => setActive(nearest(event))}
+            onPointerLeave={(event) => {
+              if (event.pointerType !== 'touch') setActive(null)
+            }}
+            onFocus={() => setActive((current) => current ?? 0)}
+            onBlur={() => setActive(null)}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowLeft') {
+                event.preventDefault()
+                setActive((current) => Math.max(0, (current ?? 0) - 1))
+              } else if (event.key === 'ArrowRight') {
+                event.preventDefault()
+                setActive((current) => Math.min(last, (current ?? 0) + 1))
+              }
+            }}
+          >
+            <svg
+              aria-hidden
+              viewBox='0 0 100 100'
+              preserveAspectRatio='none'
+              className='text-primary block size-full overflow-visible'
+            >
+              {[0, 50, 100].map((y) => (
+                <line
+                  key={y}
+                  x1={0}
+                  x2={100}
+                  y1={y}
+                  y2={y}
+                  className='stroke-border'
+                  vectorEffect='non-scaling-stroke'
+                />
+              ))}
+              {days.map((day) => (
+                <line
+                  key={day.hours}
+                  x1={xOf(day.hours)}
+                  x2={xOf(day.hours)}
+                  y1={0}
+                  y2={100}
+                  className='stroke-border'
+                  strokeDasharray='2 3'
+                  vectorEffect='non-scaling-stroke'
+                />
+              ))}
+              {gaps.map((gap) => {
+                const from = xOf(Math.max(0, gap.from - 0.5))
+                const to = xOf(Math.min(last, gap.to + 0.5))
+                return (
+                  <rect
+                    key={gap.from}
+                    x={from}
+                    width={to - from}
+                    y={0}
+                    height={100}
+                    className='fill-destructive/20'
+                  />
+                )
+              })}
+              <path
+                d={`${path} L100,100 L0,100 Z`}
+                className='fill-current opacity-10'
+              />
+              <path
+                d={path}
+                fill='none'
+                stroke='currentColor'
+                strokeWidth={2}
+                vectorEffect='non-scaling-stroke'
+                strokeLinejoin='round'
+              />
+            </svg>
+            {active !== null && point !== null && (
+              <>
+                <span
+                  aria-hidden
+                  className='border-foreground/30 pointer-events-none absolute inset-y-0 border-l border-dashed'
+                  style={{ left: `${x}%` }}
+                />
+                <span
+                  aria-hidden
+                  className='bg-primary ring-background pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2'
+                  style={{ left: `${x}%`, top: `${yOf(point)}%` }}
+                />
+                <span
+                  role='status'
+                  className={cn(
+                    'bg-popover text-popover-foreground pointer-events-none absolute bottom-full mb-1 rounded-md border px-2 py-1 text-xs whitespace-nowrap shadow-sm',
+                    x < 20 && 'translate-x-0',
+                    x >= 20 && x <= 80 && '-translate-x-1/2',
+                    x > 80 && '-translate-x-full'
+                  )}
+                  style={{ left: `${x}%` }}
+                >
+                  <span className='text-muted-foreground'>{at(active)}</span>{' '}
+                  <span
+                    className={cn(
+                      'font-medium tabular-nums',
+                      point <= 0 && 'text-destructive'
+                    )}
+                  >
+                    {point > 0 ? fmt.usdWhole(point) : t('No quota left')}
+                  </span>
+                </span>
+              </>
+            )}
+          </div>
+          <div
+            aria-hidden
+            className='text-muted-foreground relative mt-1 h-3 text-[10px] leading-none'
+          >
+            {days
+              .filter((day) => day.hours < last - 6)
+              .map((day) => (
+                <span
+                  key={day.hours}
+                  className='absolute'
+                  style={{ left: `${xOf(day.hours)}%` }}
+                >
+                  {day.label}
+                </span>
+              ))}
+          </div>
+        </div>
+      </div>
+    </figure>
+  )
+}
+
+// The axis top: the least 1, 2, 2.5 or 5 step at or above the highest value.
+function niceTop(value: number) {
+  if (value <= 0) return 1
+  const magnitude = 10 ** Math.floor(Math.log10(value))
+  const step = [1, 2, 2.5, 5, 10].find((n) => n * magnitude >= value) ?? 10
+  return step * magnitude
 }
 
 function loadShareTone(load: number): Tone {
