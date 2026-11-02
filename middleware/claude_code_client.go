@@ -126,6 +126,10 @@ func enforceClaudeCodeOnlyGroup(c *gin.Context, userGroup string) bool {
 // failed check aborts the request when reject is set and only returns false
 // when it is not.
 func admitClaudeCode(c *gin.Context, group string, reject bool) bool {
+	if isClaudeDesktopProbe(c) {
+		logger.LogInfo(c.Request.Context(), "claude code only group "+group+": admitted the Claude Desktop probe")
+		return true
+	}
 	version, failedCheck, bodyErr := detectClaudeCodeClient(c)
 	if bodyErr != nil {
 		// An aborted upload, an oversized body or malformed JSON says nothing
@@ -209,6 +213,43 @@ func detectClaudeCodeClient(c *gin.Context) (version string, failedCheck string,
 		return version, "metadata.user_id", nil
 	}
 	return version, "", nil
+}
+
+// claudeDesktopProbeFields are the only top-level fields the probe may carry.
+var claudeDesktopProbeFields = map[string]bool{"model": true, "max_tokens": true, "messages": true, "stream": true}
+
+// isClaudeDesktopProbe reports the fixed request Claude Desktop sends to check
+// a gateway: {"max_tokens":16,"messages":[{"role":"user","content":"."}],
+// "model":...}. It has no claude-cli User-Agent and no Claude Code prompt. With
+// no system prompt, no tools and "." as the only input, its at most 16 output
+// tokens are worth nothing to anyone else, so it passes as the max_tokens=1
+// probe does. Any other field, message or content fails the match, and the
+// request is then judged as usual.
+func isClaudeDesktopProbe(c *gin.Context) bool {
+	if !strings.HasSuffix(c.Request.URL.Path, "/messages") {
+		return false
+	}
+	var fields map[string]json.RawMessage
+	if common.UnmarshalBodyReusable(c, &fields) != nil {
+		return false
+	}
+	for name := range fields {
+		if !claudeDesktopProbeFields[name] {
+			return false
+		}
+	}
+	var maxTokens int
+	if common.Unmarshal(fields["max_tokens"], &maxTokens) != nil || maxTokens < 1 || maxTokens > 16 {
+		return false
+	}
+	var messages []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	if common.Unmarshal(fields["messages"], &messages) != nil || len(messages) != 1 {
+		return false
+	}
+	return messages[0].Role == "user" && messages[0].Content == "."
 }
 
 func hasClaudeCodeSystemPrompt(raw json.RawMessage) bool {
