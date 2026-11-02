@@ -16,16 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { TapTooltip, TapTooltipTrigger } from '@/components/tap-tooltip'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
-import { useInsightsFormat, useSignupMethodLabel } from '../lib'
+import {
+  useChargeFormat,
+  useInsightsFormat,
+  useSignupMethodLabel,
+} from '../lib'
 import type { ActivityInsights, FunnelRow, GrowthInsights } from '../types'
 import {
   BarSeries,
+  type BarPoint,
   CountRate,
   MetricGrid,
   Panel,
@@ -194,6 +201,9 @@ export function GrowthTab(props: {
   )
 }
 
+/** How the daily consumption chart reads a day. */
+type SpendMeasure = 'usd' | 'cny' | 'engine'
+
 export function ActivityTab(props: {
   data: ActivityInsights | undefined
   previous?: ActivityInsights
@@ -201,13 +211,10 @@ export function ActivityTab(props: {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const data = props.data
+  const charge = useChargeFormat(data)
   const previous = props.previous
   const daily = data?.daily ?? []
   const last = daily.at(-1)
-  const busiest = daily.reduce<(typeof daily)[number] | undefined>(
-    (top, day) => (!top || day.quota_usd > top.quota_usd ? day : top),
-    undefined
-  )
   const engine = data?.engine_cost
   const engineReady = !!engine?.configured && !engine.error
   const engineByDay = new Map(
@@ -216,6 +223,75 @@ export function ActivityTab(props: {
   const engineHelp = t(
     'What the Claude requests in the range cost at Anthropic’s official prices, as corecode-engine priced each one. Consumption is what new-api charged for every model at its own ratios.'
   )
+  const total = data?.engine_total
+  const totalReady = !!total?.configured && !total.error
+  const totalByDay = new Map(
+    (total?.daily ?? []).map((day) => [day.day, day.cost_usd])
+  )
+  const [picked, setPicked] = useState<SpendMeasure>('usd')
+  const measure: SpendMeasure =
+    picked === 'engine' && !totalReady ? 'usd' : picked
+  const measures: Record<
+    SpendMeasure,
+    {
+      label: string
+      value: (day: (typeof daily)[number]) => number
+      format: (value: number) => string
+      compact: (value: number) => string
+    }
+  > = {
+    usd: {
+      label: t('new-api, US$'),
+      value: (day) => charge.toUSD(day.quota_usd),
+      format: fmt.usd,
+      compact: fmt.usdCompact,
+    },
+    cny: {
+      label: t('new-api, ¥'),
+      value: (day) => day.quota_usd,
+      format: fmt.cny,
+      compact: fmt.cnyCompact,
+    },
+    engine: {
+      label: t('gpt-load value'),
+      value: (day) => totalByDay.get(day.day) ?? 0,
+      format: fmt.usd,
+      compact: fmt.usdCompact,
+    },
+  }
+  const shown = measures[measure]
+  const busiest = daily.reduce<(typeof daily)[number] | undefined>(
+    (top, day) => (!top || shown.value(day) > shown.value(top) ? day : top),
+    undefined
+  )
+  const spendPoints: BarPoint[] = daily.map((day) => ({
+    key: day.day,
+    title: fmt.day(day.day),
+    values: [shown.value(day)],
+    extra: [
+      ...(['usd', 'cny', 'engine'] as const)
+        .filter((key) => key !== measure && (key !== 'engine' || totalReady))
+        .map((key) => ({
+          label: measures[key].label,
+          value: measures[key].format(measures[key].value(day)),
+        })),
+      { label: t('Requests'), value: fmt.num(day.requests) },
+    ],
+  }))
+  const quota = data?.quota_usd ?? 0
+  const spendTotals = totalReady
+    ? t(
+        'In the range, new-api charged {{usd}} ({{cny}}), and gpt-load’s requests were worth {{engine}} at official prices.',
+        {
+          usd: fmt.usd(charge.toUSD(quota)),
+          cny: fmt.cny(quota),
+          engine: fmt.usd(total.cost_usd),
+        }
+      )
+    : t('In the range, new-api charged {{usd}} ({{cny}}).', {
+        usd: fmt.usd(charge.toUSD(quota)),
+        cny: fmt.cny(quota),
+      })
 
   return (
     <div className='grid gap-4'>
@@ -242,8 +318,16 @@ export function ActivityTab(props: {
           },
           {
             label: t('Consumption'),
-            value: fmt.usd(data?.quota_usd ?? 0),
-            hint: t('USD at list price'),
+            help: t(
+              'What new-api charged, in dollars at the site’s exchange rate: quota dollars that customers pay ¥1 each for, so yuan. Below, the yuan, and what gpt-load’s requests for every model were worth at official prices.'
+            ),
+            value: fmt.usd(charge.toUSD(quota)),
+            hint: totalReady
+              ? t('{{cny}} · gpt-load {{engine}}', {
+                  cny: fmt.cny(quota),
+                  engine: fmt.usd(total.cost_usd),
+                })
+              : fmt.cny(quota),
             delta: {
               current: data?.quota_usd ?? 0,
               previous: previous?.quota_usd,
@@ -281,7 +365,7 @@ export function ActivityTab(props: {
           {
             label: t('Per active user'),
             value: data?.active_users
-              ? fmt.usd(data.quota_usd / data.active_users)
+              ? fmt.usd(charge.toUSD(data.quota_usd) / data.active_users)
               : '-',
             hint: t('Consumption per active user'),
           },
@@ -314,31 +398,71 @@ export function ActivityTab(props: {
         </Panel>
         <Panel
           title={t('Daily consumption')}
-          description={
-            busiest && busiest.quota_usd > 0
+          help={t(
+            'Three measures of the same use. new-api, US$ and ¥: what new-api charged for every model, quota dollars that customers pay ¥1 each for, so yuan, and in dollars at the site’s exchange rate. gpt-load value: what gpt-load’s requests for every model were worth at official prices, the unit the pool’s quota is in.'
+          )}
+          description={[
+            spendTotals,
+            busiest && shown.value(busiest) > 0
               ? t('Busiest day {{day}}: {{amount}}.', {
                   day: fmt.day(busiest.day),
-                  amount: fmt.usd(busiest.quota_usd),
+                  amount: shown.format(shown.value(busiest)),
                 })
-              : undefined
+              : undefined,
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          actions={
+            <ToggleGroup
+              variant='outline'
+              size='sm'
+              aria-label={t('Measure')}
+              value={[measure]}
+              onValueChange={(value: string[]) => {
+                const next = value.at(-1) as SpendMeasure | undefined
+                if (next) setPicked(next)
+              }}
+            >
+              <ToggleGroupItem value='usd' aria-label={measures.usd.label}>
+                US$
+              </ToggleGroupItem>
+              <ToggleGroupItem value='cny' aria-label={measures.cny.label}>
+                ¥
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value='engine'
+                aria-label={measures.engine.label}
+                disabled={!totalReady}
+              >
+                gpt-load
+              </ToggleGroupItem>
+            </ToggleGroup>
           }
         >
-          <BarSeries
-            ariaLabel={t('Daily consumption')}
-            series={[
-              {
-                label: t('Consumption'),
-                format: fmt.usd,
-                compact: fmt.usdCompact,
-              },
-            ]}
-            points={daily.map((day) => ({
-              key: day.day,
-              title: fmt.day(day.day),
-              values: [day.quota_usd],
-              extra: [{ label: t('Requests'), value: fmt.num(day.requests) }],
-            }))}
-          />
+          <div className='grid gap-2'>
+            <BarSeries
+              ariaLabel={t('Daily consumption')}
+              series={[
+                {
+                  label: shown.label,
+                  format: shown.format,
+                  compact: shown.compact,
+                },
+              ]}
+              points={spendPoints}
+            />
+            {total?.error && (
+              <p className='text-destructive text-xs'>{total.error}</p>
+            )}
+            {measure === 'engine' && (total?.unpriced_requests ?? 0) > 0 && (
+              <p className='text-muted-foreground text-xs'>
+                {t(
+                  '{{count}} requests had no gpt-load price and are not in its value.',
+                  { count: total?.unpriced_requests }
+                )}
+              </p>
+            )}
+          </div>
         </Panel>
       </div>
       <Panel
@@ -349,7 +473,7 @@ export function ActivityTab(props: {
             ? t(
                 'Charged {{charged}} against {{official}} at official prices.',
                 {
-                  charged: fmt.usd(data?.quota_usd ?? 0),
+                  charged: charge.usd(charge.toUSD(quota)),
                   official: fmt.usd(engine.cost_usd),
                 }
               )
@@ -383,7 +507,10 @@ export function ActivityTab(props: {
                 title: fmt.day(day.day),
                 values: [official?.cost_usd ?? 0],
                 extra: [
-                  { label: t('Charged'), value: fmt.usd(day.quota_usd) },
+                  {
+                    label: t('Charged'),
+                    value: charge.usd(charge.toUSD(day.quota_usd)),
+                  },
                   {
                     label: t('Claude requests'),
                     value: fmt.num(official?.requests ?? 0),
@@ -417,7 +544,7 @@ export function ActivityTab(props: {
               key: 'usd',
               label: t('Consumption'),
               align: 'right',
-              render: (row) => fmt.usd(row.quota_usd),
+              render: (row) => charge.usd(charge.toUSD(row.quota_usd)),
             },
             {
               key: 'share',

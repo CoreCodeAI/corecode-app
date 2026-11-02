@@ -20,7 +20,7 @@ func TestFetchEngineDailyCost(t *testing.T) {
 		}
 		query = r.URL.RawQuery
 		_, _ = w.Write([]byte(`{"code":0,"data":{"days":[
-			{"day_start_ms":1761408000000,"request_count":3,"estimated_cost_nano_usd":"1500000000"},
+			{"day_start_ms":1761408000000,"request_count":3,"unpriced_request_count":1,"estimated_cost_nano_usd":"1500000000"},
 			{"day_start_ms":1761494400000,"request_count":2,"estimated_cost_nano_usd":"9007199254740993000"}]}}`))
 	}))
 	defer server.Close()
@@ -37,10 +37,14 @@ func TestFetchEngineDailyCost(t *testing.T) {
 	require.Empty(t, cost.Error)
 	assert.Equal(t, "from_ms=1761408000000&model_prefix=claude-&to_ms=1761580800000&tz_offset_minutes=480", query)
 	assert.Equal(t, int64(5), cost.Requests)
+	assert.Equal(t, int64(1), cost.Unpriced)
 	require.Len(t, cost.Daily, 2)
 	assert.Equal(t, EngineCostDay{Day: 1761408000, CostUSD: 1.5, Requests: 3}, cost.Daily[0])
 	assert.InDelta(t, 9007199254.740993, cost.Daily[1].CostUSD, 1e-3, "nano dollars past 2^53 still convert")
 	assert.InDelta(t, 9007199256.240993, cost.CostUSD, 1e-3)
+
+	FetchEngineDailyTotal(1761408000, 1761580800, 8*3600)
+	assert.Equal(t, "from_ms=1761408000000&to_ms=1761580800000&tz_offset_minutes=480", query, "every model")
 
 	half := FetchEngineDailyCost(1761408000, 1761580800, 5*3600+1800)
 	assert.True(t, half.Configured)

@@ -25,14 +25,17 @@ type EngineCostDay struct {
 	Requests int64   `json:"requests"`
 }
 
-// EngineDailyCost is Claude's official-price cost per day from the engine.
-// Configured is false without EngineControlURL and EngineControlKey; Error
-// holds a failed read so the rest of the view still renders.
+// EngineDailyCost is the official-price cost per day from the engine, of
+// Claude's models or of every model. Configured is false without
+// EngineControlURL and EngineControlKey; Error holds a failed read so the
+// rest of the view still renders. Unpriced counts requests the engine had
+// no price for, which are not in the cost.
 type EngineDailyCost struct {
 	Configured bool            `json:"configured"`
 	Error      string          `json:"error,omitempty"`
 	CostUSD    float64         `json:"cost_usd"`
 	Requests   int64           `json:"requests"`
+	Unpriced   int64           `json:"unpriced_requests"`
 	Daily      []EngineCostDay `json:"daily"`
 }
 
@@ -40,15 +43,26 @@ type engineUsageDaily struct {
 	Days []struct {
 		DayStartMS           int64  `json:"day_start_ms"`
 		RequestCount         int64  `json:"request_count"`
+		UnpricedRequestCount int64  `json:"unpriced_request_count"`
 		EstimatedCostNanoUSD string `json:"estimated_cost_nano_usd"`
 	} `json:"days"`
 }
 
-// FetchEngineDailyCost reads /api/usage/daily for [start, end) in unix
-// seconds, split into days at offset seconds east of UTC. The engine splits
-// days on its hourly buckets, so an offset that is not whole hours is
-// reported as an error rather than shifted.
+// FetchEngineDailyCost reads Claude's cost from /api/usage/daily for
+// [start, end) in unix seconds, split into days at offset seconds east of
+// UTC. The engine splits days on its hourly buckets, so an offset that is
+// not whole hours is reported as an error rather than shifted.
 func FetchEngineDailyCost(start, end, offset int64) EngineDailyCost {
+	return fetchEngineDailyCost(start, end, offset, EngineClaudeModelPrefix)
+}
+
+// FetchEngineDailyTotal is FetchEngineDailyCost over every model the engine
+// serves: Claude, Codex, Grok and Gemini.
+func FetchEngineDailyTotal(start, end, offset int64) EngineDailyCost {
+	return fetchEngineDailyCost(start, end, offset, "")
+}
+
+func fetchEngineDailyCost(start, end, offset int64, prefix string) EngineDailyCost {
 	base := strings.TrimRight(strings.TrimSpace(operation_setting.EngineControlURL), "/")
 	key := strings.TrimSpace(operation_setting.EngineControlKey)
 	result := EngineDailyCost{Daily: []EngineCostDay{}}
@@ -64,7 +78,9 @@ func FetchEngineDailyCost(start, end, offset int64) EngineDailyCost {
 		"from_ms":           {strconv.FormatInt(start*1000, 10)},
 		"to_ms":             {strconv.FormatInt(end*1000, 10)},
 		"tz_offset_minutes": {strconv.FormatInt(offset/60, 10)},
-		"model_prefix":      {EngineClaudeModelPrefix},
+	}
+	if prefix != "" {
+		query.Set("model_prefix", prefix)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
@@ -82,6 +98,7 @@ func FetchEngineDailyCost(start, end, offset int64) EngineDailyCost {
 		}
 		total.Add(&total, nano)
 		result.Requests += day.RequestCount
+		result.Unpriced += day.UnpricedRequestCount
 		result.Daily = append(result.Daily, EngineCostDay{
 			Day: day.DayStartMS / 1000, CostUSD: nanoToUSD(nano), Requests: day.RequestCount,
 		})

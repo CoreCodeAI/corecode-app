@@ -224,22 +224,33 @@ func GetGrowthInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxDays, model.GetGrowthInsights)
 }
 
-// ActivityResponse adds Claude's cost at official prices, as the engine
-// recorded it, beside the quota new-api charged.
+// ActivityResponse adds what the engine recorded at official prices beside
+// the quota new-api charged: Claude's cost, and every model's.
 type ActivityResponse struct {
 	*model.ActivityInsights
-	EngineCost service.EngineDailyCost `json:"engine_cost"`
+	EngineCost  service.EngineDailyCost `json:"engine_cost"`
+	EngineTotal service.EngineDailyCost `json:"engine_total"`
+	// USDExchangeRate is yuan per US dollar, as on the funds view: new-api's
+	// charge is in yuan.
+	USDExchangeRate float64 `json:"usd_exchange_rate"`
 }
 
 func GetActivityInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxDays, func(r model.InsightsRange) (*ActivityResponse, error) {
 		engineDone := make(chan service.EngineDailyCost, 1)
 		go func() { engineDone <- service.FetchEngineDailyCost(r.Start, r.End, r.Offset) }()
+		totalDone := make(chan service.EngineDailyCost, 1)
+		go func() { totalDone <- service.FetchEngineDailyTotal(r.Start, r.End, r.Offset) }()
 		insights, err := model.GetActivityInsights(r)
 		if err != nil {
 			return nil, err
 		}
-		return &ActivityResponse{ActivityInsights: insights, EngineCost: <-engineDone}, nil
+		return &ActivityResponse{
+			ActivityInsights: insights,
+			EngineCost:       <-engineDone,
+			EngineTotal:      <-totalDone,
+			USDExchangeRate:  operation_setting.USDExchangeRate,
+		}, nil
 	})
 }
 

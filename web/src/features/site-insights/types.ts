@@ -401,14 +401,22 @@ export type EngineDailyCost = {
   error?: string
   cost_usd: number
   requests: number
+  /** Requests the engine had no price for; absent before the server's release. */
+  unpriced_requests?: number
   daily: { day: number; cost_usd: number; requests: number }[]
 }
 
 export type ActivityInsights = {
   active_users: number
+  /** new-api's charge: quota dollars that customers pay ¥1 each for, so yuan. */
   quota_usd: number
   requests: number
+  /** Claude's models at official prices. */
   engine_cost: EngineDailyCost
+  /** Every model gpt-load serves; absent before the server's release. */
+  engine_total?: EngineDailyCost
+  /** Yuan per US dollar; absent before the server's release. */
+  usd_exchange_rate?: number
   daily: {
     day: number
     dau: number
