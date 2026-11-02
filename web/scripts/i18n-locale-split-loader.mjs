@@ -41,8 +41,11 @@ const ROUTES = path.join(SRC, 'routes')
 const EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx']
 const IMPORT =
   /\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)|\bimport\s+['"]([^'"]+)['"]/g
+// A template literal with a substitution matches as a whole, so its closing
+// backtick cannot open a match that swallows the code up to the next template,
+// and with it every key in between; the literals inside it are read apart.
 const LITERAL =
-  /'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`((?:[^`$\\]|\\.)*)`/g
+  /'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`((?:[^`$\\]|\\.|\$(?!\{))*)`|`(?:[^`\\]|\\.)*`/g
 
 function isSource(file) {
   return (
@@ -102,13 +105,17 @@ function unescapeLiteral(text) {
   return text.replaceAll(/\\(.)/g, (_, c) => ({ n: '\n', t: '\t' })[c] ?? c)
 }
 
+function addLiterals(text, names) {
+  for (const m of text.matchAll(LITERAL)) {
+    const literal = m[1] ?? m[2] ?? m[3]
+    if (literal !== undefined) names.add(unescapeLiteral(literal))
+    else addLiterals(m[0].slice(1, -1), names)
+  }
+}
+
 function literalsIn(files) {
   const names = new Set()
-  for (const file of files) {
-    for (const m of fs.readFileSync(file, 'utf8').matchAll(LITERAL)) {
-      names.add(unescapeLiteral(m[1] ?? m[2] ?? m[3]))
-    }
-  }
+  for (const file of files) addLiterals(fs.readFileSync(file, 'utf8'), names)
   return names
 }
 
