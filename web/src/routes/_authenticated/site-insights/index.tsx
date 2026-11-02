@@ -39,6 +39,11 @@ const siteInsightsSearchSchema = z.object({
     .optional()
     .catch(undefined),
   days: z.number().int().positive().optional().catch(undefined),
+  // The pool tab's provider; Claude when absent.
+  provider: z
+    .enum(['claude', 'codex', 'grok', 'gemini'])
+    .optional()
+    .catch(undefined),
 })
 
 export const Route = createFileRoute('/_authenticated/site-insights/')({

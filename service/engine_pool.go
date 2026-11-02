@@ -64,9 +64,12 @@ type EngineAccount struct {
 
 // EngineGroup is one engine group with its accounts counted by status.
 type EngineGroup struct {
-	ID             int            `json:"id"`
-	Name           string         `json:"name"`
-	Channel        string         `json:"channel"`
+	ID      int    `json:"id"`
+	Name    string `json:"name"`
+	Channel string `json:"channel"`
+	// Provider is the vendor new-api sells the channel's models under
+	// (ChannelProvider), which the pool tab is split by.
+	Provider       string         `json:"provider"`
 	Enabled        bool           `json:"enabled"`
 	InFlight       int            `json:"in_flight"`
 	EffectiveLimit int            `json:"effective_limit"`
@@ -374,6 +377,7 @@ func readEnginePool(base, key string) EnginePool {
 			ID:             group.ID,
 			Name:           group.Name,
 			Channel:        group.Channel,
+			Provider:       ChannelProvider(group.Channel),
 			Enabled:        group.Enabled,
 			InFlight:       group.Current,
 			EffectiveLimit: group.EffectiveLimit,

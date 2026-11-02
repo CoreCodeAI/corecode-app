@@ -98,6 +98,30 @@ type EngineRunway struct {
 	High  *EngineRunwayScenario `json:"high"`
 	// BandForecasts is the past forecasts Low and High are drawn from.
 	BandForecasts int `json:"band_forecasts"`
+	// Addition is how many accounts of runwayAddPlan would close the gap;
+	// nil without demand or without a measured account of the plan.
+	Addition *EngineRunwayAddition `json:"addition"`
+}
+
+// EngineRunwayAddition sizes the accounts to add in one plan, priced by
+// what the pool's own accounts of that plan were measured to serve.
+type EngineRunwayAddition struct {
+	Plan string `json:"plan"`
+	Tier string `json:"tier"`
+	// WeekUSD is one account's weekly capacity up to its budget line: the
+	// plan's median measured account at BudgetPercent.
+	WeekUSD       float64 `json:"week_usd"`
+	BudgetPercent float64 `json:"budget_percent"`
+	Measured      int     `json:"measured"`
+	// ForLoad brings the weekly load to 100% at today's demand, ForTrend at
+	// the trend's demand at the end of the horizon (ForLoad without one):
+	// what keeps the pool from running down week after week.
+	ForLoad  int `json:"for_load"`
+	ForTrend int `json:"for_trend"`
+	// ForWeek is the fewest added accounts, each starting a full week now,
+	// that leave the next 7 days without a gap at today's demand; nil when
+	// even runwayMaxAddition do not.
+	ForWeek *int `json:"for_week"`
 }
 
 // EngineRunwayScenario is the projection under another demand.
@@ -121,6 +145,13 @@ type runwayAccount struct {
 // runwayMaxScale bounds the headroom search: a pool that lasts at this many
 // times its demand is not short of quota.
 const runwayMaxScale = 4.0
+
+// The plan additions are sized in, and the most the 7-day search tries.
+const (
+	runwayAddPlan     = "Max"
+	runwayAddTier     = "default_claude_max_5x"
+	runwayMaxAddition = 30
+)
 
 // poolRunway sets the channel's demand against its quota supply. Over the next
 // runwayHorizon, demand runs at the last 24 hours' spend, moved through the
@@ -195,7 +226,7 @@ func poolRunway(pool EnginePool, channel string, nowMS int64, profile demandProf
 	runway.FiveHourHours = &fiveHours
 	runway.ProfileHours = profile.hours
 	runway.PeakHourUSDPerHour = burn * profile.peak()
-	runway.GrowthPerDay = math.Exp(profile.growth) - 1
+	runway.GrowthPerDay = profile.growthPerDay()
 
 	at := func(scale float64) func(ms int64) float64 {
 		return func(ms int64) float64 { return burn * scale * profile.at(ms) }
@@ -234,7 +265,66 @@ func poolRunway(pool EnginePool, channel string, nowMS int64, profile demandProf
 		}
 		runway.HeadroomScale = &lo
 	}
+	runway.Addition = runwayAddition(pool, groups, channel, &runway, accounts, nowMS, at(1))
 	return &runway
+}
+
+// runwayAddition sizes runwayAddPlan accounts against the runway's demand.
+// One account adds its plan's median measured weekly capacity, up to the
+// budget line of the group its plan's accounts are in. Nil without a
+// measured account of the plan.
+func runwayAddition(pool EnginePool, groups map[int]EngineGroup, channel string, runway *EngineRunway,
+	accounts []runwayAccount, nowMS int64, rate func(ms int64) float64) *EngineRunwayAddition {
+	var value *EnginePlanValue
+	for _, plan := range EnginePlanValues(pool.Accounts) {
+		if plan.Plan == runwayAddPlan && plan.Tier == runwayAddTier {
+			value = &plan
+			break
+		}
+	}
+	if value == nil {
+		return nil
+	}
+	budget := 100.0
+	for _, account := range pool.Accounts {
+		group, ok := groups[account.GroupID]
+		if ok && group.Channel == channel && account.Plan == runwayAddPlan && account.Tier == runwayAddTier {
+			if group.QuotaBudget {
+				budget = group.SevenDayBudget
+			}
+			break
+		}
+	}
+	week := value.WeekUSD * budget / 100
+	if week <= 0 {
+		return nil
+	}
+	addition := EngineRunwayAddition{
+		Plan: value.Plan, Tier: value.Tier, WeekUSD: week, BudgetPercent: budget, Measured: value.Measured,
+	}
+	// Whole accounts: a shortfall of a cent still takes one.
+	closing := func(demand float64) int {
+		short := (demand - runway.SustainableUSDPerHour) * runwayWeek.Hours()
+		if short <= 0 {
+			return 0
+		}
+		return int(math.Ceil(short/week - 1e-9))
+	}
+	addition.ForLoad = closing(runway.BurnUSDPerHour)
+	addition.ForTrend = addition.ForLoad
+	if runway.Trend != nil {
+		addition.ForTrend = closing(runway.BurnUSDPerHour * runway.Trend.DemandScale)
+	}
+	weekEnd := nowMS + runwayWeek.Milliseconds()
+	added := append([]runwayAccount(nil), accounts...)
+	for count := 0; count <= runwayMaxAddition; count++ {
+		if projectRunway(added, nowMS, rate).WeekHours == nil {
+			addition.ForWeek = &count
+			break
+		}
+		added = append(added, runwayAccount{remaining: week, full: week, resetMS: weekEnd})
+	}
+	return &addition
 }
 
 type runwayProjection struct {

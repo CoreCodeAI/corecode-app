@@ -25,6 +25,7 @@ import type {
   EngineGroup,
   EnginePool,
   EngineRunway,
+  PoolUsage,
 } from '../../types'
 import { PoolTab } from '../pool-tab'
 import { Breakdown } from '../shared'
@@ -363,5 +364,208 @@ describe('breakdown rows', () => {
     expect(tooltip.closest('[data-slot=tooltip-content]')).toHaveTextContent(
       name
     )
+  })
+})
+
+function usage(overrides: Partial<PoolUsage> = {}): PoolUsage {
+  return {
+    provider: 'claude',
+    observed_at: 1_800_000_000,
+    usd_exchange_rate: 8,
+    channels: ['claude'],
+    engine_configured: true,
+    windows: [
+      // ¥80 charged, $40 spent: ¥1 brings $0.50 at the week's rate.
+      {
+        hours: 1,
+        quota: 80,
+        engine_usd: 44,
+        engine_requests: 10,
+        engine_unpriced: 0,
+      },
+      {
+        hours: 168,
+        quota: 8000,
+        engine_usd: 4000,
+        engine_requests: 900,
+        engine_unpriced: 0,
+      },
+    ],
+    official_per_quota: 0.5,
+    hourly: [],
+    forecast: {
+      next_5h_usd: 230,
+      next_24h_usd: 960,
+      next_24h_trend_usd: 1000,
+      next_24h_low_usd: 800,
+      next_24h_high_usd: 1200,
+      next_5h_quota: 460,
+      next_24h_quota: 1920,
+      profile_hours: 168,
+      growth_per_day: 0.05,
+      band_forecasts: 30,
+    },
+    ...overrides,
+  }
+}
+
+describe('providers', () => {
+  const groups = [
+    group({ id: 1, name: 'Team', channel: 'claude', provider: 'claude' }),
+    group({
+      id: 2,
+      name: 'Codex',
+      channel: 'codex',
+      provider: 'codex',
+      quota_budget: false,
+    }),
+    // Before the server sends a provider, gpt-load's Gemini channel is still Gemini.
+    group({
+      id: 3,
+      name: 'Antigravity',
+      channel: 'antigravity',
+      quota_budget: false,
+    }),
+  ]
+  const accounts = [
+    account({ credential_id: 1, group_id: 1, email_mask: 'claude@x' }),
+    account({ credential_id: 2, group_id: 2, email_mask: 'codex@x' }),
+    account({ credential_id: 3, group_id: 3, email_mask: 'gemini@x' }),
+  ]
+
+  it('shows only the chosen provider’s groups and accounts', () => {
+    render(<PoolTab data={pool(groups, accounts)} provider='codex' />)
+
+    expect(screen.getByText(/codex@x/)).toBeInTheDocument()
+    expect(screen.queryByText(/claude@x/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Team')).not.toBeInTheDocument()
+    // Quota is measured for Claude only.
+    expect(screen.queryByText('5-hour left')).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/whether the Codex pool keeps up is not judged here/)
+    ).toBeInTheDocument()
+  })
+
+  it('maps gpt-load’s antigravity channel to Gemini', () => {
+    render(<PoolTab data={pool(groups, accounts)} provider='gemini' />)
+    expect(screen.getByText(/gemini@x/)).toBeInTheDocument()
+  })
+
+  it('switches provider through the callback', async () => {
+    const chosen: string[] = []
+    render(
+      <PoolTab
+        data={pool(groups, accounts)}
+        onProvider={(next) => chosen.push(next)}
+      />
+    )
+    expect(screen.getByText(/claude@x/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /^Codex/ }))
+    expect(chosen).toEqual(['codex'])
+  })
+})
+
+describe('capacity verdict', () => {
+  it('sizes the Max 5x accounts to add', () => {
+    render(
+      <PoolTab
+        data={{
+          ...pool([group({})], [account({})]),
+          five_hour_estimate: {
+            remaining_usd: 200,
+            remaining_low_usd: 190,
+            remaining_high_usd: 210,
+            capacity_usd: 400,
+            counted: 1,
+            unknown: 0,
+          },
+          runway: runway({
+            addition: {
+              plan: 'Max',
+              tier: 'default_claude_max_5x',
+              week_usd: 1458,
+              budget_percent: 98,
+              measured: 1,
+              for_load: 2,
+              for_trend: 3,
+              for_week: 1,
+            },
+          }),
+        }}
+        usage={usage()}
+      />
+    )
+
+    expect(
+      screen.getByText(
+        /Not enough capacity\. To keep up with demand now, add 2 × Max 5x; each brings about \$1,458 a week\. If use keeps growing, 3 × Max 5x by the end of the week\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Keep up 2 · 7 days 1 · with growth 3')
+    ).toBeInTheDocument()
+    // $230 forecast against $200 left in the 5-hour windows.
+    expect(screen.getByText('≈ $230')).toHaveClass('text-destructive')
+    expect(screen.getByText('Range $800 – $1,200')).toBeInTheDocument()
+  })
+
+  it('says when no account is needed', () => {
+    render(
+      <PoolTab
+        data={{
+          ...pool([group({})], [account({})]),
+          runway: runway({
+            week_load: 0.5,
+            addition: {
+              plan: 'Max',
+              tier: 'default_claude_max_5x',
+              week_usd: 1458,
+              budget_percent: 98,
+              measured: 1,
+              for_load: 0,
+              for_trend: 0,
+              for_week: 0,
+            },
+          }),
+        }}
+      />
+    )
+    expect(
+      screen.getByText(/^Enough capacity\. No account needed/)
+    ).toBeInTheDocument()
+  })
+})
+
+describe('provider usage', () => {
+  it('converts new-api’s charge to gpt-load spend at the week’s rate', () => {
+    render(<PoolTab data={pool([group({})], [account({})])} usage={usage()} />)
+
+    const row = screen.getByText('Last hour').closest('tr') as HTMLElement
+    // ¥80 is $10 at ¥8 a dollar; at $0.50 a yuan it is $40 of gpt-load,
+    // which spent $44: 1.10× the conversion.
+    expect(row).toHaveTextContent('$10.00 (¥80')
+    expect(row).toHaveTextContent('$40.00')
+    expect(row).toHaveTextContent('$44.00')
+    expect(row).toHaveTextContent('1.10×')
+    const forecast = screen
+      .getByText('Next 24 hours (forecast)')
+      .closest('tr') as HTMLElement
+    expect(forecast).toHaveTextContent('$960.00')
+    expect(
+      screen.getByText(
+        /each ¥1 new-api charged for Claude cost gpt-load \$0\.50/
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('ignores another provider’s figures while the new ones load', () => {
+    render(
+      <PoolTab
+        data={pool([group({})], [account({})])}
+        provider='codex'
+        usage={usage()}
+      />
+    )
+    expect(screen.queryByText('Last hour')).not.toBeInTheDocument()
   })
 })

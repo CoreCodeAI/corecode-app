@@ -199,38 +199,90 @@ func mean(values []float64) float64 {
 	return total / float64(len(values))
 }
 
-var claudeDemandCache struct {
-	mu      sync.Mutex
+type demandCacheEntry struct {
 	profile demandProfile
 	hour    int64
 	readAt  time.Time
 }
 
-// claudeDemandProfile reads the Claude models' hourly use over the
+var demandCache struct {
+	mu      sync.Mutex
+	entries map[string]demandCacheEntry
+}
+
+// claudeDemandProfile is the Claude models' demand profile.
+func claudeDemandProfile(now time.Time) demandProfile {
+	return vendorDemandProfile(model.VendorClaude, now)
+}
+
+// vendorDemandProfile reads the vendor's models' hourly use over the
 // demandHistory whole hours before now and builds the profile, reusing it
 // for demandProfileTTL within the same hour. A failed read gives a flat
 // shape, which is the projection the pool had before.
-func claudeDemandProfile(now time.Time) demandProfile {
+func vendorDemandProfile(vendor string, now time.Time) demandProfile {
 	hour := now.Unix() - now.Unix()%3600
-	claudeDemandCache.mu.Lock()
-	defer claudeDemandCache.mu.Unlock()
-	if claudeDemandCache.hour == hour && time.Since(claudeDemandCache.readAt) < demandProfileTTL {
-		return claudeDemandCache.profile
+	demandCache.mu.Lock()
+	defer demandCache.mu.Unlock()
+	if demandCache.entries == nil {
+		demandCache.entries = make(map[string]demandCacheEntry)
+	}
+	if entry, ok := demandCache.entries[vendor]; ok && entry.hour == hour && time.Since(entry.readAt) < demandProfileTTL {
+		return entry.profile
 	}
 	from := hour - demandHistory*3600
-	quota, err := model.HourlyQuotaWithPrefix(model.ClaudeModelPrefix, from, hour)
+	quota, err := vendorHourlyQuota(vendor, from, hour)
 	if err != nil {
-		common.SysError("read hourly Claude use for the pool demand: " + err.Error())
+		common.SysError("read hourly " + vendor + " use for the pool demand: " + err.Error())
 		// Retried after a minute, not on every pool read.
-		claudeDemandCache.profile, claudeDemandCache.hour = flatDemand(), hour
-		claudeDemandCache.readAt = time.Now().Add(time.Minute - demandProfileTTL)
-		return claudeDemandCache.profile
+		demandCache.entries[vendor] = demandCacheEntry{
+			profile: flatDemand(), hour: hour, readAt: time.Now().Add(time.Minute - demandProfileTTL),
+		}
+		return flatDemand()
 	}
 	series := make([]float64, demandHistory)
 	for i := range series {
 		series[i] = float64(quota[from+int64(i)*3600])
 	}
 	profile := buildDemandProfile(series, from)
-	claudeDemandCache.profile, claudeDemandCache.hour, claudeDemandCache.readAt = profile, hour, time.Now()
+	demandCache.entries[vendor] = demandCacheEntry{profile: profile, hour: hour, readAt: time.Now()}
 	return profile
+}
+
+// vendorHourlyQuota sums quota_data per hour over every model prefix the
+// vendor sells under, for hours starting in [from, to).
+func vendorHourlyQuota(vendor string, from, to int64) (map[int64]int64, error) {
+	hours := make(map[int64]int64)
+	for _, prefix := range model.VendorPrefixes(vendor) {
+		quota, err := model.HourlyQuotaWithPrefix(prefix, from, to)
+		if err != nil {
+			return nil, err
+		}
+		for at, value := range quota {
+			hours[at] += value
+		}
+	}
+	return hours, nil
+}
+
+// over is the demand over [fromMS, toMS) when it averages level an hour
+// over a day, moved through the day by the shape and, when growing, by the
+// trend scenario's growth from fromMS on.
+func (profile demandProfile) over(level float64, fromMS, toMS int64, growing bool) float64 {
+	hour := time.Hour.Milliseconds()
+	total := 0.0
+	for at := fromMS; at < toMS; {
+		until := min(toMS, (at/hour+1)*hour)
+		amount := level * profile.at(at) * float64(until-at) / float64(hour)
+		if growing {
+			amount *= profile.growthAt(float64(at-fromMS) / float64(hour) / 24)
+		}
+		total += amount
+		at = until
+	}
+	return total
+}
+
+// growthPerDay is the profile's daily growth as a share.
+func (profile demandProfile) growthPerDay() float64 {
+	return math.Exp(profile.growth) - 1
 }

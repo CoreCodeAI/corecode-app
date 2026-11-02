@@ -222,3 +222,53 @@ func TestPoolRunwayProjectsTheScenariosAndTheHeadroom(t *testing.T) {
 	assert.Nil(t, plenty.Trend, "no growth, no trend")
 	assert.Nil(t, plenty.Low, "no band without past forecasts")
 }
+
+func maxFiveX(account EngineAccount) EngineAccount {
+	account.Plan, account.Tier, account.SevenDayCapacitySource = "Max", "default_claude_max_5x", "measured"
+	return account
+}
+
+func TestPoolRunwaySizesMaxFiveXAccountsToCloseTheGap(t *testing.T) {
+	// $10 an hour against a $400 week at the 50% line: each added account
+	// brings $200 a week, and the $1,480 shortfall takes eight of them.
+	runway := poolRunway(runwayPool(maxFiveX(runwayAccountAt(1, 100, 400, 10, 100))), "claude", 0, flatDemand())
+	require.NotNil(t, runway.Addition)
+	addition := runway.Addition
+	assert.Equal(t, "default_claude_max_5x", addition.Tier)
+	assert.InDelta(t, 200, addition.WeekUSD, 1e-9)
+	assert.Equal(t, 50.0, addition.BudgetPercent)
+	assert.Equal(t, 8, addition.ForLoad)
+	assert.Equal(t, 8, addition.ForTrend, "without a trend it is the same")
+	require.NotNil(t, addition.ForWeek)
+	assert.Positive(t, *addition.ForWeek)
+	assert.LessOrEqual(t, *addition.ForWeek, addition.ForLoad, "a week needs no more than the steady state")
+
+	// Each added account starts a full week now: with ForWeek of them the
+	// next 7 days have no gap, with one fewer they do.
+	base := []runwayAccount{{remaining: 100, full: 200, resetMS: 100 * runwayHourMS}}
+	flat := func(int64) float64 { return 10 }
+	with := func(count int) []runwayAccount {
+		accounts := append([]runwayAccount(nil), base...)
+		for range count {
+			accounts = append(accounts, runwayAccount{remaining: 200, full: 200, resetMS: 168 * runwayHourMS})
+		}
+		return accounts
+	}
+	assert.Nil(t, projectRunway(with(*addition.ForWeek), 0, flat).WeekHours)
+	assert.NotNil(t, projectRunway(with(*addition.ForWeek-1), 0, flat).WeekHours)
+}
+
+func TestPoolRunwayAddsNothingWhenSupplyKeepsUp(t *testing.T) {
+	runway := poolRunway(runwayPool(maxFiveX(runwayAccountAt(1, 200, 400, 1, 100))), "claude", 0, flatDemand())
+	require.NotNil(t, runway.Addition)
+	assert.Zero(t, runway.Addition.ForLoad)
+	require.NotNil(t, runway.Addition.ForWeek)
+	assert.Zero(t, *runway.Addition.ForWeek)
+}
+
+func TestPoolRunwayHasNoAdditionWithoutAMeasuredMaxFiveX(t *testing.T) {
+	account := runwayAccountAt(1, 100, 400, 10, 100)
+	account.Plan, account.Tier, account.SevenDayCapacitySource = "Team", "team_standard", "measured"
+	runway := poolRunway(runwayPool(account), "claude", 0, flatDemand())
+	assert.Nil(t, runway.Addition)
+}

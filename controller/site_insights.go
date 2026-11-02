@@ -256,3 +256,19 @@ func GetBusinessInsights(c *gin.Context) {
 func GetEnginePool(c *gin.Context) {
 	common.ApiSuccess(c, service.FetchEnginePool())
 }
+
+// GetPoolUsage returns one provider's use on new-api and gpt-load over the
+// last hour to the last week, with a forecast. It takes no range.
+func GetPoolUsage(c *gin.Context) {
+	provider := c.DefaultQuery("provider", model.VendorClaude)
+	if !slices.Contains(service.PoolProviders, provider) {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	usage, err := service.FetchPoolUsage(provider)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, usage)
+}

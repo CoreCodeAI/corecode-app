@@ -28,6 +28,8 @@ import type {
   FinanceInsights,
   GrowthInsights,
   InsightsRange,
+  PoolProvider,
+  PoolUsage,
   QualityInsights,
   RiskInsights,
 } from './types'
@@ -79,6 +81,18 @@ export async function getInsights<V extends InsightsView>(
         tz_offset: -new Date().getTimezoneOffset(),
       },
     }
+  )
+  if (!res.data.success || res.data.data === undefined) {
+    throw createServerError(res.data, 'Failed to load site insights')
+  }
+  return res.data.data
+}
+
+/** One provider's use on new-api and gpt-load, with a forecast. */
+export async function getPoolUsage(provider: PoolProvider): Promise<PoolUsage> {
+  const res = await api.get<ApiResponse<PoolUsage>>(
+    '/api/site-insights/pool-usage',
+    { params: { provider } }
   )
   if (!res.data.success || res.data.data === undefined) {
     throw createServerError(res.data, 'Failed to load site insights')
