@@ -25,6 +25,7 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { TapTooltip, TapTooltipTrigger } from '@/components/tap-tooltip'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -41,12 +42,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 import { useInsightsFormat } from '../lib'
@@ -379,13 +375,21 @@ export function Sparkline(props: {
         last: latest.title,
         value: props.format(latest.value),
       })}
+      // A finger dragging across reads point after point; a vertical drag
+      // still scrolls the page.
       className={cn(
-        'focus-visible:ring-ring/50 relative cursor-crosshair rounded-sm outline-none focus-visible:ring-2',
+        'focus-visible:ring-ring/50 relative cursor-crosshair touch-pan-y rounded-sm outline-none focus-visible:ring-2',
         props.className
       )}
+      onPointerDown={(event) => setActive(nearest(event))}
       onPointerMove={(event) => setActive(nearest(event))}
-      onPointerLeave={() => setActive(null)}
-      onFocus={() => setActive(last)}
+      // A lifted finger leaves too; its point stays read until a tap
+      // elsewhere blurs the chart.
+      onPointerLeave={(event) => {
+        if (event.pointerType !== 'touch') setActive(null)
+      }}
+      // A tap focuses the chart after its pointerdown has picked a point.
+      onFocus={() => setActive((current) => current ?? last)}
       onBlur={() => setActive(null)}
       onKeyDown={(event) => {
         if (event.key === 'ArrowLeft') {
@@ -741,108 +745,105 @@ export function BarSeries(props: {
                   ),
                 ].join(', ')
                 return (
-                  <li
-                    key={point.key}
-                    className={cn(
-                      'flex h-full min-w-0 flex-1',
-                      segmented &&
-                        point.axis &&
-                        pointIndex > 0 &&
-                        'border-border/70 border-l border-dashed'
-                    )}
-                  >
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <div
-                            tabIndex={0}
-                            aria-label={ariaLabel}
-                            className={cn(
-                              'group/bar focus-visible:ring-ring/50 hover:bg-muted/40 flex min-w-0 flex-1 flex-col-reverse items-stretch justify-start rounded-sm outline-none focus-visible:ring-3',
-                              spaced && 'px-px sm:px-[3px]'
-                            )}
-                          />
-                        }
-                      >
-                        {total > 0 && props.grouped && (
-                          <span className='flex h-full items-end gap-px'>
-                            {point.values.map((value, index) => (
-                              <span
-                                key={rows[index].id}
-                                className={cn(
-                                  'min-w-0 flex-1 rounded-t-[3px]',
-                                  colorOf(index)
-                                )}
-                                style={{ height: `${(value / top) * 100}%` }}
-                              />
-                            ))}
-                          </span>
-                        )}
-                        {total > 0 &&
-                          !props.grouped &&
-                          point.values.map((value, index) => (
+                  // The item is the trigger itself: a trigger inside an item
+                  // left a sub-pixel sliver at some item edges that the
+                  // pointer reached without reaching any bar.
+                  <TapTooltip key={point.key}>
+                    <TapTooltipTrigger
+                      render={
+                        <li
+                          tabIndex={0}
+                          aria-label={ariaLabel}
+                          className={cn(
+                            'group/bar focus-visible:ring-ring/50 hover:bg-muted/40 data-popup-open:bg-muted/40 flex h-full min-w-0 flex-1 flex-col-reverse items-stretch justify-start rounded-sm outline-none focus-visible:ring-3',
+                            spaced && 'px-px sm:px-[3px]',
+                            // A segment's divider is part of its first bar,
+                            // so pointing at the line still reads that bar.
+                            segmented &&
+                              point.axis &&
+                              pointIndex > 0 &&
+                              'border-border/70 rounded-l-none border-l border-dashed'
+                          )}
+                        />
+                      }
+                    >
+                      {total > 0 && props.grouped && (
+                        <span className='flex h-full items-end gap-px'>
+                          {point.values.map((value, index) => (
                             <span
                               key={rows[index].id}
                               className={cn(
-                                'w-full first:rounded-b-none last:rounded-t-[3px]',
+                                'min-w-0 flex-1 rounded-t-[3px]',
                                 colorOf(index)
                               )}
                               style={{ height: `${(value / top) * 100}%` }}
                             />
                           ))}
-                        {barLabels && total > 0 && (
+                        </span>
+                      )}
+                      {total > 0 &&
+                        !props.grouped &&
+                        point.values.map((value, index) => (
                           <span
-                            aria-hidden
+                            key={rows[index].id}
                             className={cn(
-                              'text-muted-foreground truncate pb-0.5 text-center text-[10px] leading-none tabular-nums',
-                              labelsCrowdNarrow && 'max-sm:hidden'
+                              'w-full first:rounded-b-none last:rounded-t-[3px]',
+                              colorOf(index)
                             )}
-                          >
-                            {axisFormat(total)}
-                          </span>
-                        )}
-                      </TooltipTrigger>
-                      <TooltipContent className='block min-w-40 py-2'>
-                        <p className='mb-1.5 font-semibold'>{point.title}</p>
-                        <dl className='grid grid-cols-[1fr_auto] gap-x-4 gap-y-1'>
-                          {rows.map((row) => (
-                            <div key={row.id} className='contents'>
-                              <dt
-                                className={cn(
-                                  'flex items-center gap-1.5 opacity-80',
-                                  row.id === 'total' &&
-                                    'font-medium opacity-100'
-                                )}
-                              >
-                                {row.dot && (
-                                  <span
-                                    className={cn('size-2 rounded-sm', row.dot)}
-                                  />
-                                )}
-                                {row.label}
-                              </dt>
-                              <dd
-                                className={cn(
-                                  'text-right tabular-nums',
-                                  row.id === 'total' && 'font-medium'
-                                )}
-                              >
-                                {row.value}
-                              </dd>
-                            </div>
-                          ))}
-                          {(point.extra ?? []).map((row) => (
-                            <div key={row.label} className='contents'>
-                              <dt className='opacity-80'>{row.label}</dt>
-                              <dd className='text-right tabular-nums'>
-                                {row.value}
-                              </dd>
-                            </div>
-                          ))}
-                        </dl>
-                      </TooltipContent>
-                    </Tooltip>
-                  </li>
+                            style={{ height: `${(value / top) * 100}%` }}
+                          />
+                        ))}
+                      {barLabels && total > 0 && (
+                        <span
+                          aria-hidden
+                          className={cn(
+                            'text-muted-foreground truncate pb-0.5 text-center text-[10px] leading-none tabular-nums',
+                            labelsCrowdNarrow && 'max-sm:hidden'
+                          )}
+                        >
+                          {axisFormat(total)}
+                        </span>
+                      )}
+                    </TapTooltipTrigger>
+                    <TooltipContent className='block min-w-40 py-2'>
+                      <p className='mb-1.5 font-semibold'>{point.title}</p>
+                      <dl className='grid grid-cols-[1fr_auto] gap-x-4 gap-y-1'>
+                        {rows.map((row) => (
+                          <div key={row.id} className='contents'>
+                            <dt
+                              className={cn(
+                                'flex items-center gap-1.5 opacity-80',
+                                row.id === 'total' && 'font-medium opacity-100'
+                              )}
+                            >
+                              {row.dot && (
+                                <span
+                                  className={cn('size-2 rounded-sm', row.dot)}
+                                />
+                              )}
+                              {row.label}
+                            </dt>
+                            <dd
+                              className={cn(
+                                'text-right tabular-nums',
+                                row.id === 'total' && 'font-medium'
+                              )}
+                            >
+                              {row.value}
+                            </dd>
+                          </div>
+                        ))}
+                        {(point.extra ?? []).map((row) => (
+                          <div key={row.label} className='contents'>
+                            <dt className='opacity-80'>{row.label}</dt>
+                            <dd className='text-right tabular-nums'>
+                              {row.value}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </TooltipContent>
+                  </TapTooltip>
                 )
               })}
             </ol>
@@ -914,13 +915,13 @@ export function Breakdown(props: {
           const share = total ? item.count / total : 0
           return (
             <li key={item.name} className='min-w-0'>
-              <Tooltip>
-                <TooltipTrigger
+              <TapTooltip>
+                <TapTooltipTrigger
                   render={
                     <div
                       tabIndex={0}
                       aria-label={`${name}: ${fmt.num(item.count)}, ${fmt.pct(share)}`}
-                      className='group/row hover:bg-muted/50 focus-visible:ring-ring/50 grid grid-cols-1 gap-1 rounded-md px-1.5 py-1 outline-none focus-visible:ring-2'
+                      className='group/row hover:bg-muted/50 data-popup-open:bg-muted/50 focus-visible:ring-ring/50 grid grid-cols-1 gap-1 rounded-md px-1.5 py-1 outline-none focus-visible:ring-2'
                     />
                   }
                 >
@@ -936,7 +937,7 @@ export function Breakdown(props: {
                       style={{ width: `${share * 100}%` }}
                     />
                   </div>
-                </TooltipTrigger>
+                </TapTooltipTrigger>
                 <TooltipContent className='block max-w-sm py-2'>
                   <p className='mb-1 font-semibold break-words'>{name}</p>
                   <p className='tabular-nums opacity-80'>
@@ -947,7 +948,7 @@ export function Breakdown(props: {
                     })}
                   </p>
                 </TooltipContent>
-              </Tooltip>
+              </TapTooltip>
             </li>
           )
         })}

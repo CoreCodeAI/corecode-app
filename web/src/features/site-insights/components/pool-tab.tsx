@@ -19,13 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { TapTooltip, TapTooltipTrigger } from '@/components/tap-tooltip'
 import { Badge } from '@/components/ui/badge'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 import { ATTENTION, useInsightsFormat } from '../lib'
@@ -660,8 +657,8 @@ function WindowCell(props: {
   const tone = usageTone(props.used, props.budget)
   const used = `${Math.round(props.used)}%`
   return (
-    <Tooltip>
-      <TooltipTrigger
+    <TapTooltip>
+      <TapTooltipTrigger
         render={
           <span
             tabIndex={0}
@@ -687,7 +684,7 @@ function WindowCell(props: {
         <span className='text-muted-foreground text-xs'>
           {t('Resets {{time}}', { time: props.reset })}
         </span>
-      </TooltipTrigger>
+      </TapTooltipTrigger>
       <TooltipContent className='block min-w-52 py-2'>
         <p className='mb-1.5 font-semibold'>{props.title}</p>
         <dl className='grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 tabular-nums'>
@@ -707,7 +704,7 @@ function WindowCell(props: {
           <dd className='text-right'>{props.reset}</dd>
         </dl>
       </TooltipContent>
-    </Tooltip>
+    </TapTooltip>
   )
 }
 
@@ -722,8 +719,8 @@ function ActivityCell(props: {
     failure: row.failures,
   })
   return (
-    <Tooltip>
-      <TooltipTrigger
+    <TapTooltip>
+      <TapTooltipTrigger
         render={
           <span
             tabIndex={0}
@@ -736,7 +733,7 @@ function ActivityCell(props: {
         }
       >
         {counts}
-      </TooltipTrigger>
+      </TapTooltipTrigger>
       <TooltipContent className='block max-w-sm py-2'>
         <p>
           {row.last_used_at_ms
@@ -752,6 +749,6 @@ function ActivityCell(props: {
           </p>
         )}
       </TooltipContent>
-    </Tooltip>
+    </TapTooltip>
   )
 }

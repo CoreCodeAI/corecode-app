@@ -26,6 +26,7 @@ import {
 } from '@tanstack/react-router'
 import {
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -144,9 +145,9 @@ it('shows a day as soon as the pointer reaches any part of its column', async ()
   // so the pointer never rests on a point that opens nothing.
   expect(chart.className).not.toMatch(/\bgap-/)
   const [first] = await within(chart).findAllByRole('listitem')
-  const bar = first.querySelector(
-    '[data-slot="tooltip-trigger"]'
-  ) as HTMLElement
+  // Each item is its day's trigger, so no edge of it is dead.
+  const bar = first
+  expect(bar).toHaveAttribute('data-slot', 'tooltip-trigger')
   expect(bar).toHaveClass('px-[0.5px]', 'sm:px-0.5')
 
   await userEvent.hover(bar)
@@ -161,6 +162,36 @@ it('shows a day as soon as the pointer reaches any part of its column', async ()
   )
   expect(tooltip).toHaveTextContent(formatPaymentMoney(30.3))
   expect(tooltip).toHaveTextContent('2 orders')
+})
+
+it('shows a day on a tap, which a touch screen sends instead of a hover', async () => {
+  renderPage()
+
+  const chart = await screen.findByRole('list', {
+    name: 'Daily top-up revenue',
+  })
+  const [first] = await within(chart).findAllByRole('listitem')
+  // Each item is its day's trigger, so no edge of it is dead.
+  const bar = first
+  expect(bar).toHaveAttribute('data-slot', 'tooltip-trigger')
+
+  fireEvent.pointerDown(bar, { pointerType: 'touch' })
+  fireEvent.click(bar)
+  const tooltip = await waitFor(() => {
+    const popup = document.querySelector('[data-slot="tooltip-content"]')
+    expect(popup).not.toBeNull()
+    return popup as HTMLElement
+  })
+  expect(tooltip).toHaveTextContent(formatPaymentMoney(30.3))
+
+  // A second tap on the same day puts it away.
+  fireEvent.pointerDown(bar, { pointerType: 'touch' })
+  fireEvent.click(bar)
+  await waitFor(() =>
+    expect(
+      document.querySelector('[data-slot="tooltip-content"][data-open]')
+    ).toBeNull()
+  )
 })
 
 it('applies the user filter to both the records and the summary on Search', async () => {

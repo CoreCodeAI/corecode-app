@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import { RefreshCw } from 'lucide-react'
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -141,6 +141,22 @@ export function SiteInsights() {
     preset === 1 ? t('24 hours') : t('{{count}} days', { count: preset })
   const fetching = view ? query.isFetching : false
 
+  // On a narrow screen the tabs scroll sideways in one row; the open one is
+  // kept in view, including when the page opens on a later tab.
+  const tabsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const list = tabsRef.current
+    const active = list?.querySelector('[data-active]')
+    if (!list || !active) return
+    const box = list.getBoundingClientRect()
+    const item = active.getBoundingClientRect()
+    if (item.left < box.left) {
+      list.scrollLeft -= box.left - item.left + 24
+    } else if (item.right > box.right) {
+      list.scrollLeft += item.right - box.right + 24
+    }
+  }, [tab])
+
   return (
     <SectionPageLayout>
       <SectionPageLayout.Title>
@@ -152,9 +168,11 @@ export function SiteInsights() {
         </span>
       </SectionPageLayout.Title>
       <SectionPageLayout.Content>
-        <div className='grid gap-4'>
+        {/* A minmax track, so the tab row's width cannot widen the page. */}
+        <div className='grid grid-cols-[minmax(0,1fr)] gap-4'>
           <div className='flex flex-wrap items-center justify-between gap-2'>
             <Tabs
+              className='max-w-full min-w-0'
               value={tab}
               onValueChange={(value) =>
                 navigate({
@@ -162,16 +180,22 @@ export function SiteInsights() {
                 })
               }
             >
-              <TabsList className='h-auto flex-wrap group-data-horizontal/tabs:h-auto'>
+              <TabsList
+                ref={tabsRef}
+                className='no-scrollbar h-auto max-w-full justify-start overflow-x-auto group-data-horizontal/tabs:h-auto'
+              >
                 {INSIGHTS_TAB_GROUPS.map((group, index) => (
                   <Fragment key={group.key}>
                     {index > 0 && (
-                      <span aria-hidden className='bg-border mx-1 h-4 w-px' />
+                      <span
+                        aria-hidden
+                        className='bg-border mx-1 h-4 w-px shrink-0'
+                      />
                     )}
                     {group.key in groupLabels && (
                       <span
                         aria-hidden
-                        className='text-muted-foreground px-1 text-[11px]'
+                        className='text-muted-foreground shrink-0 px-1 text-[11px] whitespace-nowrap'
                       >
                         {groupLabels[group.key]}
                       </span>

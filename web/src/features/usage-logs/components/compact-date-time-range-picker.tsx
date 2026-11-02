@@ -70,6 +70,11 @@ export function CompactDateTimeRangePicker({
     if (dayjs(start).isSame(end, 'day')) {
       return `${dayjs(start).format('MM/DD HH:mm:ss')}–${dayjs(end).format('HH:mm:ss')}`
     }
+    // CoreCode: a range within one year fits a phone's line without the
+    // year and seconds; the full range stays in the accessible name.
+    if (dayjs(start).isSame(end, 'year')) {
+      return `${dayjs(start).format('MM/DD HH:mm')} – ${dayjs(end).format('MM/DD HH:mm')}`
+    }
     return label
   }, [start, end, label])
 

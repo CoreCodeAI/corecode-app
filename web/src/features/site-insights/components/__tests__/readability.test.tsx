@@ -267,6 +267,24 @@ describe('sparkline', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
+  it('keeps a tapped point read after the finger lifts', () => {
+    render(
+      <Sparkline points={points} format={(v) => `¥${v}`} label='Revenue' />
+    )
+    const line = screen.getByRole('img', { name: /^Revenue/ })
+    line.getBoundingClientRect = () =>
+      ({ left: 0, width: 200, top: 0, height: 32 }) as DOMRect
+    // A tap sends pointerdown, then focus, then pointerleave as the finger
+    // lifts; the point it picked survives all three.
+    fireEvent.pointerDown(line, { clientX: 100, pointerType: 'touch' })
+    fireEvent.focus(line)
+    fireEvent.pointerLeave(line, { pointerType: 'touch' })
+    expect(screen.getByRole('status')).toHaveTextContent('10/27 ¥300')
+
+    fireEvent.blur(line)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
   it('steps through points with the arrow keys', () => {
     render(
       <Sparkline points={points} format={(v) => `¥${v}`} label='Revenue' />
@@ -321,6 +339,47 @@ describe('bar hover areas', () => {
     expect(list.className).not.toMatch(/\bgap-/)
     const bar = screen.getByLabelText(/^a,/)
     expect(bar).toHaveClass('px-px')
+  })
+
+  it('opens a bar on a tap, which a touch screen sends instead of a hover', async () => {
+    render(
+      <BarSeries
+        ariaLabel='daily'
+        series={[{ label: 'Count' }]}
+        points={[
+          { key: 1, title: 'a', values: [1] },
+          { key: 2, title: 'b', values: [2] },
+        ]}
+      />
+    )
+    fireEvent.pointerDown(screen.getByLabelText(/^b,/), {
+      pointerType: 'touch',
+    })
+    const popup = await screen.findByText('b', {
+      selector: '[data-slot=tooltip-content] p',
+    })
+    expect(popup.closest('[data-slot=tooltip-content]')).toHaveTextContent(
+      'Count2'
+    )
+  })
+
+  it('makes each bar its own list item, divider included, so no edge is dead', () => {
+    render(
+      <BarSeries
+        ariaLabel='hourly'
+        series={[{ label: 'Count' }]}
+        points={[
+          { key: 1, title: 'd1 00', axis: 'd1', values: [1] },
+          { key: 2, title: 'd1 01', values: [1] },
+          { key: 3, title: 'd2 00', axis: 'd2', values: [1] },
+        ]}
+      />
+    )
+    for (const item of screen.getAllByRole('listitem')) {
+      expect(item).toHaveAttribute('data-slot', 'tooltip-trigger')
+    }
+    expect(screen.getByLabelText(/^d2 00,/)).toHaveClass('border-l')
+    expect(screen.getByLabelText(/^d1 01,/)).not.toHaveClass('border-l')
   })
 
   it('draws a dense series edge to edge', () => {
