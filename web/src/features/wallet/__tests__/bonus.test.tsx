@@ -69,12 +69,12 @@ describe('bonus on the recharge form', () => {
 
     const preset1000 = screen.getByRole('button', { name: /1,000/ })
     expect(within(preset1000).getByText('+10% bonus')).toBeVisible()
-    expect(preset1000).toHaveTextContent('Bonus 100')
-    const preset300 = screen.getByRole('button', { name: /^300/ })
+    expect(preset1000).toHaveTextContent('Bonus $100')
+    const preset300 = screen.getByRole('button', { name: /^\$300/ })
     expect(within(preset300).getByText('+5% bonus')).toBeVisible()
-    expect(preset300).toHaveTextContent('Bonus 15')
+    expect(preset300).toHaveTextContent('Bonus $15')
     // 100 is below the lowest tier
-    const preset100 = screen.getByRole('button', { name: /^100/ })
+    const preset100 = screen.getByRole('button', { name: /^\$100/ })
     expect(preset100).not.toHaveTextContent('bonus')
   })
 
@@ -82,15 +82,15 @@ describe('bonus on the recharge form', () => {
     renderForm(topupInfo('alipay'), 1200)
 
     // 1200 falls in the 1000 tier, so 120 is earned; no tier above it
-    expect(screen.getByText('Bonus 120 (+10% bonus)')).toBeVisible()
+    expect(screen.getByText('Bonus $120 (+10% bonus)')).toBeVisible()
     expect(screen.queryByText(/more to get/)).not.toBeInTheDocument()
   })
 
   it('hints at the next tier below the top one', () => {
     renderForm(topupInfo('alipay'), 500)
 
-    expect(screen.getByText('Top up 500 more to get 10% bonus')).toBeVisible()
-    expect(screen.getByText('Bonus 25 (+5% bonus)')).toBeVisible()
+    expect(screen.getByText('Top up $500 more to get 10% bonus')).toBeVisible()
+    expect(screen.getByText('Bonus $25 (+5% bonus)')).toBeVisible()
   })
 
   it('shows no bonus when only non-epay methods can be used', () => {

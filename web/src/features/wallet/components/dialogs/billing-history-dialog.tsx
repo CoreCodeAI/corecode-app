@@ -46,7 +46,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { formatCurrencyFromUSD } from '@/lib/currency'
-import { formatNumber, formatQuota } from '@/lib/format'
+import { formatQuota } from '@/lib/format'
 
 import { useBillingHistory } from '../../hooks/use-billing-history'
 import {
@@ -54,6 +54,7 @@ import {
   getPaymentMethodName,
   formatTimestamp,
 } from '../../lib/billing'
+import { formatPaymentMoney } from '../../lib/format'
 
 interface BillingHistoryDialogProps {
   open: boolean
@@ -260,7 +261,7 @@ export function BillingHistoryDialog({
                             {t('Payment')}
                           </Label>
                           <div className='text-sm font-semibold text-red-600'>
-                            {formatNumber(record.money)}
+                            {formatPaymentMoney(record.money)}
                           </div>
                         </div>
                       </div>
