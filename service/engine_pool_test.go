@@ -97,6 +97,12 @@ func TestFetchEnginePool(t *testing.T) {
 	require.NotNil(t, pool.FiveHour)
 	assert.Equal(t, 400.0, pool.FiveHour.RemainingUSD)
 	assert.Equal(t, []EngineRefill{{CredentialID: 6, At: 99, AddsUSD: 20}}, pool.Refills)
+	require.NotNil(t, pool.Runway)
+	assert.Equal(t, "claude", pool.Runway.Channel)
+	assert.Equal(t, 1, pool.Runway.Counted)
+	assert.Equal(t, 3, pool.Runway.Unknown, "the Claude accounts the estimate has no reading for")
+	assert.Equal(t, 1250*0.95, pool.Runway.WeekCapacityUSD)
+	assert.Equal(t, 9.5, pool.Runway.BurnUSDPerHour)
 
 	before := requests.Load()
 	assert.Equal(t, pool, FetchEnginePool(), "a complete read is reused within the TTL")

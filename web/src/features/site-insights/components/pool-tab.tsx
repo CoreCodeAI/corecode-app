@@ -34,6 +34,7 @@ import type {
   EngineGroup,
   EngineHorizon,
   EnginePool,
+  EngineRunway,
 } from '../types'
 import { MetricGrid, Meter, Panel, SimpleTable, type Tone } from './shared'
 
@@ -195,6 +196,10 @@ export function PoolTab(props: { data: EnginePool | undefined }) {
           },
         ]}
       />
+
+      {pool?.runway && (
+        <RunwayPanel runway={pool.runway} observedAt={pool.observed_at_ms} />
+      )}
 
       <Panel
         title={t('Groups')}
@@ -429,6 +434,125 @@ export function PoolTab(props: { data: EnginePool | undefined }) {
       </Panel>
     </div>
   )
+}
+
+/**
+ * How long the Claude accounts last at the last 24 hours' spend: the weekly
+ * quota, with each account refilling at its own weekly reset, and the 5-hour
+ * quota left now.
+ */
+function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const { runway } = props
+  const spending = runway.burn_usd_per_hour > 0
+  const duration = (hours: number) =>
+    hours < 48
+      ? t('{{hours}} hours', { hours: hours.toFixed(1) })
+      : t('{{days}} days', { days: (hours / 24).toFixed(1) })
+  const dryAt = (hours: number) =>
+    fmt.time(Math.floor((props.observedAt + hours * 3_600_000) / 1000))
+  const week = runway.week_hours
+  const five = runway.five_hour_hours
+  let weekValue = '-'
+  if (spending) {
+    weekValue =
+      week == null
+        ? `> ${duration(runway.horizon_hours)}`
+        : `≈ ${duration(week)}`
+  }
+  let description = t('No Claude spend logged in the last 24 hours.')
+  if (spending && week != null) {
+    description = t(
+      'At the last 24 hours’ spend, the weekly quota runs out around {{time}}.',
+      { time: dryAt(week) }
+    )
+  } else if (spending) {
+    description = t(
+      'At the last 24 hours’ spend, weekly resets keep up with demand for at least {{duration}}.',
+      { duration: duration(runway.horizon_hours) }
+    )
+  }
+  return (
+    <Panel
+      title={t('Claude pool runway')}
+      description={description}
+      help={t(
+        'Demand is every Claude account’s logged spend over the last 24 hours, per hour. The projection spreads it over the counted accounts in proportion to what each has left, and refills each account to its 7-day budget line at its weekly reset; what an account has left at its reset is lost. Accounts without a weekly estimate are not counted. Spend that was turned away is not in the demand, so a saturated pool lasts less than shown.'
+      )}
+    >
+      <MetricGrid
+        items={[
+          {
+            label: t('7-day quota lasts'),
+            value: weekValue,
+            tone: runwayTone(spending ? week : null),
+            hint:
+              spending && week != null
+                ? t('Runs out {{time}}', { time: dryAt(week) })
+                : t('{{amount}} left', {
+                    amount: fmt.usdWhole(runway.week_remaining_usd),
+                  }),
+          },
+          {
+            label: t('Weekly load'),
+            help: t(
+              'A week of demand over a week of the counted accounts’ capacity up to their budget lines. Under 100% the pool refills faster than it is spent.'
+            ),
+            value: fmt.pct(runway.week_load),
+            tone: loadShareTone(runway.week_load),
+            meter: {
+              value: Math.min(runway.week_load, 1),
+              tone: loadShareTone(runway.week_load),
+              label: t('Weekly load'),
+            },
+            hint: t('{{demand}} of {{capacity}} a week', {
+              demand: fmt.usdWhole(runway.burn_usd_per_hour * 168),
+              capacity: fmt.usdWhole(runway.week_capacity_usd),
+            }),
+          },
+          {
+            label: t('5-hour quota lasts'),
+            help: t(
+              'The counted accounts’ 5-hour remainder at the 24-hour average spend. Daytime peaks spend faster, and each 5-hour window refills at its own reset.'
+            ),
+            value: five == null ? '-' : `≈ ${duration(five)}`,
+            tone: five != null && five < 1 ? 'warning' : 'default',
+            hint: t('{{amount}} left', {
+              amount: fmt.usdWhole(runway.five_hour_remaining_usd),
+            }),
+          },
+          {
+            label: t('Demand per hour'),
+            value: fmt.usd(runway.burn_usd_per_hour),
+            hint: runway.unknown
+              ? t(
+                  '{{counted}} accounts counted, {{unknown}} without an estimate',
+                  {
+                    counted: runway.counted,
+                    unknown: runway.unknown,
+                  }
+                )
+              : t('{{counted}} accounts counted', { counted: runway.counted }),
+          },
+        ]}
+      />
+    </Panel>
+  )
+}
+
+// A weekly quota that runs out within a day, or within three, needs accounts.
+function runwayTone(hours: number | null): Tone {
+  if (hours == null) return 'default'
+  if (hours < 24) return 'danger'
+  if (hours < 72) return 'warning'
+  return 'default'
+}
+
+function loadShareTone(load: number): Tone {
+  if (load >= 1) return 'danger'
+  if (load >= 0.8) return 'warning'
+  return 'default'
 }
 
 // Remaining shares below these read as running low.

@@ -20,7 +20,12 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
-import type { EngineAccount, EngineGroup, EnginePool } from '../../types'
+import type {
+  EngineAccount,
+  EngineGroup,
+  EnginePool,
+  EngineRunway,
+} from '../../types'
 import { PoolTab } from '../pool-tab'
 import { Breakdown } from '../shared'
 
@@ -134,6 +139,67 @@ describe('pool account quota meters', () => {
     expect(tooltip.closest('[data-slot=tooltip-content]')).toHaveTextContent(
       /Budget line\s*90%/
     )
+  })
+})
+
+function runway(overrides: Partial<EngineRunway>): EngineRunway {
+  return {
+    channel: 'claude',
+    burn_usd_per_hour: 10,
+    week_remaining_usd: 300,
+    week_capacity_usd: 2000,
+    week_load: 0.84,
+    week_hours: 30,
+    horizon_hours: 336,
+    five_hour_remaining_usd: 25,
+    five_hour_hours: 2.5,
+    counted: 4,
+    unknown: 1,
+    ...overrides,
+  }
+}
+
+describe('pool runway', () => {
+  it('reads out when the weekly quota runs dry and the load behind it', () => {
+    render(
+      <PoolTab
+        data={{ ...pool([group({})], [account({})]), runway: runway({}) }}
+      />
+    )
+
+    expect(screen.getByText('≈ 30.0 hours')).toBeInTheDocument()
+    expect(screen.getByText('≈ 2.5 hours')).toBeInTheDocument()
+    expect(screen.getByText('84%')).toBeInTheDocument()
+    expect(screen.getByRole('meter', { name: 'Weekly load' })).toHaveAttribute(
+      'aria-valuenow',
+      '84'
+    )
+    expect(
+      screen.getByText('4 accounts counted, 1 without an estimate')
+    ).toBeInTheDocument()
+  })
+
+  it('says the pool keeps up when it lasts past the horizon', () => {
+    render(
+      <PoolTab
+        data={{
+          ...pool([group({})], [account({})]),
+          runway: runway({ week_hours: null, week_load: 0.4 }),
+        }}
+      />
+    )
+
+    expect(screen.getByText('> 14.0 days')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /weekly resets keep up with demand for at least 14.0 days/
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('stays hidden before the server sends it', () => {
+    render(<PoolTab data={pool([group({})], [account({})])} />)
+    expect(screen.queryByText('Claude pool runway')).toBeNull()
   })
 })
 

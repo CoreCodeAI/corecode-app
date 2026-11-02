@@ -104,7 +104,26 @@ export type EnginePool = {
   five_hour_estimate: EngineHorizon | null
   week_estimate: EngineHorizon | null
   refills: { credential_id: number; at_ms: number; adds_usd: number }[]
+  /** Absent before the server's release, null without an estimate. */
+  runway?: EngineRunway | null
   estimate_error?: string
+}
+
+/** How long one channel's pool lasts at the last 24 hours' spend. */
+export type EngineRunway = {
+  channel: string
+  burn_usd_per_hour: number
+  week_remaining_usd: number
+  week_capacity_usd: number
+  /** A week of demand over a week of capacity; under 1 the pool keeps up. */
+  week_load: number
+  /** null when the pool still serves at horizon_hours, or nothing was spent. */
+  week_hours: number | null
+  horizon_hours: number
+  five_hour_remaining_usd: number
+  five_hour_hours: number | null
+  counted: number
+  unknown: number
 }
 
 export type CapacityInsights = {
