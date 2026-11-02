@@ -78,6 +78,38 @@ type EngineRunway struct {
 	// Curve is the weekly quota left at each whole hour of the horizon,
 	// from now: HorizonHours+1 points, cents. Empty without demand.
 	Curve []float64 `json:"curve"`
+	// ProfileHours is the hours of use the daily shape of demand is drawn
+	// from; 0 projects demand flat at its 24-hour average.
+	ProfileHours int `json:"profile_hours"`
+	// PeakHourUSDPerHour is demand in the busiest hour of the day.
+	PeakHourUSDPerHour float64 `json:"peak_hour_usd_per_hour"`
+	// GrowthPerDay is how much use grew a day over the last week; the
+	// Trend scenario carries it on, damped.
+	GrowthPerDay float64 `json:"growth_per_day"`
+	// HeadroomScale is the largest multiple of demand the pool serves for
+	// the whole horizon without a gap; nil above runwayMaxScale.
+	HeadroomScale *float64 `json:"headroom_scale"`
+	// Trend projects demand growing on; Low and High scale it to the 10th
+	// and 90th percentiles of how past forecasts compared with the use that
+	// followed, widened to hold demand as now. Each is nil without the
+	// history it needs.
+	Trend *EngineRunwayScenario `json:"trend"`
+	Low   *EngineRunwayScenario `json:"low"`
+	High  *EngineRunwayScenario `json:"high"`
+	// BandForecasts is the past forecasts Low and High are drawn from.
+	BandForecasts int `json:"band_forecasts"`
+}
+
+// EngineRunwayScenario is the projection under another demand.
+type EngineRunwayScenario struct {
+	// DemandScale is the scenario's demand over the base demand; for the
+	// trend, at the end of the horizon.
+	DemandScale     float64   `json:"demand_scale"`
+	ShortHours      float64   `json:"short_hours"`
+	ServedShare     float64   `json:"served_share"`
+	WeekHours       *float64  `json:"week_hours"`
+	FirstShortHours *float64  `json:"first_short_hours"`
+	Curve           []float64 `json:"curve"`
 }
 
 type runwayAccount struct {
@@ -86,14 +118,19 @@ type runwayAccount struct {
 	resetMS   int64
 }
 
+// runwayMaxScale bounds the headroom search: a pool that lasts at this many
+// times its demand is not short of quota.
+const runwayMaxScale = 4.0
+
 // poolRunway sets the channel's demand against its quota supply. Over the next
-// runwayHorizon, at the last 24 hours' spend, demand is spread over the
-// accounts in proportion to what each has left, as the engine's headroom
-// routing roughly does, so every account drains at the same rate. At its
-// weekly reset an account returns to its full budget, discarding what it had
-// left. When nothing is left, demand goes unserved until the next reset.
-// Returns nil when the channel has no accounts.
-func poolRunway(pool EnginePool, channel string, nowMS int64) *EngineRunway {
+// runwayHorizon, demand runs at the last 24 hours' spend, moved through the
+// day by the profile's shape, and is spread over the accounts in proportion
+// to what each has left, as the engine's headroom routing roughly does, so
+// every account drains at the same rate. At its weekly reset an account
+// returns to its full budget, discarding what it had left. When nothing is
+// left, demand goes unserved until the next reset. Returns nil when the
+// channel has no accounts.
+func poolRunway(pool EnginePool, channel string, nowMS int64, profile demandProfile) *EngineRunway {
 	groups := make(map[int]EngineGroup, len(pool.Groups))
 	for _, group := range pool.Groups {
 		groups[group.ID] = group
@@ -156,50 +193,124 @@ func poolRunway(pool EnginePool, channel string, nowMS int64) *EngineRunway {
 	}
 	fiveHours := runway.FiveHourRemainingUSD / burn
 	runway.FiveHourHours = &fiveHours
+	runway.ProfileHours = profile.hours
+	runway.PeakHourUSDPerHour = burn * profile.peak()
+	runway.GrowthPerDay = math.Exp(profile.growth) - 1
 
-	endMS := nowMS + runwayHorizon.Milliseconds()
-	atMS, left, served := nowMS, runway.WeekRemainingUSD, 0.0
-	runway.LowestUSD = left
-	runway.Curve = make([]float64, 0, int(runwayHorizon.Hours())+1)
-	// sample records the hours from the next unsampled one up to untilMS
-	// (through it at the horizon's end), draining from left at atMS.
-	sample := func(untilMS int64, last bool) {
-		for {
-			hour := len(runway.Curve)
-			sampleMS := nowMS + int64(hour)*time.Hour.Milliseconds()
-			if sampleMS > untilMS || (sampleMS == untilMS && !last) {
-				return
+	at := func(scale float64) func(ms int64) float64 {
+		return func(ms int64) float64 { return burn * scale * profile.at(ms) }
+	}
+	base := projectRunway(accounts, nowMS, at(1))
+	runway.ShortHours, runway.ServedShare = base.ShortHours, base.ServedShare
+	runway.LowestUSD, runway.LowestHours = base.lowestUSD, base.lowestHours
+	runway.WeekHours, runway.FirstShortHours, runway.Curve = base.WeekHours, base.FirstShortHours, base.Curve
+
+	if profile.growth != 0 {
+		trend := projectRunway(accounts, nowMS, func(ms int64) float64 {
+			return at(profile.growthAt(float64(ms-nowMS) / hourMS / 24))(ms)
+		})
+		trend.DemandScale = profile.growthAt(runwayHorizon.Hours() / 24)
+		runway.Trend = &trend.EngineRunwayScenario
+	}
+	if profile.origins > 0 {
+		// The band holds demand as now, even when past forecasts all fell
+		// short of the use that followed.
+		lowScale, highScale := min(profile.low, 1), max(profile.high, 1)
+		low, high := projectRunway(accounts, nowMS, at(lowScale)), projectRunway(accounts, nowMS, at(highScale))
+		low.DemandScale, high.DemandScale = lowScale, highScale
+		runway.Low, runway.High, runway.BandForecasts = &low.EngineRunwayScenario, &high.EngineRunwayScenario, profile.origins
+	}
+
+	// The largest scale without a gap, to within 0.1% of demand.
+	if projectRunway(accounts, nowMS, at(runwayMaxScale)).WeekHours != nil {
+		lo, hi := 0.0, runwayMaxScale
+		for hi-lo > 0.001 {
+			mid := (lo + hi) / 2
+			if projectRunway(accounts, nowMS, at(mid)).WeekHours == nil {
+				lo = mid
+			} else {
+				hi = mid
 			}
-			usd := max(left-burn*float64(sampleMS-atMS)/hourMS, 0)
-			runway.Curve = append(runway.Curve, math.Round(usd*100)/100)
+		}
+		runway.HeadroomScale = &lo
+	}
+	return &runway
+}
+
+type runwayProjection struct {
+	EngineRunwayScenario
+	lowestUSD   float64
+	lowestHours float64
+}
+
+// projectRunway runs the accounts forward over runwayHorizon from nowMS at
+// demand rate(ms) dollars an hour, which holds within each UTC clock hour.
+// It steps from one clock hour, reset, or curve sample to the next. A reset
+// is applied before the sample at the same moment, so a reset on the hour
+// reads as refilled.
+func projectRunway(start []runwayAccount, nowMS int64, rate func(ms int64) float64) runwayProjection {
+	accounts := append([]runwayAccount(nil), start...)
+	hour := time.Hour.Milliseconds()
+	hourMS := float64(hour)
+	endMS := nowMS + runwayHorizon.Milliseconds()
+	result := runwayProjection{EngineRunwayScenario: EngineRunwayScenario{
+		DemandScale: 1, Curve: make([]float64, 0, int(runwayHorizon.Hours())+1),
+	}}
+	left := 0.0
+	for _, account := range accounts {
+		left += account.remaining
+	}
+	result.lowestUSD = left
+	served, demanded := 0.0, 0.0
+	firstOpen := false
+	sample := func(ms int64) {
+		for len(result.Curve) <= int(runwayHorizon.Hours()) && nowMS+int64(len(result.Curve))*hour <= ms {
+			result.Curve = append(result.Curve, math.Round(left*100)/100)
 		}
 	}
-	for {
-		next := -1
-		for i, account := range accounts {
-			if next < 0 || account.resetMS < accounts[next].resetMS {
-				next = i
+	for atMS := nowMS; atMS < endMS; {
+		for i := range accounts {
+			if accounts[i].resetMS <= atMS {
+				left += accounts[i].full - accounts[i].remaining
+				accounts[i].remaining = accounts[i].full
+				accounts[i].resetMS += runwayWeek.Milliseconds()
 			}
 		}
-		untilMS := endMS
-		if next >= 0 && accounts[next].resetMS < endMS {
-			untilMS = accounts[next].resetMS
+		sample(atMS)
+		untilMS := min(endMS, (atMS/hour+1)*hour, nowMS+int64(len(result.Curve))*hour)
+		for _, account := range accounts {
+			untilMS = min(untilMS, account.resetMS)
 		}
 		span := float64(untilMS-atMS) / hourMS
-		need := burn * span
-		sample(untilMS, untilMS == endMS)
+		perHour := rate(atMS)
+		need := perHour * span
+		demanded += need
+		if left > 0 {
+			firstOpen = false
+		}
 		switch {
-		case span <= 0:
-		case need >= left:
-			lasts := left / burn
-			if runway.WeekHours == nil {
-				start := float64(atMS-nowMS)/hourMS + lasts
-				length := span - lasts
-				runway.WeekHours, runway.FirstShortHours = &start, &length
+		case need <= 0:
+			// A quiet hour inside a gap is still an hour without quota.
+			if left <= 0 && result.WeekHours != nil {
+				result.ShortHours += span
+				if firstOpen {
+					*result.FirstShortHours += span
+				}
 			}
-			runway.ShortHours += span - lasts
-			if runway.LowestUSD > 0 {
-				runway.LowestUSD, runway.LowestHours = 0, float64(atMS-nowMS)/hourMS+lasts
+		case need >= left:
+			lasts := left / perHour
+			if result.WeekHours == nil {
+				startHours := float64(atMS-nowMS)/hourMS + lasts
+				length := 0.0
+				result.WeekHours, result.FirstShortHours = &startHours, &length
+				firstOpen = true
+			}
+			if firstOpen {
+				*result.FirstShortHours += span - lasts
+			}
+			result.ShortHours += span - lasts
+			if result.lowestUSD > 0 {
+				result.lowestUSD, result.lowestHours = 0, float64(atMS-nowMS)/hourMS+lasts
 			}
 			served += left
 			left = 0
@@ -210,21 +321,19 @@ func poolRunway(pool EnginePool, channel string, nowMS int64) *EngineRunway {
 			scale := (left - need) / left
 			served += need
 			left -= need
-			if left < runway.LowestUSD {
-				runway.LowestUSD, runway.LowestHours = left, float64(untilMS-nowMS)/hourMS
+			if left < result.lowestUSD {
+				result.lowestUSD, result.lowestHours = left, float64(untilMS-nowMS)/hourMS
 			}
 			for i := range accounts {
 				accounts[i].remaining *= scale
 			}
 		}
-		if untilMS == endMS {
-			break
-		}
-		left += accounts[next].full - accounts[next].remaining
-		accounts[next].remaining = accounts[next].full
-		accounts[next].resetMS += runwayWeek.Milliseconds()
 		atMS = untilMS
 	}
-	runway.ServedShare = served / (burn * runwayHorizon.Hours())
-	return &runway
+	sample(endMS)
+	result.ServedShare = 1
+	if demanded > 0 {
+		result.ServedShare = served / demanded
+	}
+	return result
 }

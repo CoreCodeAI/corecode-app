@@ -511,6 +511,38 @@ function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
           )
   }
 
+  // How the week changes if use keeps growing as it has.
+  const growth = runway.growth_per_day ?? 0
+  const trendStart = runway.trend?.week_hours
+  let trend: string | null = null
+  if (runway.trend && growth >= 0.01) {
+    if (trendStart == null) {
+      trend = t('Growing {{rate}} a day, it still lasts the 7 days.', {
+        rate: fmt.pct(growth),
+      })
+    } else if (gapStart == null || trendStart < gapStart - 1) {
+      trend = t(
+        'If use keeps growing {{rate}} a day, it runs out around {{time}}.',
+        { rate: fmt.pct(growth), time: at(trendStart) }
+      )
+    }
+  }
+  const headroom = runway.headroom_scale
+  const signedPct = (value: number) =>
+    `${value >= 0 ? '+' : '−'}${fmt.pct(Math.abs(value))}`
+  const peakHour = runway.peak_hour_usd_per_hour
+  let peakHint: string | undefined
+  if (runway.peak_usd_per_hour && peakHour) {
+    peakHint = t('Busiest hour {{amount}}/h · {{share}}', {
+      amount: fmt.usdWhole(peakHour),
+      share: fmt.pct(peakHour / runway.peak_usd_per_hour),
+    })
+  } else if (runway.peak_usd_per_hour) {
+    peakHint = t('{{multiple}} the demand', {
+      multiple: fmt.multiple(runway.peak_usd_per_hour / burn),
+    })
+  }
+
   let lowestTone: Tone = 'default'
   if (gapStart != null) {
     lowestTone = 'danger'
@@ -521,9 +553,9 @@ function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
   return (
     <Panel
       title={t('Claude pool supply')}
-      description={[supply, week].join(' ')}
+      description={[supply, week, trend].filter(Boolean).join(' ')}
       help={t(
-        'Demand is every Claude account’s spend over the last 24 hours, per hour. Supply is each counted account’s weekly capacity up to its budget line, refilled at its weekly reset; quota left at a reset is lost. Turned-away requests are not in the demand.'
+        'Demand is every Claude account’s spend over the last 24 hours, per hour, moved through the day by the last week’s hourly use. Supply is each counted account’s weekly capacity up to its budget line, refilled at its weekly reset; quota left at a reset is lost. Turned-away requests are not in the demand.'
       )}
     >
       <MetricGrid
@@ -581,6 +613,26 @@ function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
                 : at(runway.lowest_hours),
           },
           {
+            label: t('Demand headroom'),
+            help: t(
+              'How far demand can move before the next 7 days run short: the most the pool serves without a gap, against demand now.'
+            ),
+            value:
+              headroom == null
+                ? t('Over {{multiple}}', { multiple: fmt.multiple(4) })
+                : signedPct(headroom - 1),
+            tone: headroomTone(headroom),
+            hint:
+              headroom == null
+                ? undefined
+                : t(
+                    headroom < 1
+                      ? 'Lasts 7 days at {{amount}}/h or less'
+                      : 'Runs short above {{amount}}/h',
+                    { amount: fmt.usd(burn * headroom) }
+                  ),
+          },
+          {
             label: t('Peak throughput'),
             help: t(
               '5-hour capacity up to the budget line, per hour: the most a burst can draw.'
@@ -590,11 +642,11 @@ function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
                   amount: fmt.usdWhole(runway.peak_usd_per_hour),
                 })
               : '-',
-            hint: runway.peak_usd_per_hour
-              ? t('{{multiple}} the demand', {
-                  multiple: fmt.multiple(runway.peak_usd_per_hour / burn),
-                })
-              : undefined,
+            tone:
+              peakHour && runway.peak_usd_per_hour
+                ? loadShareTone(peakHour / runway.peak_usd_per_hour)
+                : 'default',
+            hint: peakHint,
           },
           {
             label: t('Demand per hour'),
@@ -602,15 +654,27 @@ function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
               'The last 24 hours’ spend per hour, used for the projection. Week to date is use since each account’s weekly reset; close figures mean the last day was typical.'
             ),
             value: fmt.usd(burn),
-            hint: t('Week to date {{amount}}/h · {{counted}} accounts', {
-              amount: fmt.usd(runway.week_to_date_usd_per_hour),
-              counted: runway.counted,
-            }),
+            hint: runway.trend
+              ? t('Week to date {{amount}}/h · {{growth}} a day', {
+                  amount: fmt.usd(runway.week_to_date_usd_per_hour),
+                  growth: signedPct(growth),
+                })
+              : t('Week to date {{amount}}/h · {{counted}} accounts', {
+                  amount: fmt.usd(runway.week_to_date_usd_per_hour),
+                  counted: runway.counted,
+                }),
           },
         ]}
       />
       {runway.curve && runway.curve.length > 1 && (
-        <RunwayCurve curve={runway.curve} observedAt={props.observedAt} />
+        <RunwayCurve
+          curve={runway.curve}
+          trend={runway.trend?.curve}
+          low={runway.low?.curve}
+          high={runway.high?.curve}
+          shaped={(runway.profile_hours ?? 0) > 0}
+          observedAt={props.observedAt}
+        />
       )}
       {runway.unknown > 0 && (
         <p className='text-muted-foreground mt-2 text-xs'>
@@ -627,26 +691,53 @@ const HOUR_MS = 3_600_000
 
 /**
  * The projected weekly quota left, hour by hour over the next 7 days, with
- * a tick at each midnight. Hours with nothing left are shaded. Hovering, or
- * focusing and pressing the arrow keys, reads out the hour under the pointer.
+ * a tick at each midnight. The line is the base projection; a band spans the
+ * 10th to 90th percentile demand and a dashed line follows growing use, when
+ * the server sends them. Hours the base projection has nothing left are
+ * shaded. Hovering, or focusing and pressing the arrow keys, reads out the
+ * hour under the pointer.
  */
-function RunwayCurve(props: { curve: number[]; observedAt: number }) {
+function RunwayCurve(props: {
+  curve: number[]
+  trend?: number[] | null
+  low?: number[] | null
+  high?: number[] | null
+  shaped: boolean
+  observedAt: number
+}) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const [active, setActive] = useState<number | null>(null)
   const { curve, observedAt } = props
   const last = curve.length - 1
-  const top = niceTop(Math.max(...curve))
+  const matches = (series?: number[] | null) =>
+    series && series.length === curve.length ? series : null
+  const trend = matches(props.trend)
+  // Low demand leaves the most quota: the band's top edge.
+  const upper = matches(props.low)
+  const lower = matches(props.high)
+  const band = upper && lower ? { upper, lower } : null
+  const top = niceTop(
+    Math.max(...curve, ...(trend ?? []), ...(band?.upper ?? []))
+  )
   const xOf = (hours: number) => (hours / last) * 100
   const yOf = (usd: number) => 100 - (usd / top) * 100
   const at = (hours: number) =>
     fmt.time(Math.floor((observedAt + hours * HOUR_MS) / 1000))
-  const path = curve
-    .map(
-      (usd, hour) =>
-        `${hour === 0 ? 'M' : 'L'}${xOf(hour).toFixed(2)},${yOf(usd).toFixed(2)}`
-    )
-    .join(' ')
+  const line = (series: number[]) =>
+    series
+      .map(
+        (usd, hour) =>
+          `${hour === 0 ? 'M' : 'L'}${xOf(hour).toFixed(2)},${yOf(usd).toFixed(2)}`
+      )
+      .join(' ')
+  const path = line(curve)
+  const bandPath = band
+    ? `${line(band.upper)} ${band.lower
+        .map((usd, hour) => `L${xOf(hour).toFixed(2)},${yOf(usd).toFixed(2)}`)
+        .reverse()
+        .join(' ')} Z`
+    : null
 
   // Runs of hours with nothing left, each widened by half an hour a side:
   // a gap starts and ends between two samples.
@@ -681,22 +772,49 @@ function RunwayCurve(props: { curve: number[]; observedAt: number }) {
   const lowest = curve.indexOf(Math.min(...curve))
   const point = active === null ? null : curve[active]
   const x = active === null ? 0 : xOf(active)
+  const amount = (usd: number) =>
+    usd > 0 ? fmt.usdWhole(usd) : t('No quota left')
 
   return (
     <figure className='mt-4'>
       <figcaption className='mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs'>
         <span className='text-muted-foreground'>
-          {t('Weekly quota left, next 7 days')}
+          {props.shaped
+            ? t('Weekly quota left, next 7 days, at each hour’s usual use')
+            : t('Weekly quota left, next 7 days')}
         </span>
-        {gaps.length > 0 && (
-          <span className='text-muted-foreground flex items-center gap-1.5'>
-            <span
-              aria-hidden
-              className='bg-destructive/20 size-2.5 rounded-sm'
-            />
-            {t('No quota left')}
-          </span>
-        )}
+        <span className='text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1'>
+          {(trend || band) && (
+            <span className='flex items-center gap-1.5'>
+              <span aria-hidden className='bg-primary h-0.5 w-3 rounded-full' />
+              {t('Demand as now')}
+            </span>
+          )}
+          {trend && (
+            <span className='flex items-center gap-1.5'>
+              <span
+                aria-hidden
+                className='border-foreground/60 w-3 border-t-2 border-dashed'
+              />
+              {t('Growing as this week')}
+            </span>
+          )}
+          {band && (
+            <span className='flex items-center gap-1.5'>
+              <span aria-hidden className='bg-primary/20 size-2.5 rounded-sm' />
+              {t('Usual range')}
+            </span>
+          )}
+          {gaps.length > 0 && (
+            <span className='flex items-center gap-1.5'>
+              <span
+                aria-hidden
+                className='bg-destructive/20 size-2.5 rounded-sm'
+              />
+              {t('No quota left')}
+            </span>
+          )}
+        </span>
       </figcaption>
       <div className='flex gap-2'>
         <div
@@ -780,10 +898,25 @@ function RunwayCurve(props: { curve: number[]; observedAt: number }) {
                   />
                 )
               })}
-              <path
-                d={`${path} L100,100 L0,100 Z`}
-                className='fill-current opacity-10'
-              />
+              {bandPath ? (
+                <path d={bandPath} className='fill-current opacity-20' />
+              ) : (
+                <path
+                  d={`${path} L100,100 L0,100 Z`}
+                  className='fill-current opacity-10'
+                />
+              )}
+              {trend && (
+                <path
+                  d={line(trend)}
+                  fill='none'
+                  className='stroke-foreground/60'
+                  strokeWidth={1.5}
+                  strokeDasharray='4 3'
+                  vectorEffect='non-scaling-stroke'
+                  strokeLinejoin='round'
+                />
+              )}
               <path
                 d={path}
                 fill='none'
@@ -808,22 +941,39 @@ function RunwayCurve(props: { curve: number[]; observedAt: number }) {
                 <span
                   role='status'
                   className={cn(
-                    'bg-popover text-popover-foreground pointer-events-none absolute bottom-full mb-1 rounded-md border px-2 py-1 text-xs whitespace-nowrap shadow-sm',
+                    'bg-popover text-popover-foreground pointer-events-none absolute bottom-full mb-1 flex flex-col rounded-md border px-2 py-1 text-xs whitespace-nowrap shadow-sm',
                     x < 20 && 'translate-x-0',
                     x >= 20 && x <= 80 && '-translate-x-1/2',
                     x > 80 && '-translate-x-full'
                   )}
                   style={{ left: `${x}%` }}
                 >
-                  <span className='text-muted-foreground'>{at(active)}</span>{' '}
-                  <span
-                    className={cn(
-                      'font-medium tabular-nums',
-                      point <= 0 && 'text-destructive'
-                    )}
-                  >
-                    {point > 0 ? fmt.usdWhole(point) : t('No quota left')}
+                  <span>
+                    <span className='text-muted-foreground'>{at(active)}</span>{' '}
+                    <span
+                      className={cn(
+                        'font-medium tabular-nums',
+                        point <= 0 && 'text-destructive'
+                      )}
+                    >
+                      {amount(point)}
+                    </span>
                   </span>
+                  {band && (
+                    <span className='text-muted-foreground tabular-nums'>
+                      {t('Usual range {{low}} – {{high}}', {
+                        low: fmt.usdWhole(band.lower[active]),
+                        high: fmt.usdWhole(band.upper[active]),
+                      })}
+                    </span>
+                  )}
+                  {trend && (
+                    <span className='text-muted-foreground tabular-nums'>
+                      {t('Growing: {{amount}}', {
+                        amount: amount(trend[active]),
+                      })}
+                    </span>
+                  )}
                 </span>
               </>
             )}
@@ -856,6 +1006,13 @@ function niceTop(value: number) {
   const magnitude = 10 ** Math.floor(Math.log10(value))
   const step = [1, 2, 2.5, 5, 10].find((n) => n * magnitude >= value) ?? 10
   return step * magnitude
+}
+
+function headroomTone(scale: number | null | undefined): Tone {
+  if (scale == null) return 'default'
+  if (scale < 1) return 'danger'
+  if (scale < 1.2) return 'warning'
+  return 'default'
 }
 
 function loadShareTone(load: number): Tone {

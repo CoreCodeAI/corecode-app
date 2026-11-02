@@ -137,6 +137,26 @@ export type EngineRunway = {
   unknown: number
   /** Quota left at each whole hour from now through the horizon. */
   curve?: number[] | null
+  /** Hours of use the daily shape is drawn from; 0 projects demand flat. */
+  profile_hours?: number
+  peak_hour_usd_per_hour?: number
+  growth_per_day?: number
+  /** The largest multiple of demand served for 7 days without a gap. */
+  headroom_scale?: number | null
+  /** Demand growing on, and the 10th and 90th percentile demand. */
+  trend?: EngineRunwayScenario | null
+  low?: EngineRunwayScenario | null
+  high?: EngineRunwayScenario | null
+  band_forecasts?: number
+}
+
+export type EngineRunwayScenario = {
+  demand_scale: number
+  short_hours: number
+  served_share: number
+  week_hours: number | null
+  first_short_hours: number | null
+  curve: number[] | null
 }
 
 export type CapacityInsights = {

@@ -21,6 +21,11 @@ quota left. On production data that read as unreliable:
 - "5-hour quota lasts 13 hours" means nothing, because a 5-hour window resets within
   five hours.
 
+A third issue came from the curve (PR 160): it drained at one flat rate, but use on
+2026-11-02 ran from about 3% of the daily mean at 05:00 to nearly twice it at 16:00
+(Beijing time). Use was also growing about 8% a day, so a forecast at the last day's
+average fell short of what followed.
+
 ## Decision
 
 - **The pool response's `runway`** for the Claude channel is computed in
@@ -31,6 +36,28 @@ quota left. On production data that read as unreliable:
   last 24 hours, including accounts paused now: their traffic moves to the others.
   `week_to_date_usd_per_hour` checks it: what each counted account has used since its
   weekly reset, per hour, or its last day for a window under 12 hours old.
+- **Hourly demand.** `service/engine_demand.go` reads the console's own `quota_data` for
+  the Claude models, hour by hour over the last 21 days. From it, it builds:
+  - the shape: each hour's use over the mean of the 24 hours around it, averaged by UTC
+    hour of the day over the last week, so growth stays out of it;
+  - the growth: a line through the log of the last seven days' use, bounded to 15% a
+    day;
+  - the band: forecasts made over the last week whose 72 hours have passed, each from
+    the week before it. The 10th and 90th percentiles of actual over forecast use are
+    widened to include 1.
+
+  `quota_data` is billed at the customer's price, about twice the upstream cost, so it
+  supplies only the shape. The engine's spend still sets the level. The profile is
+  cached for 10 minutes within the hour. A failed read, or under three days of use,
+  projects flat demand, as before.
+- **Scenarios.** The projection steps from one UTC clock hour, reset, or curve sample to
+  the next, at that hour's demand.
+  - `trend` carries the growth on, each day keeping 80% of the last day's growth.
+  - `low` and `high` scale demand to the band's ends.
+  - `headroom_scale` is the largest multiple of demand the pool serves for 7 days
+    without a gap, found by bisection up to 4×.
+  - `peak_hour_usd_per_hour` is demand in the busiest hour. The panel sets it against
+    peak throughput.
 - **Supply** is counted only for an account that meets all of these:
   - its group is enabled;
   - it is not suspended, disabled, blacklisted, or awaiting reauthorization;
@@ -70,6 +97,14 @@ quota left. On production data that read as unreliable:
 
 ## Alternatives considered
 
+- **Holt-Winters with a damped trend.** Backtested on 2026-10-17 to 11-02, it did no
+  better than the shape times the last day's level: 59% hourly error over 24 hours,
+  against 50%. It also needs fitted parameters.
+- **The same hour last week.** With use growing this fast it fell short by 67%.
+- **The engine's hourly `usage_stats`.** These are upstream cost per account and are
+  kept indefinitely, but they need a new engine endpoint. The console's own hours give
+  the same shape.
+
 - **Remainder over spend.** It ignores resets and halves the answer for this pool.
 - **Earliest-reset-first draining.** It is the most the pool could serve, but the
   engine does not route that way, so it overstates the supply.
@@ -86,6 +121,10 @@ quota left. On production data that read as unreliable:
 - The figures move with calibration: a capacity the engine revises moves them.
 - Remove `five_hour_hours` and `five_hour_remaining_usd` once no released console reads
   them.
+
+- With 16 days of history, the band comes from the site's growth phase: past forecasts
+  at the current level almost always fell short. A weekday shape needs three or four
+  weeks of history.
 
 ## Verification
 
@@ -123,3 +162,30 @@ quota left. On production data that read as unreliable:
   11/6 10:09, and a rise at each weekly reset. A pointer swept across it at 40 positions
   read out an hour at every one, at full width and at 390 px. It was also checked in the
   dark theme.
+
+- `engine_demand_test.go` checks:
+  - the daily shape, and how it moves with the first hour;
+  - growth and its bound;
+  - the damped trend;
+  - the flat fallback.
+- `engine_runway_test.go` checks:
+  - demand moved through the day;
+  - quiet hours inside a gap;
+  - the scenarios;
+  - the band holding demand as now;
+  - the headroom.
+- `HourlyQuotaWithPrefix` is tested on SQLite.
+- On production data for 2026-11-02 at 16:24, the model read:
+
+  | Figure | Value |
+  |---|---|
+  | Demand | $47.7/h |
+  | Busiest hour | $94/h, 64% of peak throughput |
+  | Growth | 8% a day |
+  | Band | 1.0× to 1.9× |
+  | First gap | 11/3 23:41, 19.5 hours in all |
+  | With growth | 11/3 22:28 |
+  | Headroom | −15.4% |
+
+  The curve read out a value at all 40 positions at full width and at 390 px. It
+  stayed inside the page and was checked in the dark theme.

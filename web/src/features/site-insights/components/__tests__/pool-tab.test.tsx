@@ -256,6 +256,73 @@ describe('pool supply', () => {
     expect(screen.getByRole('status')).toHaveTextContent('$200')
   })
 
+  it('reads how far demand can move and the busiest hour', () => {
+    renderRunway({ headroom_scale: 0.9, peak_hour_usd_per_hour: 80 })
+
+    expect(screen.getByText('−10%')).toBeInTheDocument()
+    expect(
+      screen.getByText('Lasts 7 days at $36.00/h or less')
+    ).toBeInTheDocument()
+    expect(screen.getByText('Busiest hour $80/h · 66.7%')).toBeInTheDocument()
+  })
+
+  it('reads headroom above the search as plenty', () => {
+    renderRunway({ headroom_scale: null })
+    expect(screen.getByText('Over 4.00×')).toBeInTheDocument()
+  })
+
+  it('says when growing use runs out sooner', () => {
+    const scenario = {
+      demand_scale: 1.4,
+      short_hours: 20,
+      served_share: 0.9,
+      week_hours: 30,
+      first_short_hours: 20,
+      curve: [400, 100, 0, 200, 50],
+    }
+    renderRunway({
+      growth_per_day: 0.08,
+      trend: scenario,
+      curve: [400, 300, 200, 350, 250],
+      low: { ...scenario, curve: [400, 350, 300, 420, 380] },
+      high: { ...scenario, curve: [400, 200, 0, 150, 0] },
+    })
+
+    expect(
+      screen.getByText(/If use keeps growing 8% a day, it runs out around/)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Week to date \$44.00\/h · \+8% a day/)
+    ).toBeInTheDocument()
+    expect(screen.getByText('Usual range')).toBeInTheDocument()
+    expect(screen.getByText('Growing as this week')).toBeInTheDocument()
+  })
+
+  it('reads the range and the growing projection at each hour', async () => {
+    const user = userEvent.setup()
+    const scenario = {
+      demand_scale: 1,
+      short_hours: 0,
+      served_share: 1,
+      week_hours: null,
+      first_short_hours: null,
+    }
+    renderRunway({
+      growth_per_day: 0.08,
+      curve: [400, 300, 200],
+      trend: { ...scenario, curve: [400, 250, 0] },
+      low: { ...scenario, curve: [400, 350, 300] },
+      high: { ...scenario, curve: [400, 200, 50] },
+    })
+
+    await user.click(screen.getByRole('img', { name: /quota left over/ }))
+    await user.keyboard('{ArrowRight}{ArrowRight}')
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('$200')
+    expect(status).toHaveTextContent('Usual range $50 – $300')
+    expect(status).toHaveTextContent('Growing: No quota left')
+  })
+
   it('leaves the curve out for a server that sends none', () => {
     renderRunway({})
     expect(screen.queryByRole('img', { name: /quota left over/ })).toBeNull()

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"math"
+
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,7 +35,7 @@ func runwayAccountAt(group int, remaining, capacity, burn float64, resetHours in
 
 func TestPoolRunwayRunsOutBeforeAnyReset(t *testing.T) {
 	// $100 left, $10 an hour, resets in 100 hours: dry after 10 hours.
-	runway := poolRunway(runwayPool(runwayAccountAt(1, 100, 400, 10, 100)), "claude", 0)
+	runway := poolRunway(runwayPool(runwayAccountAt(1, 100, 400, 10, 100)), "claude", 0, flatDemand())
 	require.NotNil(t, runway)
 	require.NotNil(t, runway.WeekHours)
 	assert.InDelta(t, 10, *runway.WeekHours, 1e-9)
@@ -51,7 +53,7 @@ func TestPoolRunwayCountsAResetAndDropsWhatWasLeft(t *testing.T) {
 	runway := poolRunway(runwayPool(
 		runwayAccountAt(1, 50, 400, 6, 5),
 		runwayAccountAt(1, 50, 400, 4, 500),
-	), "claude", 0)
+	), "claude", 0, flatDemand())
 	require.NotNil(t, runway.WeekHours)
 	assert.InDelta(t, 27.5, *runway.WeekHours, 1e-9)
 	assert.Zero(t, runway.LowestUSD)
@@ -62,7 +64,7 @@ func TestPoolRunwayLastsWhenTheWeekRefillsFasterThanItIsSpent(t *testing.T) {
 	runway := poolRunway(runwayPool(
 		runwayAccountAt(1, 150, 1000, 1, 24),
 		runwayAccountAt(1, 300, 1000, 1, 96),
-	), "claude", 0)
+	), "claude", 0, flatDemand())
 	assert.Nil(t, runway.WeekHours, "a $2/h demand never drains $1000 of weekly budget")
 	assert.Nil(t, runway.FirstShortHours)
 	assert.InDelta(t, 2*168/1000.0, runway.WeekLoad, 1e-9)
@@ -89,7 +91,7 @@ func TestPoolRunwayKeepsToItsChannelAndCountsWhatItCannotUse(t *testing.T) {
 		unknown,
 		runwayAccountAt(2, 9000, 9000, 50, 1),  // codex: another channel
 		runwayAccountAt(3, 9000, 9000, 0.5, 1), // disabled group
-	), "claude", 0)
+	), "claude", 0, flatDemand())
 	assert.InDelta(t, 5+3+2+0.5, runway.BurnUSDPerHour, 1e-9, "paused accounts' traffic moves to the others")
 	assert.Equal(t, 2, runway.Counted, "the serving and the budget-paused account")
 	assert.Equal(t, 1, runway.Unknown)
@@ -98,11 +100,11 @@ func TestPoolRunwayKeepsToItsChannelAndCountsWhatItCannotUse(t *testing.T) {
 	// The paused account refills $200 at hour 1: $100 - $10.5 + $200 = $289.5.
 	assert.InDelta(t, 1+(100-10.5+200)/10.5, *runway.WeekHours, 1e-9)
 
-	assert.Nil(t, poolRunway(runwayPool(runwayAccountAt(2, 1, 1, 1, 1)), "claude", 0), "no Claude account, no runway")
+	assert.Nil(t, poolRunway(runwayPool(runwayAccountAt(2, 1, 1, 1, 1)), "claude", 0, flatDemand()), "no Claude account, no runway")
 }
 
 func TestPoolRunwayWithoutSpend(t *testing.T) {
-	runway := poolRunway(runwayPool(runwayAccountAt(1, 100, 400, 0, 10)), "claude", 0)
+	runway := poolRunway(runwayPool(runwayAccountAt(1, 100, 400, 0, 10)), "claude", 0, flatDemand())
 	assert.Nil(t, runway.WeekHours)
 	assert.Nil(t, runway.FiveHourHours)
 	assert.Zero(t, runway.WeekLoad)
@@ -119,7 +121,7 @@ func TestPoolRunwayMeasuresEachGapUntilTheNextReset(t *testing.T) {
 	runway := poolRunway(runwayPool(
 		runwayAccountAt(1, 25, 400, 6, 100),
 		runwayAccountAt(1, 25, 400, 4, 20),
-	), "claude", 0)
+	), "claude", 0, flatDemand())
 	require.NotNil(t, runway.WeekHours)
 	assert.InDelta(t, 5, *runway.WeekHours, 1e-9)
 	require.NotNil(t, runway.FirstShortHours)
@@ -138,7 +140,7 @@ func TestPoolRunwayReportsAGrazingGapAsShort(t *testing.T) {
 	// gap, not a pool that has run out.
 	refilling := runwayAccountAt(1, 50, 4000, 5, 0)
 	refilling.SevenDayReset = int64(10.1 * float64(runwayHourMS))
-	runway := poolRunway(runwayPool(refilling, runwayAccountAt(1, 50, 400, 5, 160)), "claude", 0)
+	runway := poolRunway(runwayPool(refilling, runwayAccountAt(1, 50, 400, 5, 160)), "claude", 0, flatDemand())
 	require.NotNil(t, runway.FirstShortHours)
 	assert.InDelta(t, 10, *runway.WeekHours, 1e-9)
 	assert.InDelta(t, 0.1, *runway.FirstShortHours, 1e-9)
@@ -152,7 +154,71 @@ func TestPoolRunwayPeakAndWeekToDate(t *testing.T) {
 	old := runwayAccountAt(1, 100, 400, 5, 68) // 100 hours in
 	old.SevenDay = 25
 	old.FiveHourCapacityUSD = dollars(100)
-	runway := poolRunway(runwayPool(young, old), "claude", 0)
+	runway := poolRunway(runwayPool(young, old), "claude", 0, flatDemand())
 	assert.InDelta(t, (50+100)*0.8/5, runway.PeakUSDPerHour, 1e-9, "5-hour capacity up to the 80% line, per hour")
 	assert.InDelta(t, 3+400*0.25/100, runway.WeekToDateUSDPerHour, 1e-9, "the young window counts its last day")
+}
+
+// halfDayDemand runs all demand in UTC 00:00–12:00, at twice the average.
+func halfDayDemand() demandProfile {
+	profile := flatDemand()
+	for hour := range profile.shape {
+		profile.shape[hour] = 0
+		if hour < 12 {
+			profile.shape[hour] = 2
+		}
+	}
+	return profile
+}
+
+func TestPoolRunwayMovesDemandThroughTheDay(t *testing.T) {
+	// $100 left and $10/h on average, all of it in the first half of each
+	// UTC day: $20/h from midnight runs out at 05:00, not at 10:00.
+	pool := runwayPool(runwayAccountAt(1, 100, 400, 10, 1000))
+	runway := poolRunway(pool, "claude", 0, halfDayDemand())
+	require.NotNil(t, runway.WeekHours)
+	assert.InDelta(t, 5, *runway.WeekHours, 1e-9)
+	assert.InDelta(t, 20, runway.PeakHourUSDPerHour, 1e-9)
+	assert.InDelta(t, 163, runway.ShortHours, 1e-9, "quiet hours inside the gap count too")
+	assert.InDelta(t, 100/(10*168.0), runway.ServedShare, 1e-9)
+	assert.InDelta(t, 60, runway.Curve[2], 1e-9)
+	assert.InDelta(t, 0, runway.Curve[5], 1e-9)
+
+	// From UTC 12:00 the first six hours are quiet.
+	runway = poolRunway(pool, "claude", 12*runwayHourMS, halfDayDemand())
+	assert.InDelta(t, 17, *runway.WeekHours, 1e-9)
+	assert.InDelta(t, 100, runway.Curve[11], 1e-9)
+}
+
+func TestPoolRunwayProjectsTheScenariosAndTheHeadroom(t *testing.T) {
+	// $100 left and no reset in the week: at $10/h it lasts 10 hours, and
+	// lasting the week takes demand at or below 100/1680 of it.
+	pool := runwayPool(runwayAccountAt(1, 100, 400, 10, 1000))
+	profile := flatDemand()
+	profile.hours, profile.growth = 24*7, math.Log(1.1)
+	profile.low, profile.high, profile.origins = 0.5, 2, 30
+	runway := poolRunway(pool, "claude", 0, profile)
+
+	require.NotNil(t, runway.Low)
+	require.NotNil(t, runway.High)
+	assert.InDelta(t, 20, *runway.Low.WeekHours, 1e-9)
+	assert.InDelta(t, 5, *runway.High.WeekHours, 1e-9)
+	assert.Equal(t, 0.5, runway.Low.DemandScale)
+	assert.Equal(t, 30, runway.BandForecasts)
+	require.NotNil(t, runway.Trend)
+	assert.Less(t, *runway.Trend.WeekHours, 10.0, "growing demand runs out sooner")
+	assert.InDelta(t, profile.growthAt(7), runway.Trend.DemandScale, 1e-9)
+	assert.InDelta(t, 0.1, runway.GrowthPerDay, 1e-9)
+	require.NotNil(t, runway.HeadroomScale)
+	assert.InDelta(t, 100/1680.0, *runway.HeadroomScale, 0.001)
+
+	profile.low, profile.high = 1.2, 1.5
+	runway = poolRunway(pool, "claude", 0, profile)
+	assert.Equal(t, 1.0, runway.Low.DemandScale, "the band holds demand as now")
+	assert.Equal(t, 1.5, runway.High.DemandScale)
+
+	plenty := poolRunway(runwayPool(runwayAccountAt(1, 100000, 400000, 10, 1000)), "claude", 0, flatDemand())
+	assert.Nil(t, plenty.HeadroomScale, "lasting at four times the demand is headroom enough")
+	assert.Nil(t, plenty.Trend, "no growth, no trend")
+	assert.Nil(t, plenty.Low, "no band without past forecasts")
 }

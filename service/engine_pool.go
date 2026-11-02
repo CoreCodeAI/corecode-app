@@ -457,6 +457,6 @@ func readEnginePool(base, key string) EnginePool {
 			pool.Accounts[i].FiveHourCapacityUSD = row.FiveHour.CapacityUSD
 		}
 	}
-	pool.Runway = poolRunway(pool, "claude", pool.ObservedAt)
+	pool.Runway = poolRunway(pool, "claude", pool.ObservedAt, claudeDemandProfile(time.UnixMilli(pool.ObservedAt)))
 	return pool
 }
