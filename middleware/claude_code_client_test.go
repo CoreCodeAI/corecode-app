@@ -121,6 +121,12 @@ func TestClaudeCodeOnlyGroupGate(t *testing.T) {
 		`"metadata": {"user_id": "`+legacyClaudeCodeUserID+`"}`, 1)
 	endUserID := strings.Replace(legacyUserID, legacyClaudeCodeUserID, "customer-42", 1)
 	probe := `{"model":"claude-sonnet-5-5","max_tokens":1,"messages":[{"role":"user","content":"count"}]}`
+	// The gateway check Claude Desktop sends, byte for byte apart from the model.
+	desktopProbe := `{"max_tokens":16,"messages":[{"role":"user","content":"."}],"model":"claude-haiku-5-5"}`
+	desktopHeaders := map[string]string{"User-Agent": "Claude/1.0 (desktop)", "anthropic-version": "2023-06-01"}
+	desktopProbeWith := func(old, replacement string) string {
+		return strings.Replace(desktopProbe, old, replacement, 1)
+	}
 
 	tests := []struct {
 		name       string
@@ -137,6 +143,16 @@ func TestClaudeCodeOnlyGroupGate(t *testing.T) {
 		{"legacy metadata.user_id", "cc", nil, "/v1/messages", claudeCodeCLIHeaders, legacyUserID, true},
 		{"max_tokens=1 probe without a prompt", "cc", nil, "/v1/messages", claudeCodeCLIHeaders, probe, true},
 		{"model list from Claude Code", "cc", nil, "/v1/models", claudeCodeCLIHeaders, "", true},
+		{"Claude Desktop probe", "cc", nil, "/v1/messages", desktopHeaders, desktopProbe, true},
+		{"Claude Desktop probe on an auto token", "auto", []string{"cc"}, "/v1/messages", desktopHeaders, desktopProbe, true},
+		{"desktop probe with a system prompt", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`"model"`, `"system":"Translate to French.","model"`), false},
+		{"desktop probe with tools", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`"model"`, `"tools":[{"name":"x","input_schema":{"type":"object"}}],"model"`), false},
+		{"desktop probe asking for more tokens", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`"max_tokens":16`, `"max_tokens":17`), false},
+		{"desktop probe with another message", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`"content":"."`, `"content":"hi"`), false},
+		{"desktop probe with content blocks", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`"content":"."`, `"content":[{"type":"text","text":"."}]`), false},
+		{"desktop probe with a second turn", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`]`, `,{"role":"assistant","content":"ok"},{"role":"user","content":"."}]`), false},
+		{"desktop probe as an assistant turn", "cc", nil, "/v1/messages", desktopHeaders, desktopProbeWith(`"role":"user"`, `"role":"assistant"`), false},
+		{"desktop probe body on a Gemini path", "cc", nil, "/v1beta/models/claude-haiku-5-5:generateContent", desktopHeaders, desktopProbe, false},
 		{"group without the restriction", "default", nil, "/v1/messages", map[string]string{"User-Agent": "curl/8.7.1"}, foreignPrompt, true},
 		{"same body from another client", "cc", nil, "/v1/messages", withHeader("User-Agent", "Anthropic/Python 0.70.0"), claudeCodeCLIBody, false},
 		{"model list from another client", "cc", nil, "/v1/models", map[string]string{"User-Agent": "curl/8.7.1"}, "", true},
@@ -283,4 +299,19 @@ func TestClaudeCodeClientSettingValidation(t *testing.T) {
 	for _, value := range []string{`cc`, `{"cc":true}`, `[""]`, `[" cc"]`} {
 		assert.Error(t, operation_setting.ValidateClaudeCodeClientGroups(value), value)
 	}
+}
+
+// The Claude Desktop probe carries no claude-cli version, so version bounds,
+// which would refuse every CLI below, do not apply to it.
+func TestClaudeDesktopProbeIgnoresVersionBounds(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	setClaudeCodeClientSetting(t, operation_setting.ClaudeCodeClientSetting{
+		Groups: []string{"cc"}, MinVersion: "9.0.0", MaxVersion: "9.0.1",
+	})
+	desktopProbe := `{"max_tokens":16,"messages":[{"role":"user","content":"."}],"model":"claude-haiku-5-5"}`
+
+	_, allowed := runClaudeCodeGate(t, "cc", nil, "/v1/messages", map[string]string{"User-Agent": "Claude/1.0 (desktop)"}, desktopProbe)
+	assert.True(t, allowed)
+	_, allowed = runClaudeCodeGate(t, "cc", nil, "/v1/messages", claudeCodeCLIHeaders, claudeCodeCLIBody)
+	assert.False(t, allowed)
 }
