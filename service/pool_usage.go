@@ -20,7 +20,7 @@ import (
 
 // PoolUsageWindowHours are the spans the pool tab reads usage over, newest
 // first: the last hour to the last week.
-var PoolUsageWindowHours = []int64{1, 3, 6, 24, 168}
+var PoolUsageWindowHours = []int64{1, 3, 5, 24, 168}
 
 const (
 	// poolUsageSeriesHours is the hourly history the pool tab draws.

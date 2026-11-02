@@ -507,6 +507,11 @@ describe('capacity verdict', () => {
     // $230 forecast against $200 left in the 5-hour windows.
     expect(screen.getByText('≈ $230')).toHaveClass('text-destructive')
     expect(screen.getByText('Range $800 – $1,200')).toBeInTheDocument()
+    // new-api's ¥460 is $57.50 at ¥8 a dollar, and $230 of gpt-load at $0.50 a yuan.
+    expect(screen.getByText('≈ $58')).toBeInTheDocument()
+    expect(screen.getByText('¥460 · ≈ $230 in gpt-load')).toBeInTheDocument()
+    expect(screen.getByText('≈ $240')).toBeInTheDocument()
+    expect(screen.getByText('¥1,920 · ≈ $960 in gpt-load')).toBeInTheDocument()
   })
 
   it('says when no account is needed', () => {
