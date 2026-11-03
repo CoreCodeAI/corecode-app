@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -254,8 +255,41 @@ func GetActivityInsights(c *gin.Context) {
 	})
 }
 
+// maxInsightModels bounds the models query parameter; the site sells far
+// fewer models than this.
+const (
+	maxInsightModels   = 100
+	maxInsightModelLen = 128
+)
+
+// insightsModels reads the comma-separated models query parameter. Blank
+// entries are dropped; an absent parameter selects every model.
+func insightsModels(c *gin.Context) ([]string, bool) {
+	var models []string
+	for _, name := range strings.Split(c.Query("models"), ",") {
+		name = strings.TrimSpace(name)
+		if name == "" || slices.Contains(models, name) {
+			continue
+		}
+		models = append(models, name)
+	}
+	if len(models) > maxInsightModels || slices.ContainsFunc(models, func(name string) bool {
+		return len(name) > maxInsightModelLen
+	}) {
+		common.ApiErrorT(c, "Invalid parameters")
+		return nil, false
+	}
+	return models, true
+}
+
 func GetQualityInsights(c *gin.Context) {
-	serveInsights(c, model.InsightsMaxLogDays, model.GetQualityInsights)
+	models, ok := insightsModels(c)
+	if !ok {
+		return
+	}
+	serveInsights(c, model.InsightsMaxLogDays, func(r model.InsightsRange) (*model.QualityInsights, error) {
+		return model.GetQualityInsights(r, models)
+	})
 }
 
 func GetBusinessInsights(c *gin.Context) {

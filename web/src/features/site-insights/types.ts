@@ -448,9 +448,11 @@ export type QualityInsights = {
   ttft_p50_ms: number
   ttft_p95_ms: number
   cache_share: number
+  /** Every model in the range, whatever the filter selects. */
   models:
     | {
         model: string
+        vendor: string
         requests: number
         errors: number
         error_rate: number

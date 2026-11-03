@@ -164,7 +164,7 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 			require.Len(t, activity.Retention, 2)
 			assert.Equal(t, RetentionCohort{Day: day1, Size: 2, Days: []float64{1, 0.5}}, activity.Retention[1])
 
-			quality, err := GetQualityInsights(r)
+			quality, err := GetQualityInsights(r, nil)
 			require.NoError(t, err)
 			assert.EqualValues(t, 6, quality.Requests, "root counts toward quality")
 			assert.Equal(t, 0.3333, quality.ErrorRate)
@@ -172,6 +172,18 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 			assert.Equal(t, []NamedCount{{"eof", 2}}, quality.StreamEnds)
 			assert.Equal(t, []NamedCount{{"429", 2}}, quality.StatusCodes)
 			assert.Equal(t, 0.6957, quality.CacheShare, "80 cached of 115 input tokens")
+
+			sonnetOnly, err := GetQualityInsights(r, []string{"sonnet"})
+			require.NoError(t, err)
+			assert.EqualValues(t, 2, sonnetOnly.Requests, "only the selected model counts")
+			assert.EqualValues(t, 1, sonnetOnly.Errors)
+			assert.Equal(t, 0.5, sonnetOnly.ErrorRate)
+			assert.Zero(t, sonnetOnly.TTFTP95, "opus's first-response times are left out")
+			require.Len(t, sonnetOnly.Daily, 2)
+			assert.EqualValues(t, 2, sonnetOnly.Daily[0].Requests)
+			assert.Zero(t, sonnetOnly.Daily[1].Requests)
+			assert.Len(t, sonnetOnly.Models, len(quality.Models), "the table keeps every model, as the filter's options")
+			assert.Equal(t, quality.StatusCodes, sonnetOnly.StatusCodes, "counted per hour, not per model")
 
 			business, err := GetBusinessInsights(r)
 			require.NoError(t, err)

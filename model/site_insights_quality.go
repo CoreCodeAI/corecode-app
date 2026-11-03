@@ -13,6 +13,7 @@ import (
 // first-response time of streamed requests.
 type ModelQuality struct {
 	Model      string  `json:"model"`
+	Vendor     string  `json:"vendor"`
 	Requests   int64   `json:"requests"`
 	Errors     int64   `json:"errors"`
 	ErrorRate  float64 `json:"error_rate"`
@@ -95,7 +96,20 @@ func errorReason(content string) string {
 	return reason
 }
 
-func GetQualityInsights(r InsightsRange) (*QualityInsights, error) {
+// QualityModelFilter limits the headline figures and the daily series to the
+// named models. The per-model table, the status codes, the failure reasons and
+// the stream ends ignore it: the table is where the filter's options come
+// from, and the other three are counted per hour, not per model.
+// A nil or empty filter selects every model.
+func QualityModelFilter(models []string) func(string) bool {
+	if len(models) == 0 {
+		return func(string) bool { return true }
+	}
+	return func(name string) bool { return slices.Contains(models, name) }
+}
+
+func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error) {
+	selected := QualityModelFilter(only)
 	hours, err := loadInsightHours(r)
 	if err != nil {
 		return nil, err
@@ -130,19 +144,22 @@ func GetQualityInsights(r InsightsRange) (*QualityInsights, error) {
 			row := model.row
 			bucket := models[name]
 			if bucket == nil {
-				bucket = &modelBucket{quality: ModelQuality{Model: name}, ttft: histogram{}, latency: histogram{}}
+				bucket = &modelBucket{quality: ModelQuality{Model: name, Vendor: ModelVendor(name)}, ttft: histogram{}, latency: histogram{}}
 				models[name] = bucket
 			}
-			result.Requests += row.Requests
-			result.Errors += row.Errors
 			bucket.quality.Requests += row.Requests
 			bucket.quality.Errors += row.Errors
 			bucket.ttft.merge(model.ttft)
 			bucket.latency.merge(model.latency)
-			allTTFT.merge(model.ttft)
 			input := row.Uncached + row.CacheRead + row.CacheWrite
 			bucket.cache += row.CacheRead
 			bucket.input += input
+			if !selected(name) {
+				continue
+			}
+			result.Requests += row.Requests
+			result.Errors += row.Errors
+			allTTFT.merge(model.ttft)
 			cacheRead += row.CacheRead
 			inputTotal += input
 			if day != nil {

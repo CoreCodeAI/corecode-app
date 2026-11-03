@@ -7413,7 +7413,6 @@
     "Colored above 2%; red above 5%.": "超过 2% 标黄，超过 5% 标红。",
     "Colored above 10 seconds.": "超过 10 秒时标色。",
     "Highest failure rate: {{model}} at {{rate}}.": "失败率最高的是 {{model}}：{{rate}}。",
-    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. A dash means nothing was measured.": "请求少于 100 的模型显示为灰色：样本太少，比率和分位数不宜比较。「—」表示没有测到数据。",
     "Worst day {{day}}: {{rate}} of {{count}} requests.": "失败率最高的一天是 {{day}}：{{count}} 次请求中失败 {{rate}}。",
     "{{inviters}} inviters brought {{invitees}} invitees": "{{inviters}} 个邀请人带来 {{invitees}} 个被邀请人",
     "Colored above 30%, where commission eats the margin.": "超过 30% 时标色：佣金在吃掉利润。",
@@ -7702,6 +7701,11 @@
     "Measured ÷ converted": "实测÷折算",
     "{{count}} requests over the last 7 days had no gpt-load price and are not in its spend.": "最近 7 天有 {{count}} 个请求在 gpt-load 没有价格，没有计入它的消耗。",
     "{{provider}} gpt-load spend by hour, last 48 hours": "{{provider}} 过去 48 小时每小时的 gpt-load 消耗",
-    "The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here.": "引擎只测算 Claude 账号的额度，所以这里不判断 {{provider}} 号池够不够。"
+    "The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here.": "引擎只测算 Claude 账号的额度，所以这里不判断 {{provider}} 号池够不够。",
+    "GPT": "GPT",
+    "Filter by model": "按模型筛选",
+    "All {{vendor}} models": "全部 {{vendor}} 模型",
+    "The cards and daily charts cover the selected models. The table, status codes, failure reasons and stream ends cover every model.": "顶部卡片和每日图表只统计所选模型；模型表、状态码、失败原因和流结束方式仍统计全部模型。",
+    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.": "请求数不足 100 的模型颜色变淡：它们的比率和分位数样本太少，不宜比较。选了模型筛选后，筛选之外的模型也会变淡。破折号表示没有测到数据。"
   }
 }
