@@ -517,3 +517,38 @@ export type BusinessInsights = {
 }
 
 export type InsightsRange = { start_time: number; end_time: number }
+
+/** The spans the funds view's user table reads, in hours. */
+export type UserSpendHours = 1 | 5 | 12 | 24 | 168
+
+/**
+ * One customer's use over the window: new-api's charge (quota dollars, paid
+ * ¥1 each) and gpt-load's official-price cost (US$) shared out to them, with
+ * their balance and everything they have ever paid, in yuan.
+ */
+export type UserSpendRow = UserRef & {
+  email: string
+  requests: number
+  quota_usd: number
+  engine_usd: number
+  topup_paid: number
+  subscription_paid: number
+  balance_usd: number
+}
+
+export type UserSpend = {
+  hours: UserSpendHours
+  start_time: number
+  end_time: number
+  usd_exchange_rate: number
+  engine_configured: boolean
+  engine_error?: string
+  customers: number
+  quota_usd: number
+  root_quota_usd: number
+  engine_usd: number
+  customer_engine_usd: number
+  root_engine_usd: number
+  unattributed_engine_usd: number
+  users: UserSpendRow[]
+}

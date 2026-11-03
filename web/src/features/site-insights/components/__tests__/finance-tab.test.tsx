@@ -16,19 +16,37 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   cleanup,
   fireEvent,
-  render,
+  render as renderElement,
   screen,
   within,
 } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import type { ReactElement } from 'react'
+import { describe, expect, it, vi } from 'vitest'
 
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import type { EngineDailyCost, FinanceInsights } from '../../types'
 import { FinanceTab } from '../finance-tab'
+
+// The user table at the bottom reads its own window; these tests are about
+// the rest of the view, so its read never settles.
+vi.mock('../../api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api')>()),
+  getUserSpend: () => new Promise(() => undefined),
+}))
+
+function render(ui: ReactElement) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  return renderElement(
+    <QueryClientProvider client={client}>{ui}</QueryClientProvider>
+  )
+}
 
 const day = (offset: number) => 1761408000 + offset * 86400
 

@@ -32,6 +32,8 @@ import type {
   PoolUsage,
   QualityInsights,
   RiskInsights,
+  UserSpend,
+  UserSpendHours,
 } from './types'
 
 export type InsightsView =
@@ -95,6 +97,21 @@ export async function getPoolUsage(provider: PoolProvider): Promise<PoolUsage> {
   const res = await api.get<ApiResponse<PoolUsage>>(
     '/api/site-insights/pool-usage',
     { params: { provider } }
+  )
+  if (!res.data.success || res.data.data === undefined) {
+    throw createServerError(res.data, 'Failed to load site insights')
+  }
+  return res.data.data
+}
+
+/**
+ * Each customer's use over the last `hours`: new-api's charge and gpt-load's
+ * cost shared out to them. The server shares one read a minute.
+ */
+export async function getUserSpend(hours: UserSpendHours): Promise<UserSpend> {
+  const res = await api.get<ApiResponse<UserSpend>>(
+    '/api/site-insights/user-spend',
+    { params: { hours } }
   )
   if (!res.data.success || res.data.data === undefined) {
     throw createServerError(res.data, 'Failed to load site insights')

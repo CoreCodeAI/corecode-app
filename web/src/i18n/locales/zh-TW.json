@@ -6983,7 +6983,7 @@
     "Enter a GA4 measurement ID such as G-XXXXXXXXXX": "請輸入 GA4 評估 ID，例如 G-XXXXXXXXXX",
     "Enter the Umami website ID as a UUID": "請輸入 UUID 格式的 Umami 網站 ID",
     "Enter an absolute HTTPS URL": "請輸入完整的 HTTPS 網址",
-    "24 hours": "24 hours",
+    "24 hours": "24 小時",
     "Accounts": "Accounts",
     "Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.": "Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.",
     "Accounts sharing an address": "Accounts sharing an address",
@@ -7711,6 +7711,21 @@
     "Filter by model": "依模型篩選",
     "All {{vendor}} models": "全部 {{vendor}} 模型",
     "The cards and daily charts cover the selected models. The table, status codes, failure reasons and stream ends cover every model.": "頂部卡片和每日圖表只統計所選模型；模型表、狀態碼、失敗原因和串流結束方式仍統計全部模型。",
-    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.": "請求數不足 100 的模型顏色變淡：它們的比率和分位數樣本太少，不宜比較。選了模型篩選後，篩選之外的模型也會變淡。破折號表示沒有測到資料。"
+    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.": "請求數不足 100 的模型顏色變淡：它們的比率和分位數樣本太少，不宜比較。選了模型篩選後，篩選之外的模型也會變淡。破折號表示沒有測到資料。",
+    "5 hours": "5 小時",
+    "12 hours": "12 小時",
+    "Consumption by user": "使用者消耗",
+    "Customers with use in the window, most new-api value first, up to 100; root’s own use is not listed. new-api value is what new-api charged at its own prices, in yuan, with dollars at the site’s exchange rate under it. gpt-load value is what the same requests cost at official prices. gpt-load does not know which user sent a request, so each model’s cost is shared among that model’s users by their new-api charge with the group ratio taken out. Total paid is every wallet top-up the customer ever paid, in yuan, with plans bought listed under it. Balance is the wallet now.": "時間窗內有消耗的使用者，按 new-api 價值由高到低，最多 100 名；root 自己的使用不列出。new-api 價值是 new-api 按自身價格扣的額度，單位為元，下方是按站點匯率折算的美元。gpt-load 價值是同樣這些請求按官方價格計的成本。gpt-load 不知道請求來自哪個使用者，所以每個模型的成本按使用者在該模型上的 new-api 消耗（去掉分組倍率後）分攤。累計儲值是該使用者歷來所有錢包儲值的實付金額，單位為元，購買的方案列在下方。餘額是錢包目前餘額。",
+    "{{count}} customers used {{quota}} of new-api value and {{engine}} at gpt-load’s official prices.": "{{count}} 個使用者消耗了 {{quota}} 的 new-api 價值，按 gpt-load 官方價計為 {{engine}}。",
+    "{{count}} customers used {{quota}} of new-api value.": "{{count}} 個使用者消耗了 {{quota}} 的 new-api 價值。",
+    "Root’s own use, {{quota}} and {{engine}}, is not listed.": "root 自己的使用（{{quota}}，{{engine}}）未列出。",
+    "Root’s own use, {{quota}}, is not listed.": "root 自己的使用（{{quota}}）未列出。",
+    "{{amount}} of gpt-load’s cost was for a vendor no one was charged for, so it is not shared out.": "gpt-load 有 {{amount}} 的成本屬於這段時間沒有向任何使用者收費的廠商，未分攤。",
+    "No consumption in this window": "這段時間沒有消耗",
+    "new-api value": "New API 價值",
+    "The user’s share of gpt-load’s official-price cost: each model’s cost split by new-api charge, group ratio taken out.": "該使用者分攤到的 gpt-load 官方價成本：每個模型的成本按 new-api 消耗（去掉分組倍率）分給使用者。",
+    "Total paid": "累計儲值",
+    "Every wallet top-up the customer ever paid, in yuan; plans bought are listed under it.": "該使用者歷來所有錢包儲值的實付金額，單位為元；購買的方案列在下方。",
+    "Plans {{amount}}": "方案 {{amount}}"
   }
 }

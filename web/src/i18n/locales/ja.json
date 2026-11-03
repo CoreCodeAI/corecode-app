@@ -6983,7 +6983,7 @@
     "Enter a GA4 measurement ID such as G-XXXXXXXXXX": "G-XXXXXXXXXX のような GA4 測定 ID を入力してください",
     "Enter the Umami website ID as a UUID": "Umami ウェブサイト ID を UUID 形式で入力してください",
     "Enter an absolute HTTPS URL": "HTTPS の絶対 URL を入力してください",
-    "24 hours": "24 hours",
+    "24 hours": "24 時間",
     "Accounts": "Accounts",
     "Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.": "Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.",
     "Accounts sharing an address": "Accounts sharing an address",
@@ -7711,6 +7711,21 @@
     "Filter by model": "Filter by model",
     "All {{vendor}} models": "All {{vendor}} models",
     "The cards and daily charts cover the selected models. The table, status codes, failure reasons and stream ends cover every model.": "The cards and daily charts cover the selected models. The table, status codes, failure reasons and stream ends cover every model.",
-    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.": "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured."
+    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.": "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.",
+    "5 hours": "5 時間",
+    "12 hours": "12 時間",
+    "Consumption by user": "ユーザー別消費",
+    "Customers with use in the window, most new-api value first, up to 100; root’s own use is not listed. new-api value is what new-api charged at its own prices, in yuan, with dollars at the site’s exchange rate under it. gpt-load value is what the same requests cost at official prices. gpt-load does not know which user sent a request, so each model’s cost is shared among that model’s users by their new-api charge with the group ratio taken out. Total paid is every wallet top-up the customer ever paid, in yuan, with plans bought listed under it. Balance is the wallet now.": "期間内に消費のあった顧客を new-api 価値の高い順に最大 100 件表示します。root 自身の利用は含みません。new-api 価値は new-api が自社価格で差し引いた額（元）で、下にサイトの為替レートでのドルを示します。gpt-load 価値は同じリクエストの公式価格でのコストです。gpt-load はリクエストの送信ユーザーを知らないため、各モデルのコストをそのモデルの利用者に、グループ倍率を除いた new-api 消費額に応じて配分します。累計入金は顧客がこれまでに支払ったウォレット入金の総額（元）で、購入したプランを下に示します。残高は現在のウォレット残高です。",
+    "{{count}} customers used {{quota}} of new-api value and {{engine}} at gpt-load’s official prices.": "{{count}} 人の顧客が new-api 価値 {{quota}}、gpt-load 公式価格で {{engine}} を消費しました。",
+    "{{count}} customers used {{quota}} of new-api value.": "{{count}} 人の顧客が new-api 価値 {{quota}} を消費しました。",
+    "Root’s own use, {{quota}} and {{engine}}, is not listed.": "root 自身の利用（{{quota}}、{{engine}}）は表示していません。",
+    "Root’s own use, {{quota}}, is not listed.": "root 自身の利用（{{quota}}）は表示していません。",
+    "{{amount}} of gpt-load’s cost was for a vendor no one was charged for, so it is not shared out.": "gpt-load のコストのうち {{amount}} は誰にも請求のなかったベンダー分のため、配分していません。",
+    "No consumption in this window": "この期間の消費はありません",
+    "new-api value": "new-api 価値",
+    "The user’s share of gpt-load’s official-price cost: each model’s cost split by new-api charge, group ratio taken out.": "ユーザーが負担する gpt-load 公式価格コスト：各モデルのコストをグループ倍率を除いた new-api 消費額で配分。",
+    "Total paid": "累計入金",
+    "Every wallet top-up the customer ever paid, in yuan; plans bought are listed under it.": "顧客がこれまでに支払ったウォレット入金の総額（元）。購入したプランは下に表示。",
+    "Plans {{amount}}": "プラン {{amount}}"
   }
 }

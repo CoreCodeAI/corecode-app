@@ -6983,7 +6983,7 @@
     "Enter a GA4 measurement ID such as G-XXXXXXXXXX": "Saisissez un ID de mesure GA4, par exemple G-XXXXXXXXXX",
     "Enter the Umami website ID as a UUID": "Saisissez l’ID de site Umami au format UUID",
     "Enter an absolute HTTPS URL": "Saisissez une URL HTTPS absolue",
-    "24 hours": "24 hours",
+    "24 hours": "24 heures",
     "Accounts": "Accounts",
     "Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.": "Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.",
     "Accounts sharing an address": "Accounts sharing an address",
@@ -7711,6 +7711,21 @@
     "Filter by model": "Filter by model",
     "All {{vendor}} models": "All {{vendor}} models",
     "The cards and daily charts cover the selected models. The table, status codes, failure reasons and stream ends cover every model.": "The cards and daily charts cover the selected models. The table, status codes, failure reasons and stream ends cover every model.",
-    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.": "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured."
+    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.": "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.",
+    "5 hours": "5 heures",
+    "12 hours": "12 heures",
+    "Consumption by user": "Consommation par utilisateur",
+    "Customers with use in the window, most new-api value first, up to 100; root’s own use is not listed. new-api value is what new-api charged at its own prices, in yuan, with dollars at the site’s exchange rate under it. gpt-load value is what the same requests cost at official prices. gpt-load does not know which user sent a request, so each model’s cost is shared among that model’s users by their new-api charge with the group ratio taken out. Total paid is every wallet top-up the customer ever paid, in yuan, with plans bought listed under it. Balance is the wallet now.": "Clients ayant consommé dans la fenêtre, par valeur new-api décroissante, 100 au plus ; l’usage propre de root n’est pas listé. La valeur new-api est ce que new-api a facturé à ses propres prix, en yuans, avec les dollars au taux du site en dessous. La valeur gpt-load est le coût des mêmes requêtes aux prix officiels. gpt-load ignore quel utilisateur a envoyé une requête : le coût de chaque modèle est réparti entre ses utilisateurs selon leur facturation new-api, hors ratio de groupe. Total payé : toutes les recharges de portefeuille payées par le client, en yuans, les forfaits achetés en dessous. Solde : le portefeuille actuel.",
+    "{{count}} customers used {{quota}} of new-api value and {{engine}} at gpt-load’s official prices.": "{{count}} clients ont consommé {{quota}} de valeur new-api et {{engine}} aux prix officiels de gpt-load.",
+    "{{count}} customers used {{quota}} of new-api value.": "{{count}} clients ont consommé {{quota}} de valeur new-api.",
+    "Root’s own use, {{quota}} and {{engine}}, is not listed.": "L’usage propre de root, {{quota}} et {{engine}}, n’est pas listé.",
+    "Root’s own use, {{quota}}, is not listed.": "L’usage propre de root, {{quota}}, n’est pas listé.",
+    "{{amount}} of gpt-load’s cost was for a vendor no one was charged for, so it is not shared out.": "{{amount}} du coût gpt-load concerne un fournisseur facturé à personne ; il n’est pas réparti.",
+    "No consumption in this window": "Aucune consommation dans cette fenêtre",
+    "new-api value": "Valeur new-api",
+    "The user’s share of gpt-load’s official-price cost: each model’s cost split by new-api charge, group ratio taken out.": "Part du coût gpt-load aux prix officiels : le coût de chaque modèle réparti selon la facturation new-api, hors ratio de groupe.",
+    "Total paid": "Total payé",
+    "Every wallet top-up the customer ever paid, in yuan; plans bought are listed under it.": "Toutes les recharges de portefeuille payées par le client, en yuans ; les forfaits achetés en dessous.",
+    "Plans {{amount}}": "Forfaits {{amount}}"
   }
 }

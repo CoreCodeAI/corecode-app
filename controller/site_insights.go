@@ -335,3 +335,20 @@ func GetPoolUsage(c *gin.Context) {
 	}
 	common.ApiSuccess(c, usage)
 }
+
+// GetUserSpendInsights returns each customer's use over the last `hours`
+// (one of service.UserSpendWindowHours, 24 by default): new-api's charge and
+// gpt-load's cost shared out to them, with their balance and what they paid.
+func GetUserSpendInsights(c *gin.Context) {
+	hours, err := strconv.ParseInt(c.DefaultQuery("hours", "24"), 10, 64)
+	if err != nil || !slices.Contains(service.UserSpendWindowHours, hours) {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	spend, err := service.FetchUserSpend(hours)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, spend)
+}

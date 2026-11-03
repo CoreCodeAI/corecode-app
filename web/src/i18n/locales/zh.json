@@ -7711,6 +7711,21 @@
     "Filter by model": "按模型筛选",
     "All {{vendor}} models": "全部 {{vendor}} 模型",
     "The cards and daily charts cover the selected models. The table, status codes, failure reasons and stream ends cover every model.": "顶部卡片和每日图表只统计所选模型；模型表、状态码、失败原因和流结束方式仍统计全部模型。",
-    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.": "请求数不足 100 的模型颜色变淡：它们的比率和分位数样本太少，不宜比较。选了模型筛选后，筛选之外的模型也会变淡。破折号表示没有测到数据。"
+    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.": "请求数不足 100 的模型颜色变淡：它们的比率和分位数样本太少，不宜比较。选了模型筛选后，筛选之外的模型也会变淡。破折号表示没有测到数据。",
+    "5 hours": "5 小时",
+    "12 hours": "12 小时",
+    "Consumption by user": "用户消耗",
+    "Customers with use in the window, most new-api value first, up to 100; root’s own use is not listed. new-api value is what new-api charged at its own prices, in yuan, with dollars at the site’s exchange rate under it. gpt-load value is what the same requests cost at official prices. gpt-load does not know which user sent a request, so each model’s cost is shared among that model’s users by their new-api charge with the group ratio taken out. Total paid is every wallet top-up the customer ever paid, in yuan, with plans bought listed under it. Balance is the wallet now.": "时间窗内有消耗的用户，按 new-api 价值从高到低，最多 100 名；root 自己的使用不列出。new-api 价值是 new-api 按自身价格扣的额度，单位为元，下方是按站点汇率折算的美元。gpt-load 价值是同样这些请求按官方价格计的成本。gpt-load 不知道请求来自哪个用户，所以每个模型的成本按用户在该模型上的 new-api 消耗（去掉分组倍率后）分摊。累计充值是该用户历来所有钱包充值的实付金额，单位为元，购买的套餐列在下方。余额是钱包当前余额。",
+    "{{count}} customers used {{quota}} of new-api value and {{engine}} at gpt-load’s official prices.": "{{count}} 个用户消耗了 {{quota}} 的 new-api 价值，按 gpt-load 官方价计为 {{engine}}。",
+    "{{count}} customers used {{quota}} of new-api value.": "{{count}} 个用户消耗了 {{quota}} 的 new-api 价值。",
+    "Root’s own use, {{quota}} and {{engine}}, is not listed.": "root 自己的使用（{{quota}}，{{engine}}）未列出。",
+    "Root’s own use, {{quota}}, is not listed.": "root 自己的使用（{{quota}}）未列出。",
+    "{{amount}} of gpt-load’s cost was for a vendor no one was charged for, so it is not shared out.": "gpt-load 有 {{amount}} 的成本属于这段时间没有向任何用户收费的厂商，未分摊。",
+    "No consumption in this window": "这段时间没有消耗",
+    "new-api value": "New API 价值",
+    "The user’s share of gpt-load’s official-price cost: each model’s cost split by new-api charge, group ratio taken out.": "该用户分摊到的 gpt-load 官方价成本：每个模型的成本按 new-api 消耗（去掉分组倍率）分给用户。",
+    "Total paid": "累计充值",
+    "Every wallet top-up the customer ever paid, in yuan; plans bought are listed under it.": "该用户历来所有钱包充值的实付金额，单位为元；购买的套餐列在下方。",
+    "Plans {{amount}}": "套餐 {{amount}}"
   }
 }
