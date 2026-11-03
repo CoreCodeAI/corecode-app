@@ -80,6 +80,14 @@ const localeLoaders: Record<string, LocaleLoader> = {
     rest: () =>
       import(/* webpackChunkName: "i18n-rest-ja" */ './locales/ja.json?rest'),
   },
+  ko: {
+    boot: () =>
+      import(/* webpackChunkName: "locale-ko" */ './locales/ko.json?boot'),
+    core: () =>
+      import(/* webpackChunkName: "i18n-core-ko" */ './locales/ko.json?core'),
+    rest: () =>
+      import(/* webpackChunkName: "i18n-rest-ko" */ './locales/ko.json?rest'),
+  },
   vi: {
     boot: () =>
       import(/* webpackChunkName: "locale-vi" */ './locales/vi.json?boot'),

@@ -34,11 +34,12 @@ import { useAuthStore } from '@/stores/auth-store'
 
 // The languages corecode.live is written in that the console has a locale for,
 // in the order of the static site's language menu. fr and vi stay reachable
-// from the profile page; ko has no console locale yet.
+// from the profile page.
 const SWITCHER_LANGUAGES = [
   { code: 'zhCN', label: '简体中文', tag: 'zh-CN' },
   { code: 'en', label: 'English', tag: 'en' },
   { code: 'ja', label: '日本語', tag: 'ja' },
+  { code: 'ko', label: '한국어', tag: 'ko' },
   { code: 'ru', label: 'Русский', tag: 'ru' },
   { code: 'zhTW', label: '繁體中文', tag: 'zh-TW' },
 ] as const
