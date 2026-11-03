@@ -36,7 +36,15 @@ type ViolationGuardSetting struct {
 	// or whitespace, whose first refusal in the window is only a warning: the
 	// refused conversation stays blocked, and nothing else is restricted.
 	LenientCategories string `json:"lenient_categories"`
+	// ClientCheckLimit stops forwarding a customer's client checks once the
+	// upstream has refused this many of them within ClientCheckWindowSeconds;
+	// 0 always forwards them. See clientCheckRefusal in the service package.
+	ClientCheckLimit int `json:"client_check_limit"`
 }
+
+// ClientCheckWindowSeconds is how long a refused client check counts toward
+// ClientCheckLimit.
+const ClientCheckWindowSeconds = 24 * 3600
 
 // LenientCategory reports whether a refusal of this category is warned about
 // once before it counts as a strike.
@@ -61,6 +69,9 @@ var violationGuardSetting = ViolationGuardSetting{
 	// Anthropic's classifier refuses many ordinary agent sessions with this
 	// category, so the first such refusal only warns.
 	LenientCategories: "reasoning_extraction",
+	// A client that keeps sending checks the upstream refuses costs the pool
+	// account a refusal each time, and the customer gains nothing from them.
+	ClientCheckLimit: 5,
 }
 
 func init() {
@@ -79,7 +90,7 @@ func ValidateViolationGuardOption(field string, value string) error {
 		if value != ViolationGuardModeObserve && value != ViolationGuardModeEnforce {
 			return fmt.Errorf("Violation guard mode must be observe or enforce")
 		}
-	case "suspend_hours", "ban_strikes":
+	case "suspend_hours", "ban_strikes", "client_check_limit":
 		if number, err := strconv.Atoi(value); err != nil || number < 0 {
 			return fmt.Errorf("Violation guard %s must be a non-negative whole number", field)
 		}

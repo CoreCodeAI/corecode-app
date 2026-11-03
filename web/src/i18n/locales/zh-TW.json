@@ -7755,6 +7755,8 @@
     "Feishu signing secret": "飛書簽名密鑰",
     "Only when the bot has signature verification on. Leave blank unless updating.": "僅在機器人開啟簽名驗證時填寫。不修改請留空。",
     "Send test message": "傳送測試訊息",
-    "Uses the saved webhook. Save changes first.": "使用已儲存的 webhook，請先儲存變更。"
+    "Uses the saved webhook. Save changes first.": "使用已儲存的 webhook，請先儲存變更。",
+    "Client check limit": "用戶端檢查上限",
+    "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.": "客戶的用戶端檢查請求（如 Claude Code auto 模式在呼叫工具前發出的檢查）24 小時內被上游拒絕達到此次數後，不再轉發這類請求。它們從不計入違規。0 表示一律轉發。"
   }
 }

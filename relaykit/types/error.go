@@ -45,6 +45,7 @@ const (
 	// The violation guard rejected the request before it reached a channel.
 	ErrorCodeViolationSuspended           ErrorCode = "violation_suspended"
 	ErrorCodeViolationConversationBlocked ErrorCode = "violation_conversation_blocked"
+	ErrorCodeViolationClientCheckBlocked  ErrorCode = "violation_client_check_blocked"
 	ErrorCodeRiskGateBlocked              ErrorCode = "risk_gate_blocked"
 
 	// new api error
