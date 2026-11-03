@@ -7757,6 +7757,9 @@
     "Send test message": "发送测试消息",
     "Uses the saved webhook. Save changes first.": "使用已保存的 webhook，请先保存更改。",
     "Client check limit": "客户端检查上限",
-    "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.": "客户的客户端检查请求（如 Claude Code auto 模式在调用工具前发出的检查）24 小时内被上游拒绝达到此次数后，不再转发这类请求。它们从不计入违规。0 表示始终转发。"
+    "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.": "客户的客户端检查请求（如 Claude Code auto 模式在调用工具前发出的检查）24 小时内被上游拒绝达到此次数后，不再转发这类请求。它们从不计入违规。0 表示始终转发。",
+    "USDT / USDC network": "USDT / USDC 网络",
+    "Pay with USDT / USDC": "用 USDT / USDC 支付",
+    "About ${{amount}} in USDT or USDC at the site exchange rate.": "按站内汇率约合 ${{amount}} 的 USDT 或 USDC。"
   }
 }

@@ -7757,6 +7757,9 @@
     "Send test message": "テストメッセージを送信",
     "Uses the saved webhook. Save changes first.": "保存済みの Webhook を使います。先に変更を保存してください。",
     "Client check limit": "クライアントチェックの上限",
-    "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.": "顧客のクライアントチェック（Claude Code の auto モードがツール呼び出し前に送るチェックなど）が 24 時間以内に上流でこの回数拒否されると、以後は転送しません。違反としては数えません。0 の場合は常に転送します。"
+    "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.": "顧客のクライアントチェック（Claude Code の auto モードがツール呼び出し前に送るチェックなど）が 24 時間以内に上流でこの回数拒否されると、以後は転送しません。違反としては数えません。0 の場合は常に転送します。",
+    "USDT / USDC network": "USDT / USDC ネットワーク",
+    "Pay with USDT / USDC": "USDT / USDC で支払う",
+    "About ${{amount}} in USDT or USDC at the site exchange rate.": "サイトの為替レートで約 ${{amount}} 分の USDT または USDC です。"
   }
 }

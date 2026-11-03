@@ -155,6 +155,15 @@ export async function paySubscriptionWaffoPancake(
   return res.data
 }
 
+// Opens a NOWPayments invoice for the plan, paid in the chosen USDT or USDC
+// network; answers the hosted payment page as data.pay_link.
+export async function paySubscriptionNowPayments(
+  data: SubscriptionPayRequest & { pay_currency: string }
+): Promise<SubscriptionPayResponse> {
+  const res = await api.post('/api/subscription/nowpayments/pay', data)
+  return res.data
+}
+
 export async function paySubscriptionBalance(
   data: SubscriptionPayRequest
 ): Promise<SubscriptionPayResponse> {
