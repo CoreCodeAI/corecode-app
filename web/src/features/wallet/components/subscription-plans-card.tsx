@@ -61,6 +61,7 @@ import { handleServerError } from '@/lib/handle-server-error'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
+import { PAYMENT_TYPES } from '../constants'
 import { formatPaymentMoney } from '../lib'
 import type { PaymentMethod, TopupInfo } from '../types'
 
@@ -71,9 +72,15 @@ interface SubscriptionPlansCardProps {
   onPurchaseSuccess?: () => void | Promise<void>
 }
 
+// The methods epay serves. pay_methods also lists the gateways with their own
+// purchase path (Stripe, Creem, NOWPayments), which epay would refuse.
 function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
   return payMethods.filter(
-    (m) => m?.type && m.type !== 'stripe' && m.type !== 'creem'
+    (m) =>
+      m?.type &&
+      m.type !== 'stripe' &&
+      m.type !== 'creem' &&
+      m.type !== PAYMENT_TYPES.NOWPAYMENTS
   )
 }
 
@@ -667,6 +674,7 @@ export function SubscriptionPlansCard({
         enableWaffoPancake={enableWaffoPancake}
         enableOnlineTopUp={enableOnlineTopUp}
         epayMethods={epayMethods}
+        nowPaymentsCurrencies={topupInfo?.nowpayments_currencies}
         userQuota={userQuota}
         onPurchaseSuccess={onPurchaseSuccess}
         purchaseLimit={

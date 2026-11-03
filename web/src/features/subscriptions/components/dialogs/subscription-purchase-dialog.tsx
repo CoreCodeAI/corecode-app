@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button'
 import { Combobox } from '@/components/ui/combobox'
 import { Separator } from '@/components/ui/separator'
 import { formatPaymentMoney } from '@/features/wallet/lib'
+import type { NowPaymentsCurrency } from '@/features/wallet/types'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { formatQuota } from '@/lib/format'
 import { handleServerError } from '@/lib/handle-server-error'
@@ -39,6 +40,7 @@ import {
   paySubscriptionEpay,
   paySubscriptionWaffoPancake,
   paySubscriptionBalance,
+  paySubscriptionNowPayments,
 } from '../../api'
 import { formatDuration, formatResetPeriod } from '../../lib'
 import type { PlanRecord } from '../../types'
@@ -57,6 +59,8 @@ interface Props {
   enableWaffoPancake?: boolean
   enableOnlineTopUp?: boolean
   epayMethods?: PaymentMethod[]
+  /** USDT and USDC networks offered through NOWPayments; empty when it is off */
+  nowPaymentsCurrencies?: NowPaymentsCurrency[]
   purchaseLimit?: number
   purchaseCount?: number
   userQuota?: number
@@ -68,6 +72,8 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const { currency } = useSystemConfig()
   const [paying, setPaying] = useState(false)
   const [selectedEpayMethod, setSelectedEpayMethod] = useState('')
+  const [selectedNowPaymentsCurrency, setSelectedNowPaymentsCurrency] =
+    useState('')
 
   useEffect(() => {
     if (props.open && props.epayMethods && props.epayMethods.length > 0) {
@@ -76,6 +82,14 @@ export function SubscriptionPurchaseDialog(props: Props) {
       setSelectedEpayMethod('')
     }
   }, [props.open, props.epayMethods])
+
+  useEffect(() => {
+    if (props.open && props.nowPaymentsCurrencies?.length) {
+      setSelectedNowPaymentsCurrency(props.nowPaymentsCurrencies[0].code)
+    } else if (!props.open) {
+      setSelectedNowPaymentsCurrency('')
+    }
+  }, [props.open, props.nowPaymentsCurrencies])
 
   const plan = props.plan?.plan
   if (!plan) return null
@@ -86,7 +100,20 @@ export function SubscriptionPurchaseDialog(props: Props) {
     props.enableWaffoPancake && !!plan.waffo_pancake_product_id
   const hasEpay =
     props.enableOnlineTopUp && (props.epayMethods || []).length > 0
-  const hasAnyPayment = hasStripe || hasCreem || hasWaffoPancake || hasEpay
+  const nowPaymentsCurrencies = props.nowPaymentsCurrencies || []
+  const hasNowPayments = nowPaymentsCurrencies.length > 0
+  const hasAnyPayment =
+    hasStripe || hasCreem || hasWaffoPancake || hasEpay || hasNowPayments
+  // NOWPayments invoices the CNY price in US dollars at the server's rate,
+  // rounded to the cent; USDT and USDC are one dollar each.
+  const usdExchangeRate = Number(currency?.usdExchangeRate || 0)
+  const nowPaymentsPriceUSD =
+    usdExchangeRate > 0
+      ? (
+          Math.round((Number(plan.price_amount || 0) / usdExchangeRate) * 100) /
+          100
+        ).toFixed(2)
+      : ''
   const totalAmount = Number(plan.total_amount || 0)
   const price = formatPaymentMoney(Number(plan.price_amount || 0))
   const quotaPerUnit =
@@ -193,6 +220,32 @@ export function SubscriptionPurchaseDialog(props: Props) {
         document.body.removeChild(form)
         toast.success(t('Payment initiated'))
         props.onOpenChange(false)
+      } else {
+        handleServerError(res, t('Payment request failed'))
+      }
+    } catch (error) {
+      handleServerError(error, t('Payment request failed'))
+    } finally {
+      setPaying(false)
+    }
+  }
+
+  // In-tab redirect, as in the wallet: the popup would be blocked after the
+  // await.
+  const handlePayNowPayments = async () => {
+    if (!selectedNowPaymentsCurrency) {
+      toast.error(t('Choose a network'))
+      return
+    }
+    setPaying(true)
+    try {
+      const res = await paySubscriptionNowPayments({
+        plan_id: plan.id,
+        pay_currency: selectedNowPaymentsCurrency,
+      })
+      if (res.message === 'success' && res.data?.pay_link) {
+        toast.success(t('Redirecting to payment page...'))
+        window.location.assign(res.data.pay_link)
       } else {
         handleServerError(res, t('Payment request failed'))
       }
@@ -382,6 +435,41 @@ export function SubscriptionPurchaseDialog(props: Props) {
                 >
                   {t('Pay')}
                 </Button>
+              </div>
+            )}
+            {hasNowPayments && (
+              <div className='space-y-1.5'>
+                <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
+                  <Combobox
+                    options={nowPaymentsCurrencies.map((c) => ({
+                      value: c.code,
+                      label: `${c.coin} · ${c.network}`,
+                    }))}
+                    value={selectedNowPaymentsCurrency}
+                    onValueChange={(v) =>
+                      v !== null && setSelectedNowPaymentsCurrency(v)
+                    }
+                    disabled={limitReached}
+                    className='flex-1'
+                    aria-label={t('USDT / USDC network')}
+                  />
+                  <Button
+                    onClick={handlePayNowPayments}
+                    disabled={
+                      paying || !selectedNowPaymentsCurrency || limitReached
+                    }
+                  >
+                    {t('Pay with USDT / USDC')}
+                  </Button>
+                </div>
+                {nowPaymentsPriceUSD && (
+                  <p className='text-muted-foreground text-xs'>
+                    {t(
+                      'About ${{amount}} in USDT or USDC at the site exchange rate.',
+                      { amount: nowPaymentsPriceUSD }
+                    )}
+                  </p>
+                )}
               </div>
             )}
           </div>

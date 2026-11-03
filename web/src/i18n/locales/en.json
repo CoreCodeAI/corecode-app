@@ -7757,6 +7757,9 @@
     "Send test message": "Send test message",
     "Uses the saved webhook. Save changes first.": "Uses the saved webhook. Save changes first.",
     "Client check limit": "Client check limit",
-    "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.": "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them."
+    "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.": "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.",
+    "USDT / USDC network": "USDT / USDC network",
+    "Pay with USDT / USDC": "Pay with USDT / USDC",
+    "About ${{amount}} in USDT or USDC at the site exchange rate.": "About ${{amount}} in USDT or USDC at the site exchange rate."
   }
 }

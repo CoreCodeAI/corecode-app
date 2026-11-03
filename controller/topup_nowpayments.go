@@ -32,7 +32,8 @@ import (
 // that amount in US dollars at the USDExchangeRate option. USDT and USDC are
 // both taken as one dollar.
 
-const nowPaymentsAPIBase = "https://api.nowpayments.io/v1"
+// nowPaymentsAPIBase is NOWPayments' API. Tests point it at a stub.
+var nowPaymentsAPIBase = "https://api.nowpayments.io/v1"
 
 var nowPaymentsHTTPClient = &http.Client{Timeout: 20 * time.Second}
 
@@ -109,9 +110,7 @@ func RequestNowPaymentsPay(c *gin.Context) {
 		return
 	}
 	payCurrency := strings.ToLower(strings.TrimSpace(req.PayCurrency))
-	if !slices.ContainsFunc(setting.GetNowPaymentsPayCurrencies(), func(currency setting.NowPaymentsCurrency) bool {
-		return currency.Code == payCurrency
-	}) {
+	if !isNowPaymentsPayCurrency(payCurrency) {
 		paymentError(c, common.NewMessage("Payment method does not exist"))
 		return
 	}
@@ -131,14 +130,10 @@ func RequestNowPaymentsPay(c *gin.Context) {
 	}
 
 	tradeNo := fmt.Sprintf("NPUSR%dNO%s%d", id, common.GetRandomString(6), time.Now().Unix())
-	invoiceURL, err := createNowPaymentsInvoice(c.Request.Context(), tradeNo, priceUSD, payCurrency)
+	invoiceURL, err := createNowPaymentsInvoice(c.Request.Context(), tradeNo, priceUSD, payCurrency, "CoreCode top-up "+tradeNo, "/usage-logs")
 	if err != nil {
 		logger.LogError(c.Request.Context(), common.LogText("NOWPayments failed to create invoice user_id=%d trade_no=%s pay_currency=%s price_usd=%s error=%q", id, tradeNo, payCurrency, priceUSD.StringFixed(2), err.Error()))
-		if strings.Contains(err.Error(), "AMOUNT_MINIMAL_ERROR") {
-			paymentError(c, common.NewMessage("The amount is below this network's minimum. Choose a larger amount or another network."))
-			return
-		}
-		paymentError(c, common.NewMessage("Failed to start payment"))
+		paymentError(c, nowPaymentsInvoiceError(err))
 		return
 	}
 
@@ -166,17 +161,34 @@ func RequestNowPaymentsPay(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "success", "data": gin.H{"pay_link": invoiceURL}})
 }
 
+// nowPaymentsInvoiceError is what the customer reads when NOWPayments
+// refuses an invoice.
+func nowPaymentsInvoiceError(err error) *common.Message {
+	if strings.Contains(err.Error(), "AMOUNT_MINIMAL_ERROR") {
+		return common.NewMessage("The amount is below this network's minimum. Choose a larger amount or another network.")
+	}
+	return common.NewMessage("Failed to start payment")
+}
+
+// isNowPaymentsPayCurrency reports whether the wallet offers this ticker now.
+func isNowPaymentsPayCurrency(payCurrency string) bool {
+	return slices.ContainsFunc(setting.GetNowPaymentsPayCurrencies(), func(currency setting.NowPaymentsCurrency) bool {
+		return currency.Code == payCurrency
+	})
+}
+
 // createNowPaymentsInvoice opens a hosted invoice for priceUSD, paid in
-// payCurrency, and returns the page the customer pays on.
-func createNowPaymentsInvoice(ctx context.Context, tradeNo string, priceUSD decimal.Decimal, payCurrency string) (string, error) {
+// payCurrency, and returns the page the customer pays on. successPath is the
+// console page the customer returns to once paid.
+func createNowPaymentsInvoice(ctx context.Context, tradeNo string, priceUSD decimal.Decimal, payCurrency string, description string, successPath string) (string, error) {
 	body, err := common.Marshal(map[string]any{
 		"price_amount":      priceUSD.InexactFloat64(),
 		"price_currency":    "usd",
 		"pay_currency":      payCurrency,
 		"order_id":          tradeNo,
-		"order_description": "CoreCode top-up " + tradeNo,
+		"order_description": description,
 		"ipn_callback_url":  strings.TrimRight(service.GetCallbackAddress(), "/") + "/api/nowpayments/webhook",
-		"success_url":       paymentReturnPath("/usage-logs"),
+		"success_url":       paymentReturnPath(successPath),
 		"cancel_url":        paymentReturnPath("/wallet"),
 	})
 	if err != nil {
@@ -370,6 +382,12 @@ func NowPaymentsWebhook(c *gin.Context) {
 
 	LockOrder(tradeNo)
 	defer UnlockOrder(tradeNo)
+	if isNowPaymentsSubscriptionTradeNo(tradeNo) {
+		if handleNowPaymentsSubscriptionNotification(c, ctx, tradeNo, body, notification, summary, callerIp) {
+			c.Status(http.StatusOK)
+		}
+		return
+	}
 	switch notification.PaymentStatus {
 	case "finished":
 		alreadyDone, err := model.RechargeNowPayments(tradeNo, callerIp)
@@ -435,12 +453,10 @@ func notifyNowPaymentsFeishu(title string, tradeNo string, notification nowPayme
 // nowPaymentsFeishuText describes a deposit and the order it names, if any.
 func nowPaymentsFeishuText(title string, tradeNo string, notification nowPaymentsNotification) string {
 	lines := []string{title, "订单：" + tradeNo}
-	if topUp := model.GetTopUpByTradeNo(tradeNo); topUp != nil {
-		user := fmt.Sprintf("#%d", topUp.UserId)
-		if username, err := model.GetUsernameById(topUp.UserId, false); err == nil && username != "" {
-			user = username + " " + user
-		}
-		lines = append(lines, "用户："+user)
+	if isNowPaymentsSubscriptionTradeNo(tradeNo) {
+		lines = append(lines, nowPaymentsSubscriptionFeishuLines(tradeNo)...)
+	} else if topUp := model.GetTopUpByTradeNo(tradeNo); topUp != nil {
+		lines = append(lines, "用户："+nowPaymentsFeishuUser(topUp.UserId))
 		order := fmt.Sprintf("充值：%d，应付 ¥%.2f", topUp.Amount, topUp.Money)
 		if topUp.BonusQuota > 0 && common.QuotaPerUnit > 0 {
 			order = fmt.Sprintf("充值：%d（赠送 %.2f），应付 ¥%.2f", topUp.Amount, float64(topUp.BonusQuota)/common.QuotaPerUnit, topUp.Money)
@@ -459,6 +475,15 @@ func nowPaymentsFeishuText(title string, tradeNo string, notification nowPayment
 		lines = append(lines, "原付款 payment_id："+parent)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// nowPaymentsFeishuUser names a user as "username #id", or "#id" alone.
+func nowPaymentsFeishuUser(userId int) string {
+	user := fmt.Sprintf("#%d", userId)
+	if username, err := model.GetUsernameById(userId, false); err == nil && username != "" {
+		user = username + " " + user
+	}
+	return user
 }
 
 // nowPaymentsJSONText shows a raw IPN value, quotes dropped, "-" when absent.
