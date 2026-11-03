@@ -38,6 +38,13 @@ CoreCode's own (CoreCode, official, support) or a lucky number (888, 666).
   held for good, so the cap stops one account from collecting codes. A change
   of case retires nothing and does not count. Root changes are not capped.
 
+## Alternatives considered
+
+- **Refuse codes that contain a reserved word.** It would also refuse
+  ordinary words that hold one, such as badminton.
+- **Free a code once its owner changes it.** Whoever claimed it next would
+  take every sign-up the old links still bring.
+
 ## Compatibility
 
 The new table is created by `AutoMigrate` and is empty on upgrade, so codes

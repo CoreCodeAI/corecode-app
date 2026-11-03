@@ -35,6 +35,10 @@ Status: implemented
   returns localized copies for display, so switching language does not mark
   announcements unread.
 
+## Alternatives considered
+
+Not recorded when the change shipped.
+
 ## Files
 
 | Path | Why |
@@ -46,7 +50,7 @@ Status: implemented
 | `web/src/hooks/use-notifications.ts` | announcement popover localized, read keys unchanged |
 | `setting/console_setting/validation.go` | translations validated through the item checks |
 
-## Behavior
+## Consequences
 
 - The admin settings forms still edit the base fields only. A bilingual
   value is written through the options API, which CoreCode does with

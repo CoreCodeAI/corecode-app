@@ -35,7 +35,7 @@ can be one click from a working provider.
   query strings are not logged. The fragment is therefore not reported, and the
   web link works for customers who have no `magpie://` handler registered yet.
 
-## Alternatives
+## Alternatives considered
 
 - `magpie://import?…` directly: no third-party page, but the browser does
   nothing visible when Magpie is not installed.

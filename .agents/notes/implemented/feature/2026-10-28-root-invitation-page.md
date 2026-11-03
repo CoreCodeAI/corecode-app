@@ -49,6 +49,10 @@ Status: implemented
   Invitation settings item to root only. The access-token scopes of the
   existing routes are unchanged.
 
+## Alternatives considered
+
+Not recorded when the change shipped.
+
 ## Compatibility
 
 The server ships before the console. The console in production calls only

@@ -31,6 +31,10 @@ Each template with a substitution shifted the pairing again.
 - `locale-split.test.ts` checks a key named after several such templates (`Peak
   throughput`, rest) and one inside a template (`Oops! Something went wrong`, boot).
 
+## Alternatives considered
+
+Not recorded when the change shipped.
+
 ## Consequences
 
 Against the zh locale on 2026-11-02:

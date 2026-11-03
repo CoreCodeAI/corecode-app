@@ -41,6 +41,11 @@ records, masked and one credit at a time.
 - Direct and second level reuse the wallet's colours for the two levels (info
   and chart-4), so a level looks the same on both pages.
 
+## Alternatives considered
+
+- **Add second-level commission to the invitee rows.** A row's commission
+  would then exceed its rate times its paid spend.
+
 ## Compatibility
 
 The response field is added, and the console treats it as optional because the

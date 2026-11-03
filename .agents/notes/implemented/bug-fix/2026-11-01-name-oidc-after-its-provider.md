@@ -21,6 +21,12 @@ unfamiliar protocol name where they expected Google.
   session and audit labels, which are plain functions, read the cached status
   (`readCachedStatus`) and fall back to "OIDC" when there is none.
 
+## Alternatives considered
+
+- **Show Google's mark from the display name.** The name is editable, so any
+  provider named "Google" would carry Google's mark; the authorization
+  endpoint is not.
+
 ## Verification
 
 - Vitest: the binding row reads "Google" with no "OIDC" when the status names
