@@ -320,13 +320,20 @@ func applyHeaderOverrideToRequest(req *http.Request, headerOverride map[string]s
 	}
 }
 
+// newUpstreamRequest ties the upstream call to the client's request, so a client
+// that disconnects cancels the upstream call instead of leaving it to run, and
+// be billed, to completion.
+func newUpstreamRequest(c *gin.Context, url string, body io.Reader) (*http.Request, error) {
+	return http.NewRequestWithContext(c.Request.Context(), c.Request.Method, url, body)
+}
+
 func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody io.Reader) (*http.Response, error) {
 	fullRequestURL, err := a.GetRequestURL(info)
 	if err != nil {
 		return nil, fmt.Errorf("get request url failed: %w", err)
 	}
 	logger.LogDebug(c, "fullRequestURL: %s", common.SanitizeURLForLog(fullRequestURL))
-	req, err := http.NewRequest(c.Request.Method, fullRequestURL, requestBody)
+	req, err := newUpstreamRequest(c, fullRequestURL, requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("new request failed: %w", err)
 	}
@@ -354,7 +361,7 @@ func DoFormRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBod
 		return nil, fmt.Errorf("get request url failed: %w", err)
 	}
 	logger.LogDebug(c, "fullRequestURL: %s", common.SanitizeURLForLog(fullRequestURL))
-	req, err := http.NewRequest(c.Request.Method, fullRequestURL, requestBody)
+	req, err := newUpstreamRequest(c, fullRequestURL, requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("new request failed: %w", err)
 	}
@@ -487,6 +494,13 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 
 	common2.SetContextKey(c, appconstant.ContextKeyUpstreamRequestOrigin, req.URL.Scheme+"://"+req.URL.Host)
 	resp, err := relayClient.Do(req)
+	if err != nil && req.Context().Err() != nil && c.Request.Context().Err() != nil {
+		// The client left, so no other channel can serve it and this channel did
+		// nothing wrong: stop without a retry, an error log, or a channel penalty.
+		return nil, types.NewError(err, types.ErrorCodeDoRequestFailed,
+			types.ErrOptionWithHideErrMsg("client disconnected"),
+			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+	}
 	if err != nil {
 		logger.LogError(c, common2.LogText("do request failed: %s", err.Error()))
 		return nil, types.NewError(err, types.ErrorCodeDoRequestFailed, types.ErrOptionWithHideErrMsg("upstream error: do request failed"))
