@@ -31,7 +31,7 @@ export interface BonusTier {
   rate: number
 }
 
-const NON_EPAY_PAYMENT_TYPES = new Set<string>([
+const NO_BONUS_PAYMENT_TYPES = new Set<string>([
   PAYMENT_TYPES.STRIPE,
   PAYMENT_TYPES.CREEM,
   PAYMENT_TYPES.WAFFO,
@@ -39,11 +39,12 @@ const NON_EPAY_PAYMENT_TYPES = new Set<string>([
 ])
 
 /**
- * Only online epay methods (alipay, wxpay and similar) earn a bonus; Stripe,
- * Creem and Waffo orders never do.
+ * Online epay methods (alipay, wxpay and similar) and NOWPayments (USDT /
+ * USDC), whose orders are priced like epay's, earn a bonus; Stripe, Creem and
+ * Waffo orders never do.
  */
 export function isBonusEligiblePayment(paymentType: string | undefined) {
-  return !!paymentType && !NON_EPAY_PAYMENT_TYPES.has(paymentType)
+  return !!paymentType && !NO_BONUS_PAYMENT_TYPES.has(paymentType)
 }
 
 function getTiers(bonus: Record<number, number> | undefined): BonusTier[] {

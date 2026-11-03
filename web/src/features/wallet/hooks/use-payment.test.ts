@@ -41,9 +41,34 @@ describe('payment amount routing', () => {
         calls.push('pancake')
         return { success: true, data: '4' }
       },
+      nowPayments: async () => {
+        calls.push('nowpayments')
+        return { success: true, data: '5' }
+      },
     })
 
     expect(amount).toBe(18.75)
     expect(calls).toEqual(['waffo:120'])
+  })
+
+  test('prices a NOWPayments payment in US dollars on its own endpoint', async () => {
+    const calls: string[] = []
+    const unexpected = async () => {
+      calls.push('other')
+      return { success: true, data: '100' }
+    }
+    const amount = await requestPaymentAmount(100, PAYMENT_TYPES.NOWPAYMENTS, {
+      regular: unexpected,
+      stripe: unexpected,
+      waffo: unexpected,
+      waffoPancake: unexpected,
+      nowPayments: async (request) => {
+        calls.push(`nowpayments:${request.amount}`)
+        return { success: true, data: '14.71' }
+      },
+    })
+
+    expect(amount).toBe(14.71)
+    expect(calls).toEqual(['nowpayments:100'])
   })
 })

@@ -22,6 +22,7 @@ import { createServerError } from '@/lib/server-error-message'
 import type {
   RedemptionRequest,
   PaymentRequest,
+  NowPaymentsPaymentRequest,
   AmountRequest,
   AffiliateTransferRequest,
   AffiliateCommission,
@@ -108,6 +109,30 @@ export async function calculateWaffoAmount(
   request: AmountRequest
 ): Promise<AmountResponse> {
   const res = await api.post('/api/user/waffo/amount', request, {
+    skipBusinessError: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+/**
+ * Calculate the US dollar price of a NOWPayments (USDT / USDC) payment
+ */
+export async function calculateNowPaymentsAmount(
+  request: AmountRequest
+): Promise<AmountResponse> {
+  const res = await api.post('/api/user/nowpayments/amount', request, {
+    skipBusinessError: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+/**
+ * Open a NOWPayments invoice; answers the hosted payment page as pay_link
+ */
+export async function requestNowPaymentsPayment(
+  request: NowPaymentsPaymentRequest
+): Promise<StripePaymentResponse> {
+  const res = await api.post('/api/user/nowpayments/pay', request, {
     skipBusinessError: true,
   } as Record<string, unknown>)
   return res.data

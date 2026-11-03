@@ -111,18 +111,35 @@ export function isWaffoPancakePayment(paymentType: string): boolean {
   return paymentType === PAYMENT_TYPES.WAFFO_PANCAKE
 }
 
+/**
+ * Check if payment method is NOWPayments (USDT / USDC), which is priced in US
+ * dollars rather than in the CNY the other methods charge
+ */
+export function isNowPaymentsPayment(paymentType: string | undefined): boolean {
+  return paymentType === PAYMENT_TYPES.NOWPAYMENTS
+}
+
 export interface PaymentProcessors {
   regular: (topupAmount: number, paymentType: string) => Promise<boolean>
   waffo: (topupAmount: number, payMethodIndex: number) => Promise<boolean>
   waffoPancake: (topupAmount: number) => Promise<boolean>
+  nowPayments: (topupAmount: number, payCurrency: string) => Promise<boolean>
 }
 
 export async function dispatchSelectedPayment(
   paymentMethod: PaymentMethod,
   topupAmount: number,
   waffoMethodIndex: number | null,
-  processors: PaymentProcessors
+  processors: PaymentProcessors,
+  nowPaymentsCurrency: string | null = null
 ): Promise<boolean> {
+  if (isNowPaymentsPayment(paymentMethod.type)) {
+    if (!nowPaymentsCurrency) {
+      return false
+    }
+    return processors.nowPayments(topupAmount, nowPaymentsCurrency)
+  }
+
   if (isWaffoPayment(paymentMethod.type)) {
     if (waffoMethodIndex === null) {
       return false

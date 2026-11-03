@@ -71,6 +71,9 @@ export function Wallet(props: WalletProps) {
   const [selectedWaffoMethodIndex, setSelectedWaffoMethodIndex] = useState<
     number | null
   >(null)
+  const [nowPaymentsCurrency, setNowPaymentsCurrency] = useState<string | null>(
+    null
+  )
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [billingDialogOpen, setBillingDialogOpen] = useState(false)
@@ -96,6 +99,7 @@ export function Wallet(props: WalletProps) {
     processing,
     calculatePaymentAmount,
     processPayment,
+    processNowPaymentsPayment,
   } = usePayment()
   const { redeeming, redeemCode } = useRedemption()
   const { processing: creemProcessing, processCreemPayment } = useCreemPayment()
@@ -167,6 +171,13 @@ export function Wallet(props: WalletProps) {
   const handlePaymentMethodSelect = async (method: PaymentMethod) => {
     setSelectedPaymentMethod(method)
     setSelectedWaffoMethodIndex(null)
+    // Keep the network chosen last time while it is still offered.
+    const currencies = topupInfo?.nowpayments_currencies ?? []
+    setNowPaymentsCurrency((current) =>
+      currencies.some((currency) => currency.code === current)
+        ? current
+        : (currencies[0]?.code ?? null)
+    )
     setPaymentLoading(method.type)
 
     try {
@@ -196,7 +207,9 @@ export function Wallet(props: WalletProps) {
         regular: processPayment,
         waffo: processWaffoPayment,
         waffoPancake: processWaffoPancakePayment,
-      }
+        nowPayments: processNowPaymentsPayment,
+      },
+      nowPaymentsCurrency
     )
 
     if (success) {
@@ -298,6 +311,7 @@ export function Wallet(props: WalletProps) {
                   topupAmount={topupAmount}
                   onTopupAmountChange={handleTopupAmountChange}
                   paymentAmount={paymentAmount}
+                  paymentAmountType={getCurrentPaymentType()}
                   calculating={calculating}
                   onPaymentMethodSelect={handlePaymentMethodSelect}
                   paymentLoading={paymentLoading}
@@ -356,6 +370,10 @@ export function Wallet(props: WalletProps) {
         discountRate={getDiscountRate()}
         bonusRate={getBonusRate()}
         usdExchangeRate={effectiveUsdExchangeRate}
+        nowPaymentsCurrencies={topupInfo?.nowpayments_currencies}
+        nowPaymentsCurrency={nowPaymentsCurrency}
+        onNowPaymentsCurrencyChange={setNowPaymentsCurrency}
+        paymentUsdRate={currency?.usdExchangeRate}
       />
 
       <BillingHistoryDialog

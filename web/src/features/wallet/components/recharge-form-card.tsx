@@ -41,6 +41,7 @@ import {
   bonusRateToPercent,
   findBonusTier,
   findNextBonusTier,
+  formatMethodPaymentMoney,
   formatPaymentMoney,
   getBonusLabel,
   getDiscountLabel,
@@ -67,6 +68,8 @@ interface RechargeFormCardProps {
   topupAmount: number
   onTopupAmountChange: (amount: number) => void
   paymentAmount: number
+  /** The payment type paymentAmount was priced for */
+  paymentAmountType?: string
   calculating: boolean
   onPaymentMethodSelect: (method: PaymentMethod) => void
   paymentLoading: string | null
@@ -97,6 +100,7 @@ export function RechargeFormCard({
   topupAmount,
   onTopupAmountChange,
   paymentAmount,
+  paymentAmountType,
   calculating,
   onPaymentMethodSelect,
   paymentLoading,
@@ -401,7 +405,10 @@ export function RechargeFormCard({
                       <Skeleton className='h-5 w-16' />
                     ) : (
                       <span className='text-sm font-semibold'>
-                        {formatPaymentMoney(paymentAmount)}
+                        {formatMethodPaymentMoney(
+                          paymentAmount,
+                          paymentAmountType
+                        )}
                       </span>
                     )}
                   </div>

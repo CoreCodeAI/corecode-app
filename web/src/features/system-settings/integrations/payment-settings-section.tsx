@@ -50,7 +50,7 @@ import { getPaymentErrorTranslation } from '@/features/wallet/lib/payment'
 import { handleServerError } from '@/lib/handle-server-error'
 import { cn } from '@/lib/utils'
 
-import { confirmPaymentCompliance } from '../api'
+import { confirmPaymentCompliance, testNowPaymentsFeishu } from '../api'
 import {
   SettingsForm,
   SettingsSwitchContent,
@@ -163,6 +163,25 @@ const paymentSchema = z.object({
   StripeUnitPrice: z.coerce.number().min(0),
   StripeMinTopUp: z.coerce.number().min(0),
   StripePromotionCodesEnabled: z.boolean(),
+  NowPaymentsApiKey: z.string(),
+  NowPaymentsIpnSecret: z.string(),
+  NowPaymentsMinTopUp: z.coerce.number().int().min(1),
+  NowPaymentsPayCurrencies: z.string(),
+  NowPaymentsFeishuWebhook: z
+    .string()
+    .trim()
+    .refine(
+      (value) =>
+        value === '' ||
+        /^https:\/\/open\.(feishu\.cn|larksuite\.com)\/open-apis\/bot\/v2\/hook\/[^/?#]+$/.test(
+          value
+        ),
+      {
+        message:
+          'Enter a Feishu or Lark custom bot webhook, starting with https://open.feishu.cn/open-apis/bot/v2/hook/.',
+      }
+    ),
+  NowPaymentsFeishuSecret: z.string(),
   CreemApiKey: z.string(),
   CreemWebhookSecret: z.string(),
   CreemTestMode: z.boolean(),
@@ -202,6 +221,31 @@ type PaymentBaseFormValues = Omit<
 >
 
 const CURRENT_COMPLIANCE_TERMS_VERSION = 'v1'
+
+// The tickers the server accepts for NowPaymentsPayCurrencies
+// (setting/payment_nowpayments.go); USDT and USDC only.
+const NOWPAYMENTS_CURRENCY_CODES = [
+  'usdttrc20',
+  'usdtbsc',
+  'usdtsol',
+  'usdtmatic',
+  'usdtton',
+  'usdterc20',
+  'usdcbsc',
+  'usdcsol',
+  'usdcbase',
+  'usdcmatic',
+  'usdcarb',
+  'usdc',
+]
+
+function normalizeNowPaymentsCurrencies(value: string): string {
+  return value
+    .split(',')
+    .map((code) => code.trim().toLowerCase())
+    .filter(Boolean)
+    .join(',')
+}
 const paymentTabContentClassName = 'mt-6 min-w-0'
 
 type PaymentComplianceDefaults = {
@@ -364,6 +408,20 @@ export function PaymentSettingsSection({
     },
   })
 
+  const testFeishuMutation = useMutation({
+    mutationFn: testNowPaymentsFeishu,
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(t('Test message sent.'))
+      } else {
+        handleServerError(data, t('Failed to send the test message'))
+      }
+    },
+    onError: (error: Error) => {
+      handleServerError(error, t('Failed to send the test message'))
+    },
+  })
+
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema) as Resolver<PaymentFormValues>,
     mode: 'onChange', // Enable real-time validation
@@ -453,6 +511,14 @@ export function PaymentSettingsSection({
       StripeUnitPrice: values.StripeUnitPrice,
       StripeMinTopUp: values.StripeMinTopUp,
       StripePromotionCodesEnabled: values.StripePromotionCodesEnabled,
+      NowPaymentsApiKey: values.NowPaymentsApiKey.trim(),
+      NowPaymentsIpnSecret: values.NowPaymentsIpnSecret.trim(),
+      NowPaymentsMinTopUp: values.NowPaymentsMinTopUp,
+      NowPaymentsPayCurrencies: normalizeNowPaymentsCurrencies(
+        values.NowPaymentsPayCurrencies
+      ),
+      NowPaymentsFeishuWebhook: values.NowPaymentsFeishuWebhook.trim(),
+      NowPaymentsFeishuSecret: values.NowPaymentsFeishuSecret.trim(),
       CreemApiKey: values.CreemApiKey.trim(),
       CreemWebhookSecret: values.CreemWebhookSecret.trim(),
       CreemTestMode: values.CreemTestMode,
@@ -499,6 +565,16 @@ export function PaymentSettingsSection({
       StripeMinTopUp: initialRef.current.StripeMinTopUp,
       StripePromotionCodesEnabled:
         initialRef.current.StripePromotionCodesEnabled,
+      NowPaymentsApiKey: initialRef.current.NowPaymentsApiKey.trim(),
+      NowPaymentsIpnSecret: initialRef.current.NowPaymentsIpnSecret.trim(),
+      NowPaymentsMinTopUp: initialRef.current.NowPaymentsMinTopUp,
+      NowPaymentsPayCurrencies: normalizeNowPaymentsCurrencies(
+        initialRef.current.NowPaymentsPayCurrencies
+      ),
+      NowPaymentsFeishuWebhook:
+        initialRef.current.NowPaymentsFeishuWebhook.trim(),
+      NowPaymentsFeishuSecret:
+        initialRef.current.NowPaymentsFeishuSecret.trim(),
       CreemApiKey: initialRef.current.CreemApiKey.trim(),
       CreemWebhookSecret: initialRef.current.CreemWebhookSecret.trim(),
       CreemTestMode: initialRef.current.CreemTestMode,
@@ -630,6 +706,61 @@ export function PaymentSettingsSection({
       updates.push({
         key: 'StripePromotionCodesEnabled',
         value: sanitized.StripePromotionCodesEnabled,
+      })
+    }
+
+    if (
+      sanitized.NowPaymentsApiKey &&
+      sanitized.NowPaymentsApiKey !== initial.NowPaymentsApiKey
+    ) {
+      updates.push({
+        key: 'NowPaymentsApiKey',
+        value: sanitized.NowPaymentsApiKey,
+      })
+    }
+
+    if (
+      sanitized.NowPaymentsIpnSecret &&
+      sanitized.NowPaymentsIpnSecret !== initial.NowPaymentsIpnSecret
+    ) {
+      updates.push({
+        key: 'NowPaymentsIpnSecret',
+        value: sanitized.NowPaymentsIpnSecret,
+      })
+    }
+
+    if (sanitized.NowPaymentsMinTopUp !== initial.NowPaymentsMinTopUp) {
+      updates.push({
+        key: 'NowPaymentsMinTopUp',
+        value: sanitized.NowPaymentsMinTopUp,
+      })
+    }
+
+    if (
+      sanitized.NowPaymentsPayCurrencies !== initial.NowPaymentsPayCurrencies
+    ) {
+      updates.push({
+        key: 'NowPaymentsPayCurrencies',
+        value: sanitized.NowPaymentsPayCurrencies,
+      })
+    }
+
+    if (
+      sanitized.NowPaymentsFeishuWebhook !== initial.NowPaymentsFeishuWebhook
+    ) {
+      updates.push({
+        key: 'NowPaymentsFeishuWebhook',
+        value: sanitized.NowPaymentsFeishuWebhook,
+      })
+    }
+
+    if (
+      sanitized.NowPaymentsFeishuSecret &&
+      sanitized.NowPaymentsFeishuSecret !== initial.NowPaymentsFeishuSecret
+    ) {
+      updates.push({
+        key: 'NowPaymentsFeishuSecret',
+        value: sanitized.NowPaymentsFeishuSecret,
       })
     }
 
@@ -912,9 +1043,10 @@ export function PaymentSettingsSection({
           />
           <Tabs defaultValue='general' className='min-w-0'>
             <div className='overflow-x-auto pb-1'>
-              <TabsList className='grid min-w-[44rem] grid-cols-6'>
+              <TabsList className='grid min-w-[52rem] grid-cols-7'>
                 <TabsTrigger value='general'>{t('General')}</TabsTrigger>
                 <TabsTrigger value='epay'>Epay</TabsTrigger>
+                <TabsTrigger value='nowpayments'>NOWPayments</TabsTrigger>
                 <TabsTrigger value='stripe'>{t('Stripe')}</TabsTrigger>
                 <TabsTrigger value='creem'>Creem</TabsTrigger>
                 <TabsTrigger value='waffo-pancake'>Waffo Pancake</TabsTrigger>
@@ -1344,6 +1476,217 @@ export function PaymentSettingsSection({
                       </FormItem>
                     )}
                   />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent
+              value='nowpayments'
+              className={paymentTabContentClassName}
+            >
+              <div className='space-y-4'>
+                <div>
+                  <h3 className='text-lg font-medium'>
+                    {t('NOWPayments (USDT / USDC)')}
+                  </h3>
+                  <p className='text-muted-foreground text-sm'>
+                    {t(
+                      'Customers pay the top-up price in USDT or USDC, converted from CNY at the USD exchange rate. Bonus tiers and discounts apply as for Epay.'
+                    )}
+                  </p>
+                </div>
+
+                <div className='bg-info/10 text-info rounded-md p-4 text-sm'>
+                  <ul className='list-inside list-disc space-y-1'>
+                    <li>
+                      {t('IPN URL (sent with each invoice):')}{' '}
+                      <code className='bg-info/15 rounded px-1 py-0.5 text-xs'>
+                        {'<CallbackAddress>/api/nowpayments/webhook'}
+                      </code>
+                    </li>
+                    <li>
+                      {t(
+                        'Generate the IPN secret and add a payout wallet under Settings → Payments in the NOWPayments dashboard.'
+                      )}
+                    </li>
+                    <li>
+                      {t(
+                        'Keep the default payment status at Partially Paid: only finished payments are credited, and partial, repeated or wrong-asset deposits wait for an administrator.'
+                      )}
+                    </li>
+                  </ul>
+                </div>
+
+                <div className='grid gap-6 md:grid-cols-2'>
+                  <FormField
+                    control={form.control}
+                    name='NowPaymentsApiKey'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('API key')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='password'
+                            autoComplete='new-password'
+                            {...field}
+                            onChange={(event) =>
+                              field.onChange(event.target.value)
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('Leave blank unless updating')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='NowPaymentsIpnSecret'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('IPN secret')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='password'
+                            autoComplete='new-password'
+                            {...field}
+                            onChange={(event) =>
+                              field.onChange(event.target.value)
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('Leave blank unless updating')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className='grid gap-6 md:grid-cols-2'>
+                  <FormField
+                    control={form.control}
+                    name='NowPaymentsMinTopUp'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Minimum top-up')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='number'
+                            step='1'
+                            min={1}
+                            {...safeNumberFieldProps(field)}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'In the same unit as the Epay minimum. Each network also has its own minimum on NOWPayments.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='NowPaymentsPayCurrencies'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Networks offered')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            onChange={(event) =>
+                              field.onChange(event.target.value)
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Comma-separated NOWPayments tickers. Accepted: {{codes}}',
+                            { codes: NOWPAYMENTS_CURRENCY_CODES.join(', ') }
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className='space-y-1 pt-2'>
+                  <h4 className='font-medium'>{t('Feishu notifications')}</h4>
+                  <p className='text-muted-foreground text-sm'>
+                    {t(
+                      'A Feishu group bot hears about each credited crypto top-up, and each partial, repeated or wrong-asset deposit an administrator must review. Leave the webhook blank to send nothing.'
+                    )}
+                  </p>
+                </div>
+
+                <div className='grid gap-6 md:grid-cols-2'>
+                  <FormField
+                    control={form.control}
+                    name='NowPaymentsFeishuWebhook'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Feishu bot webhook')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder='https://open.feishu.cn/open-apis/bot/v2/hook/...'
+                            {...field}
+                            onChange={(event) =>
+                              field.onChange(event.target.value)
+                            }
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='NowPaymentsFeishuSecret'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Feishu signing secret')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='password'
+                            autoComplete='new-password'
+                            {...field}
+                            onChange={(event) =>
+                              field.onChange(event.target.value)
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Only when the bot has signature verification on. Leave blank unless updating.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className='flex flex-wrap items-center gap-3'>
+                  <Button
+                    type='button'
+                    variant='outline'
+                    disabled={testFeishuMutation.isPending}
+                    onClick={() => testFeishuMutation.mutate()}
+                  >
+                    {t('Send test message')}
+                  </Button>
+                  <span className='text-muted-foreground text-sm'>
+                    {t('Uses the saved webhook. Save changes first.')}
+                  </span>
                 </div>
               </div>
             </TabsContent>

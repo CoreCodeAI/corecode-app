@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { TFunction } from 'i18next'
 
-import { DEFAULT_DISCOUNT_RATE } from '../constants'
+import { DEFAULT_DISCOUNT_RATE, PAYMENT_TYPES } from '../constants'
 
 // ============================================================================
 // Wallet-specific Formatting Functions
@@ -70,6 +70,20 @@ export function formatCurrency(amount: number | string): string {
  */
 export function formatPaymentMoney(amount: number): string {
   return `¥${formatCurrency(amount)}`
+}
+
+/**
+ * Format what a payment method charges: US dollars for NOWPayments (paid in
+ * USDT or USDC at one dollar each), CNY for every other method.
+ */
+export function formatMethodPaymentMoney(
+  amount: number,
+  paymentType: string | undefined
+): string {
+  if (paymentType === PAYMENT_TYPES.NOWPAYMENTS) {
+    return `$${formatCurrency(amount)}`
+  }
+  return formatPaymentMoney(amount)
 }
 
 /**

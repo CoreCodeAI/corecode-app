@@ -24,14 +24,17 @@ import { handleServerError } from '@/lib/handle-server-error'
 
 import {
   calculateAmount,
+  calculateNowPaymentsAmount,
   calculateStripeAmount,
   calculateWaffoAmount,
   calculateWaffoPancakeAmount,
   requestPayment,
   requestStripePayment,
+  requestNowPaymentsPayment,
   isApiSuccess,
 } from '../api'
 import {
+  isNowPaymentsPayment,
   isStripePayment,
   isWaffoPayment,
   isWaffoPancakePayment,
@@ -50,6 +53,7 @@ export interface PaymentAmountCalculators {
   stripe: AmountCalculator
   waffo: AmountCalculator
   waffoPancake: AmountCalculator
+  nowPayments: AmountCalculator
 }
 
 const defaultPaymentAmountCalculators: PaymentAmountCalculators = {
@@ -57,6 +61,7 @@ const defaultPaymentAmountCalculators: PaymentAmountCalculators = {
   stripe: calculateStripeAmount,
   waffo: calculateWaffoAmount,
   waffoPancake: calculateWaffoPancakeAmount,
+  nowPayments: calculateNowPaymentsAmount,
 }
 
 export async function requestPaymentAmount(
@@ -71,6 +76,8 @@ export async function requestPaymentAmount(
     calculator = calculators.waffo
   } else if (isWaffoPancakePayment(paymentType)) {
     calculator = calculators.waffoPancake
+  } else if (isNowPaymentsPayment(paymentType)) {
+    calculator = calculators.nowPayments
   }
 
   const response = await calculator({ amount: topupAmount })
@@ -159,12 +166,40 @@ export function usePayment() {
     []
   )
 
+  // Open a NOWPayments invoice in this tab; the invoice returns the customer
+  // to the console once paid or cancelled.
+  const processNowPaymentsPayment = useCallback(
+    async (topupAmount: number, payCurrency: string) => {
+      try {
+        setProcessing(true)
+        const response = await requestNowPaymentsPayment({
+          amount: Math.floor(topupAmount),
+          pay_currency: payCurrency,
+        })
+        if (!isApiSuccess(response) || !response.data?.pay_link) {
+          handleServerError(response, i18next.t('Payment request failed'))
+          return false
+        }
+        toast.success(i18next.t('Redirecting to payment page...'))
+        window.location.assign(response.data.pay_link)
+        return true
+      } catch (error) {
+        handleServerError(error, i18next.t('Payment request failed'))
+        return false
+      } finally {
+        setProcessing(false)
+      }
+    },
+    []
+  )
+
   return {
     amount,
     calculating,
     processing,
     calculatePaymentAmount,
     processPayment,
+    processNowPaymentsPayment,
     setAmount,
   }
 }

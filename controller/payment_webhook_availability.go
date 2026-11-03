@@ -92,6 +92,21 @@ func isWaffoPancakeWebhookEnabled() bool {
 	return isWaffoPancakeTopUpEnabled()
 }
 
+// isNowPaymentsTopUpEnabled needs the API key that opens invoices, the IPN
+// secret that proves a callback, and at least one currency to offer.
+func isNowPaymentsTopUpEnabled() bool {
+	if !isPaymentComplianceConfirmed() {
+		return false
+	}
+	return strings.TrimSpace(setting.NowPaymentsApiKey) != "" &&
+		strings.TrimSpace(setting.NowPaymentsIpnSecret) != "" &&
+		len(setting.GetNowPaymentsPayCurrencies()) > 0
+}
+
+func isNowPaymentsWebhookEnabled() bool {
+	return isNowPaymentsTopUpEnabled()
+}
+
 func isEpayTopUpEnabled() bool {
 	if !isPaymentComplianceConfirmed() {
 		return false

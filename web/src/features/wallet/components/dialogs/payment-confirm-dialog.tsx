@@ -29,16 +29,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatLocalCurrencyAmount } from '@/lib/currency'
 
 import { DEFAULT_DISCOUNT_RATE } from '../../constants'
 import {
-  formatPaymentMoney,
+  formatMethodPaymentMoney,
   getPaymentIcon,
   isBonusEligiblePayment,
+  isNowPaymentsPayment,
 } from '../../lib'
-import type { PaymentMethod } from '../../types'
+import type { NowPaymentsCurrency, PaymentMethod } from '../../types'
 
 interface PaymentConfirmDialogProps {
   open: boolean
@@ -53,6 +62,13 @@ interface PaymentConfirmDialogProps {
   /** Bonus fraction for this amount; shown only for epay payment methods */
   bonusRate?: number
   usdExchangeRate?: number
+  /** Networks a NOWPayments (USDT / USDC) payment can be made on */
+  nowPaymentsCurrencies?: NowPaymentsCurrency[]
+  /** The chosen NOWPayments ticker */
+  nowPaymentsCurrency?: string | null
+  onNowPaymentsCurrencyChange?: (code: string) => void
+  /** CNY per US dollar, the rate a NOWPayments price is converted at */
+  paymentUsdRate?: number
 }
 
 export function PaymentConfirmDialog({
@@ -67,8 +83,20 @@ export function PaymentConfirmDialog({
   discountRate = DEFAULT_DISCOUNT_RATE,
   bonusRate = 0,
   usdExchangeRate = 1,
+  nowPaymentsCurrencies = [],
+  nowPaymentsCurrency = null,
+  onNowPaymentsCurrencyChange,
+  paymentUsdRate,
 }: PaymentConfirmDialogProps) {
   const { t } = useTranslation()
+  const isCrypto = isNowPaymentsPayment(paymentMethod?.type)
+  const selectedCurrency = nowPaymentsCurrencies.find(
+    (currency) => currency.code === nowPaymentsCurrency
+  )
+  const currencyLabel = (currency: NowPaymentsCurrency) =>
+    `${currency.coin} · ${currency.network}`
+  const formatMoney = (amount: number) =>
+    formatMethodPaymentMoney(amount, paymentMethod?.type)
   const hasDiscount = discountRate > 0 && discountRate < 1 && paymentAmount > 0
   const originalAmount = hasDiscount ? paymentAmount / discountRate : 0
   const discountAmount = hasDiscount ? originalAmount - paymentAmount : 0
@@ -136,11 +164,11 @@ export function PaymentConfirmDialog({
             ) : (
               <div className='flex items-baseline gap-2'>
                 <span className='text-2xl font-semibold'>
-                  {formatPaymentMoney(paymentAmount)}
+                  {formatMoney(paymentAmount)}
                 </span>
                 {hasDiscount && (
                   <span className='text-muted-foreground text-sm line-through'>
-                    {formatPaymentMoney(originalAmount)}
+                    {formatMoney(originalAmount)}
                   </span>
                 )}
               </div>
@@ -152,9 +180,59 @@ export function PaymentConfirmDialog({
               <div className='flex items-center justify-between text-sm'>
                 <span className='text-muted-foreground'>{t('You save')}</span>
                 <span className='font-semibold text-green-600'>
-                  {formatPaymentMoney(discountAmount)}
+                  {formatMoney(discountAmount)}
                 </span>
               </div>
+            </div>
+          )}
+
+          {isCrypto && (
+            <div className='space-y-2'>
+              <div className='flex items-center justify-between gap-3'>
+                <span className='text-muted-foreground text-sm'>
+                  {t('Network')}
+                </span>
+                <Select
+                  items={nowPaymentsCurrencies.map((currency) => ({
+                    value: currency.code,
+                    label: currencyLabel(currency),
+                  }))}
+                  value={nowPaymentsCurrency}
+                  onValueChange={(value) => {
+                    if (typeof value === 'string') {
+                      onNowPaymentsCurrencyChange?.(value)
+                    }
+                  }}
+                  disabled={processing}
+                >
+                  <SelectTrigger aria-label={t('Network')} className='w-44'>
+                    <SelectValue>
+                      {selectedCurrency
+                        ? currencyLabel(selectedCurrency)
+                        : t('Choose a network')}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectGroup>
+                      {nowPaymentsCurrencies.map((currency) => (
+                        <SelectItem key={currency.code} value={currency.code}>
+                          {currencyLabel(currency)}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className='text-muted-foreground text-xs text-pretty'>
+                {paymentUsdRate
+                  ? t(
+                      'Priced at 1 USD = ¥{{rate}}; USDT and USDC each count as 1 USD. Send it on the network you choose here.',
+                      { rate: paymentUsdRate }
+                    )
+                  : t(
+                      'USDT and USDC each count as 1 USD. Send it on the network you choose here.'
+                    )}
+              </p>
             </div>
           )}
 
@@ -180,7 +258,10 @@ export function PaymentConfirmDialog({
           <AlertDialogCancel disabled={processing}>
             {t('Cancel')}
           </AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm} disabled={processing}>
+          <AlertDialogAction
+            onClick={onConfirm}
+            disabled={processing || (isCrypto && !selectedCurrency)}
+          >
             {processing && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
             {t('Confirm Payment')}
           </AlertDialogAction>

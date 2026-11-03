@@ -111,6 +111,26 @@ func TestEpayTopUpBonusDatabaseMatrix(t *testing.T) {
 			assert.Contains(t, messages[0], "including a bonus of")
 			assert.Contains(t, messages[1], "including a bonus of")
 			assert.NotContains(t, messages[2], "bonus")
+
+			// A NOWPayments order completes through the same transaction, bonus
+			// included and once, and neither gateway completes the other's order.
+			crypto := &TopUp{UserId: user.Id, Amount: 300, Money: 300, TradeNo: "BONUS-NOWPAYMENTS", PaymentMethod: PaymentMethodNowPayments,
+				PaymentProvider: PaymentProviderNowPayments, BonusQuota: 15 * 500000, Status: common.TopUpStatusPending}
+			require.NoError(t, db.Create(crypto).Error)
+			_, err = RechargeEpay(crypto.TradeNo, "alipay", "127.0.0.1")
+			require.ErrorIs(t, err, ErrPaymentMethodMismatch)
+			alreadyDone, err = RechargeNowPayments(crypto.TradeNo, "127.0.0.1")
+			require.NoError(t, err)
+			assert.False(t, alreadyDone)
+			alreadyDone, err = RechargeNowPayments(crypto.TradeNo, "127.0.0.1")
+			require.NoError(t, err)
+			assert.True(t, alreadyDone)
+			assert.Equal(t, 7+1780*500000, quota())
+			stored = GetTopUpByTradeNo(crypto.TradeNo)
+			require.NotNil(t, stored)
+			assert.Equal(t, PaymentMethodNowPayments, stored.PaymentMethod)
+			_, err = RechargeNowPayments(plain.TradeNo, "127.0.0.1")
+			require.ErrorIs(t, err, ErrPaymentMethodMismatch)
 		})
 	}
 }

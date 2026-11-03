@@ -97,6 +97,18 @@ func GetTopUpInfo(c *gin.Context) {
 		}
 	}
 
+	// CoreCode addition: USDT and USDC through NOWPayments, one method whose
+	// network the customer picks in the payment dialog.
+	enableNowPayments := isNowPaymentsTopUpEnabled()
+	if enableNowPayments {
+		payMethods = append(payMethods, map[string]string{
+			"name":      "USDT / USDC",
+			"type":      model.PaymentMethodNowPayments,
+			"color":     "#26A17B",
+			"min_topup": strconv.Itoa(setting.NowPaymentsMinTopUp),
+		})
+	}
+
 	data := gin.H{
 		"enable_online_topup":              isEpayTopUpEnabled(),
 		"enable_stripe_topup":              isStripeTopUpEnabled(),
@@ -118,12 +130,18 @@ func GetTopUpInfo(c *gin.Context) {
 		"stripe_min_topup":        setting.StripeMinTopUp,
 		"waffo_min_topup":         setting.WaffoMinTopUp,
 		"waffo_pancake_min_topup": setting.WaffoPancakeMinTopUp,
-		"amount_options":          operation_setting.GetPaymentSetting().AmountOptions,
-		"discount":                operation_setting.GetPaymentSetting().AmountDiscount,
-		"bonus":                   operation_setting.GetPaymentSetting().AmountBonus,
-		"bonus_campaign":          operation_setting.GetPaymentSetting().BonusCampaign,
-		"topup_link":              common.TopUpLink,
-		"concurrency":             userConcurrencyInfo(c.GetInt("id"), c.GetString("group")),
+		"nowpayments_currencies": func() any {
+			if enableNowPayments {
+				return setting.GetNowPaymentsPayCurrencies()
+			}
+			return []setting.NowPaymentsCurrency{}
+		}(),
+		"amount_options": operation_setting.GetPaymentSetting().AmountOptions,
+		"discount":       operation_setting.GetPaymentSetting().AmountDiscount,
+		"bonus":          operation_setting.GetPaymentSetting().AmountBonus,
+		"bonus_campaign": operation_setting.GetPaymentSetting().BonusCampaign,
+		"topup_link":     common.TopUpLink,
+		"concurrency":    userConcurrencyInfo(c.GetInt("id"), c.GetString("group")),
 	}
 	common.ApiSuccess(c, data)
 }

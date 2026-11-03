@@ -33,6 +33,7 @@ const (
 	PaymentMethodCreem        = "creem"
 	PaymentMethodWaffo        = "waffo"
 	PaymentMethodWaffoPancake = "waffo_pancake"
+	PaymentMethodNowPayments  = "nowpayments"
 	PaymentMethodBalance      = "balance"
 )
 
@@ -42,6 +43,7 @@ const (
 	PaymentProviderCreem        = "creem"
 	PaymentProviderWaffo        = "waffo"
 	PaymentProviderWaffoPancake = "waffo_pancake"
+	PaymentProviderNowPayments  = "nowpayments"
 	PaymentProviderBalance      = "balance"
 )
 
@@ -190,6 +192,19 @@ func UpdatePendingTopUpStatus(tradeNo string, expectedPaymentProvider string, ta
 // alreadyDone=true 表示订单此前已完成，本次为幂等重复回调。
 // 进程内的 LockOrder 只是优化，正确性由本函数的数据库行锁保证。
 func RechargeEpay(tradeNo string, actualPaymentMethod string, callerIp string) (alreadyDone bool, err error) {
+	return completeOnlineTopUp(tradeNo, PaymentProviderEpay, actualPaymentMethod, callerIp)
+}
+
+// RechargeNowPayments completes a NOWPayments crypto order. Its order is priced
+// like an epay order (Amount, a CNY Money, and a bonus fixed at order time), so
+// it completes through the same locked transaction and credits once.
+func RechargeNowPayments(tradeNo string, callerIp string) (alreadyDone bool, err error) {
+	return completeOnlineTopUp(tradeNo, PaymentProviderNowPayments, "", callerIp)
+}
+
+// completeOnlineTopUp credits an order whose quota is its Amount plus its
+// BonusQuota, under a row lock, once. provider must match the order's.
+func completeOnlineTopUp(tradeNo string, provider string, actualPaymentMethod string, callerIp string) (alreadyDone bool, err error) {
 	if tradeNo == "" {
 		return false, errors.New("payment order number not provided")
 	}
@@ -205,7 +220,7 @@ func RechargeEpay(tradeNo string, actualPaymentMethod string, callerIp string) (
 		if err := lockForUpdate(tx).Where(refCol+" = ?", tradeNo).First(topUp).Error; err != nil {
 			return ErrTopUpNotFound
 		}
-		if topUp.PaymentProvider != PaymentProviderEpay {
+		if topUp.PaymentProvider != provider {
 			return ErrPaymentMethodMismatch
 		}
 		if topUp.Status == common.TopUpStatusSuccess {
@@ -234,18 +249,18 @@ func RechargeEpay(tradeNo string, actualPaymentMethod string, callerIp string) (
 	})
 	if err != nil {
 		if !errors.Is(err, ErrTopUpNotFound) && !errors.Is(err, ErrPaymentMethodMismatch) && !errors.Is(err, ErrTopUpStatusInvalid) {
-			common.SysError(common.LogText("epay topup failed: %s", err.Error()))
+			common.SysError(common.LogText("%s topup failed: %s", provider, err.Error()))
 		}
 		return false, err
 	}
 	if alreadyDone {
 		return true, nil
 	}
-	syncCreditUserQuotaCache(topUp.UserId, quotaToAdd, common.LogText("epay topup"))
+	syncCreditUserQuotaCache(topUp.UserId, quotaToAdd, common.LogText("%s topup", provider))
 
-	common.SysLog(common.LogText("Epay top-up succeeded trade_no=%s user_id=%d quota_to_add=%d money=%.2f", topUp.TradeNo, topUp.UserId, quotaToAdd, topUp.Money))
+	common.SysLog(common.LogText("Online top-up succeeded provider=%s trade_no=%s user_id=%d quota_to_add=%d money=%.2f", provider, topUp.TradeNo, topUp.UserId, quotaToAdd, topUp.Money))
 	RecordTopupLog(topUp.UserId, topUpCreditMessage("Online top-up succeeded, amount added: {{quota}}, payment amount: {{amount}}",
-		"Online top-up succeeded, amount added: {{quota}} including a bonus of {{bonus}}, payment amount: {{amount}}", quotaToAdd, topUp), callerIp, topUp.PaymentMethod, PaymentProviderEpay)
+		"Online top-up succeeded, amount added: {{quota}} including a bonus of {{bonus}}, payment amount: {{amount}}", quotaToAdd, topUp), callerIp, topUp.PaymentMethod, provider)
 	return false, nil
 }
 
