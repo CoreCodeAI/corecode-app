@@ -27,34 +27,35 @@ afterEach(async () => {
   await act(() => i18next.changeLanguage('en'))
 })
 
-test('switches between EN and 中文', async () => {
+test('the menu lists the site languages and switches to the one picked', async () => {
   render(<LanguageSwitcher />)
-  expect(screen.getByRole('button', { name: 'EN' })).toHaveAttribute(
-    'aria-pressed',
-    'true'
-  )
+  const trigger = screen.getByRole('button', { name: 'Change language' })
+  expect(trigger).toHaveTextContent('English')
 
-  await userEvent.click(screen.getByRole('button', { name: '中文' }))
-  expect(i18next.language).toBe('zhCN')
-  expect(screen.getByRole('button', { name: '中文' })).toHaveAttribute(
-    'aria-pressed',
-    'true'
-  )
+  await userEvent.click(trigger)
+  const items = await screen.findAllByRole('menuitem')
+  expect(items.map((item) => item.textContent)).toEqual([
+    '简体中文',
+    'English',
+    '日本語',
+    'Русский',
+    '繁體中文',
+  ])
+  await userEvent.click(screen.getByRole('menuitem', { name: '日本語' }))
+  expect(i18next.language).toBe('ja')
 })
 
-test('lights 中文 for Traditional Chinese and EN for other languages', async () => {
+test('the trigger names the current language, and English for one it does not list', async () => {
   await act(() => i18next.changeLanguage('zhTW'))
   const view = render(<LanguageSwitcher />)
-  expect(screen.getByRole('button', { name: '中文' })).toHaveAttribute(
-    'aria-pressed',
-    'true'
-  )
+  expect(
+    screen.getByRole('button', { name: 'Change language' })
+  ).toHaveTextContent('繁體中文')
   view.unmount()
 
   await act(() => i18next.changeLanguage('fr'))
   render(<LanguageSwitcher />)
-  expect(screen.getByRole('button', { name: 'EN' })).toHaveAttribute(
-    'aria-pressed',
-    'true'
-  )
+  expect(
+    screen.getByRole('button', { name: 'Change language' })
+  ).toHaveTextContent('English')
 })
