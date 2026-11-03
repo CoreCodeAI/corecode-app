@@ -268,6 +268,24 @@ func GetEnginePool(c *gin.Context) {
 	common.ApiSuccess(c, service.FetchEnginePool())
 }
 
+// SetEngineSubscriptionRenewal records the billing date an operator read for
+// one provider organization in the engine; an empty renews_on removes it.
+func SetEngineSubscriptionRenewal(c *gin.Context) {
+	var request struct {
+		RenewsOn         string `json:"renews_on"`
+		OrganizationName string `json:"organization_name"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := service.SetEngineSubscriptionRenewal(c.Request.Context(), c.Param("organization_uuid"), request.RenewsOn, request.OrganizationName); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
 // GetPoolUsage returns one provider's use on new-api and gpt-load over the
 // last hour to the last week, with a forecast. It takes no range.
 func GetPoolUsage(c *gin.Context) {

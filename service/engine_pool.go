@@ -1,12 +1,14 @@
 package service
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"fmt"
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -63,6 +65,11 @@ type EngineAccount struct {
 	// Organization is the provider organization; the seats of one team share
 	// it and one subscription. Emails in it are masked like EmailMask.
 	Organization string `json:"organization"`
+	// OrganizationUUID keys the renewal date an operator enters for the
+	// organization; SubscriptionStatus is the provider's word for the
+	// subscription, such as active.
+	OrganizationUUID   string `json:"organization_uuid"`
+	SubscriptionStatus string `json:"subscription_status"`
 	// SubscriptionPeriodEnd is when the subscription next renews, 0 when the
 	// engine has no date. SubscriptionState is confirmed when the provider
 	// reported it and estimated when the engine counted it monthly from the
@@ -185,6 +192,8 @@ type engineGroup struct {
 			Tier       string `json:"tier"`
 			// An engine before the subscription fields sends none of these.
 			Organization            string `json:"organization"`
+			OrganizationUUID        string `json:"organization_uuid"`
+			SubscriptionStatus      string `json:"subscription_status"`
 			SubscriptionState       string `json:"subscription_state"`
 			SubscriptionPeriodEndMS *int64 `json:"subscription_period_end_ms"`
 		} `json:"account"`
@@ -259,18 +268,33 @@ func deref[T any](value *T) T {
 }
 
 func engineGet[T any](ctx context.Context, base string, key string, path string) (T, error) {
+	return engineRequest[T](ctx, http.MethodGet, base, key, path, nil)
+}
+
+func engineRequest[T any](ctx context.Context, method string, base string, key string, path string, body any) (T, error) {
 	var zero T
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api"+path, nil)
+	var payload io.Reader
+	if body != nil {
+		encoded, err := common.Marshal(body)
+		if err != nil {
+			return zero, err
+		}
+		payload = bytes.NewReader(encoded)
+	}
+	request, err := http.NewRequestWithContext(ctx, method, base+"/api"+path, payload)
 	if err != nil {
 		return zero, err
 	}
 	request.Header.Set("Authorization", "Bearer "+key)
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		return zero, err
 	}
 	defer response.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(response.Body, 8<<20))
+	read, err := io.ReadAll(io.LimitReader(response.Body, 8<<20))
 	if err != nil {
 		return zero, err
 	}
@@ -278,13 +302,35 @@ func engineGet[T any](ctx context.Context, base string, key string, path string)
 		return zero, fmt.Errorf("engine %s returned HTTP %d", path, response.StatusCode)
 	}
 	var envelope engineEnvelope[T]
-	if err := common.Unmarshal(body, &envelope); err != nil {
+	if err := common.Unmarshal(read, &envelope); err != nil {
 		return zero, fmt.Errorf("engine %s: %w", path, err)
 	}
 	if envelope.Code != 0 {
 		return zero, fmt.Errorf("engine %s: %s", path, envelope.Message)
 	}
 	return envelope.Data, nil
+}
+
+// SetEngineSubscriptionRenewal records in the engine the billing date an
+// operator read for a provider organization, or removes it when renewsOn is
+// empty, and drops the cached pool so the next read shows it.
+func SetEngineSubscriptionRenewal(ctx context.Context, organizationUUID, renewsOn, organizationName string) error {
+	base := strings.TrimRight(strings.TrimSpace(operation_setting.EngineControlURL), "/")
+	key := strings.TrimSpace(operation_setting.EngineControlKey)
+	if base == "" || key == "" {
+		return fmt.Errorf("engine control is not configured")
+	}
+	path := "/subscription-renewals/" + url.PathEscape(organizationUUID)
+	_, err := engineRequest[any](ctx, http.MethodPut, base, key, path, map[string]string{
+		"renews_on": renewsOn, "organization_name": organizationName,
+	})
+	if err != nil {
+		return err
+	}
+	enginePoolCache.mu.Lock()
+	enginePoolCache.readAt = time.Time{}
+	enginePoolCache.mu.Unlock()
+	return nil
 }
 
 // enginePoolTTL is how long one complete read of the pool is shared. The
@@ -431,6 +477,7 @@ func readEnginePool(base, key string) EnginePool {
 					words[index] = maskEmail(word)
 				}
 				account.Organization = strings.Join(words, " ")
+				account.OrganizationUUID, account.SubscriptionStatus = observed.OrganizationUUID, observed.SubscriptionStatus
 				account.SubscriptionState = observed.SubscriptionState
 				account.SubscriptionPeriodEnd = deref(observed.SubscriptionPeriodEndMS)
 				account.Observation, account.ObservedAt = observed.State, deref(observed.ObservedAt)

@@ -140,3 +140,21 @@ export async function saveConcurrencyTiers(
     throw createServerError(res.data, 'Failed to save concurrency tiers')
   }
 }
+
+/**
+ * Records in corecode-engine the billing date an operator read for one
+ * provider organization, as YYYY-MM-DD; an empty date removes it.
+ */
+export async function saveSubscriptionRenewal(params: {
+  organizationUUID: string
+  renewsOn: string
+  organizationName: string
+}): Promise<void> {
+  const res = await api.put<ApiResponse<unknown>>(
+    `/api/site-insights/pool/subscription-renewals/${encodeURIComponent(params.organizationUUID)}`,
+    { renews_on: params.renewsOn, organization_name: params.organizationName }
+  )
+  if (!res.data.success) {
+    throw createServerError(res.data, 'Failed to save the renewal date')
+  }
+}

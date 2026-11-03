@@ -16,11 +16,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
+import { describe, expect, it, vi } from 'vitest'
 
+import { saveSubscriptionRenewal } from '../../api'
 import type { EngineAccount } from '../../types'
 import { SubscriptionRenewalsPanel } from '../subscription-renewals-panel'
+
+vi.mock('../../api', () => ({ saveSubscriptionRenewal: vi.fn() }))
+
+function withQuery(children: ReactNode) {
+  return (
+    <QueryClientProvider client={new QueryClient()}>
+      {children}
+    </QueryClientProvider>
+  )
+}
 
 const DAY = 24 * 60 * 60 * 1000
 const NOW = Date.UTC(2026, 10, 3)
@@ -59,43 +73,45 @@ function account(overrides: Partial<EngineAccount>): EngineAccount {
 describe('SubscriptionRenewalsPanel', () => {
   it('lists one row per subscription, soonest first', () => {
     render(
-      <SubscriptionRenewalsPanel
-        now={NOW}
-        accounts={[
-          account({
-            credential_id: 1,
-            group: 'Team-A',
-            email_mask: 'r***@a.com',
-            plan: 'Team',
-            organization: 'A Team',
-            subscription_state: 'estimated',
-            subscription_period_end_ms: NOW + 18 * DAY,
-          }),
-          account({
-            credential_id: 2,
-            group: 'Team-A',
-            email_mask: 'h***@a.com',
-            plan: 'Team',
-            organization: 'A Team',
-            subscription_state: 'estimated',
-            subscription_period_end_ms: NOW + 18 * DAY,
-          }),
-          account({
-            credential_id: 3,
-            group: 'Solo',
-            email_mask: 'b***@b.com',
-            plan: 'Max',
-            organization: 'B Studio',
-            subscription_state: 'confirmed',
-            subscription_period_end_ms: NOW + 3 * DAY,
-          }),
-          account({
-            credential_id: 4,
-            group: 'Solo',
-            email_mask: 'n***@n.com',
-          }),
-        ]}
-      />
+      withQuery(
+        <SubscriptionRenewalsPanel
+          now={NOW}
+          accounts={[
+            account({
+              credential_id: 1,
+              group: 'Team-A',
+              email_mask: 'r***@a.com',
+              plan: 'Team',
+              organization: 'A Team',
+              subscription_state: 'estimated',
+              subscription_period_end_ms: NOW + 18 * DAY,
+            }),
+            account({
+              credential_id: 2,
+              group: 'Team-A',
+              email_mask: 'h***@a.com',
+              plan: 'Team',
+              organization: 'A Team',
+              subscription_state: 'estimated',
+              subscription_period_end_ms: NOW + 18 * DAY,
+            }),
+            account({
+              credential_id: 3,
+              group: 'Solo',
+              email_mask: 'b***@b.com',
+              plan: 'Max',
+              organization: 'B Studio',
+              subscription_state: 'confirmed',
+              subscription_period_end_ms: NOW + 3 * DAY,
+            }),
+            account({
+              credential_id: 4,
+              group: 'Solo',
+              email_mask: 'n***@n.com',
+            }),
+          ]}
+        />
+      )
     )
 
     const rows = screen.getAllByRole('row').slice(1)
@@ -111,9 +127,53 @@ describe('SubscriptionRenewalsPanel', () => {
     expect(screen.queryByText('n***@n.com')).toBeNull()
   })
 
+  it('saves the date entered for an organization', async () => {
+    const user = userEvent.setup()
+    vi.mocked(saveSubscriptionRenewal).mockResolvedValue()
+    render(
+      withQuery(
+        <SubscriptionRenewalsPanel
+          now={NOW}
+          accounts={[
+            account({
+              plan: 'Max',
+              organization: 'Max seat',
+              organization_uuid: '0f6c1a2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b',
+              subscription_status: 'past_due',
+              subscription_state: 'estimated',
+              subscription_period_end_ms: NOW + 26 * DAY,
+            }),
+            account({
+              credential_id: 2,
+              organization: 'Codex org',
+              subscription_state: 'confirmed',
+              subscription_period_end_ms: NOW + 10 * DAY,
+            }),
+          ]}
+        />
+      )
+    )
+
+    expect(screen.getByText('past_due')).toBeTruthy()
+    const buttons = screen.getAllByRole('button', { name: 'Set renewal date' })
+    expect(buttons).toHaveLength(1)
+    await user.click(buttons[0])
+    const input = screen.getByLabelText('Renewal date')
+    await user.clear(input)
+    await user.type(input, '2026-11-09')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(saveSubscriptionRenewal).toHaveBeenCalledWith({
+      organizationUUID: '0f6c1a2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b',
+      renewsOn: '2026-11-09',
+      organizationName: 'Max seat',
+    })
+  })
+
   it('shows nothing before the engine reports any date', () => {
     const { container } = render(
-      <SubscriptionRenewalsPanel now={NOW} accounts={[account({})]} />
+      withQuery(
+        <SubscriptionRenewalsPanel now={NOW} accounts={[account({})]} />
+      )
     )
     expect(container.innerHTML).toBe('')
   })

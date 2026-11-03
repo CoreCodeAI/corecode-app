@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/stretchr/testify/assert"
@@ -33,7 +34,7 @@ func TestFetchEnginePool(t *testing.T) {
 					   "active":2,"sessions":3,"cooldown_until_ms":null,
 					   "activity":{"last_used_at_ms":9,"last_failure_summary":"rate limited","last_failure_at_ms":10,"success_count":40,"failure_count":1},
 					   "account":{"state":"fresh","observed_at_ms":11,"email":"bob@x.com","plan":"Max","tier":"default_claude_max_5x",
-					     "organization":"bob@x.com's Organization","subscription_state":"estimated","subscription_period_end_ms":1795000000000}}]},
+					     "organization":"bob@x.com's Organization","organization_uuid":"0f6c1a2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b","subscription_status":"active","subscription_state":"estimated","subscription_period_end_ms":1795000000000}}]},
 					{"id":7,"name":"team-01","channel_id":"claude","enabled":true,"current":0,"override_limit":8,"effective_limit":8,"quota_supported":true,
 					 "quota_effective":{"enabled":true,"five_hour_percent":90,"seven_day_percent":95},"counts":{"total":3,"available":2,"cooldown":1},
 					 "credentials":[
@@ -89,6 +90,8 @@ func TestFetchEnginePool(t *testing.T) {
 	assert.Equal(t, "Max", first.Plan)
 	assert.Equal(t, "b***@x.com's Organization", first.Organization, "an email in the organization is masked too")
 	assert.Equal(t, "estimated", first.SubscriptionState)
+	assert.Equal(t, "0f6c1a2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b", first.OrganizationUUID)
+	assert.Equal(t, "active", first.SubscriptionStatus)
 	assert.Equal(t, int64(1795000000000), first.SubscriptionPeriodEnd)
 	assert.Zero(t, pool.Accounts[1].SubscriptionPeriodEnd, "an account without an observation has no renewal")
 	assert.Equal(t, 150.0, *first.FiveHourRemainingUSD)
@@ -185,4 +188,35 @@ func TestEnginePoolListsClaudeFirst(t *testing.T) {
 	}
 	assert.Equal(t, []int{2, 4, 1, 3}, groups, "Claude groups first, each side in the engine's order")
 	assert.Equal(t, []int{21, 22, 41, 11, 31}, accounts, "accounts follow their groups")
+}
+
+func TestSetEngineSubscriptionRenewal(t *testing.T) {
+	var gotMethod, gotPath, gotAuth string
+	var gotBody map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath, gotAuth = r.Method, r.URL.Path, r.Header.Get("Authorization")
+		require.NoError(t, common.DecodeJson(r.Body, &gotBody))
+		_, _ = w.Write([]byte(`{"code":0,"data":[]}`))
+	}))
+	defer server.Close()
+	previousURL, previousKey := operation_setting.EngineControlURL, operation_setting.EngineControlKey
+	t.Cleanup(func() {
+		operation_setting.EngineControlURL, operation_setting.EngineControlKey = previousURL, previousKey
+	})
+
+	operation_setting.EngineControlURL, operation_setting.EngineControlKey = "", ""
+	assert.Error(t, SetEngineSubscriptionRenewal(t.Context(), "org", "2026-11-09", "Max"))
+
+	operation_setting.EngineControlURL, operation_setting.EngineControlKey = server.URL, "secret"
+	enginePoolCache.mu.Lock()
+	enginePoolCache.readAt = time.Now()
+	enginePoolCache.mu.Unlock()
+	require.NoError(t, SetEngineSubscriptionRenewal(t.Context(), "0f6c1a2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b", "2026-11-09", "Max"))
+	assert.Equal(t, http.MethodPut, gotMethod)
+	assert.Equal(t, "/api/subscription-renewals/0f6c1a2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b", gotPath)
+	assert.Equal(t, "Bearer secret", gotAuth)
+	assert.Equal(t, map[string]string{"renews_on": "2026-11-09", "organization_name": "Max"}, gotBody)
+	enginePoolCache.mu.Lock()
+	assert.True(t, enginePoolCache.readAt.IsZero(), "the next pool read asks the engine again")
+	enginePoolCache.mu.Unlock()
 }
