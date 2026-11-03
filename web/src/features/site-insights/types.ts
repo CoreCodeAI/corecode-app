@@ -61,7 +61,11 @@ export type EngineAccount = {
   burn_usd_per_hour: number | null
   /** The provider organization; seats of one team share it. Absent before the server's release. */
   organization?: string
-  /** confirmed when the provider reported the renewal, estimated when the engine counted it. */
+  /** Keys the renewal date an operator enters for the organization. */
+  organization_uuid?: string
+  /** The provider's word for the subscription, such as active. */
+  subscription_status?: string
+  /** confirmed when the provider reported the renewal or an operator entered it, estimated when the engine counted it. */
   subscription_state?: string
   /** When the subscription next renews; 0 or absent without a date. */
   subscription_period_end_ms?: number
