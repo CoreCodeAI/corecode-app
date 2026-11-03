@@ -32,7 +32,8 @@ func TestFetchEnginePool(t *testing.T) {
 					 "credentials":[{"id":6,"name":"#6","status":"available","five_hour":{"utilization":0.05,"reset_at_ms":7},"seven_day":{"utilization":0.36,"reset_at_ms":8},
 					   "active":2,"sessions":3,"cooldown_until_ms":null,
 					   "activity":{"last_used_at_ms":9,"last_failure_summary":"rate limited","last_failure_at_ms":10,"success_count":40,"failure_count":1},
-					   "account":{"state":"fresh","observed_at_ms":11,"email":"bob@x.com","plan":"Max","tier":"default_claude_max_5x"}}]},
+					   "account":{"state":"fresh","observed_at_ms":11,"email":"bob@x.com","plan":"Max","tier":"default_claude_max_5x",
+					     "organization":"bob@x.com's Organization","subscription_state":"estimated","subscription_period_end_ms":1795000000000}}]},
 					{"id":7,"name":"team-01","channel_id":"claude","enabled":true,"current":0,"override_limit":8,"effective_limit":8,"quota_supported":true,
 					 "quota_effective":{"enabled":true,"five_hour_percent":90,"seven_day_percent":95},"counts":{"total":3,"available":2,"cooldown":1},
 					 "credentials":[
@@ -86,6 +87,10 @@ func TestFetchEnginePool(t *testing.T) {
 	assert.Equal(t, int64(40), first.Successes)
 	assert.Equal(t, "rate limited", first.LastFailure)
 	assert.Equal(t, "Max", first.Plan)
+	assert.Equal(t, "b***@x.com's Organization", first.Organization, "an email in the organization is masked too")
+	assert.Equal(t, "estimated", first.SubscriptionState)
+	assert.Equal(t, int64(1795000000000), first.SubscriptionPeriodEnd)
+	assert.Zero(t, pool.Accounts[1].SubscriptionPeriodEnd, "an account without an observation has no renewal")
 	assert.Equal(t, 150.0, *first.FiveHourRemainingUSD)
 	assert.Equal(t, 9.5, *first.BurnUSDPerHour)
 	assert.Equal(t, 1250.0, *first.SevenDayCapacityUSD)

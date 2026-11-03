@@ -60,6 +60,15 @@ type EngineAccount struct {
 	// FiveHourCapacityUSD is a full 5-hour window of the account, calibrated
 	// the same way.
 	FiveHourCapacityUSD *float64 `json:"five_hour_capacity_usd"`
+	// Organization is the provider organization; the seats of one team share
+	// it and one subscription. Emails in it are masked like EmailMask.
+	Organization string `json:"organization"`
+	// SubscriptionPeriodEnd is when the subscription next renews, 0 when the
+	// engine has no date. SubscriptionState is confirmed when the provider
+	// reported it and estimated when the engine counted it monthly from the
+	// subscription start, as it does for Claude.
+	SubscriptionState     string `json:"subscription_state"`
+	SubscriptionPeriodEnd int64  `json:"subscription_period_end_ms"`
 }
 
 // EngineGroup is one engine group with its accounts counted by status.
@@ -174,6 +183,10 @@ type engineGroup struct {
 			Email      string `json:"email"`
 			Plan       string `json:"plan"`
 			Tier       string `json:"tier"`
+			// An engine before the subscription fields sends none of these.
+			Organization            string `json:"organization"`
+			SubscriptionState       string `json:"subscription_state"`
+			SubscriptionPeriodEndMS *int64 `json:"subscription_period_end_ms"`
 		} `json:"account"`
 	} `json:"credentials"`
 }
@@ -412,6 +425,14 @@ func readEnginePool(base, key string) EnginePool {
 					account.EmailMask = maskEmail(observed.Email)
 				}
 				account.Plan, account.Tier = observed.Plan, observed.Tier
+				// A personal Claude organization is named after its owner's email.
+				words := strings.Fields(observed.Organization)
+				for index, word := range words {
+					words[index] = maskEmail(word)
+				}
+				account.Organization = strings.Join(words, " ")
+				account.SubscriptionState = observed.SubscriptionState
+				account.SubscriptionPeriodEnd = deref(observed.SubscriptionPeriodEndMS)
 				account.Observation, account.ObservedAt = observed.State, deref(observed.ObservedAt)
 			}
 			if activity := credential.Activity; activity != nil {

@@ -50,6 +50,7 @@ import {
   type MetricItem,
   type Tone,
 } from './shared'
+import { SubscriptionRenewalsPanel } from './subscription-renewals-panel'
 
 function statusVariant(account: EngineAccount) {
   if (account.eligible) return 'outline'
@@ -381,6 +382,13 @@ export function PoolTab(props: {
           ]}
         />
       </Panel>
+
+      {pool && (
+        <SubscriptionRenewalsPanel
+          accounts={accounts}
+          now={pool.observed_at_ms}
+        />
+      )}
 
       <Panel
         title={t('All accounts')}
