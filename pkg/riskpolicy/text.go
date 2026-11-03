@@ -336,11 +336,20 @@ func openaiModel(input Input) bool {
 }
 
 func arrayLength(value gjson.Result) int {
-	if value.IsArray() {
-		return len(value.Array())
+	if !value.IsArray() {
+		return 0
 	}
-	return 0
+	// Counted in place: Array would build a slice of every element.
+	count := 0
+	value.ForEach(func(_, _ gjson.Result) bool {
+		count++
+		return true
+	})
+	return count
 }
+
+// ArrayLength is the number of elements of value, zero when it is not an array.
+func ArrayLength(value gjson.Result) int { return arrayLength(value) }
 
 func tokenLimit(body gjson.Result) (float64, bool) {
 	for _, key := range []string{"max_tokens", "max_output_tokens", "max_new_tokens"} {

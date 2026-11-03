@@ -8,6 +8,7 @@ import (
 	"unicode/utf16"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/pkg/riskpolicy"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
@@ -52,7 +53,9 @@ func readRiskGateRequest(c *gin.Context, source string) (riskGateRequest, error)
 	if err != nil {
 		return riskGateRequest{}, err
 	}
-	body := gjson.ParseBytes(raw)
+	// The policy reads text, not image payloads; every lookup would otherwise
+	// scan them.
+	body := gjson.ParseBytes(riskpolicy.Slim(raw))
 	if !body.IsObject() {
 		return riskGateRequest{}, errors.New("risk policy requires a JSON request object")
 	}
@@ -66,15 +69,27 @@ func readRiskGateRequest(c *gin.Context, source string) (riskGateRequest, error)
 	})
 	// The Responses API carries the conversation in input, a string or a list.
 	if input := body.Get("input"); input.IsArray() {
-		turns += len(input.Array())
+		turns += riskpolicy.ArrayLength(input)
 	} else if input.Exists() {
 		turns++
 	}
 	return riskGateRequest{
 		body:     body,
 		official: riskGateOfficialClient(c.Request.Header, body, !detectProxy.Exists() || detectProxy.Bool()),
-		bare:     turns == 1 && len(body.Get("tools").Array()) == 0,
+		bare:     turns == 1 && resultLength(body.Get("tools")) == 0,
 	}, nil
+}
+
+// resultLength is len(value.Array()) without building the slice: a missing or
+// null value has none, a value that is not an array counts as one.
+func resultLength(value gjson.Result) int {
+	switch {
+	case value.Type == gjson.Null:
+		return 0
+	case !value.IsArray():
+		return 1
+	}
+	return riskpolicy.ArrayLength(value)
 }
 
 func riskGateSystemBlocks(system gjson.Result) []string {
