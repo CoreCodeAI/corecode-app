@@ -6983,7 +6983,7 @@
     "Enter a GA4 measurement ID such as G-XXXXXXXXXX": "Введите идентификатор GA4, например G-XXXXXXXXXX",
     "Enter the Umami website ID as a UUID": "Введите ID сайта Umami в формате UUID",
     "Enter an absolute HTTPS URL": "Введите абсолютный HTTPS-адрес",
-    "24 hours": "24 hours",
+    "24 hours": "24 часа",
     "Accounts": "Accounts",
     "Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.": "Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.",
     "Accounts sharing an address": "Accounts sharing an address",
@@ -7711,6 +7711,21 @@
     "Filter by model": "Filter by model",
     "All {{vendor}} models": "All {{vendor}} models",
     "The cards and daily charts cover the selected models. The table, status codes, failure reasons and stream ends cover every model.": "The cards and daily charts cover the selected models. The table, status codes, failure reasons and stream ends cover every model.",
-    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.": "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured."
+    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.": "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.",
+    "5 hours": "5 часов",
+    "12 hours": "12 часов",
+    "Consumption by user": "Расход по пользователям",
+    "Customers with use in the window, most new-api value first, up to 100; root’s own use is not listed. new-api value is what new-api charged at its own prices, in yuan, with dollars at the site’s exchange rate under it. gpt-load value is what the same requests cost at official prices. gpt-load does not know which user sent a request, so each model’s cost is shared among that model’s users by their new-api charge with the group ratio taken out. Total paid is every wallet top-up the customer ever paid, in yuan, with plans bought listed under it. Balance is the wallet now.": "Клиенты с расходом в окне, по убыванию стоимости new-api, не более 100; собственный расход root не показан. Стоимость new-api — сколько списал new-api по своим ценам, в юанях, под ней доллары по курсу сайта. Стоимость gpt-load — стоимость тех же запросов по официальным ценам. gpt-load не знает, какой пользователь отправил запрос, поэтому стоимость каждой модели делится между её пользователями по их списаниям new-api без коэффициента группы. Всего оплачено — все пополнения кошелька клиента, в юанях, купленные планы ниже. Баланс — текущий кошелёк.",
+    "{{count}} customers used {{quota}} of new-api value and {{engine}} at gpt-load’s official prices.": "{{count}} клиентов израсходовали {{quota}} стоимости new-api и {{engine}} по официальным ценам gpt-load.",
+    "{{count}} customers used {{quota}} of new-api value.": "{{count}} клиентов израсходовали {{quota}} стоимости new-api.",
+    "Root’s own use, {{quota}} and {{engine}}, is not listed.": "Собственный расход root, {{quota}} и {{engine}}, не показан.",
+    "Root’s own use, {{quota}}, is not listed.": "Собственный расход root, {{quota}}, не показан.",
+    "{{amount}} of gpt-load’s cost was for a vendor no one was charged for, so it is not shared out.": "{{amount}} стоимости gpt-load пришлось на поставщика, за которого никто не платил; не распределено.",
+    "No consumption in this window": "Нет расхода в этом окне",
+    "new-api value": "Стоимость new-api",
+    "The user’s share of gpt-load’s official-price cost: each model’s cost split by new-api charge, group ratio taken out.": "Доля пользователя в стоимости gpt-load по официальным ценам: стоимость модели делится по списаниям new-api без коэффициента группы.",
+    "Total paid": "Всего оплачено",
+    "Every wallet top-up the customer ever paid, in yuan; plans bought are listed under it.": "Все пополнения кошелька, оплаченные клиентом, в юанях; купленные планы ниже.",
+    "Plans {{amount}}": "Планы {{amount}}"
   }
 }

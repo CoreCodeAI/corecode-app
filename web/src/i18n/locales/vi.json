@@ -6983,7 +6983,7 @@
     "Enter a GA4 measurement ID such as G-XXXXXXXXXX": "Nhập mã đo lường GA4, ví dụ G-XXXXXXXXXX",
     "Enter the Umami website ID as a UUID": "Nhập mã trang web Umami dạng UUID",
     "Enter an absolute HTTPS URL": "Nhập URL HTTPS đầy đủ",
-    "24 hours": "24 hours",
+    "24 hours": "24 giờ",
     "Accounts": "Accounts",
     "Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.": "Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.",
     "Accounts sharing an address": "Accounts sharing an address",
@@ -7711,6 +7711,21 @@
     "Filter by model": "Filter by model",
     "All {{vendor}} models": "All {{vendor}} models",
     "The cards and daily charts cover the selected models. The table, status codes, failure reasons and stream ends cover every model.": "The cards and daily charts cover the selected models. The table, status codes, failure reasons and stream ends cover every model.",
-    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.": "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured."
+    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.": "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.",
+    "5 hours": "5 giờ",
+    "12 hours": "12 giờ",
+    "Consumption by user": "Mức tiêu thụ theo người dùng",
+    "Customers with use in the window, most new-api value first, up to 100; root’s own use is not listed. new-api value is what new-api charged at its own prices, in yuan, with dollars at the site’s exchange rate under it. gpt-load value is what the same requests cost at official prices. gpt-load does not know which user sent a request, so each model’s cost is shared among that model’s users by their new-api charge with the group ratio taken out. Total paid is every wallet top-up the customer ever paid, in yuan, with plans bought listed under it. Balance is the wallet now.": "Khách hàng có tiêu thụ trong khoảng thời gian, xếp theo giá trị new-api giảm dần, tối đa 100; mức dùng riêng của root không được liệt kê. Giá trị new-api là số new-api đã trừ theo giá của nó, tính bằng nhân dân tệ, bên dưới là đô la theo tỷ giá của trang. Giá trị gpt-load là chi phí của cùng các yêu cầu theo giá chính thức. gpt-load không biết người dùng nào gửi yêu cầu, nên chi phí mỗi mô hình được chia cho người dùng mô hình đó theo mức trừ new-api, đã bỏ hệ số nhóm. Tổng đã nạp là mọi lần nạp ví khách đã trả, tính bằng nhân dân tệ, gói đã mua ở bên dưới. Số dư là ví hiện tại.",
+    "{{count}} customers used {{quota}} of new-api value and {{engine}} at gpt-load’s official prices.": "{{count}} khách hàng đã dùng {{quota}} giá trị new-api và {{engine}} theo giá chính thức của gpt-load.",
+    "{{count}} customers used {{quota}} of new-api value.": "{{count}} khách hàng đã dùng {{quota}} giá trị new-api.",
+    "Root’s own use, {{quota}} and {{engine}}, is not listed.": "Mức dùng riêng của root, {{quota}} và {{engine}}, không được liệt kê.",
+    "Root’s own use, {{quota}}, is not listed.": "Mức dùng riêng của root, {{quota}}, không được liệt kê.",
+    "{{amount}} of gpt-load’s cost was for a vendor no one was charged for, so it is not shared out.": "{{amount}} chi phí gpt-load thuộc nhà cung cấp không ai bị tính phí, nên không được chia.",
+    "No consumption in this window": "Không có tiêu thụ trong khoảng này",
+    "new-api value": "Giá trị new-api",
+    "The user’s share of gpt-load’s official-price cost: each model’s cost split by new-api charge, group ratio taken out.": "Phần chi phí gpt-load theo giá chính thức của người dùng: chi phí mỗi mô hình chia theo mức trừ new-api, đã bỏ hệ số nhóm.",
+    "Total paid": "Tổng đã nạp",
+    "Every wallet top-up the customer ever paid, in yuan; plans bought are listed under it.": "Mọi lần nạp ví khách đã trả, tính bằng nhân dân tệ; gói đã mua ở bên dưới.",
+    "Plans {{amount}}": "Gói {{amount}}"
   }
 }

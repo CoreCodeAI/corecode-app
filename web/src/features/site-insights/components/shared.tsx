@@ -977,6 +977,11 @@ export function SimpleTable<T>(props: {
   empty: string
   /** Fades a row whose figures carry little weight, such as a small sample. */
   faded?: (row: T) => boolean
+  /**
+   * Draws each row as a card below the sm breakpoint, where a wide table
+   * would scroll sideways; the table shows from sm up.
+   */
+  card?: (row: T) => ReactNode
 }) {
   const { t } = useTranslation()
   const [page, setPage] = useState(0)
@@ -991,7 +996,24 @@ export function SimpleTable<T>(props: {
   const visible = rows.slice(offset, offset + TABLE_PAGE_SIZE)
   return (
     <TooltipProvider delay={HELP_DELAY}>
-      <div className='-mx-4 overflow-x-auto'>
+      {props.card && (
+        <ul className='grid gap-2 sm:hidden'>
+          {visible.map((row, index) => (
+            <li
+              key={props.rowKey(row, offset + index)}
+              className={cn(
+                'rounded-md border p-3 tabular-nums',
+                props.faded?.(row) && 'text-muted-foreground'
+              )}
+            >
+              {props.card?.(row)}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div
+        className={cn('-mx-4 overflow-x-auto', props.card && 'hidden sm:block')}
+      >
         <Table>
           <TableHeader>
             <TableRow>

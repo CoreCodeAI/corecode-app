@@ -24,6 +24,7 @@ import { useInsightsFormat } from '../lib'
 import type { FinanceInsights } from '../types'
 import { FinanceSummary } from './finance-summary'
 import { BarSeries, HelpLabel, Panel, SimpleTable, UserLabel } from './shared'
+import { UserSpendPanel } from './user-spend'
 import { VendorTabs } from './vendor-usage'
 
 export function FinanceTab(props: {
@@ -262,6 +263,8 @@ export function FinanceTab(props: {
           />
         </Panel>
       </div>
+
+      <UserSpendPanel />
     </div>
   )
 }

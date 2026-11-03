@@ -442,6 +442,7 @@ func SetApiRouter(router *gin.Engine) {
 			siteInsightsRoute.GET("/pool", controller.GetEnginePool)
 			siteInsightsRoute.PUT("/pool/subscription-renewals/:organization_uuid", controller.SetEngineSubscriptionRenewal)
 			siteInsightsRoute.GET("/pool-usage", controller.GetPoolUsage)
+			siteInsightsRoute.GET("/user-spend", controller.GetUserSpendInsights)
 		}
 
 		dataRoute := apiRouter.Group("/data")
