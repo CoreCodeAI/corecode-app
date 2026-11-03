@@ -345,11 +345,13 @@ func issueDefaultAPIToken(c *gin.Context, user *model.User) error {
 	return token.Insert()
 }
 
-// AdminUserRow is a user as the admin user list shows it: the user and what
-// they have paid through payment gateways, in the payment currency.
+// AdminUserRow is a user as the admin user list shows it: the user, what
+// they have paid through payment gateways in the payment currency, and the
+// quota left on their spendable subscriptions beside the wallet's quota.
 type AdminUserRow struct {
 	*model.User
-	PaidTotal float64 `json:"paid_total"`
+	PaidTotal             float64 `json:"paid_total"`
+	SubscriptionRemaining int64   `json:"subscription_remaining"`
 }
 
 func adminUserRows(users []*model.User) ([]AdminUserRow, error) {
@@ -361,9 +363,13 @@ func adminUserRows(users []*model.User) ([]AdminUserRow, error) {
 	if err != nil {
 		return nil, err
 	}
+	subscriptions, err := model.UsersSubscriptionRemaining(ids)
+	if err != nil {
+		return nil, err
+	}
 	rows := make([]AdminUserRow, len(users))
 	for i, user := range users {
-		rows[i] = AdminUserRow{User: user, PaidTotal: paid[user.Id]}
+		rows[i] = AdminUserRow{User: user, PaidTotal: paid[user.Id], SubscriptionRemaining: subscriptions[user.Id]}
 	}
 	return rows, nil
 }

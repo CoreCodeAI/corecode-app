@@ -55,16 +55,23 @@ func NewUserSortOptions(sortBy string, sortOrder string) UserSortOptions {
 
 func (options UserSortOptions) Apply(query *gorm.DB) *gorm.DB {
 	desc := options.SortOrder != "asc"
+	direction := "ASC"
+	if desc {
+		direction = "DESC"
+	}
+	// Each expression order is one expression with its id tiebreak: GORM
+	// drops an ORDER BY expression when a column order is merged after it.
 	if options.SortBy == userSortPaidTotal {
 		paid := paidTopUps(query.Session(&gorm.Session{NewDB: true})).
 			Select("COALESCE(SUM(money), 0)").Where("top_ups.user_id = users.id")
-		direction := "ASC"
-		if desc {
-			direction = "DESC"
-		}
-		// One expression: GORM drops an ORDER BY expression when a column
-		// order is merged after it.
 		return query.Order(clause.OrderBy{Expression: clause.Expr{SQL: "(?) " + direction + ", id DESC", Vars: []any{paid}}})
+	}
+	// The balance column shows the wallet plus what is left on subscriptions,
+	// so it sorts by that sum.
+	if options.SortBy == "quota" {
+		subscriptions := spendableSubscriptions(query.Session(&gorm.Session{NewDB: true}), common.GetTimestamp()).
+			Select(subscriptionRemainingSum).Where("user_subscriptions.user_id = users.id")
+		return query.Order(clause.OrderBy{Expression: clause.Expr{SQL: "(users.quota + (?)) " + direction + ", id DESC", Vars: []any{subscriptions}}})
 	}
 	columnName, ok := userSortColumns[options.SortBy]
 	if !ok {
