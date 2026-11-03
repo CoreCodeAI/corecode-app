@@ -440,6 +440,16 @@ func (s *BillingSession) preConsumeFunding(c *gin.Context, quota int) (int, *typ
 	return held, nil
 }
 
+// quotaMessage is the message a client reads for a refused reservation. It
+// keeps the model error it explains, so a fallback can still read the amounts.
+type quotaMessage struct {
+	text  string
+	cause error
+}
+
+func (e *quotaMessage) Error() string { return e.text }
+func (e *quotaMessage) Unwrap() error { return e.cause }
+
 func (s *BillingSession) fundingError(c *gin.Context, err error) *types.NewAPIError {
 	// TODO: model 层应定义哨兵错误（如 ErrNoActiveSubscription），用 errors.Is 替代字符串匹配
 	if errors.Is(err, ErrInsufficientWalletQuota) {
@@ -454,7 +464,8 @@ func (s *BillingSession) fundingError(c *gin.Context, err error) *types.NewAPIEr
 	}
 	errMsg := err.Error()
 	if strings.Contains(errMsg, "no active subscription") || strings.Contains(errMsg, "subscription quota insufficient") {
-		return types.NewErrorWithStatusCode(errors.New(i18n.T(c, i18n.MsgQuotaSubscriptionInsufficient, map[string]any{"Error": errMsg})), types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+		message := &quotaMessage{text: i18n.T(c, i18n.MsgQuotaSubscriptionInsufficient, map[string]any{"Error": errMsg}), cause: err}
+		return types.NewErrorWithStatusCode(message, types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 	}
 	return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
 }
@@ -703,18 +714,47 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		return session, nil
 	}
 
+	// When neither source can hold the reservation, the wallet's message alone
+	// reads as if the subscription were empty; name what each one holds and
+	// what the request needs. Nil when the subscription refusal carries no amounts.
+	bothInsufficient := func(subErr, walletErr *types.NewAPIError) *types.NewAPIError {
+		var short *model.SubscriptionQuotaInsufficientError
+		if walletErr.GetErrorCode() != types.ErrorCodeInsufficientUserQuota || !errors.As(subErr, &short) {
+			return nil
+		}
+		wallet, err := model.GetUserQuota(relayInfo.UserId, false)
+		if err != nil {
+			return nil
+		}
+		return types.NewErrorWithStatusCode(
+			errors.New(i18n.T(c, i18n.MsgQuotaSubscriptionAndWalletInsufficient, map[string]any{
+				"Required":     logger.FormatQuota(int(short.Need)),
+				"Subscription": logger.FormatQuota(int(short.Remaining)),
+				"Wallet":       logger.FormatQuota(wallet),
+			})),
+			types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+	}
+
 	switch pref {
 	case "subscription_only":
 		return trySubscription(false)
 	case "wallet_only":
 		return tryWallet(false)
 	case "wallet_first":
-		session, err := tryWallet(true)
-		if err != nil {
-			if err.GetErrorCode() == types.ErrorCodeInsufficientUserQuota {
-				return trySubscription(false)
+		session, walletErr := tryWallet(true)
+		if walletErr == nil {
+			return session, nil
+		}
+		if walletErr.GetErrorCode() != types.ErrorCodeInsufficientUserQuota {
+			return nil, walletErr
+		}
+		session, subErr := trySubscription(false)
+		if subErr != nil {
+			if both := bothInsufficient(subErr, walletErr); both != nil {
+				return nil, both
 			}
-			return nil, err
+			return nil, subErr
 		}
 		return session, nil
 	case "subscription_first":
@@ -732,12 +772,19 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		if overflowErr != nil {
 			return nil, types.NewError(overflowErr, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
 		}
-		session, apiErr := trySubscription(allowOverflow)
-		if apiErr != nil {
-			if apiErr.GetErrorCode() == types.ErrorCodeInsufficientUserQuota && allowOverflow {
-				return tryWallet(false)
+		session, subErr := trySubscription(allowOverflow)
+		if subErr == nil {
+			return session, nil
+		}
+		if subErr.GetErrorCode() != types.ErrorCodeInsufficientUserQuota || !allowOverflow {
+			return nil, subErr
+		}
+		session, walletErr := tryWallet(false)
+		if walletErr != nil {
+			if both := bothInsufficient(subErr, walletErr); both != nil {
+				return nil, both
 			}
-			return nil, apiErr
+			return nil, walletErr
 		}
 		return session, nil
 	}

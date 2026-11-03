@@ -1342,6 +1342,18 @@ func maybeResetUserSubscriptionWithPlanTx(tx *gorm.DB, sub *UserSubscription, pl
 }
 
 // PreConsumeUserSubscription pre-consumes from any active subscription total quota.
+// SubscriptionQuotaInsufficientError reports a reservation no active
+// subscription could hold. Remaining is the most any one of them has left,
+// since a reservation draws from a single subscription.
+type SubscriptionQuotaInsufficientError struct {
+	Need      int64
+	Remaining int64
+}
+
+func (e *SubscriptionQuotaInsufficientError) Error() string {
+	return fmt.Sprintf("subscription quota insufficient, need=%d", e.Need)
+}
+
 func PreConsumeUserSubscription(requestId string, userId int, modelName string, quotaType int, amount int64) (*SubscriptionPreConsumeResult, error) {
 	return preConsumeUserSubscription(requestId, userId, amount, false)
 }
@@ -1459,7 +1471,11 @@ func preConsumeUserSubscription(requestId string, userId int, amount int64, part
 			returnValue.AmountUsedAfter = sub.AmountUsed
 			return nil
 		}
-		return fmt.Errorf("subscription quota insufficient, need=%d", amount)
+		short := &SubscriptionQuotaInsufficientError{Need: amount}
+		if largest != nil {
+			short.Remaining = largest.AmountTotal - largest.AmountUsed
+		}
+		return short
 	})
 	if err != nil {
 		return nil, err
