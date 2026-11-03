@@ -59,6 +59,12 @@ export type EngineAccount = {
   five_hour_remaining_usd: number | null
   seven_day_remaining_usd: number | null
   burn_usd_per_hour: number | null
+  /** The provider organization; seats of one team share it. Absent before the server's release. */
+  organization?: string
+  /** confirmed when the provider reported the renewal, estimated when the engine counted it. */
+  subscription_state?: string
+  /** When the subscription next renews; 0 or absent without a date. */
+  subscription_period_end_ms?: number
 }
 
 export type EngineGroup = {
