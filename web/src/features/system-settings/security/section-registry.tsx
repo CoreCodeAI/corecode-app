@@ -118,6 +118,8 @@ const SECURITY_SECTIONS = [
             settings['violation_guard_setting.strike_window_days'],
           'violation_guard_setting.lenient_categories':
             settings['violation_guard_setting.lenient_categories'],
+          'violation_guard_setting.client_check_limit':
+            settings['violation_guard_setting.client_check_limit'],
         }}
       />
     ),

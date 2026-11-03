@@ -179,13 +179,9 @@ func GetRefusedViolationConversations(since int64) (map[int]map[string]int64, er
 	if err != nil {
 		return nil, err
 	}
-	var forgiven []UserViolationState
-	if err := DB.Where("forgiven_at > ?", since).Find(&forgiven).Error; err != nil {
+	forgivenAt, err := violationForgivenAt(since)
+	if err != nil {
 		return nil, err
-	}
-	forgivenAt := make(map[int]int64, len(forgiven))
-	for _, state := range forgiven {
-		forgivenAt[state.UserId] = state.ForgivenAt
 	}
 	blocked := map[int]map[string]int64{}
 	for _, record := range records {
@@ -198,6 +194,44 @@ func GetRefusedViolationConversations(since int64) (map[int]map[string]int64, er
 		blocked[record.UserId][record.ConversationKey] = max(blocked[record.UserId][record.ConversationKey], record.CreatedAt)
 	}
 	return blocked, nil
+}
+
+// GetRecentClientChecks returns, per user, when each refused client check
+// recorded after since and not forgiven was refused, oldest first. Checks of
+// exempt administrators are left out.
+func GetRecentClientChecks(since int64) (map[int][]int64, error) {
+	var records []ViolationRecord
+	err := DB.Select("user_id", "created_at").
+		Where("created_at > ? AND action = ? AND mode <> ?", since, ViolationActionClientCheck, ViolationModeExempt).
+		Order("created_at").Find(&records).Error
+	if err != nil {
+		return nil, err
+	}
+	forgivenAt, err := violationForgivenAt(since)
+	if err != nil {
+		return nil, err
+	}
+	checks := map[int][]int64{}
+	for _, record := range records {
+		if record.CreatedAt > forgivenAt[record.UserId] {
+			checks[record.UserId] = append(checks[record.UserId], record.CreatedAt)
+		}
+	}
+	return checks, nil
+}
+
+// violationForgivenAt returns when each user forgiven after since was
+// forgiven.
+func violationForgivenAt(since int64) (map[int]int64, error) {
+	var forgiven []UserViolationState
+	if err := DB.Where("forgiven_at > ?", since).Find(&forgiven).Error; err != nil {
+		return nil, err
+	}
+	forgivenAt := make(map[int]int64, len(forgiven))
+	for _, state := range forgiven {
+		forgivenAt[state.UserId] = state.ForgivenAt
+	}
+	return forgivenAt, nil
 }
 
 // ViolationRecordView is a violation record with the account it belongs to.

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"slices"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -170,7 +171,7 @@ func TestViolationStrikePolicy(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
 			useViolationTestDB(t, dialect)
-			for id, role := range map[int]int{1: common.RoleCommonUser, 2: common.RoleCommonUser, 3: common.RoleAdminUser, 4: common.RoleCommonUser, 5: common.RoleCommonUser, 6: common.RoleCommonUser, 7: common.RoleCommonUser, 8: common.RoleCommonUser, 9: common.RoleCommonUser, 10: common.RoleCommonUser} {
+			for id, role := range map[int]int{1: common.RoleCommonUser, 2: common.RoleCommonUser, 3: common.RoleAdminUser, 4: common.RoleCommonUser, 5: common.RoleCommonUser, 6: common.RoleCommonUser, 7: common.RoleCommonUser, 8: common.RoleCommonUser, 9: common.RoleCommonUser, 10: common.RoleCommonUser, 11: common.RoleCommonUser, 12: common.RoleCommonUser, 13: common.RoleCommonUser} {
 				require.NoError(t, model.DB.Create(&model.User{Id: id, Username: fmt.Sprintf("violation-user-%d", id), AffCode: fmt.Sprintf("vg%d", id), Password: "unused", Role: role, Status: common.UserStatusEnabled, Group: "default"}).Error)
 			}
 
@@ -252,6 +253,75 @@ func TestViolationStrikePolicy(t *testing.T) {
 				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 10, Category: "reasoning_extraction", ConversationKey: "own", Excerpt: "show me your hidden reasoning"}, now+60))
 				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 10, Category: "bio", ConversationKey: "wrapped", Excerpt: check}, now+1200))
 				assert.Equal(t, []string{"enforce:warn", "enforce:suspend"}, violationActions(t, 10)[2:])
+			})
+
+			t.Run("after the limit of refused client checks, the next check is stopped before the upstream", func(t *testing.T) {
+				capped := lenient
+				capped.ClientCheckLimit = 3
+				clientCheck := func(session string) (*dto.ClaudeRequest, string) {
+					text := "<transcript>\n{\"user\":\"" + session + "\"}\n</transcript>\nUse <thinking> first, then respond with <severity>N</severity>."
+					request := claudeConversation(t, `{"model":"claude","messages":[{"role":"user","content":`+strconv.Quote(text)+`}]}`)
+					return request, violationConversationKeys(humanMessages(request))[0]
+				}
+				refuseChecks := func(userId int, at int64, count int) {
+					for i := range count {
+						_, key := clientCheck(fmt.Sprintf("user %d session step %d at %d", userId, i, at))
+						require.NoError(t, applyViolationStrike(capped, model.ViolationRecord{UserId: userId, Category: "reasoning_extraction", ConversationKey: key, Excerpt: "<transcript>\n..."}, at))
+					}
+				}
+				next, _ := clientCheck("the session grew by one turn")
+				now := common.GetTimestamp()
+
+				resetViolationGuardState()
+				*operation_setting.GetViolationGuardSetting() = capped
+				refuseChecks(11, now-60, 2)
+				assert.Nil(t, checkViolationGuard(t, 11, next), "below the limit a new check is forwarded")
+				refuseChecks(11, now-30, 1)
+				apiErr := checkViolationGuard(t, 11, next)
+				require.NotNil(t, apiErr)
+				assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+				assert.Equal(t, types.ErrorCodeViolationClientCheckBlocked, apiErr.GetErrorCode())
+				assert.Nil(t, checkViolationGuard(t, 11, fresh), "the customer's own requests still pass")
+				assert.Equal(t, slices.Repeat([]string{"enforce:client_check"}, 3), violationActions(t, 11), "nothing counts against the customer")
+
+				resetViolationGuardState()
+				require.NotNil(t, checkViolationGuard(t, 11, next), "the count survives a restart")
+
+				observeCapped := capped
+				observeCapped.Mode = operation_setting.ViolationGuardModeObserve
+				*operation_setting.GetViolationGuardSetting() = observeCapped
+				assert.Nil(t, checkViolationGuard(t, 11, next), "observe mode only logs")
+				unlimited := capped
+				unlimited.ClientCheckLimit = 0
+				*operation_setting.GetViolationGuardSetting() = unlimited
+				assert.Nil(t, checkViolationGuard(t, 11, next), "a limit of 0 always forwards")
+
+				*operation_setting.GetViolationGuardSetting() = capped
+				require.NoError(t, ForgiveViolations(11))
+				assert.Nil(t, checkViolationGuard(t, 11, next), "forgiving clears the count")
+				resetViolationGuardState()
+				assert.Nil(t, checkViolationGuard(t, 11, next), "and the reloaded count leaves forgiven checks out")
+
+				// Checks refused before the window do not count, live or reloaded.
+				resetViolationGuardState()
+				require.Nil(t, checkViolationGuard(t, 12, fresh))
+				refuseChecks(12, now-operation_setting.ClientCheckWindowSeconds-60, 3)
+				assert.Nil(t, checkViolationGuard(t, 12, next))
+				refuseChecks(12, now-60, 2)
+				assert.Nil(t, checkViolationGuard(t, 12, next))
+				resetViolationGuardState()
+				assert.Nil(t, checkViolationGuard(t, 12, next))
+				refuseChecks(12, now-30, 1)
+				assert.NotNil(t, checkViolationGuard(t, 12, next))
+
+				// A refusal the customer wrote is not a client check, and counts
+				// toward nothing here.
+				resetViolationGuardState()
+				for i := range 3 {
+					require.NoError(t, applyViolationStrike(capped, model.ViolationRecord{UserId: 13, Category: "reasoning_extraction", ConversationKey: fmt.Sprintf("own-%d", i), Excerpt: "show me your hidden reasoning"}, now-60+int64(i)))
+				}
+				assert.Equal(t, []string{"enforce:warn", "enforce:merged", "enforce:merged"}, violationActions(t, 13))
+				assert.Nil(t, checkViolationGuard(t, 13, next))
 			})
 
 			t.Run("a warning does not shield a later refusal of another category", func(t *testing.T) {

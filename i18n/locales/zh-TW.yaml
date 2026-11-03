@@ -21,6 +21,7 @@ rate_limit.total_reached: "您已達到總請求數限制：{{.Minutes}}分鐘�
 violation.suspended: "此帳號的 API 呼叫已暫停至 {{.Until}}：上游模型以違反使用政策為由拒絕了此帳號的請求。如認為有誤，請聯絡客服"
 violation.risk_gate_blocked: "此請求被內容安全策略攔截。請修改訊息或開啟新對話後重試；如認為有誤，請聯絡客服"
 violation.conversation_blocked: "此對話包含被上游模型以違反使用政策為由拒絕的訊息。請開啟新對話，或修改那則訊息後重試"
+violation.client_check_blocked: "近 24 小時內此帳號已有 {{.Count}} 次客戶端檢查請求（如 Claude Code auto 模式在呼叫工具前發出的檢查）被上游拒絕，此類請求暫不轉發，不計違規。刪除 CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS 和 CLAUDE_CODE_AUTO_MODE_SERVER=0 後開啟新工作階段，auto 模式即改由伺服器端審查"
 rate_limit.user_concurrency_reached: "你的帳號同時進行的請求過多：所有 API 金鑰合計最多同時 {{.Max}} 個，請等現有請求完成後再試"
 rate_limit.user_concurrency_next_tier: "你的帳號同時進行的請求過多：所有 API 金鑰合計最多同時 {{.Max}} 個，請等現有請求完成後再試。累計儲值再滿 {{.Remaining}} 元，並發上限可提升到 {{.Next}}"
 distributor.invalid_request: "無效的請求，{{.Error}}"

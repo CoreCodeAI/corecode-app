@@ -7755,6 +7755,8 @@
     "Feishu signing secret": "Khóa ký Feishu",
     "Only when the bot has signature verification on. Leave blank unless updating.": "Chỉ điền khi bot bật xác minh chữ ký. Để trống nếu không thay đổi.",
     "Send test message": "Gửi tin nhắn thử",
-    "Uses the saved webhook. Save changes first.": "Dùng webhook đã lưu. Hãy lưu thay đổi trước."
+    "Uses the saved webhook. Save changes first.": "Dùng webhook đã lưu. Hãy lưu thay đổi trước.",
+    "Client check limit": "Giới hạn kiểm tra của ứng dụng",
+    "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.": "Ngừng chuyển tiếp các yêu cầu kiểm tra do ứng dụng của khách hàng gửi, chẳng hạn yêu cầu mà chế độ auto của Claude Code gửi trước khi gọi công cụ, khi phía thượng nguồn đã từ chối số lần này trong 24 giờ. Chúng không bao giờ bị tính là vi phạm. 0 nghĩa là luôn chuyển tiếp."
   }
 }

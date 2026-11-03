@@ -33,8 +33,9 @@ const maxViolationExcerptBytes = 4096
 const minViolationMergeSeconds = 10 * 60
 
 // violationGuardState is what the relay checks on every request: suspended
-// users, and the refused conversations of each user with the time each was
-// refused. It lives in process memory because one new-api instance serves the
+// users, the refused conversations of each user with the time each was
+// refused, and when each user's client checks were refused within
+// ClientCheckWindowSeconds, oldest first. It lives in process memory because one new-api instance serves the
 // relay. It loads from the database on first use, and every strike or lift
 // writes the database first and then this copy.
 var violationGuardState = struct {
@@ -42,6 +43,7 @@ var violationGuardState = struct {
 	loaded         bool
 	suspendedUntil map[int]int64
 	conversations  map[int]map[string]int64
+	clientChecks   map[int][]int64
 }{}
 
 func loadViolationGuardState(now, windowStart int64) bool {
@@ -52,28 +54,34 @@ func loadViolationGuardState(now, windowStart int64) bool {
 		return true
 	}
 	suspended, err := model.GetActiveViolationSuspensions(now)
+	var conversations map[int]map[string]int64
 	if err == nil {
-		var conversations map[int]map[string]int64
 		conversations, err = model.GetRefusedViolationConversations(windowStart)
-		if err == nil {
-			violationGuardState.Lock()
-			defer violationGuardState.Unlock()
-			if !violationGuardState.loaded {
-				violationGuardState.suspendedUntil = suspended
-				violationGuardState.conversations = conversations
-				violationGuardState.loaded = true
-			}
-			return true
-		}
 	}
-	common.SysError(common.LogText("violation guard: failed to load suspensions and refused conversations: %s", err.Error()))
-	return false
+	var clientChecks map[int][]int64
+	if err == nil {
+		clientChecks, err = model.GetRecentClientChecks(now - operation_setting.ClientCheckWindowSeconds)
+	}
+	if err != nil {
+		common.SysError(common.LogText("violation guard: failed to load suspensions, refused conversations and client checks: %s", err.Error()))
+		return false
+	}
+	violationGuardState.Lock()
+	defer violationGuardState.Unlock()
+	if !violationGuardState.loaded {
+		violationGuardState.suspendedUntil = suspended
+		violationGuardState.conversations = conversations
+		violationGuardState.clientChecks = clientChecks
+		violationGuardState.loaded = true
+	}
+	return true
 }
 
 // Violation guard verdicts on a request.
 const (
 	violationVerdictSuspended    = "suspended"
 	violationVerdictConversation = "conversation"
+	violationVerdictClientCheck  = "client_check"
 )
 
 // violationRefusedRecently reports whether the upstream refused one of the
@@ -93,8 +101,9 @@ func violationRefusedRecently(userId int) bool {
 }
 
 // CheckViolationGuard rejects, before any channel is used, a request from an
-// account suspended for a violation, or one that resends a conversation the
-// upstream refused. In observe mode it only logs what it would reject. When
+// account suspended for a violation, a client check from an account whose
+// client checks the upstream keeps refusing, or a request that resends a
+// conversation the upstream refused. In observe mode it only logs what it would reject. When
 // the state cannot be loaded the request passes.
 func CheckViolationGuard(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
 	_, apiErr := violationGuardVerdict(c, info)
@@ -102,8 +111,8 @@ func CheckViolationGuard(c *gin.Context, info *relaycommon.RelayInfo) *types.New
 }
 
 // violationGuardVerdict is CheckViolationGuard that also reports what it
-// found, violationVerdictSuspended or violationVerdictConversation, in either
-// mode.
+// found, violationVerdictSuspended, violationVerdictClientCheck or
+// violationVerdictConversation, in either mode.
 func violationGuardVerdict(c *gin.Context, info *relaycommon.RelayInfo) (string, *types.NewAPIError) {
 	setting := operation_setting.GetViolationGuardSetting()
 	if !setting.Enabled || info == nil {
@@ -129,6 +138,17 @@ func violationGuardVerdict(c *gin.Context, info *relaycommon.RelayInfo) (string,
 		}
 		logger.LogInfo(c, common.LogText("violation guard (observe): user %d is suspended; enforce mode would reject this request", info.UserId))
 		return violationVerdictSuspended, nil
+	}
+	if limit := setting.ClientCheckLimit; limit > 0 && clientCheckRequest(info.Request) {
+		if refused := recentClientChecks(info.UserId, now); refused >= limit {
+			if !enforce {
+				logger.LogInfo(c, common.LogText("violation guard (observe): user %d sent a client check after %d were refused; enforce mode would reject this request", info.UserId, refused))
+				return violationVerdictClientCheck, nil
+			}
+			RequestPolicy(c).AddEvent(PolicyEvent{ErrorCode: string(types.ErrorCodeViolationClientCheckBlocked), ErrorSource: "local", Decision: PolicyDecision{Action: "stop", Reason: "local_rejection", Source: "global"}, Health: "unchanged"})
+			return violationVerdictClientCheck, types.NewErrorWithStatusCode(errors.New(i18n.T(c, i18n.MsgViolationClientCheckBlocked, map[string]any{"Count": refused})),
+				types.ErrorCodeViolationClientCheckBlocked, http.StatusForbidden, types.ErrOptionWithSkipRetry())
+		}
 	}
 	if !hasRefusedConversations {
 		return "", nil
@@ -197,7 +217,35 @@ func RecordUpstreamRefusal(c *gin.Context, info *relaycommon.RelayInfo) {
 // reasoning_extraction. Only lenient categories qualify, so a client that
 // copies the wrapper cannot hide a refusal of another category.
 func clientCheckRefusal(setting operation_setting.ViolationGuardSetting, record model.ViolationRecord) bool {
-	return setting.LenientCategory(record.Category) && strings.HasPrefix(record.Excerpt, "<transcript>")
+	return setting.LenientCategory(record.Category) && strings.HasPrefix(record.Excerpt, clientCheckPrefix)
+}
+
+// clientCheckPrefix starts the latest human message of a client check.
+const clientCheckPrefix = "<transcript>"
+
+// clientCheckRequest reports whether a request has the shape of a client
+// check: its latest human message, the one a refusal records as the excerpt,
+// starts with clientCheckPrefix. A request carries no refusal category yet, so
+// the shape alone decides; it is only stopped for a customer whose checks
+// were already refused.
+func clientCheckRequest(request dto.Request) bool {
+	messages := humanMessages(request)
+	return len(messages) > 0 && strings.HasPrefix(messages[len(messages)-1], clientCheckPrefix)
+}
+
+// recentClientChecks counts the user's client checks the upstream refused
+// within ClientCheckWindowSeconds before now.
+func recentClientChecks(userId int, now int64) int {
+	since := now - operation_setting.ClientCheckWindowSeconds
+	violationGuardState.RLock()
+	defer violationGuardState.RUnlock()
+	refused := 0
+	for _, refusedAt := range violationGuardState.clientChecks[userId] {
+		if refusedAt > since {
+			refused++
+		}
+	}
+	return refused
 }
 
 // violationExempt reports whether refusals of a user with this role are
@@ -300,6 +348,11 @@ func applyViolationStrike(setting operation_setting.ViolationGuardSetting, recor
 		}
 		violationGuardState.conversations[record.UserId][record.ConversationKey] = now
 	}
+	if violationGuardState.loaded && record.Action == model.ViolationActionClientCheck {
+		since := now - operation_setting.ClientCheckWindowSeconds
+		checks := slices.DeleteFunc(violationGuardState.clientChecks[record.UserId], func(refusedAt int64) bool { return refusedAt <= since })
+		violationGuardState.clientChecks[record.UserId] = append(checks, now)
+	}
 	violationGuardState.Unlock()
 
 	if record.Mode != operation_setting.ViolationGuardModeEnforce {
@@ -339,6 +392,7 @@ func ForgiveViolations(userId int) error {
 	defer violationGuardState.Unlock()
 	delete(violationGuardState.suspendedUntil, userId)
 	delete(violationGuardState.conversations, userId)
+	delete(violationGuardState.clientChecks, userId)
 	return nil
 }
 

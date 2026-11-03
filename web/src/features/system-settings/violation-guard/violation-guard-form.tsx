@@ -59,6 +59,7 @@ const violationGuardSchema = z.object({
   ban_strikes: z.number().int().min(0),
   strike_window_days: z.number().int().min(1),
   lenient_categories: z.string(),
+  client_check_limit: z.number().int().min(0),
 })
 
 type ViolationGuardFormValues = z.output<typeof violationGuardSchema>
@@ -70,6 +71,7 @@ export type ViolationGuardValues = {
   'violation_guard_setting.ban_strikes': number
   'violation_guard_setting.strike_window_days': number
   'violation_guard_setting.lenient_categories': string
+  'violation_guard_setting.client_check_limit': number
 }
 
 type ViolationGuardFormProps = {
@@ -85,6 +87,7 @@ const toFormValues = (
   ban_strikes: defaults['violation_guard_setting.ban_strikes'],
   strike_window_days: defaults['violation_guard_setting.strike_window_days'],
   lenient_categories: defaults['violation_guard_setting.lenient_categories'],
+  client_check_limit: defaults['violation_guard_setting.client_check_limit'],
 })
 
 const toOptionValues = (
@@ -97,6 +100,7 @@ const toOptionValues = (
   'violation_guard_setting.strike_window_days': values.strike_window_days,
   'violation_guard_setting.lenient_categories':
     values.lenient_categories.trim(),
+  'violation_guard_setting.client_check_limit': values.client_check_limit,
 })
 
 export function ViolationGuardForm(props: ViolationGuardFormProps) {
@@ -129,7 +133,11 @@ export function ViolationGuardForm(props: ViolationGuardFormProps) {
   }
 
   const numberField = (
-    name: 'suspend_hours' | 'ban_strikes' | 'strike_window_days',
+    name:
+      | 'suspend_hours'
+      | 'ban_strikes'
+      | 'strike_window_days'
+      | 'client_check_limit',
     label: string,
     description: string,
     min: number
@@ -273,6 +281,14 @@ export function ViolationGuardForm(props: ViolationGuardFormProps) {
               </FormItem>
             )}
           />
+          {numberField(
+            'client_check_limit',
+            t('Client check limit'),
+            t(
+              'Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.'
+            ),
+            0
+          )}
         </SettingsFormGrid>
       </SettingsForm>
     </Form>
