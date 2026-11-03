@@ -2,6 +2,9 @@
 
 Status: implemented
 
+Superseded on 2026-11-03 by `2026-11-03-header-language-menu.md`: the
+header offers the five languages corecode.live is written in.
+
 ## Problem
 
 The header, sign-in and setup pages opened upstream's seven-language menu
