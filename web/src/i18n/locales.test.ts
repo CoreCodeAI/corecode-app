@@ -21,6 +21,7 @@ import { expect, it } from 'vitest'
 import en from './locales/en.json'
 import fr from './locales/fr.json'
 import ja from './locales/ja.json'
+import ko from './locales/ko.json'
 import ru from './locales/ru.json'
 import vi from './locales/vi.json'
 import zhTW from './locales/zh-TW.json'
@@ -29,7 +30,7 @@ import zh from './locales/zh.json'
 // A supported language loads without the en fallback, so a key it lacks
 // would render as its raw source text. `bun run i18n:sync` fills the gaps.
 it('gives every locale a non-empty value for every en key', () => {
-  const locales = { fr, ja, ru, vi, zhTW, zh }
+  const locales = { fr, ja, ko, ru, vi, zhTW, zh }
   const keys = Object.keys(en.translation)
   for (const [name, locale] of Object.entries(locales)) {
     const translation = locale.translation as Record<string, string>

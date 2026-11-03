@@ -14,12 +14,15 @@ console header still offered EN / 中文, so a reader who arrived from `/ja/` or
 ## Decision
 
 `components/language-switcher.tsx` is a dropdown with a globe and the current
-language's name. It lists 简体中文, English, 日本語, Русский and 繁體中文, in the
+language's name. It lists 简体中文, English, 日本語, 한국어, Русский and 繁體中文, in the
 static site's order. Choosing one calls `i18n.changeLanguage` and, for a
 signed-in user, saves it to the profile, as before.
 
-- Korean is left out: the console has no `ko` locale, and a 한국어 entry would show
-  English.
+- Korean was left out at first because the console had no `ko` locale. A
+  `ko.json` translated from the English source text now carries every key
+  (`locales.test.ts`), so 한국어 is listed between 日本語 and Русский. Korean is
+  not an upstream locale, so new upstream keys reach it through
+  `bun run i18n:sync` like the others.
 - `fr` and `vi` stay on the profile page only. corecode.live is not written in
   them.
 - A language the menu does not list, such as `fr`, shows "English" on the

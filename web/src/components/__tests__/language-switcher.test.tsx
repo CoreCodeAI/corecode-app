@@ -38,6 +38,7 @@ test('the menu lists the site languages and switches to the one picked', async (
     '简体中文',
     'English',
     '日本語',
+    '한국어',
     'Русский',
     '繁體中文',
   ])
