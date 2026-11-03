@@ -28,6 +28,10 @@ model, and its `sonnet` default matched the Gemini pool's
 - **The header links to the Claude Code guide** (`/docs/claude-code/`).
 - **The estimator offers only Claude models**, without aliases.
 
+## Alternatives considered
+
+Not recorded when the change shipped.
+
 ## Verification
 
 `vitest run src/features/pricing` passes, including `group-vendors.test.ts`

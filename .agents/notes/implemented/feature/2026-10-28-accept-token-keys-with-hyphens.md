@@ -26,6 +26,10 @@ never matched: `sk-gl-abc` was looked up as `gl`.
 The extra lookup runs only for values that contain a hyphen, and it goes
 through the same Redis-first `GetTokenByKey` as the main lookup.
 
+## Alternatives considered
+
+Not recorded when the change shipped.
+
 ## Verification
 
 `TestSplitTokenKeyKeepsStoredKeysWithHyphens` covers a stored hyphenated key, a

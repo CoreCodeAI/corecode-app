@@ -30,6 +30,10 @@ not call GPT from any client but Claude Code.
 - **An unreadable body is still refused**, as Distribute would refuse it.
 - A token on a named Claude Code only group is unchanged.
 
+## Alternatives considered
+
+Not recorded when the change shipped.
+
 ## Verification
 
 `TestClaudeCodeOnlyGroupGate` now expects an `auto` token with an open candidate

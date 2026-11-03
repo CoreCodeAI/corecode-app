@@ -28,6 +28,12 @@ or whether they are a promotion channel.
   from the affiliate summary the page already loads, with the same badges as
   the wallet's invitation card.
 
+## Alternatives considered
+
+- **Sum `affiliate_referrals.base`.** It advances when nothing is credited
+  and follows the invitee to a new inviter, so it would not match the
+  commission column.
+
 ## Consequences
 
 - Paid spend times the current rate equals the commission only while the rate
