@@ -153,6 +153,23 @@ export function useSidebarData(): SidebarData {
         title: t('Admin'),
         items: [
           {
+            title: t('Site Insights'),
+            url: '/site-insights',
+            icon: ChartNoAxesCombined,
+            requiredRole: ROLE.SUPER_ADMIN,
+          },
+          {
+            title: t('Feedback Review'),
+            url: '/feedback-admin',
+            icon: MessageSquareText,
+          },
+          {
+            title: t('Invitation program'),
+            url: '/affiliates',
+            icon: HandCoins,
+            requiredRole: ROLE.SUPER_ADMIN,
+          },
+          {
             title: t('Channels'),
             url: '/channels',
             icon: Radio,
@@ -186,23 +203,6 @@ export function useSidebarData(): SidebarData {
             title: t('Enterprise Applications'),
             url: '/enterprise-applications',
             icon: Building2,
-          },
-          {
-            title: t('Feedback Review'),
-            url: '/feedback-admin',
-            icon: MessageSquareText,
-          },
-          {
-            title: t('Invitation program'),
-            url: '/affiliates',
-            icon: HandCoins,
-            requiredRole: ROLE.SUPER_ADMIN,
-          },
-          {
-            title: t('Site Insights'),
-            url: '/site-insights',
-            icon: ChartNoAxesCombined,
-            requiredRole: ROLE.SUPER_ADMIN,
           },
           {
             title: t('System Info'),
