@@ -907,6 +907,46 @@ func GetAllActiveUserSubscriptions(userId int) ([]SubscriptionSummary, error) {
 	return buildSubscriptionSummaries(subs), nil
 }
 
+// subscriptionRemainingSum adds up what is left on a set of subscriptions; a
+// subscription used past its total counts as nothing left, not as debt.
+const subscriptionRemainingSum = "COALESCE(SUM(CASE WHEN user_subscriptions.amount_used < user_subscriptions.amount_total " +
+	"THEN user_subscriptions.amount_total - user_subscriptions.amount_used ELSE 0 END), 0)"
+
+// spendableSubscriptions selects the subscriptions whose quota a request can
+// still spend: active and unexpired, as billing reads them. A plan without a
+// total (amount_total 0) is unlimited and has no amount to add, so it is left out.
+func spendableSubscriptions(db *gorm.DB, now int64) *gorm.DB {
+	return db.Model(&UserSubscription{}).Where(
+		"user_subscriptions.status = ? AND user_subscriptions.end_time > ? AND user_subscriptions.amount_total > 0",
+		"active", now)
+}
+
+// UsersSubscriptionRemaining returns, per user, the quota left on their
+// spendable subscriptions. Users without one are absent.
+func UsersSubscriptionRemaining(userIds []int) (map[int]int64, error) {
+	remaining := make(map[int]int64, len(userIds))
+	if len(userIds) == 0 {
+		return remaining, nil
+	}
+	var rows []struct {
+		UserId int
+		Total  int64
+	}
+	err := spendableSubscriptions(DB, common.GetTimestamp()).
+		Where("user_subscriptions.user_id IN ?", userIds).
+		Select("user_subscriptions.user_id AS user_id, " + subscriptionRemainingSum + " AS total").
+		Group("user_subscriptions.user_id").Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		if row.Total > 0 {
+			remaining[row.UserId] = row.Total
+		}
+	}
+	return remaining, nil
+}
+
 // HasActiveUserSubscription returns whether the user has any active subscription.
 // This is a lightweight existence check to avoid heavy pre-consume transactions.
 func HasActiveUserSubscription(userId int) (bool, error) {

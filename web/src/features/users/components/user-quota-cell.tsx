@@ -25,7 +25,10 @@ import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 type UserQuotaCellProps = {
-  remaining: number
+  /** The wallet's quota */
+  wallet: number
+  /** Quota left on active subscriptions */
+  subscription: number
   used: number
 }
 
@@ -35,8 +38,11 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
 
   const { meta: currency } = getCurrencyDisplay()
   const quotaUnit = currency.kind === 'tokens' ? t('Tokens') : currency.symbol
-  const hasQuota = props.remaining !== 0 || props.used !== 0
-  const formattedRemaining = formatQuotaWithCurrency(props.remaining, {
+  // The balance a user can spend is the wallet plus what is left on their
+  // subscriptions; the popover shows the two apart.
+  const remaining = props.wallet + props.subscription
+  const hasQuota = remaining !== 0 || props.used !== 0
+  const formattedRemaining = formatQuotaWithCurrency(remaining, {
     showSymbol: false,
   })
   const formattedUsed = formatQuotaWithCurrency(props.used, {
@@ -53,6 +59,16 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
       }
       details={[
         { label: t('Available Balance'), value: formattedRemaining },
+        {
+          label: t('Wallet'),
+          value: formatQuotaWithCurrency(props.wallet, { showSymbol: false }),
+        },
+        {
+          label: t('Subscription Remaining'),
+          value: formatQuotaWithCurrency(props.subscription, {
+            showSymbol: false,
+          }),
+        },
         { label: t('Total Used'), value: formattedUsed },
       ]}
     >
@@ -60,8 +76,8 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
         <span className='grid min-w-0 grid-cols-1 gap-y-1 text-sm tabular-nums'>
           <span
             className={cn(
-              props.remaining < 0 && 'text-destructive',
-              props.remaining === 0 && 'text-muted-foreground'
+              remaining < 0 && 'text-destructive',
+              remaining === 0 && 'text-muted-foreground'
             )}
           >
             {formattedRemaining}

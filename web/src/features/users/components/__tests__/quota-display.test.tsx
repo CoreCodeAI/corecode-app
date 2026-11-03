@@ -65,7 +65,11 @@ await i18n.init({
   initAsync: false,
 })
 
-function QuotaTable(props: { remaining: number; used: number }) {
+function QuotaTable(props: {
+  remaining: number
+  used: number
+  subscription?: number
+}) {
   const columns = useUsersColumns().filter((column) =>
     ['quota', 'used_quota'].includes(
       column.id ?? ('accessorKey' in column ? String(column.accessorKey) : '')
@@ -81,6 +85,7 @@ function QuotaTable(props: { remaining: number; used: number }) {
         role: 1,
         status: 1,
         quota: props.remaining,
+        subscription_remaining: props.subscription,
         used_quota: props.used,
         request_count: 0,
         group: 'default',
@@ -165,7 +170,10 @@ it('shows balance above secondary usage text and opens quota details on click', 
   const detail = await screen.findByRole('dialog', { name: 'Quota ($)' })
   expect(within(detail).getByText('Available Balance')).toBeInTheDocument()
   expect(within(detail).getByText('Total Used')).toBeInTheDocument()
-  expect(within(detail).getByText('0.0038')).toBeInTheDocument()
+  // Without subscriptions the balance is the wallet.
+  expect(within(detail).getAllByText('0.0038')).toHaveLength(2)
+  expect(within(detail).getByText('Subscription Remaining')).toBeInTheDocument()
+  expect(within(detail).getByText('0')).toBeInTheDocument()
   expect(within(detail).getByText('0.0022')).toBeInTheDocument()
   expect(within(detail).queryByRole('progressbar')).not.toBeInTheDocument()
   await userEvent.keyboard('{Escape}')
@@ -188,7 +196,7 @@ it.each([0, 500000])(
       expect(screen.queryByText('Used amount')).not.toBeInTheDocument()
       await userEvent.click(screen.getByRole('button', { name: 'No Quota' }))
       const detail = await screen.findByRole('dialog', { name: 'Quota ($)' })
-      expect(within(detail).getAllByText('0')).toHaveLength(2)
+      expect(within(detail).getAllByText('0')).toHaveLength(4)
       return
     }
     expect(screen.queryByText('No Quota')).not.toBeInTheDocument()
@@ -212,8 +220,31 @@ it('preserves negative balances in details opened with the keyboard', async () =
   await userEvent.tab()
   await userEvent.keyboard('{Enter}')
   const detail = await screen.findByRole('dialog')
-  expect(within(detail).getByText('-1')).toBeInTheDocument()
+  expect(within(detail).getAllByText('-1')).toHaveLength(2)
   expect(within(detail).getByText('2')).toBeInTheDocument()
+})
+
+it('adds what is left on subscriptions to the wallet and shows the two apart', async () => {
+  render(
+    <I18nextProvider i18n={i18n}>
+      <QuotaTable remaining={-500000} subscription={1500000} used={1100} />
+    </I18nextProvider>
+  )
+  // A wallet in debt is offset by the subscription: -1 + 3 = 2.
+  const cell = screen.getAllByRole('cell')[0]
+  expect(within(cell).getByText('2')).not.toHaveClass('text-destructive')
+  await userEvent.click(
+    screen.getByRole('button', {
+      name: 'Available Balance 2; Used amount 0.0022',
+    })
+  )
+  const detail = await screen.findByRole('dialog', { name: 'Quota ($)' })
+  const value = (label: string) =>
+    within(detail).getByText(label).nextElementSibling?.textContent
+  expect(value('Available Balance')).toBe('2')
+  expect(value('Wallet')).toBe('-1')
+  expect(value('Subscription Remaining')).toBe('3')
+  expect(value('Total Used')).toBe('0.0022')
 })
 
 it('shows the custom symbol only in the column header', () => {

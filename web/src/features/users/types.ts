@@ -61,6 +61,8 @@ export const userSchema = z.object({
   remark: z.string().optional(),
   /** What the user paid through payment gateways, in the payment currency */
   paid_total: z.number().optional(),
+  /** Quota left on the user's active, capped subscriptions, beside `quota` (the wallet) */
+  subscription_remaining: z.number().optional(),
   admin_permissions: z
     .record(z.string(), z.record(z.string(), z.boolean()))
     .optional(),
