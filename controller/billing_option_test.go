@@ -359,6 +359,7 @@ func TestPreConsumeShortfallAcrossWalletAndSubscription(t *testing.T) {
 				wantSubUsed      int
 				wantOverflowSrc  string
 				wantOverflowPart int
+				wantMessage      string // the refusal's message, when one is asserted
 			}{
 				{name: "wallet below estimate reserves its balance", preference: "wallet_only", wallet: 1000, subLeft: -1,
 					wantHeld: 1000, wantWalletHeld: 1000, wantWallet: -1250},
@@ -371,7 +372,12 @@ func TestPreConsumeShortfallAcrossWalletAndSubscription(t *testing.T) {
 					wantHeld: 1500, wantWallet: 4750, wantSubUsed: 2000, wantOverflowSrc: "wallet", wantOverflowPart: 250},
 				{name: "an empty wallet takes the overage past the subscription", preference: "subscription_first", wallet: 0, subLeft: 2000, overflow: true,
 					wantHeld: 1500, wantWallet: -250, wantSubUsed: 2000, wantOverflowSrc: "wallet", wantOverflowPart: 250},
-				{name: "an empty wallet does not admit what the subscription cannot hold", preference: "subscription_first", wallet: 0, subLeft: 1000, overflow: true},
+				{name: "an empty wallet does not admit what the subscription cannot hold", preference: "subscription_first", wallet: 0, subLeft: 1000, overflow: true,
+					wantMessage: "Not enough quota for this request: it needs ＄0.003000 reserved and is charged its actual usage when it ends; the subscription has ＄0.002000 left and the wallet holds ＄0.000000"},
+				{name: "wallet first names both sources when neither holds the estimate", preference: "wallet_first", wallet: 0, subLeft: 1000,
+					wantMessage: "Not enough quota for this request: it needs ＄0.003000 reserved and is charged its actual usage when it ends; the subscription has ＄0.002000 left and the wallet holds ＄0.000000"},
+				{name: "a wallet refusal without a subscription keeps its message", preference: "subscription_first", wallet: 0, subLeft: -1,
+					wantMessage: "Insufficient user quota, remaining quota: ＄0.000000"},
 				{name: "plan without wallet overflow keeps full reservation", preference: "subscription_first", wallet: 5000, subLeft: 1000},
 				{name: "a failed subscription charge falls to the overflow wallet", preference: "subscription_first", wallet: 5000, subLeft: 2000, overflow: true, subscriptionGone: true,
 					wantHeld: 1500, wantWallet: 4250, wantOverflowSrc: "wallet", wantOverflowPart: 750},
@@ -405,6 +411,9 @@ func TestPreConsumeShortfallAcrossWalletAndSubscription(t *testing.T) {
 					if tc.wantHeld == 0 {
 						require.NotNil(t, apiErr)
 						assert.Equal(t, types.ErrorCodeInsufficientUserQuota, apiErr.GetErrorCode())
+						if tc.wantMessage != "" {
+							assert.Equal(t, tc.wantMessage, apiErr.Error())
+						}
 						require.NoError(t, db.First(&user, user.Id).Error)
 						assert.Equal(t, tc.wallet, user.Quota)
 						return
