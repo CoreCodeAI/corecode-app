@@ -132,6 +132,12 @@ func InitOptionMap() {
 	common.OptionMap["WaffoPancakeReturnURL"] = setting.WaffoPancakeReturnURL
 	common.OptionMap["WaffoPancakeUnitPrice"] = strconv.FormatFloat(setting.WaffoPancakeUnitPrice, 'f', -1, 64)
 	common.OptionMap["WaffoPancakeMinTopUp"] = strconv.Itoa(setting.WaffoPancakeMinTopUp)
+	common.OptionMap["NowPaymentsApiKey"] = setting.NowPaymentsApiKey
+	common.OptionMap["NowPaymentsIpnSecret"] = setting.NowPaymentsIpnSecret
+	common.OptionMap["NowPaymentsMinTopUp"] = strconv.Itoa(setting.NowPaymentsMinTopUp)
+	common.OptionMap["NowPaymentsPayCurrencies"] = setting.NowPaymentsPayCurrencies
+	common.OptionMap["NowPaymentsFeishuWebhook"] = setting.NowPaymentsFeishuWebhook
+	common.OptionMap["NowPaymentsFeishuSecret"] = setting.NowPaymentsFeishuSecret
 	common.OptionMap["WaffoPancakeStoreID"] = setting.WaffoPancakeStoreID
 	common.OptionMap["WaffoPancakeProductID"] = setting.WaffoPancakeProductID
 	common.OptionMap["TopupGroupRatio"] = common.TopupGroupRatio2JSONString()
@@ -620,6 +626,18 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.WaffoPancakeUnitPrice, _ = strconv.ParseFloat(value, 64)
 	case "WaffoPancakeMinTopUp":
 		setting.WaffoPancakeMinTopUp, _ = strconv.Atoi(value)
+	case "NowPaymentsApiKey":
+		setting.NowPaymentsApiKey = value
+	case "NowPaymentsIpnSecret":
+		setting.NowPaymentsIpnSecret = value
+	case "NowPaymentsMinTopUp":
+		setting.NowPaymentsMinTopUp, _ = strconv.Atoi(value)
+	case "NowPaymentsPayCurrencies":
+		setting.NowPaymentsPayCurrencies = value
+	case "NowPaymentsFeishuWebhook":
+		setting.NowPaymentsFeishuWebhook = value
+	case "NowPaymentsFeishuSecret":
+		setting.NowPaymentsFeishuSecret = value
 	case "TopupGroupRatio":
 		err = common.UpdateTopupGroupRatioByJSONString(value)
 	case "GitHubClientId":

@@ -154,6 +154,8 @@ export interface TopupInfo {
   enable_waffo_pancake_topup?: boolean
   /** Minimum topup amount for Waffo Pancake */
   waffo_pancake_min_topup?: number
+  /** Stablecoin networks offered through NOWPayments; empty when it is off */
+  nowpayments_currencies?: NowPaymentsCurrency[]
   /** Whether redemption code usage is enabled */
   enable_redemption?: boolean
   /** Whether compliance confirmation has been completed */
@@ -220,6 +222,26 @@ export interface WaffoPaymentRequest {
 /**
  * Waffo Pancake payment request parameters
  */
+/**
+ * A stablecoin on one network, named by its NOWPayments ticker. USDT and USDC
+ * are both priced as one US dollar.
+ */
+export interface NowPaymentsCurrency {
+  /** NOWPayments ticker, such as usdttrc20 */
+  code: string
+  /** USDT or USDC */
+  coin: string
+  /** Network label, such as TRC20 */
+  network: string
+}
+
+export interface NowPaymentsPaymentRequest {
+  /** Topup amount */
+  amount: number
+  /** NOWPayments ticker the invoice is paid in */
+  pay_currency: string
+}
+
 export interface WaffoPancakePaymentRequest {
   /** Topup amount */
   amount: number

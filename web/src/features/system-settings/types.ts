@@ -335,6 +335,12 @@ export type BillingSettings = {
   StripeUnitPrice: number
   StripeMinTopUp: number
   StripePromotionCodesEnabled: boolean
+  NowPaymentsApiKey?: string
+  NowPaymentsIpnSecret?: string
+  NowPaymentsMinTopUp?: number
+  NowPaymentsPayCurrencies?: string
+  NowPaymentsFeishuWebhook?: string
+  NowPaymentsFeishuSecret?: string
   CreemApiKey: string
   CreemWebhookSecret: string
   CreemTestMode: boolean

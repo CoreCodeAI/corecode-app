@@ -56,6 +56,10 @@ describe('payment dispatch', () => {
           calls.push('pancake')
           return false
         },
+        nowPayments: async () => {
+          calls.push('nowpayments')
+          return false
+        },
       }
     )
 
@@ -76,10 +80,36 @@ describe('payment dispatch', () => {
           return true
         },
         waffoPancake: async () => false,
+        nowPayments: async () => false,
       }
     )
 
     expect(success).toBe(false)
     expect(called).toBe(false)
+  })
+
+  test('opens a NOWPayments invoice only for the chosen network', async () => {
+    const calls: string[] = []
+    const processors = {
+      regular: async () => {
+        calls.push('regular')
+        return false
+      },
+      waffo: async () => false,
+      waffoPancake: async () => false,
+      nowPayments: async (amount: number, payCurrency: string) => {
+        calls.push(`nowpayments:${amount}:${payCurrency}`)
+        return true
+      },
+    }
+    const method = { name: 'USDT / USDC', type: PAYMENT_TYPES.NOWPAYMENTS }
+
+    expect(
+      await dispatchSelectedPayment(method, 100, null, processors, null)
+    ).toBe(false)
+    expect(
+      await dispatchSelectedPayment(method, 100, null, processors, 'usdttrc20')
+    ).toBe(true)
+    expect(calls).toEqual(['nowpayments:100:usdttrc20'])
   })
 })

@@ -291,6 +291,16 @@ func UpdateOption(c *gin.Context) {
 			common.ApiError(c, err)
 			return
 		}
+	case "NowPaymentsPayCurrencies":
+		if _, err := setting.ParseNowPaymentsPayCurrencies(option.Value.(string)); err != nil {
+			common.ApiErrorT(c, "Unsupported NOWPayments currency. Only the listed USDT and USDC networks are accepted.")
+			return
+		}
+	case "NowPaymentsFeishuWebhook":
+		if err := service.ValidateFeishuBotWebhook(option.Value.(string)); err != nil {
+			common.ApiErrorT(c, "Enter a Feishu or Lark custom bot webhook, starting with https://open.feishu.cn/open-apis/bot/v2/hook/.")
+			return
+		}
 	case operation_setting.ToolPriceOptionKey:
 		err = operation_setting.ValidateToolPricesJSON(option.Value.(string))
 		if err != nil {

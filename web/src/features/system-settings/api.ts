@@ -58,6 +58,13 @@ export async function updatePasskeyDomains(
   return res.data
 }
 
+export async function testNowPaymentsFeishu() {
+  const res = await api.post<{ success: boolean; message: string }>(
+    '/api/option/nowpayments/feishu-test'
+  )
+  return res.data
+}
+
 export async function confirmPaymentCompliance() {
   const res = await api.post<ConfirmPaymentComplianceResponse>(
     '/api/option/payment_compliance',
