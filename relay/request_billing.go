@@ -23,6 +23,7 @@ import (
 // provide the current request body through BodyStorage or BillingRequestInput;
 // channel retries retain the resulting billing session and pricing snapshot.
 func PrepareRequestBilling(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
+	stopEstimate := service.TimePreChannel(c, service.PreChannelBillingEstimate)
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	meta := &types.TokenCountMeta{TokenType: types.TokenTypeTokenizer}
 	if info.Request != nil && (needSensitiveCheck || constant.CountToken) {
@@ -51,11 +52,13 @@ func PrepareRequestBilling(c *gin.Context, info *relaycommon.RelayInfo) *types.N
 	}
 
 	tokens, err := service.EstimateRequestToken(c, meta, info)
+	stopEstimate()
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeCountTokenFailed)
 	}
 	info.SetEstimatePromptTokens(tokens)
 
+	defer service.TimePreChannel(c, service.PreChannelBillingReserve)()
 	priceData, err := helper.ModelPriceHelper(c, info, tokens, meta)
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest))

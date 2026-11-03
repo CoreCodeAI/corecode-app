@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -321,27 +322,22 @@ func getModelFromJSONBody(c *gin.Context) (*ModelRequest, error) {
 	}, nil
 }
 
+// countTopLevelJSONKey counts the members of the top-level object named target.
+// It crosses a string with bytes.IndexByte instead of byte by byte: a Claude
+// Code body is mostly base64 strings of hundreds of kilobytes.
 func countTopLevelJSONKey(data []byte, target string) int {
 	depth := 0
-	inString := false
-	escaped := false
-	stringStart := 0
 	expectingKey := false
 	count := 0
-	for index, current := range data {
-		if inString {
-			if escaped {
-				escaped = false
-				continue
+	for index := 0; index < len(data); index++ {
+		switch data[index] {
+		case '"':
+			stringStart := index + 1
+			end := jsonStringEnd(data, stringStart)
+			if end < 0 {
+				return count
 			}
-			if current == '\\' {
-				escaped = true
-				continue
-			}
-			if current != '"' {
-				continue
-			}
-			inString = false
+			index = end
 			if depth == 1 && expectingKey {
 				key := string(data[stringStart:index])
 				var decodedKey string
@@ -357,12 +353,6 @@ func countTopLevelJSONKey(data []byte, target string) int {
 				}
 				expectingKey = false
 			}
-			continue
-		}
-		switch current {
-		case '"':
-			inString = true
-			stringStart = index + 1
 		case '{':
 			depth++
 			if depth == 1 {
@@ -377,6 +367,27 @@ func countTopLevelJSONKey(data []byte, target string) int {
 		}
 	}
 	return count
+}
+
+// jsonStringEnd returns the index of the quote that closes the string whose
+// content starts at from, or -1 when it never closes. A quote closes the string
+// unless an odd number of backslashes precede it.
+func jsonStringEnd(data []byte, from int) int {
+	for search := from; ; {
+		next := bytes.IndexByte(data[search:], '"')
+		if next < 0 {
+			return -1
+		}
+		end := search + next
+		backslashes := 0
+		for p := end - 1; p >= from && data[p] == '\\'; p-- {
+			backslashes++
+		}
+		if backslashes%2 == 0 {
+			return end
+		}
+		search = end + 1
+	}
 }
 
 func getJSONStringValue(result gjson.Result, field string) (string, error) {

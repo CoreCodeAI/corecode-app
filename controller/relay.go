@@ -120,8 +120,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 	}()
 
+	stopParse := service.TimePreChannel(c, service.PreChannelParse)
 	request, err := helper.GetAndValidateRequest(c, relayFormat)
 	if err != nil {
+		stopParse()
 		// Map "request body too large" to 413 so clients can handle it correctly
 		if common.IsRequestBodyTooLargeError(err) || errors.Is(err, common.ErrRequestBodyTooLarge) {
 			newAPIError = types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, http.StatusRequestEntityTooLarge, types.ErrOptionWithSkipRetry())
@@ -132,6 +134,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	relayInfo, err := relaycommon.GenRelayInfo(c, relayFormat, request, ws)
+	stopParse()
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)
 		return
@@ -151,7 +154,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 	}()
 
-	if newAPIError = service.CheckRiskGate(c, relayInfo); newAPIError != nil {
+	stopRiskGate := service.TimePreChannel(c, service.PreChannelRiskGate)
+	newAPIError = service.CheckRiskGate(c, relayInfo)
+	stopRiskGate()
+	if newAPIError != nil {
 		return
 	}
 
@@ -183,7 +189,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		relayInfo.PerformanceBusinessRejection = false
 		relayInfo.PerformanceOutputTokens = 0
 		relayInfo.RetryIndex = retryParam.GetRetry()
+		stopSelect := service.TimePreChannel(c, service.PreChannelSelect)
 		channel, channelErr := getChannel(c, relayInfo, retryParam)
+		stopSelect()
 		if channelErr != nil {
 			logger.LogError(c, channelErr.Error())
 			newAPIError = channelErr

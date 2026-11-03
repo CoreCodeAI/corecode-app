@@ -109,7 +109,7 @@ func (c *ClaudeMediaMessage) SetContent(content any) {
 }
 
 func (c *ClaudeMediaMessage) ParseMediaContent() []ClaudeMediaMessage {
-	mediaContent, _ := kitutil.Any2Type[[]ClaudeMediaMessage](c.Content)
+	mediaContent, _ := parseClaudeMedia(c.Content)
 	return mediaContent
 }
 
@@ -185,7 +185,7 @@ func (c *ClaudeMessage) SetContent(content any) {
 }
 
 func (c *ClaudeMessage) ParseContent() ([]ClaudeMediaMessage, error) {
-	return kitutil.Any2Type[[]ClaudeMediaMessage](c.Content)
+	return parseClaudeMedia(c.Content)
 }
 
 type Tool struct {
