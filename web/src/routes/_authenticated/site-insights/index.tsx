@@ -39,6 +39,8 @@ const siteInsightsSearchSchema = z.object({
     .optional()
     .catch(undefined),
   days: z.number().int().positive().optional().catch(undefined),
+  // The quality tab's model filter; every model when absent.
+  models: z.array(z.string()).max(100).optional().catch(undefined),
   // The pool tab's provider; Claude when absent.
   provider: z
     .enum(['claude', 'codex', 'grok', 'gemini'])

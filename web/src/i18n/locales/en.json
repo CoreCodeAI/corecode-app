@@ -7404,7 +7404,6 @@
     "Colored above 2%; red above 5%.": "Colored above 2%; red above 5%.",
     "Colored above 10 seconds.": "Colored above 10 seconds.",
     "Highest failure rate: {{model}} at {{rate}}.": "Highest failure rate: {{model}} at {{rate}}.",
-    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. A dash means nothing was measured.": "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. A dash means nothing was measured.",
     "Worst day {{day}}: {{rate}} of {{count}} requests.": "Worst day {{day}}: {{rate}} of {{count}} requests.",
     "{{inviters}} inviters brought {{invitees}} invitees": "{{inviters}} inviters brought {{invitees}} invitees",
     "Colored above 30%, where commission eats the margin.": "Colored above 30%, where commission eats the margin.",
@@ -7693,6 +7692,11 @@
     "Measured ÷ converted": "Measured ÷ converted",
     "{{count}} requests over the last 7 days had no gpt-load price and are not in its spend.": "{{count}} requests over the last 7 days had no gpt-load price and are not in its spend.",
     "{{provider}} gpt-load spend by hour, last 48 hours": "{{provider}} gpt-load spend by hour, last 48 hours",
-    "The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here.": "The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here."
+    "The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here.": "The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here.",
+    "GPT": "GPT",
+    "Filter by model": "Filter by model",
+    "All {{vendor}} models": "All {{vendor}} models",
+    "The cards and daily charts cover the selected models. The table, status codes, failure reasons and stream ends cover every model.": "The cards and daily charts cover the selected models. The table, status codes, failure reasons and stream ends cover every model.",
+    "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.": "Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured."
   }
 }

@@ -70,13 +70,15 @@ export const VIEW_MAX_DAYS: Record<InsightsView, number> = {
 
 export async function getInsights<V extends InsightsView>(
   view: V,
-  range: InsightsRange
+  range: InsightsRange,
+  models: string[] = []
 ): Promise<InsightsByView[V]> {
   const res = await api.get<ApiResponse<InsightsByView[V]>>(
     `/api/site-insights/${view}`,
     {
       params: {
         ...range,
+        ...(models.length > 0 && { models: models.join(',') }),
         // Minutes east of UTC, so days split at the viewer's midnight.
         tz_offset: -new Date().getTimezoneOffset(),
       },

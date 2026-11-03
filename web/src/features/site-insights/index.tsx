@@ -89,21 +89,34 @@ export function SiteInsights() {
   const queryClient = useQueryClient()
   const viewDays = (view: InsightsView) =>
     Math.min(search.days ?? 7, VIEW_MAX_DAYS[view])
-  const insightsQuery = (view: InsightsView) => {
+  // Only the quality view takes the model filter. The overview reads it
+  // unfiltered, so its figures do not follow a filter set on another tab.
+  const models = search.models ?? []
+  const filterOf = (view: InsightsView, filtered: boolean) =>
+    view === 'quality' && filtered ? models : []
+  const insightsQuery = (view: InsightsView, filtered = true) => {
     const range = { start_time: now - viewDays(view) * 86400, end_time: now }
+    const only = filterOf(view, filtered)
     return {
-      queryKey: ['site-insights', view, range],
-      queryFn: () => getInsights(view, range),
+      queryKey: ['site-insights', view, range, ...(only.length ? [only] : [])],
+      queryFn: () => getInsights(view, range, only),
       // A tab prefetched on hover is still fresh when it opens.
       staleTime: 30_000,
     }
   }
-  const previousQuery = (view: InsightsView) => {
+  const previousQuery = (view: InsightsView, filtered = true) => {
     const span = viewDays(view) * 86400
     const range = { start_time: now - 2 * span, end_time: now - span }
+    const only = filterOf(view, filtered)
     return {
-      queryKey: ['site-insights', view, 'previous', range],
-      queryFn: () => getInsights(view, range),
+      queryKey: [
+        'site-insights',
+        view,
+        'previous',
+        range,
+        ...(only.length ? [only] : []),
+      ],
+      queryFn: () => getInsights(view, range, only),
       staleTime: PREVIOUS_STALE_MS,
     }
   }
@@ -280,6 +293,16 @@ export function SiteInsights() {
               view={view}
               data={query.data}
               previous={previous.data}
+              models={{
+                selected: models,
+                onChange: (next) =>
+                  navigate({
+                    search: (prev) => ({
+                      ...prev,
+                      models: next.length > 0 ? next : undefined,
+                    }),
+                  }),
+              }}
               pool={{
                 provider,
                 onProvider: (next) =>
@@ -295,8 +318,8 @@ export function SiteInsights() {
             />
           ) : (
             <OverviewTab
-              current={insightsQuery}
-              previous={previousQuery}
+              current={(next) => insightsQuery(next, false)}
+              previous={(next) => previousQuery(next, false)}
               refreshMs={REFRESH_MS}
               onOpen={(next) =>
                 navigate({ search: (prev) => ({ ...prev, tab: next }) })
@@ -313,6 +336,7 @@ function InsightsView(props: {
   view: InsightsView
   data: unknown
   previous: unknown
+  models: { selected: string[]; onChange: (models: string[]) => void }
   pool: {
     provider: PoolProvider
     onProvider: (provider: PoolProvider) => void
@@ -335,7 +359,13 @@ function InsightsView(props: {
     case 'activity':
       return <ActivityTab data={props.data as never} previous={previous} />
     case 'quality':
-      return <QualityTab data={props.data as never} previous={previous} />
+      return (
+        <QualityTab
+          data={props.data as never}
+          previous={previous}
+          models={props.models}
+        />
+      )
     case 'business':
       return <BusinessTab data={props.data as never} previous={previous} />
     case 'pool':

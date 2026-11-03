@@ -18,6 +18,17 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
 import { failureTone, SMALL_SAMPLE, useInsightsFormat } from '../lib'
@@ -40,9 +51,119 @@ const RATE_TONES: Record<Tone, string> = {
   danger: 'text-destructive font-medium',
 }
 
+/**
+ * Picks the models the quality figures cover. The options are the table's
+ * models, which the filter does not narrow; a selected model with no traffic
+ * in the range stays listed so it can be cleared.
+ */
+function ModelFilter(props: {
+  options?: QualityInsights['models']
+  selected: string[]
+  onChange: (models: string[]) => void
+}) {
+  const { t } = useTranslation()
+  const rows = props.options ?? []
+  const names = [
+    ...rows.map((row) => row.model),
+    ...props.selected.filter((name) => !rows.some((row) => row.model === name)),
+  ]
+  const vendorLabels: Record<string, string> = {
+    claude: t('Claude'),
+    codex: t('GPT'),
+    grok: t('Grok'),
+    gemini: t('Gemini'),
+    other: t('Other'),
+  }
+  const vendors = Object.keys(vendorLabels).filter((vendor) =>
+    rows.some((row) => row.vendor === vendor)
+  )
+  const toggle = (name: string, on: boolean) =>
+    props.onChange(
+      on
+        ? [...props.selected, name]
+        : props.selected.filter((item) => item !== name)
+    )
+  let label = t('All models')
+  if (props.selected.length === 1) {
+    label = props.selected[0]
+  } else if (props.selected.length > 1) {
+    label = t('{{count}} models', { count: props.selected.length })
+  }
+
+  return (
+    <div className='flex flex-wrap items-center gap-2'>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant='outline'
+              size='sm'
+              className='max-w-full min-w-0 justify-start font-mono text-xs'
+              aria-label={t('Filter by model')}
+            />
+          }
+        >
+          <span className='truncate'>{label}</span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align='start'
+          className='max-h-80 w-64 overflow-y-auto'
+        >
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>{t('Filter by model')}</DropdownMenuLabel>
+            <DropdownMenuItem
+              closeOnClick={false}
+              disabled={props.selected.length === 0}
+              onClick={() => props.onChange([])}
+            >
+              {t('All models')}
+            </DropdownMenuItem>
+            {vendors.map((vendor) => (
+              <DropdownMenuItem
+                key={vendor}
+                closeOnClick={false}
+                onClick={() =>
+                  props.onChange(
+                    rows
+                      .filter((row) => row.vendor === vendor)
+                      .map((row) => row.model)
+                  )
+                }
+              >
+                {t('All {{vendor}} models', { vendor: vendorLabels[vendor] })}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            {names.map((name) => (
+              <DropdownMenuCheckboxItem
+                key={name}
+                className='font-mono text-xs'
+                checked={props.selected.includes(name)}
+                onCheckedChange={(on) => toggle(name, !!on)}
+              >
+                {name}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {props.selected.length > 0 && (
+        <span className='text-muted-foreground text-xs'>
+          {t(
+            'The cards and daily charts cover the selected models. The table, status codes, failure reasons and stream ends cover every model.'
+          )}
+        </span>
+      )}
+    </div>
+  )
+}
+
 export function QualityTab(props: {
   data: QualityInsights | undefined
   previous?: QualityInsights
+  models: { selected: string[]; onChange: (models: string[]) => void }
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -63,6 +184,11 @@ export function QualityTab(props: {
 
   return (
     <div className='grid gap-4'>
+      <ModelFilter
+        options={data?.models}
+        selected={props.models.selected}
+        onChange={props.models.onChange}
+      />
       <MetricGrid
         loading={!data}
         items={[
@@ -138,14 +264,18 @@ export function QualityTab(props: {
             : undefined
         }
         help={t(
-          'Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. A dash means nothing was measured.'
+          'Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.'
         )}
       >
         <SimpleTable
           rows={data?.models}
           rowKey={(row) => row.model}
           empty={t('No requests in this range')}
-          faded={(row) => row.requests < SMALL_SAMPLE}
+          faded={(row) =>
+            row.requests < SMALL_SAMPLE ||
+            (props.models.selected.length > 0 &&
+              !props.models.selected.includes(row.model))
+          }
           columns={[
             {
               key: 'model',
