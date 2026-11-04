@@ -180,7 +180,7 @@ test.each([
       matched_tier: 'standard',
       expr_b64: btoa('tier("standard", p * 2 + c * 10)'),
     },
-    expected: 'standard · $2 / $10/M',
+    expected: 'Standard · $2 / $10/M',
   },
   {
     name: 'per-call',
@@ -211,13 +211,13 @@ test.each([
     tier: 'standard',
     billingUnit: 'token' as const,
     fixedPrice: undefined,
-    expected: 'Dynamic Pricing · standard',
+    expected: 'Dynamic Pricing · Standard',
   },
   {
     tier: 'long_context',
     billingUnit: 'token' as const,
     fixedPrice: undefined,
-    expected: 'Dynamic Pricing · long_context',
+    expected: 'Dynamic Pricing · Long context',
   },
   {
     tier: 'free_small_output',
@@ -501,3 +501,34 @@ test.each(['missing schema', 'unsupported expression', 'unknown tier'])(
     )
   }
 )
+
+test.each([
+  { tier: 'standard', english: 'Standard', chinese: '标准' },
+  { tier: 'long_context', english: 'Long context', chinese: '长上下文' },
+])(
+  'names the $tier context tier in the interface language',
+  async ({ tier, english, chinese }) => {
+    i18n.addResourceBundle('zh', 'translation', zh.translation)
+    const preview = renderPreview({
+      billing_mode: 'tiered_expr',
+      matched_tier: tier,
+      expr_b64: btoa(
+        'len <= 100000 ? tier("standard", p * 0.1 + c * 0.5) : tier("long_context", p * 0.5 + c * 2.5)'
+      ),
+    })
+    expect(preview.textContent).toMatch(new RegExp(`^${english} · \\$`))
+    await act(() => i18n.changeLanguage('zh'))
+    expect(
+      screen.getByRole('button', { name: new RegExp(`^${chinese} · \\$`) })
+    ).toBeVisible()
+  }
+)
+
+test('keeps a tier name the billing expression made up', () => {
+  const preview = renderPreview({
+    billing_mode: 'tiered_expr',
+    matched_tier: 'night_rate',
+    expr_b64: btoa('tier("night_rate", p * 0.1 + c * 0.5)'),
+  })
+  expect(preview.textContent).toMatch(/^night_rate · \$/)
+})

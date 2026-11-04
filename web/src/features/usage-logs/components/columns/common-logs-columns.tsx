@@ -39,6 +39,7 @@ import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 import {
   normalizeTierLabel,
   parseTaskTiersFromExpr,
+  tierDisplayLabel,
 } from '@/features/pricing/lib/billing-expr'
 import {
   formatTaskUsageUnitPrice,
@@ -220,11 +221,11 @@ function buildTypeDetailSegments(
         )
       }
       segments.push({
-        text: `${tier.label || t('Default')} · ${prices.join(' · ')}`,
+        text: `${tierDisplayLabel(tier.label, t) || t('Default')} · ${prices.join(' · ')}`,
       })
     } else {
       segments.push({
-        text: `${t('Dynamic Pricing')} · ${other.matched_tier || t('Special billing expression')}`,
+        text: `${t('Dynamic Pricing')} · ${tierDisplayLabel(other.matched_tier, t) || t('Special billing expression')}`,
         muted: true,
       })
     }
@@ -234,7 +235,8 @@ function buildTypeDetailSegments(
         .filter((entry) => ['inputPrice', 'outputPrice'].includes(entry.field))
         .map((entry) => formatPriceCompact(entry.price))
       if (baseEntries.length > 0) {
-        const tierLabel = tieredSummary.tier.label || t('Default')
+        const tierLabel =
+          tierDisplayLabel(tieredSummary.tier.label, t) || t('Default')
         segments.push({
           text: `${tierLabel} · ${formatPriceList(baseEntries, true)}`,
         })
@@ -273,7 +275,7 @@ function buildTypeDetailSegments(
         )
         .map((entry) =>
           entry.unit
-            ? `${tieredSummary.tier.label || t('Default')} · ${t(entry.shortLabel)} ${formatPriceCompact(entry.price)}/${t(entry.unit)}`
+            ? `${tierDisplayLabel(tieredSummary.tier.label, t) || t('Default')} · ${t(entry.shortLabel)} ${formatPriceCompact(entry.price)}/${t(entry.unit)}`
             : `${t(entry.shortLabel)} ${formatPrice(entry.price)}`
         )
       if (otherEntries.length > 0) {
@@ -284,7 +286,7 @@ function buildTypeDetailSegments(
       }
     } else {
       segments.push({
-        text: `${t('Dynamic Pricing')} · ${other.matched_tier || t('Special billing expression')}`,
+        text: `${t('Dynamic Pricing')} · ${tierDisplayLabel(other.matched_tier, t) || t('Special billing expression')}`,
         muted: true,
       })
     }

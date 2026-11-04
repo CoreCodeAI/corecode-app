@@ -7761,6 +7761,7 @@
     "USDT / USDC network": "Réseau USDT / USDC",
     "Pay with USDT / USDC": "Payer en USDT / USDC",
     "About ${{amount}} in USDT or USDC at the site exchange rate.": "Environ ${{amount}} en USDT ou USDC au taux de change du site.",
-    "{{credit}} credit = {{money}}": "{{credit}} de crédit = {{money}}"
+    "{{credit}} credit = {{money}}": "{{credit}} de crédit = {{money}}",
+    "Long context": "Contexte long"
   }
 }

@@ -66,7 +66,7 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import { useBillingTime } from '../hooks/use-billing-time'
 import { usePricingData } from '../hooks/use-pricing-data'
-import type { ParsedTaskTier } from '../lib/billing-expr'
+import { type ParsedTaskTier, tierDisplayLabel } from '../lib/billing-expr'
 import { formatBillingCondition } from '../lib/billing-expression/condition-display'
 import {
   formatTaskUsageUnitPrice,
@@ -1244,9 +1244,11 @@ function ProviderGroupPricingSection(
                                 )
                               }
                               if (tier.conditionText) {
-                                return `${tier.label}: ${formatBillingCondition(tier.conditionText, t, i18n.language) ?? tier.conditionText}`
+                                return `${tierDisplayLabel(tier.label, t)}: ${formatBillingCondition(tier.conditionText, t, i18n.language) ?? tier.conditionText}`
                               }
-                              return tier.label || t('Default')
+                              return (
+                                tierDisplayLabel(tier.label, t) || t('Default')
+                              )
                             },
                           },
                         ]),
