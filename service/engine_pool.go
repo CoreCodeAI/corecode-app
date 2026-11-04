@@ -20,21 +20,35 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+// EngineQuotaWindow is a provider-reported window, independent of Claude's
+// admission budgets and calibrated dollar capacity. Utilization is a ratio;
+// nil means there is no usage reading, not an unused window.
+type EngineQuotaWindow struct {
+	ID           string   `json:"id"`
+	Label        string   `json:"label"`
+	Scope        string   `json:"scope"`
+	Utilization  *float64 `json:"utilization"`
+	ResetAtMS    *int64   `json:"reset_at_ms"`
+	ObservedAtMS *int64   `json:"observed_at_ms"`
+	State        string   `json:"state"`
+}
+
 // EngineAccount is one subscription account of corecode-engine's pool as the
 // root dashboard shows it. Usage is in percent; the email is masked here.
 type EngineAccount struct {
-	CredentialID  int     `json:"credential_id"`
-	GroupID       int     `json:"group_id"`
-	Group         string  `json:"group"`
-	EmailMask     string  `json:"email_mask"`
-	Plan          string  `json:"plan"`
-	Tier          string  `json:"tier"`
-	Status        string  `json:"status"`
-	FiveHour      float64 `json:"five_hour"`
-	SevenDay      float64 `json:"seven_day"`
-	FiveHourReset int64   `json:"five_hour_reset_ms"`
-	SevenDayReset int64   `json:"seven_day_reset_ms"`
-	CooldownUntil int64   `json:"cooldown_until_ms"`
+	CredentialID  int                 `json:"credential_id"`
+	GroupID       int                 `json:"group_id"`
+	Group         string              `json:"group"`
+	EmailMask     string              `json:"email_mask"`
+	Plan          string              `json:"plan"`
+	Tier          string              `json:"tier"`
+	Status        string              `json:"status"`
+	FiveHour      float64             `json:"five_hour"`
+	SevenDay      float64             `json:"seven_day"`
+	FiveHourReset int64               `json:"five_hour_reset_ms"`
+	SevenDayReset int64               `json:"seven_day_reset_ms"`
+	QuotaWindows  []EngineQuotaWindow `json:"quota_windows"`
+	CooldownUntil int64               `json:"cooldown_until_ms"`
 	// Eligible reports an available account in an enabled group: the engine
 	// already marks an account over a quota budget, so this is what its
 	// scheduler may send requests to.
@@ -191,11 +205,12 @@ type engineGroup struct {
 			Plan       string `json:"plan"`
 			Tier       string `json:"tier"`
 			// An engine before the subscription fields sends none of these.
-			Organization            string `json:"organization"`
-			OrganizationUUID        string `json:"organization_uuid"`
-			SubscriptionStatus      string `json:"subscription_status"`
-			SubscriptionState       string `json:"subscription_state"`
-			SubscriptionPeriodEndMS *int64 `json:"subscription_period_end_ms"`
+			Organization            string              `json:"organization"`
+			OrganizationUUID        string              `json:"organization_uuid"`
+			SubscriptionStatus      string              `json:"subscription_status"`
+			SubscriptionState       string              `json:"subscription_state"`
+			SubscriptionPeriodEndMS *int64              `json:"subscription_period_end_ms"`
+			Windows                 []EngineQuotaWindow `json:"windows"`
 		} `json:"account"`
 	} `json:"credentials"`
 }
@@ -466,6 +481,7 @@ func readEnginePool(base, key string) EnginePool {
 				Active:        credential.Active,
 				Sessions:      credential.Sessions,
 			}
+			account.QuotaWindows = []EngineQuotaWindow{}
 			if observed := credential.Account; observed != nil {
 				if observed.Email != "" {
 					account.EmailMask = maskEmail(observed.Email)
@@ -481,6 +497,9 @@ func readEnginePool(base, key string) EnginePool {
 				account.SubscriptionState = observed.SubscriptionState
 				account.SubscriptionPeriodEnd = deref(observed.SubscriptionPeriodEndMS)
 				account.Observation, account.ObservedAt = observed.State, deref(observed.ObservedAt)
+				if observed.Windows != nil {
+					account.QuotaWindows = observed.Windows
+				}
 			}
 			if activity := credential.Activity; activity != nil {
 				account.Successes, account.Failures = activity.SuccessCount, activity.FailureCount

@@ -7706,7 +7706,7 @@
     "Measured ÷ converted": "実測値 ÷ 換算額",
     "{{count}} requests over the last 7 days had no gpt-load price and are not in its spend.": "直近 7 日間の {{count}} 件のリクエストに gpt-load の価格がなく、消費額には含まれていません。",
     "{{provider}} gpt-load spend by hour, last 48 hours": "{{provider}} の時間別 gpt-load 消費額（過去 48 時間）",
-    "The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here.": "エンジンがクォータを推定するのは Claude アカウントのみのため、{{provider}} のプールが需要に追いついているかはここでは判断しません。",
+    "Dollar capacity is estimated for Claude only. Provider-reported quota percentages appear in the account table; whether the {{provider}} pool keeps up is not judged here.": "ドル建ての容量推定は Claude のみです。アカウント表にはプロバイダーが報告した残りのクォータ割合を表示します。{{provider}} のプールが需要に追いつくかはここでは判断しません。",
     "GPT": "GPT",
     "Filter by model": "モデルで絞り込み",
     "All {{vendor}} models": "すべての {{vendor}} モデル",

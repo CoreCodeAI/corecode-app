@@ -7706,7 +7706,7 @@
     "Measured ÷ converted": "Measured ÷ converted",
     "{{count}} requests over the last 7 days had no gpt-load price and are not in its spend.": "{{count}} requests over the last 7 days had no gpt-load price and are not in its spend.",
     "{{provider}} gpt-load spend by hour, last 48 hours": "{{provider}} gpt-load spend by hour, last 48 hours",
-    "The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here.": "The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here.",
+    "Dollar capacity is estimated for Claude only. Provider-reported quota percentages appear in the account table; whether the {{provider}} pool keeps up is not judged here.": "La capacité en dollars est estimée uniquement pour Claude. Le tableau des comptes affiche les pourcentages de quota restant indiqués par le fournisseur ; la capacité du pool {{provider}} à répondre à la demande n’est pas évaluée ici.",
     "GPT": "GPT",
     "Filter by model": "Filter by model",
     "All {{vendor}} models": "All {{vendor}} models",

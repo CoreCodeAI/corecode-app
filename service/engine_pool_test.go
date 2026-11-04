@@ -190,6 +190,62 @@ func TestEnginePoolListsClaudeFirst(t *testing.T) {
 	assert.Equal(t, []int{21, 22, 41, 11, 31}, accounts, "accounts follow their groups")
 }
 
+func TestEnginePoolKeepsProviderQuotaWindowsWithoutDollarEstimate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/group-concurrency" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte(`{"code":0,"data":{"groups":[
+			{"id":11,"channel_id":"codex","enabled":true,"quota_supported":false,"credentials":[
+				{"id":5012,"status":"available","account":{"state":"fresh","windows":[
+					{"id":"primary","label":"7d","scope":"account","utilization":0.02,"reset_at_ms":1794378753000,"observed_at_ms":1793775167746,"state":"available"},
+					{"id":"spark-primary","label":"5h","scope":"Spark","utilization":0,"state":"available"},
+					{"id":"review","label":"Code review","scope":"account","utilization":null,"reset_at_ms":1794378753000,"state":"unavailable"},
+					{"id":"secondary","label":"7d","scope":"Spark","utilization":1,"state":"exhausted"}
+				]}},
+				{"id":5013,"status":"available","account":null}
+			]}
+		]}}`))
+	}))
+	defer server.Close()
+
+	pool := readEnginePool(server.URL, "quota-windows")
+	require.Empty(t, pool.Error)
+	require.NotEmpty(t, pool.EstimateError)
+	encoded, err := common.Marshal(pool)
+	require.NoError(t, err)
+	var payload struct {
+		Accounts []struct {
+			QuotaWindows []struct {
+				ID, Label, Scope, State string
+				Utilization             *float64
+				ResetAtMS               *int64 `json:"reset_at_ms"`
+				ObservedAtMS            *int64 `json:"observed_at_ms"`
+			} `json:"quota_windows"`
+		} `json:"accounts"`
+	}
+	require.NoError(t, common.Unmarshal(encoded, &payload))
+	require.Len(t, payload.Accounts, 2)
+	windows := payload.Accounts[0].QuotaWindows
+	require.Len(t, windows, 4, "provider quotas are independent of Claude's budget and dollar estimate")
+	assert.Equal(t, "primary", windows[0].ID)
+	assert.Equal(t, "7d", windows[0].Label, "a Codex primary window is not necessarily five hours")
+	assert.Equal(t, "account", windows[0].Scope)
+	require.NotNil(t, windows[0].Utilization)
+	assert.Equal(t, 0.02, *windows[0].Utilization)
+	require.NotNil(t, windows[0].ResetAtMS)
+	assert.EqualValues(t, 1794378753000, *windows[0].ResetAtMS)
+	require.NotNil(t, windows[0].ObservedAtMS)
+	assert.EqualValues(t, 1793775167746, *windows[0].ObservedAtMS)
+	require.NotNil(t, windows[1].Utilization)
+	assert.Zero(t, *windows[1].Utilization)
+	assert.Equal(t, "Spark", windows[1].Scope)
+	assert.Nil(t, windows[2].Utilization, "missing usage must not become zero usage")
+	assert.Equal(t, "exhausted", windows[3].State)
+	assert.Empty(t, payload.Accounts[1].QuotaWindows)
+}
+
 func TestSetEngineSubscriptionRenewal(t *testing.T) {
 	var gotMethod, gotPath, gotAuth string
 	var gotBody map[string]string

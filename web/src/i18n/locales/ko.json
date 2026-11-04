@@ -7706,7 +7706,7 @@
     "Measured ÷ converted": "측정값 ÷ 환산값",
     "{{count}} requests over the last 7 days had no gpt-load price and are not in its spend.": "최근 7일 동안 gpt-load 가격이 없는 요청 {{count}}건은 지출에 포함되지 않았습니다.",
     "{{provider}} gpt-load spend by hour, last 48 hours": "{{provider}} gpt-load 시간별 지출, 최근 48시간",
-    "The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here.": "엔진은 Claude 계정에 대해서만 한도를 추정하므로 {{provider}} 풀이 수요를 따라가는지는 여기서 판단하지 않습니다.",
+    "Dollar capacity is estimated for Claude only. Provider-reported quota percentages appear in the account table; whether the {{provider}} pool keeps up is not judged here.": "달러 기준 용량은 Claude에 대해서만 추정합니다. 계정 표에는 공급자가 보고한 남은 한도 비율이 표시되며, {{provider}} 풀이 수요를 충족하는지는 여기서 판단하지 않습니다.",
     "GPT": "GPT",
     "Filter by model": "모델별 필터",
     "All {{vendor}} models": "모든 {{vendor}} 모델",

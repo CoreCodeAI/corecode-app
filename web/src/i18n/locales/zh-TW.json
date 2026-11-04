@@ -7706,7 +7706,7 @@
     "Measured ÷ converted": "實測÷折算",
     "{{count}} requests over the last 7 days had no gpt-load price and are not in its spend.": "最近 7 天有 {{count}} 個請求在 gpt-load 沒有價格，沒有計入它的消耗。",
     "{{provider}} gpt-load spend by hour, last 48 hours": "{{provider}} 過去 48 小時每小時的 gpt-load 消耗",
-    "The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here.": "引擎只測算 Claude 帳號的額度，所以這裡不判斷 {{provider}} 號池夠不夠。",
+    "Dollar capacity is estimated for Claude only. Provider-reported quota percentages appear in the account table; whether the {{provider}} pool keeps up is not judged here.": "美元容量僅對 Claude 估算。帳號表顯示上游回報的剩餘額度百分比；這裡不判斷 {{provider}} 號池夠不夠。",
     "GPT": "GPT",
     "Filter by model": "依模型篩選",
     "All {{vendor}} models": "全部 {{vendor}} 模型",

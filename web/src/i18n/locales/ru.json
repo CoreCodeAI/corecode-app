@@ -7706,7 +7706,7 @@
     "Measured ÷ converted": "Измерено ÷ пересчитано",
     "{{count}} requests over the last 7 days had no gpt-load price and are not in its spend.": "Запросов за последние 7 дней без цены в gpt-load: {{count}}; в его расход они не входят.",
     "{{provider}} gpt-load spend by hour, last 48 hours": "Расход gpt-load на {{provider}} по часам, последние 48 часов",
-    "The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here.": "Движок оценивает квоту только для аккаунтов Claude, поэтому здесь не определяется, справляется ли пул {{provider}}.",
+    "Dollar capacity is estimated for Claude only. Provider-reported quota percentages appear in the account table; whether the {{provider}} pool keeps up is not judged here.": "Ёмкость в долларах оценивается только для Claude. В таблице аккаунтов показан оставшийся процент квоты по данным провайдера; здесь не оценивается, справляется ли пул {{provider}} со спросом.",
     "GPT": "GPT",
     "Filter by model": "Фильтр по модели",
     "All {{vendor}} models": "Все модели {{vendor}}",
