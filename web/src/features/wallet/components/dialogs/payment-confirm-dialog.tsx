@@ -38,10 +38,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { toIntlLocale } from '@/i18n/languages'
 import { formatLocalCurrencyAmount } from '@/lib/currency'
 
 import { DEFAULT_DISCOUNT_RATE } from '../../constants'
 import {
+  formatChargeMoney,
   formatMethodPaymentMoney,
   getPaymentIcon,
   isBonusEligiblePayment,
@@ -69,6 +71,8 @@ interface PaymentConfirmDialogProps {
   onNowPaymentsCurrencyChange?: (code: string) => void
   /** CNY per US dollar, the rate a NOWPayments price is converted at */
   paymentUsdRate?: number
+  /** CNY charged for one US dollar of credit, before any discount */
+  priceRatio?: number
 }
 
 export function PaymentConfirmDialog({
@@ -87,16 +91,18 @@ export function PaymentConfirmDialog({
   nowPaymentsCurrency = null,
   onNowPaymentsCurrencyChange,
   paymentUsdRate,
+  priceRatio = 1,
 }: PaymentConfirmDialogProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const isCrypto = isNowPaymentsPayment(paymentMethod?.type)
   const selectedCurrency = nowPaymentsCurrencies.find(
     (currency) => currency.code === nowPaymentsCurrency
   )
   const currencyLabel = (currency: NowPaymentsCurrency) =>
     `${currency.coin} · ${currency.network}`
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const formatMoney = (amount: number) =>
-    formatMethodPaymentMoney(amount, paymentMethod?.type)
+    formatMethodPaymentMoney(amount, paymentMethod?.type, locale)
   const hasDiscount = discountRate > 0 && discountRate < 1 && paymentAmount > 0
   const originalAmount = hasDiscount ? paymentAmount / discountRate : 0
   const discountAmount = hasDiscount ? originalAmount - paymentAmount : 0
@@ -174,6 +180,18 @@ export function PaymentConfirmDialog({
               </div>
             )}
           </div>
+
+          {!isCrypto && (
+            <p className='text-muted-foreground -mt-2 text-right text-xs'>
+              {t('{{credit}} credit = {{money}}', {
+                credit: formatLocalCurrencyAmount(
+                  usdExchangeRate,
+                  currencyOptions
+                ),
+                money: formatChargeMoney(priceRatio, locale),
+              })}
+            </p>
+          )}
 
           {hasDiscount && !calculating && (
             <div className='bg-muted/50 rounded-lg p-3'>

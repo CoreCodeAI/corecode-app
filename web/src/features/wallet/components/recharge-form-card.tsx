@@ -34,6 +34,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { toIntlLocale } from '@/i18n/languages'
 import { formatCurrencyFromUSD } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 
@@ -42,7 +43,7 @@ import {
   findBonusTier,
   findNextBonusTier,
   formatMethodPaymentMoney,
-  formatPaymentMoney,
+  formatChargeMoney,
   getBonusLabel,
   getDiscountLabel,
   isBonusEligiblePayment,
@@ -122,7 +123,8 @@ export function RechargeFormCard({
   onWaffoMethodSelect,
   enableWaffoPancakeTopup,
 }: RechargeFormCardProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const [localAmount, setLocalAmount] = useState(topupAmount.toString())
 
   useEffect(() => {
@@ -344,8 +346,11 @@ export function RechargeFormCard({
                                 t={t}
                                 i18nKey='Pay {{amount}} <savings>• Save {{saved}}</savings>'
                                 values={{
-                                  amount: formatPaymentMoney(actualPrice),
-                                  saved: formatPaymentMoney(savedAmount),
+                                  amount: formatChargeMoney(
+                                    actualPrice,
+                                    locale
+                                  ),
+                                  saved: formatChargeMoney(savedAmount, locale),
                                 }}
                                 components={{
                                   savings: <span className='text-green-600' />,
@@ -353,7 +358,7 @@ export function RechargeFormCard({
                               />
                             ) : (
                               t('Pay {{amount}}', {
-                                amount: formatPaymentMoney(actualPrice),
+                                amount: formatChargeMoney(actualPrice, locale),
                               })
                             )}
                           </div>
@@ -407,7 +412,8 @@ export function RechargeFormCard({
                       <span className='text-sm font-semibold'>
                         {formatMethodPaymentMoney(
                           paymentAmount,
-                          paymentAmountType
+                          paymentAmountType,
+                          locale
                         )}
                       </span>
                     )}

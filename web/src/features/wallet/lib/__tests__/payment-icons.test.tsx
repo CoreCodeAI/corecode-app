@@ -47,4 +47,15 @@ test('an admin-configured Simple Icon still resolves through the lazy icon loade
   )
   const title = await screen.findByTitle('Configured Alipay')
   expect(title.closest('svg')).toHaveClass('h-4', 'w-4')
+  expect(title.closest('svg')).toHaveStyle({
+    color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.ALIPAY],
+  })
+})
+
+test('a configured icon for a method without a brand color keeps the text color', async () => {
+  render(getPaymentIcon('custom_pay', 'h-4 w-4', 'SiAlipay', 'Custom'))
+  const title = await screen.findByTitle('Custom')
+  expect(title.closest('svg')?.getAttribute('style') ?? '').not.toContain(
+    'color'
+  )
 })

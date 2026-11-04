@@ -7760,6 +7760,7 @@
     "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.": "Cesser de transmettre les vérifications envoyées par le client d’un utilisateur, comme celle que le mode auto de Claude Code envoie avant un appel d’outil, dès que l’amont en a refusé ce nombre en 24 heures. Elles ne comptent jamais comme des violations. 0 les transmet toujours.",
     "USDT / USDC network": "Réseau USDT / USDC",
     "Pay with USDT / USDC": "Payer en USDT / USDC",
-    "About ${{amount}} in USDT or USDC at the site exchange rate.": "Environ ${{amount}} en USDT ou USDC au taux de change du site."
+    "About ${{amount}} in USDT or USDC at the site exchange rate.": "Environ ${{amount}} en USDT ou USDC au taux de change du site.",
+    "{{credit}} credit = {{money}}": "{{credit}} de crédit = {{money}}"
   }
 }

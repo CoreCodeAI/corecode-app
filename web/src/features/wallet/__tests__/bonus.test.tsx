@@ -148,3 +148,35 @@ describe('bonus in the payment confirmation', () => {
     expect(screen.queryByText('Bonus')).not.toBeInTheDocument()
   })
 })
+
+describe('the payment currency in the payment confirmation', () => {
+  function renderCharge(methodType: string) {
+    return render(
+      <PaymentConfirmDialog
+        open
+        onOpenChange={vi.fn()}
+        onConfirm={vi.fn()}
+        topupAmount={10}
+        paymentAmount={73}
+        paymentMethod={{ name: 'Pay', type: methodType }}
+        calculating={false}
+        processing={false}
+        priceRatio={7.3}
+      />
+    )
+  }
+
+  it('marks yuan as CN¥ outside Chinese and states the credit rate', () => {
+    renderCharge('alipay')
+
+    expect(screen.getByText('CN¥73')).toBeVisible()
+    expect(screen.getByText('$1 credit = CN¥7.3')).toBeVisible()
+  })
+
+  it('states no yuan rate for a USDT / USDC payment', () => {
+    renderCharge('nowpayments')
+
+    expect(screen.getByText('$73')).toBeVisible()
+    expect(screen.queryByText(/credit =/)).not.toBeInTheDocument()
+  })
+})

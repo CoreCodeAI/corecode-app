@@ -73,17 +73,34 @@ export function formatPaymentMoney(amount: number): string {
 }
 
 /**
+ * Format what a customer is about to pay in CNY, with the symbol the
+ * interface language reads unambiguously: ¥ in Chinese, CN¥ or 元 elsewhere,
+ * where a bare ¥ reads as yen. Pass the Intl locale of the interface language.
+ */
+export function formatChargeMoney(amount: number, locale?: string): string {
+  const numeric = Number(amount)
+  if (!Number.isFinite(numeric)) return '-'
+  return new Intl.NumberFormat(locale ?? 'zh-CN', {
+    style: 'currency',
+    currency: 'CNY',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: Math.abs(numeric) >= 1 ? 2 : 4,
+  }).format(numeric)
+}
+
+/**
  * Format what a payment method charges: US dollars for NOWPayments (paid in
  * USDT or USDC at one dollar each), CNY for every other method.
  */
 export function formatMethodPaymentMoney(
   amount: number,
-  paymentType: string | undefined
+  paymentType: string | undefined,
+  locale?: string
 ): string {
   if (paymentType === PAYMENT_TYPES.NOWPAYMENTS) {
     return `$${formatCurrency(amount)}`
   }
-  return formatPaymentMoney(amount)
+  return formatChargeMoney(amount, locale)
 }
 
 /**

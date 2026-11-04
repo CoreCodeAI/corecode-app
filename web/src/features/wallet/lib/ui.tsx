@@ -59,7 +59,8 @@ function normalizeHttpIconUrl(raw: string | undefined | null): string | null {
  * Get payment method icon component
  *
  * When icon is provided, render a safe http(s) image URL or resolve it as a
- * react-icons component name. Invalid configured icons intentionally render
+ * react-icons component name, colored like the built-in icon of the same
+ * payment type. Invalid configured icons intentionally render
  * nothing instead of falling back to the payment type.
  */
 export function getPaymentIcon(
@@ -84,11 +85,16 @@ export function getPaymentIcon(
     )
   }
   if (iconValue) {
+    // A configured icon name keeps the method's brand color, so naming the
+    // brand's own glyph (SiAlipay for alipay) does not render it in black.
+    const brandColor =
+      PAYMENT_ICON_COLORS[paymentType as keyof typeof PAYMENT_ICON_COLORS]
     return (
       <ReactIconByName
         name={iconValue}
         className={className}
         title={altName || paymentType || iconValue}
+        style={brandColor ? { color: brandColor } : undefined}
       />
     )
   }

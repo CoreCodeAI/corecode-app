@@ -7760,6 +7760,7 @@
     "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.": "Перестать пересылать проверки, которые отправляет клиент пользователя (например, проверку режима auto в Claude Code перед вызовом инструмента), когда вышестоящая модель отклонила столько из них за 24 часа. Они никогда не считаются нарушениями. 0 — пересылать всегда.",
     "USDT / USDC network": "Сеть USDT / USDC",
     "Pay with USDT / USDC": "Оплатить в USDT / USDC",
-    "About ${{amount}} in USDT or USDC at the site exchange rate.": "Около ${{amount}} в USDT или USDC по курсу сайта."
+    "About ${{amount}} in USDT or USDC at the site exchange rate.": "Около ${{amount}} в USDT или USDC по курсу сайта.",
+    "{{credit}} credit = {{money}}": "{{credit}} кредитов = {{money}}"
   }
 }

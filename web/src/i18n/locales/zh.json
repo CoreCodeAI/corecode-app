@@ -6220,7 +6220,7 @@
     "Top-up Records": "充值记录",
     "Top-up revenue": "充值总额",
     "Topped up {{quota}} with a redemption code, code ID {{id}}": "通过兑换码充值 {{quota}}，兑换码ID {{id}}",
-    "Topup Amount": "充值金额",
+    "Topup Amount": "充值额度",
     "Total": "总计",
     "Total = used + remaining. It is not an initial allocation or a periodic budget; changing the remaining quota changes the total and percentage.": "总额度 = 已用 + 剩余，并非初始额度或周期预算。修改剩余额度会改变总额度和已用比例。",
     "Total Allocated": "总分配",
@@ -7760,6 +7760,7 @@
     "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.": "客户的客户端检查请求（如 Claude Code auto 模式在调用工具前发出的检查）24 小时内被上游拒绝达到此次数后，不再转发这类请求。它们从不计入违规。0 表示始终转发。",
     "USDT / USDC network": "USDT / USDC 网络",
     "Pay with USDT / USDC": "用 USDT / USDC 支付",
-    "About ${{amount}} in USDT or USDC at the site exchange rate.": "按站内汇率约合 ${{amount}} 的 USDT 或 USDC。"
+    "About ${{amount}} in USDT or USDC at the site exchange rate.": "按站内汇率约合 ${{amount}} 的 USDT 或 USDC。",
+    "{{credit}} credit = {{money}}": "{{credit}} 额度 = {{money}}"
   }
 }

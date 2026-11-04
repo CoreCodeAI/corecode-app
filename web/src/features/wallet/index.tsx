@@ -374,6 +374,7 @@ export function Wallet(props: WalletProps) {
         nowPaymentsCurrency={nowPaymentsCurrency}
         onNowPaymentsCurrencyChange={setNowPaymentsCurrency}
         paymentUsdRate={currency?.usdExchangeRate}
+        priceRatio={(status?.price as number) || 1}
       />
 
       <BillingHistoryDialog

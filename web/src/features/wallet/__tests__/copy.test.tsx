@@ -117,10 +117,10 @@ it.each([
     expect(screen.getByPlaceholderText('最低 1')).toBeVisible()
     await act(() => i18n.changeLanguage('en'))
     expect(screen.getByRole('button', { name: /^\$100 / })).toHaveTextContent(
-      `20% OFFPay ¥${paid} • Save ¥${saved}`
+      `20% OFFPay CN¥${paid} • Save CN¥${saved}`
     )
     expect(screen.getByRole('button', { name: /^\$20 / })).toHaveTextContent(
-      `Pay ¥${full}`
+      `Pay CN¥${full}`
     )
     expect(screen.getByPlaceholderText('Minimum 1')).toBeVisible()
   }
