@@ -7608,7 +7608,7 @@
     "View refused message": "Показать отклонённое сообщение",
     "The last message the customer wrote in the refused request, up to 4 KB. The upstream judged the whole conversation, not only this message.": "Последнее сообщение клиента в отклонённом запросе, до 4 КБ. Провайдер оценивал весь диалог, а не только это сообщение.",
     "Warn-first categories": "Категории с предупреждением сначала",
-    "Refusal categories, separated by commas, whose first refusal in the counting window is only a warning: the refused conversation stays blocked, but the customer is not suspended and the warning does not count toward disabling.": "Категории отказов через запятую, для которых первый отказ в окне подсчёта — только предупреждение: отклонённый диалог остаётся заблокированным, но клиент не приостанавливается, и предупреждение не засчитывается для отключения.",
+    "Refusal categories, separated by commas, whose first refusal in the counting window is only a warning: the customer is not suspended and the warning does not count toward disabling. The customer can continue the refused conversation; it is blocked only when the upstream refuses it again.": "Категории отказов через запятую, для которых первый отказ в окне подсчёта — только предупреждение: клиент не приостанавливается, и предупреждение не засчитывается для отключения. Клиент может продолжить отклонённый диалог; он блокируется, только если вышестоящая модель отклонит его снова.",
     "Email code": "Код по почте",
     "A 6-digit code was sent to {{email}}. It expires in 10 minutes.": "6-значный код отправлен на {{email}}. Он действителен 10 минут.",
     "We will email a 6-digit code to the address on your account.": "Мы отправим 6-значный код на почту вашего аккаунта.",

@@ -7608,7 +7608,7 @@
     "View refused message": "查看被拒绝的消息",
     "The last message the customer wrote in the refused request, up to 4 KB. The upstream judged the whole conversation, not only this message.": "被拒请求里客户写的最后一条消息，最多 4 KB。上游判断的是整段对话，不只是这一条。",
     "Warn-first categories": "首次仅警告的类别",
-    "Refusal categories, separated by commas, whose first refusal in the counting window is only a warning: the refused conversation stays blocked, but the customer is not suspended and the warning does not count toward disabling.": "拒绝类别，用逗号分隔。计次窗口内这些类别的第一次拒绝只记警告：被拒的对话仍会封锁，但不暂停客户，也不计入封号次数。",
+    "Refusal categories, separated by commas, whose first refusal in the counting window is only a warning: the customer is not suspended and the warning does not count toward disabling. The customer can continue the refused conversation; it is blocked only when the upstream refuses it again.": "拒绝类别，用逗号分隔。计次窗口内这些类别的第一次拒绝只记警告：不暂停客户，也不计入封号次数。客户可以继续被拒的对话，上游再次拒绝这个对话时才封锁它。",
     "Email code": "邮箱验证码",
     "A 6-digit code was sent to {{email}}. It expires in 10 minutes.": "6 位验证码已发送至 {{email}}，10 分钟内有效。",
     "We will email a 6-digit code to the address on your account.": "我们会向账户绑定的邮箱发送 6 位验证码。",

@@ -20,7 +20,8 @@ const (
 // ViolationGuardSetting turns an upstream usage-policy refusal into a strike
 // against the customer who sent the request. The first strike suspends the
 // customer's relay access; BanStrikes strikes within StrikeWindowDays disable
-// the account. A refused conversation stays blocked for the strike window.
+// the account. A refused conversation stays blocked for the strike window,
+// except as LenientCategories says.
 type ViolationGuardSetting struct {
 	Enabled bool   `json:"enabled"`
 	Mode    string `json:"mode"`
@@ -33,8 +34,9 @@ type ViolationGuardSetting struct {
 	BanStrikes       int `json:"ban_strikes"`
 	StrikeWindowDays int `json:"strike_window_days"`
 	// LenientCategories lists upstream refusal categories, separated by commas
-	// or whitespace, whose first refusal in the window is only a warning: the
-	// refused conversation stays blocked, and nothing else is restricted.
+	// or whitespace, whose first refusal in the window is only a warning that
+	// restricts nothing. A refusal of these categories only holds its
+	// conversation; the conversation is blocked when it is refused again.
 	LenientCategories string `json:"lenient_categories"`
 	// ClientCheckLimit stops forwarding a customer's client checks once the
 	// upstream has refused this many of them within ClientCheckWindowSeconds;

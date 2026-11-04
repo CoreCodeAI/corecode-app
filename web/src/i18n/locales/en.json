@@ -7608,7 +7608,7 @@
     "View refused message": "View refused message",
     "The last message the customer wrote in the refused request, up to 4 KB. The upstream judged the whole conversation, not only this message.": "The last message the customer wrote in the refused request, up to 4 KB. The upstream judged the whole conversation, not only this message.",
     "Warn-first categories": "Warn-first categories",
-    "Refusal categories, separated by commas, whose first refusal in the counting window is only a warning: the refused conversation stays blocked, but the customer is not suspended and the warning does not count toward disabling.": "Refusal categories, separated by commas, whose first refusal in the counting window is only a warning: the refused conversation stays blocked, but the customer is not suspended and the warning does not count toward disabling.",
+    "Refusal categories, separated by commas, whose first refusal in the counting window is only a warning: the customer is not suspended and the warning does not count toward disabling. The customer can continue the refused conversation; it is blocked only when the upstream refuses it again.": "Refusal categories, separated by commas, whose first refusal in the counting window is only a warning: the customer is not suspended and the warning does not count toward disabling. The customer can continue the refused conversation; it is blocked only when the upstream refuses it again.",
     "Email code": "Email code",
     "A 6-digit code was sent to {{email}}. It expires in 10 minutes.": "A 6-digit code was sent to {{email}}. It expires in 10 minutes.",
     "We will email a 6-digit code to the address on your account.": "We will email a 6-digit code to the address on your account.",

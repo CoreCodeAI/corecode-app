@@ -7608,7 +7608,7 @@
     "View refused message": "거부된 메시지 보기",
     "The last message the customer wrote in the refused request, up to 4 KB. The upstream judged the whole conversation, not only this message.": "거부된 요청에서 고객이 마지막으로 작성한 메시지이며 최대 4KB입니다. 업스트림은 이 메시지만이 아니라 전체 대화를 판단했습니다.",
     "Warn-first categories": "먼저 경고할 범주",
-    "Refusal categories, separated by commas, whose first refusal in the counting window is only a warning: the refused conversation stays blocked, but the customer is not suspended and the warning does not count toward disabling.": "쉼표로 구분한 거부 범주이며, 집계 기간 내 첫 거부는 경고로만 처리됩니다. 거부된 대화는 계속 차단되지만 고객은 정지되지 않으며 경고는 비활성화 횟수에 포함되지 않습니다.",
+    "Refusal categories, separated by commas, whose first refusal in the counting window is only a warning: the customer is not suspended and the warning does not count toward disabling. The customer can continue the refused conversation; it is blocked only when the upstream refuses it again.": "쉼표로 구분한 거부 범주이며, 집계 기간 내 첫 거부는 경고로만 처리됩니다. 고객은 정지되지 않으며 경고는 비활성화 횟수에 포함되지 않습니다. 고객은 거부된 대화를 계속할 수 있으며, 업스트림이 그 대화를 다시 거부할 때만 차단됩니다.",
     "Email code": "이메일 코드",
     "A 6-digit code was sent to {{email}}. It expires in 10 minutes.": "6자리 코드를 {{email}}(으)로 보냈습니다. 10분 후에 만료됩니다.",
     "We will email a 6-digit code to the address on your account.": "계정에 등록된 주소로 6자리 코드를 이메일로 보내 드립니다.",
