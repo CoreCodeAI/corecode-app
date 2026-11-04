@@ -557,7 +557,7 @@ describe('providers', () => {
 })
 
 describe('capacity verdict', () => {
-  it('sizes the Max 5x accounts to add', () => {
+  it('sizes the Team Tier 1 accounts to add, with Team Standard beside them', () => {
     render(
       <PoolTab
         data={{
@@ -571,16 +571,28 @@ describe('capacity verdict', () => {
             unknown: 0,
           },
           runway: runway({
-            addition: {
-              plan: 'Max',
-              tier: 'default_claude_max_5x',
-              week_usd: 1458,
-              budget_percent: 98,
-              measured: 1,
-              for_load: 2,
-              for_trend: 3,
-              for_week: 1,
-            },
+            additions: [
+              {
+                plan: 'Team',
+                tier: 'team_tier_1',
+                week_usd: 1458,
+                budget_percent: 98,
+                measured: 4,
+                for_load: 2,
+                for_trend: 3,
+                for_week: 1,
+              },
+              {
+                plan: 'Team',
+                tier: 'team_standard',
+                week_usd: 290,
+                budget_percent: 98,
+                measured: 6,
+                for_load: 10,
+                for_trend: 14,
+                for_week: 5,
+              },
+            ],
           }),
         }}
         usage={usage()}
@@ -589,11 +601,14 @@ describe('capacity verdict', () => {
 
     expect(
       screen.getByText(
-        /Not enough capacity\. To keep up with demand now, add 2 × Max 5x; each brings about \$1,458 a week\. If use keeps growing, 3 × Max 5x by the end of the week\./
+        /Not enough capacity\. To keep up with demand now, add 2 × Team Tier 1; each brings about \$1,458 a week\. If use keeps growing, 3 × Team Tier 1 by the end of the week\./
       )
     ).toBeInTheDocument()
+    expect(screen.getByText('Team Tier 1 to add')).toBeInTheDocument()
     expect(
-      screen.getByText('Keep up 2 · 7 days 1 · with growth 3')
+      screen.getByText(
+        'Keep up 2 · 7 days 1 · with growth 3 · or 10 × Team Standard'
+      )
     ).toBeInTheDocument()
     // $230 forecast against $200 left in the 5-hour windows.
     expect(screen.getByText('≈ $230')).toHaveClass('text-destructive')

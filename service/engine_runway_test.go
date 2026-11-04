@@ -223,18 +223,18 @@ func TestPoolRunwayProjectsTheScenariosAndTheHeadroom(t *testing.T) {
 	assert.Nil(t, plenty.Low, "no band without past forecasts")
 }
 
-func maxFiveX(account EngineAccount) EngineAccount {
-	account.Plan, account.Tier, account.SevenDayCapacitySource = "Max", "default_claude_max_5x", "measured"
+func teamSeat(tier string, account EngineAccount) EngineAccount {
+	account.Plan, account.Tier, account.SevenDayCapacitySource = "Team", tier, "measured"
 	return account
 }
 
-func TestPoolRunwaySizesMaxFiveXAccountsToCloseTheGap(t *testing.T) {
+func TestPoolRunwaySizesTeamAccountsToCloseTheGap(t *testing.T) {
 	// $10 an hour against a $400 week at the 50% line: each added account
 	// brings $200 a week, and the $1,480 shortfall takes eight of them.
-	runway := poolRunway(runwayPool(maxFiveX(runwayAccountAt(1, 100, 400, 10, 100))), "claude", 0, flatDemand())
+	runway := poolRunway(runwayPool(teamSeat("team_tier_1", runwayAccountAt(1, 100, 400, 10, 100))), "claude", 0, flatDemand())
 	require.NotNil(t, runway.Addition)
 	addition := runway.Addition
-	assert.Equal(t, "default_claude_max_5x", addition.Tier)
+	assert.Equal(t, "team_tier_1", addition.Tier)
 	assert.InDelta(t, 200, addition.WeekUSD, 1e-9)
 	assert.Equal(t, 50.0, addition.BudgetPercent)
 	assert.Equal(t, 8, addition.ForLoad)
@@ -259,16 +259,33 @@ func TestPoolRunwaySizesMaxFiveXAccountsToCloseTheGap(t *testing.T) {
 }
 
 func TestPoolRunwayAddsNothingWhenSupplyKeepsUp(t *testing.T) {
-	runway := poolRunway(runwayPool(maxFiveX(runwayAccountAt(1, 200, 400, 1, 100))), "claude", 0, flatDemand())
+	runway := poolRunway(runwayPool(teamSeat("team_tier_1", runwayAccountAt(1, 200, 400, 1, 100))), "claude", 0, flatDemand())
 	require.NotNil(t, runway.Addition)
 	assert.Zero(t, runway.Addition.ForLoad)
 	require.NotNil(t, runway.Addition.ForWeek)
 	assert.Zero(t, *runway.Addition.ForWeek)
 }
 
-func TestPoolRunwayHasNoAdditionWithoutAMeasuredMaxFiveX(t *testing.T) {
+func TestPoolRunwayHasNoAdditionWithoutAMeasuredTeamSeat(t *testing.T) {
 	account := runwayAccountAt(1, 100, 400, 10, 100)
-	account.Plan, account.Tier, account.SevenDayCapacitySource = "Team", "team_standard", "measured"
+	account.Plan, account.Tier, account.SevenDayCapacitySource = "Max", "default_claude_max_5x", "measured"
 	runway := poolRunway(runwayPool(account), "claude", 0, flatDemand())
 	assert.Nil(t, runway.Addition)
+	assert.Empty(t, runway.Additions)
+}
+
+func TestPoolRunwaySizesEachTeamTierTierOneFirst(t *testing.T) {
+	// Tier 1 serves $400 a week and Standard $80, each at the 50% line:
+	// the $1,480 shortfall takes 8 Tier 1 seats or 37 Standard ones.
+	pool := runwayPool(
+		teamSeat("team_standard", runwayAccountAt(1, 20, 80, 10, 100)),
+		teamSeat("team_tier_1", runwayAccountAt(2, 80, 400, 10, 100)),
+	)
+	runway := poolRunway(pool, "claude", 0, flatDemand())
+	require.Len(t, runway.Additions, 2)
+	assert.Equal(t, "team_tier_1", runway.Additions[0].Tier)
+	assert.Equal(t, "team_standard", runway.Additions[1].Tier)
+	require.NotNil(t, runway.Addition)
+	assert.Equal(t, runway.Additions[0], *runway.Addition)
+	assert.Less(t, runway.Additions[0].ForLoad, runway.Additions[1].ForLoad)
 }
