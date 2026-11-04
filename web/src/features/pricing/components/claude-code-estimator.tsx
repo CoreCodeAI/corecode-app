@@ -34,6 +34,7 @@ import { Slider } from '@/components/ui/slider'
 import { toIntlLocale } from '@/i18n/languages'
 import { cn } from '@/lib/utils'
 
+import { tierDisplayLabel } from '../lib/billing-expr'
 import {
   DEFAULT_WORKLOAD,
   estimateClaudeCodeCost,
@@ -251,7 +252,7 @@ export function ClaudeCodeEstimator(props: {
       {estimate.tier && (
         <p className='text-muted-foreground mt-3 text-sm'>
           {t('This context is billed at the {{tier}} tier.', {
-            tier: estimate.tier,
+            tier: tierDisplayLabel(estimate.tier, t),
           })}
         </p>
       )}

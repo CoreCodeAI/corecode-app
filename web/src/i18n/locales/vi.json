@@ -7761,6 +7761,7 @@
     "USDT / USDC network": "Mạng USDT / USDC",
     "Pay with USDT / USDC": "Thanh toán bằng USDT / USDC",
     "About ${{amount}} in USDT or USDC at the site exchange rate.": "Khoảng ${{amount}} bằng USDT hoặc USDC theo tỷ giá của trang.",
-    "{{credit}} credit = {{money}}": "{{credit}} tín dụng = {{money}}"
+    "{{credit}} credit = {{money}}": "{{credit}} tín dụng = {{money}}",
+    "Long context": "Ngữ cảnh dài"
   }
 }

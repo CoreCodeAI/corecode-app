@@ -7761,6 +7761,7 @@
     "USDT / USDC network": "Сеть USDT / USDC",
     "Pay with USDT / USDC": "Оплатить в USDT / USDC",
     "About ${{amount}} in USDT or USDC at the site exchange rate.": "Около ${{amount}} в USDT или USDC по курсу сайта.",
-    "{{credit}} credit = {{money}}": "{{credit}} кредитов = {{money}}"
+    "{{credit}} credit = {{money}}": "{{credit}} кредитов = {{money}}",
+    "Long context": "Длинный контекст"
   }
 }

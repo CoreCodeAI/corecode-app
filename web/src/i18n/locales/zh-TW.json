@@ -7761,6 +7761,7 @@
     "USDT / USDC network": "USDT / USDC 網路",
     "Pay with USDT / USDC": "用 USDT / USDC 支付",
     "About ${{amount}} in USDT or USDC at the site exchange rate.": "按站內匯率約合 ${{amount}} 的 USDT 或 USDC。",
-    "{{credit}} credit = {{money}}": "{{credit}} 額度 = {{money}}"
+    "{{credit}} credit = {{money}}": "{{credit}} 額度 = {{money}}",
+    "Long context": "長上下文"
   }
 }

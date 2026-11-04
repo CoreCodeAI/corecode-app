@@ -348,6 +348,33 @@ export function parseTaskTiersFromExpr(
   return readTaskTierChain(compiled.ast, schema, includeBooleanConditions) ?? []
 }
 
+const TIER_LABEL_KEYS: Record<string, string> = {
+  base: 'Base',
+  default: 'Default',
+  standard: 'Standard',
+  long_context: 'Long context',
+}
+
+/**
+ * The name to show for a pricing tier. Billing expressions name tiers in
+ * English ("standard", "long_context"); the common names read in the
+ * interface language, any other label as written.
+ */
+export function tierDisplayLabel(
+  label: string | undefined,
+  t: (key: string) => string
+): string {
+  if (!label) return ''
+  const key =
+    TIER_LABEL_KEYS[
+      label
+        .trim()
+        .toLowerCase()
+        .replaceAll(/[\s-]+/g, '_')
+    ]
+  return key ? t(key) : label
+}
+
 export function normalizeTierLabel(label: string | undefined): string {
   if (!label) return ''
   return label

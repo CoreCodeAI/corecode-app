@@ -29,6 +29,7 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import { useBillingTime } from '../hooks/use-billing-time'
+import { tierDisplayLabel } from '../lib/billing-expr'
 import {
   getCardExamplePrice,
   getDynamicDisplayGroupRatio,
@@ -209,7 +210,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
               (entry) => entry.formattedRange
             ) && (
               <span className='text-muted-foreground col-span-full text-xs break-words'>
-                ({dynamicSummary.tier.label})
+                ({tierDisplayLabel(dynamicSummary.tier.label, t)})
               </span>
             )}
         </>

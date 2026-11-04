@@ -7761,6 +7761,7 @@
     "USDT / USDC network": "USDT / USDC 네트워크",
     "Pay with USDT / USDC": "USDT / USDC로 결제",
     "About ${{amount}} in USDT or USDC at the site exchange rate.": "사이트 환율 기준 약 ${{amount}}의 USDT 또는 USDC입니다.",
-    "{{credit}} credit = {{money}}": "{{credit}} 크레딧 = {{money}}"
+    "{{credit}} credit = {{money}}": "{{credit}} 크레딧 = {{money}}",
+    "Long context": "긴 컨텍스트"
   }
 }

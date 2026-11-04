@@ -7761,6 +7761,7 @@
     "USDT / USDC network": "USDT / USDC ネットワーク",
     "Pay with USDT / USDC": "USDT / USDC で支払う",
     "About ${{amount}} in USDT or USDC at the site exchange rate.": "サイトの為替レートで約 ${{amount}} 分の USDT または USDC です。",
-    "{{credit}} credit = {{money}}": "{{credit}} 分のクレジット = {{money}}"
+    "{{credit}} credit = {{money}}": "{{credit}} 分のクレジット = {{money}}",
+    "Long context": "ロングコンテキスト"
   }
 }

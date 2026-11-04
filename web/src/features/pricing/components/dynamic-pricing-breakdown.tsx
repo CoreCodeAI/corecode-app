@@ -44,6 +44,7 @@ import {
   type RequestRuleGroup,
   type RequestRuleTrace,
   type TierCondition,
+  tierDisplayLabel,
 } from '../lib/billing-expr'
 import { formatBillingCondition } from '../lib/billing-expression/condition-display'
 import { compileBillingExpression } from '../lib/billing-expression/parser'
@@ -521,7 +522,7 @@ export function DynamicPricingBreakdown({
                         variant='secondary'
                         className='bg-primary/10 text-primary'
                       >
-                        {tier.label || t('Default')}
+                        {tierDisplayLabel(tier.label, t) || t('Default')}
                       </Badge>
                     )}
                     {isMatched && (
@@ -640,7 +641,7 @@ export function DynamicPricingBreakdown({
                             variant='secondary'
                             className='bg-primary/10 text-primary'
                           >
-                            {tier.label || t('Default')}
+                            {tierDisplayLabel(tier.label, t) || t('Default')}
                           </Badge>
                         )}
                         {isMatched && (

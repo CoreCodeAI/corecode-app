@@ -111,13 +111,13 @@ it('names the tier a context-priced model bills the workload at', async () => {
       priceRate={2}
     />
   )
-  expect(screen.getByText(/billed at the standard tier/)).toBeVisible()
+  expect(screen.getByText(/billed at the Standard tier/)).toBeVisible()
 
   const context = screen.getByLabelText('Context per turn (tokens)')
   await user.clear(context)
   await user.type(context, '150000')
 
-  expect(screen.getByText(/billed at the long_context tier/)).toBeVisible()
+  expect(screen.getByText(/billed at the Long context tier/)).toBeVisible()
 })
 
 it('renders nothing for a model priced per request', () => {
