@@ -7760,6 +7760,7 @@
     "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.": "Ngừng chuyển tiếp các yêu cầu kiểm tra do ứng dụng của khách hàng gửi, chẳng hạn yêu cầu mà chế độ auto của Claude Code gửi trước khi gọi công cụ, khi phía thượng nguồn đã từ chối số lần này trong 24 giờ. Chúng không bao giờ bị tính là vi phạm. 0 nghĩa là luôn chuyển tiếp.",
     "USDT / USDC network": "Mạng USDT / USDC",
     "Pay with USDT / USDC": "Thanh toán bằng USDT / USDC",
-    "About ${{amount}} in USDT or USDC at the site exchange rate.": "Khoảng ${{amount}} bằng USDT hoặc USDC theo tỷ giá của trang."
+    "About ${{amount}} in USDT or USDC at the site exchange rate.": "Khoảng ${{amount}} bằng USDT hoặc USDC theo tỷ giá của trang.",
+    "{{credit}} credit = {{money}}": "{{credit}} tín dụng = {{money}}"
   }
 }

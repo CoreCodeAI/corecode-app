@@ -7760,6 +7760,7 @@
     "Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.": "고객의 클라이언트 확인 요청(Claude Code auto 모드가 도구 호출 전에 보내는 확인 등)이 24시간 안에 업스트림에서 이 횟수만큼 거부되면 더 이상 전달하지 않습니다. 위반으로 집계되지 않습니다. 0이면 항상 전달합니다.",
     "USDT / USDC network": "USDT / USDC 네트워크",
     "Pay with USDT / USDC": "USDT / USDC로 결제",
-    "About ${{amount}} in USDT or USDC at the site exchange rate.": "사이트 환율 기준 약 ${{amount}}의 USDT 또는 USDC입니다."
+    "About ${{amount}} in USDT or USDC at the site exchange rate.": "사이트 환율 기준 약 ${{amount}}의 USDT 또는 USDC입니다.",
+    "{{credit}} credit = {{money}}": "{{credit}} 크레딧 = {{money}}"
   }
 }
