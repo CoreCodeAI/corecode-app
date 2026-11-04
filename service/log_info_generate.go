@@ -77,6 +77,9 @@ func AppendRelayLogAdminInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 	if timing := preChannelMilliseconds(ctx); timing != nil {
 		other.SetAdmin("pre_channel_ms", timing)
 	}
+	if milliseconds, ok := outboundBuildMilliseconds(ctx); ok {
+		other.SetAdmin("outbound_build_ms", milliseconds)
+	}
 	if relayInfo != nil {
 		if billingModel := relayInfo.GetBillingModelName(); billingModel != "" && billingModel != relayInfo.OriginModelName {
 			other.SetAdmin("billing_model", billingModel)

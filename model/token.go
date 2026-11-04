@@ -205,7 +205,7 @@ func SearchUserTokens(userId int, keyword string, token string, offset int, limi
 	}
 
 	// 先查匹配总数（用于分页，受 maxTokens 上限保护，避免全表 COUNT）
-	err = baseQuery.Limit(maxTokens).Count(&total).Error
+	total, err = countUpTo(baseQuery, maxTokens)
 	if err != nil {
 		common.SysError(common.LogText("failed to count search tokens: %s", err.Error()))
 		return nil, 0, common.NewMessage("Failed to search tokens")
