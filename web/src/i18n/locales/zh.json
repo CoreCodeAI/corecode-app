@@ -7706,7 +7706,7 @@
     "Measured ÷ converted": "实测÷折算",
     "{{count}} requests over the last 7 days had no gpt-load price and are not in its spend.": "最近 7 天有 {{count}} 个请求在 gpt-load 没有价格，没有计入它的消耗。",
     "{{provider}} gpt-load spend by hour, last 48 hours": "{{provider}} 过去 48 小时每小时的 gpt-load 消耗",
-    "The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here.": "引擎只测算 Claude 账号的额度，所以这里不判断 {{provider}} 号池够不够。",
+    "Dollar capacity is estimated for Claude only. Provider-reported quota percentages appear in the account table; whether the {{provider}} pool keeps up is not judged here.": "美元容量只对 Claude 估算。账号表展示上游返回的剩余额度百分比；这里不判断 {{provider}} 号池够不够。",
     "GPT": "GPT",
     "Filter by model": "按模型筛选",
     "All {{vendor}} models": "全部 {{vendor}} 模型",

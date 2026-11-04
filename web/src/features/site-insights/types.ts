@@ -32,6 +32,17 @@ export type CapacityHour = {
   upstream_rate_limits: number
 }
 
+export type EngineQuotaWindow = {
+  id: string
+  label: string
+  scope: string
+  /** Provider usage as a ratio; null is unknown, zero is unused. */
+  utilization: number | null
+  reset_at_ms: number | null
+  observed_at_ms: number | null
+  state: string
+}
+
 export type EngineAccount = {
   credential_id: number
   group_id: number
@@ -45,6 +56,8 @@ export type EngineAccount = {
   seven_day: number
   five_hour_reset_ms: number
   seven_day_reset_ms: number
+  /** Provider-reported windows; absent before the server's release. */
+  quota_windows?: EngineQuotaWindow[]
   cooldown_until_ms: number
   eligible: boolean
   active: number

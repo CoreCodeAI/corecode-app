@@ -141,6 +141,97 @@ describe('pool account quota meters', () => {
       /Budget line\s*90%/
     )
   })
+
+  it('shows provider windows with their actual period, remaining share and reset', async () => {
+    render(
+      <PoolTab
+        provider='codex'
+        data={pool(
+          [group({ channel: 'codex', quota_budget: false })],
+          [
+            account({
+              five_hour: 0,
+              seven_day: 0,
+              quota_windows: [
+                {
+                  id: 'primary',
+                  label: '7d',
+                  scope: 'account',
+                  utilization: 0.02,
+                  reset_at_ms: 1794378753000,
+                  observed_at_ms: 1793775167746,
+                  state: 'available',
+                },
+                {
+                  id: 'spark-primary',
+                  label: '5h',
+                  scope: 'Spark',
+                  utilization: 0,
+                  reset_at_ms: null,
+                  observed_at_ms: null,
+                  state: 'available',
+                },
+                {
+                  id: 'spark-secondary',
+                  label: '7d',
+                  scope: 'Spark',
+                  utilization: 1,
+                  reset_at_ms: null,
+                  observed_at_ms: null,
+                  state: 'exhausted',
+                },
+                {
+                  id: 'review',
+                  label: 'Code review',
+                  scope: 'account',
+                  utilization: null,
+                  reset_at_ms: null,
+                  observed_at_ms: null,
+                  state: 'unavailable',
+                },
+              ],
+            }),
+          ]
+        )}
+      />
+    )
+
+    expect(screen.getByText('98% left')).toBeInTheDocument()
+    expect(screen.getByText('100% left')).toBeInTheDocument()
+    expect(screen.getByText('0% left')).toBeInTheDocument()
+    expect(screen.getByText('Spark · 5h')).toBeInTheDocument()
+    expect(screen.getByText('Spark · 7d')).toBeInTheDocument()
+    expect(screen.getByText('No quota reading')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('meter', { name: /^5-hour window/ })
+    ).not.toBeInTheDocument()
+    const weekly = screen.getByRole('meter', { name: /^7d / })
+    expect(weekly).toHaveAttribute('aria-valuenow', '2')
+    await userEvent.hover(weekly)
+    const reset = await screen.findByText('Resets')
+    expect(reset.closest('[data-slot=tooltip-content]')).not.toHaveTextContent(
+      /Resets\s*-/
+    )
+    expect(reset.closest('[data-slot=tooltip-content]')).toHaveTextContent(
+      /Used\s*2%/
+    )
+  })
+
+  it('does not turn absent provider windows into a full quota', () => {
+    render(
+      <PoolTab
+        provider='codex'
+        data={pool(
+          [group({ channel: 'codex', quota_budget: false })],
+          [account({ quota_windows: [] })]
+        )}
+      />
+    )
+    expect(screen.getByText('No quota reading')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('meter', { name: /window/ })
+    ).not.toBeInTheDocument()
+  })
 })
 
 function runway(overrides: Partial<EngineRunway>): EngineRunway {
@@ -439,7 +530,7 @@ describe('providers', () => {
     expect(screen.getByText(/codex@x/)).toBeInTheDocument()
     expect(screen.queryByText(/claude@x/)).not.toBeInTheDocument()
     expect(screen.queryByText('Team')).not.toBeInTheDocument()
-    // Quota is measured for Claude only.
+    // Dollar capacity is estimated for Claude only.
     expect(screen.queryByText('5-hour left')).not.toBeInTheDocument()
     expect(
       screen.getByText(/whether the Codex pool keeps up is not judged here/)

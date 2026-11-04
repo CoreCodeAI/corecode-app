@@ -81,7 +81,7 @@ function useStatusLabel() {
 /**
  * The engine's pool for one provider at a time, Claude by default: its
  * accounts and groups, its use on new-api and gpt-load, and for Claude,
- * whose quota the engine measures, whether the pool keeps up.
+ * whose dollar capacity the engine estimates, whether the pool keeps up.
  */
 export function PoolTab(props: {
   data: EnginePool | undefined
@@ -191,7 +191,7 @@ export function PoolTab(props: {
       tone: attention.length > 0 ? 'danger' : 'default',
     },
   ]
-  // The engine estimates quota for Claude subscription accounts only.
+  // The engine estimates dollar capacity for Claude subscription accounts only.
   if (claude) {
     summary.push(
       {
@@ -278,7 +278,7 @@ export function PoolTab(props: {
       {!claude && (
         <p className='text-muted-foreground text-xs'>
           {t(
-            'The engine estimates quota for Claude accounts only, so whether the {{provider}} pool keeps up is not judged here.',
+            'Dollar capacity is estimated for Claude only. Provider-reported quota percentages appear in the account table; whether the {{provider}} pool keeps up is not judged here.',
             { provider: PROVIDER_LABELS[provider] }
           )}
         </p>
@@ -475,40 +475,96 @@ export function PoolTab(props: {
               align: 'right',
               render: (row) => `${row.active} / ${row.sessions}`,
             },
-            {
-              key: 'five',
-              label: t('5-hour'),
-              hint: t(
-                'The bar is the share of the window the account has used; the tick is its budget line, where the engine stops scheduling it.'
-              ),
-              align: 'right',
-              render: (row) => (
-                <WindowCell
-                  title={t('5-hour window')}
-                  used={row.five_hour}
-                  budget={budgetOf(row, 'five')}
-                  remaining={row.five_hour_remaining_usd}
-                  reset={at(row.five_hour_reset_ms)}
-                />
-              ),
-            },
-            {
-              key: 'seven',
-              label: t('7-day'),
-              hint: t(
-                'The bar is the share of the window the account has used; the tick is its budget line, where the engine stops scheduling it.'
-              ),
-              align: 'right',
-              render: (row) => (
-                <WindowCell
-                  title={t('7-day window')}
-                  used={row.seven_day}
-                  budget={budgetOf(row, 'seven')}
-                  remaining={row.seven_day_remaining_usd}
-                  reset={at(row.seven_day_reset_ms)}
-                />
-              ),
-            },
+            ...(claude
+              ? [
+                  {
+                    key: 'five',
+                    label: t('5-hour'),
+                    hint: t(
+                      'The bar is the share of the window the account has used; the tick is its budget line, where the engine stops scheduling it.'
+                    ),
+                    align: 'right' as const,
+                    render: (row: EngineAccount) => (
+                      <WindowCell
+                        title={t('5-hour window')}
+                        used={row.five_hour}
+                        budget={budgetOf(row, 'five')}
+                        remaining={row.five_hour_remaining_usd}
+                        reset={at(row.five_hour_reset_ms)}
+                      />
+                    ),
+                  },
+                  {
+                    key: 'seven',
+                    label: t('7-day'),
+                    hint: t(
+                      'The bar is the share of the window the account has used; the tick is its budget line, where the engine stops scheduling it.'
+                    ),
+                    align: 'right' as const,
+                    render: (row: EngineAccount) => (
+                      <WindowCell
+                        title={t('7-day window')}
+                        used={row.seven_day}
+                        budget={budgetOf(row, 'seven')}
+                        remaining={row.seven_day_remaining_usd}
+                        reset={at(row.seven_day_reset_ms)}
+                      />
+                    ),
+                  },
+                ]
+              : [
+                  {
+                    key: 'quota',
+                    label: t('Remaining quota'),
+                    render: (row: EngineAccount) => (
+                      <div className='grid gap-3'>
+                        {row.quota_windows?.length ? (
+                          row.quota_windows.map((window) => {
+                            const title = [
+                              window.scope === 'account' ? '' : window.scope,
+                              window.label || window.id,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')
+                            return (
+                              <div
+                                key={`${window.id}-${window.scope}`}
+                                className='grid gap-1'
+                              >
+                                <span className='text-xs font-medium'>
+                                  {title}
+                                </span>
+                                <WindowCell
+                                  title={title}
+                                  used={
+                                    window.utilization == null
+                                      ? null
+                                      : window.utilization * 100
+                                  }
+                                  budget={0}
+                                  remaining={null}
+                                  showRemainingPercent
+                                  reset={at(window.reset_at_ms ?? 0)}
+                                />
+                                {window.observed_at_ms != null && (
+                                  <span className='text-muted-foreground text-xs'>
+                                    {t('Observed {{time}}', {
+                                      time: at(window.observed_at_ms),
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })
+                        ) : (
+                          <span className='text-muted-foreground text-xs'>
+                            {t('No quota reading')}
+                          </span>
+                        )}
+                      </div>
+                    ),
+                  },
+                ]),
             {
               key: 'burn',
               label: t('Spend / hour'),
@@ -1146,13 +1202,24 @@ const TEXT_TONES: Record<Tone, string> = {
 
 function WindowCell(props: {
   title: string
-  used: number
+  used: number | null
   budget: number
   remaining: number | null
+  showRemainingPercent?: boolean
   reset: string
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  if (props.used == null) {
+    return (
+      <span className='text-muted-foreground grid gap-1 text-xs'>
+        <span>{t('No quota reading')}</span>
+        {props.reset !== '-' && (
+          <span>{t('Resets {{time}}', { time: props.reset })}</span>
+        )}
+      </span>
+    )
+  }
   const tone = usageTone(props.used, props.budget)
   const used = `${Math.round(props.used)}%`
   return (
@@ -1166,7 +1233,11 @@ function WindowCell(props: {
         }
       >
         <span className={TEXT_TONES[tone]}>
-          {used}
+          {props.showRemainingPercent
+            ? t('{{amount}} left', {
+                amount: fmt.pct(Math.max(0, 1 - props.used / 100)),
+              })
+            : used}
           {props.remaining != null && (
             <span className='text-muted-foreground font-normal'>
               {' · '}
