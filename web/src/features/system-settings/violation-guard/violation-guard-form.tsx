@@ -274,7 +274,7 @@ export function ViolationGuardForm(props: ViolationGuardFormProps) {
                 </FormControl>
                 <FormDescription>
                   {t(
-                    'Refusal categories, separated by commas, whose first refusal in the counting window is only a warning: the refused conversation stays blocked, but the customer is not suspended and the warning does not count toward disabling.'
+                    'Refusal categories, separated by commas, whose first refusal in the counting window is only a warning: the customer is not suspended and the warning does not count toward disabling. The customer can continue the refused conversation; it is blocked only when the upstream refuses it again.'
                   )}
                 </FormDescription>
                 <FormMessage />

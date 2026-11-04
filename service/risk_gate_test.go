@@ -303,7 +303,7 @@ func TestRiskGate(t *testing.T) {
 				require.NotNil(t, send(10, "gpt-6", "curl/8", `{"model":"gpt-6","messages":[{"role":"user","content":"hello"}]}`), "GPT is checked but not counted")
 
 				violationGuardState.Lock()
-				violationGuardState.conversations = map[int]map[string]int64{11: {"an earlier conversation": common.GetTimestamp()}}
+				violationGuardState.conversations = map[int]map[string]model.RefusedConversation{11: {"an earlier conversation": {RefusedAt: common.GetTimestamp()}}}
 				violationGuardState.Unlock()
 				require.NotNil(t, send(11, "claude-opus-5-5", "claude-cli/2.1.303", official), "a customer with a recent refusal is asked about even from Claude Code")
 

@@ -29,10 +29,11 @@ const (
 	MsgUserConcurrencyLimitReached  = "rate_limit.user_concurrency_reached"
 	MsgUserConcurrencyLimitNextTier = "rate_limit.user_concurrency_next_tier"
 
-	MsgViolationSuspended           = "violation.suspended"
-	MsgViolationConversationBlocked = "violation.conversation_blocked"
-	MsgViolationClientCheckBlocked  = "violation.client_check_blocked"
-	MsgRiskGateBlocked              = "violation.risk_gate_blocked"
+	MsgViolationSuspended                 = "violation.suspended"
+	MsgViolationConversationBlocked       = "violation.conversation_blocked"
+	MsgViolationConversationBlockedQuoted = "violation.conversation_blocked_quoted"
+	MsgViolationClientCheckBlocked        = "violation.client_check_blocked"
+	MsgRiskGateBlocked                    = "violation.risk_gate_blocked"
 
 	MsgDistributorInvalidRequest               = "distributor.invalid_request"
 	MsgDistributorInvalidChannelId             = "distributor.invalid_channel_id"

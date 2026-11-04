@@ -168,14 +168,26 @@ func GetActiveViolationSuspensions(now int64) (map[int]int64, error) {
 	return suspended, nil
 }
 
+// RefusedConversation is a conversation the upstream refused, as the
+// violation guard holds it: when it was last refused, whether resending it is
+// blocked, and the refused message, for the customer to recognize.
+type RefusedConversation struct {
+	RefusedAt int64
+	Blocked   bool
+	Message   string
+}
+
 // GetRefusedViolationConversations returns, per user, the refused
-// conversations recorded after since and not forgiven, with the time each was
-// refused. Conversations of exempt administrators are left out.
-func GetRefusedViolationConversations(since int64) (map[int]map[string]int64, error) {
+// conversations recorded after since and not forgiven. A conversation is
+// blocked once it has a refusal whose category is not lenient, or a second
+// refusal of any category; a single lenient refusal only holds it. Message is
+// the first refusal's excerpt. Conversations of exempt administrators are left
+// out.
+func GetRefusedViolationConversations(since int64, lenient func(category string) bool) (map[int]map[string]RefusedConversation, error) {
 	var records []ViolationRecord
-	err := DB.Select("user_id", "conversation_key", "created_at").
+	err := DB.Select("user_id", "conversation_key", "created_at", "category", "excerpt").
 		Where("created_at > ? AND conversation_key <> '' AND mode <> ?", since, ViolationModeExempt).
-		Find(&records).Error
+		Order("id").Find(&records).Error
 	if err != nil {
 		return nil, err
 	}
@@ -183,17 +195,33 @@ func GetRefusedViolationConversations(since int64) (map[int]map[string]int64, er
 	if err != nil {
 		return nil, err
 	}
-	blocked := map[int]map[string]int64{}
+	refused := map[int]map[string]RefusedConversation{}
 	for _, record := range records {
 		if record.CreatedAt <= forgivenAt[record.UserId] {
 			continue
 		}
-		if blocked[record.UserId] == nil {
-			blocked[record.UserId] = map[string]int64{}
+		if refused[record.UserId] == nil {
+			refused[record.UserId] = map[string]RefusedConversation{}
 		}
-		blocked[record.UserId][record.ConversationKey] = max(blocked[record.UserId][record.ConversationKey], record.CreatedAt)
+		conversation, seen := refused[record.UserId][record.ConversationKey]
+		conversation.RefusedAt = max(conversation.RefusedAt, record.CreatedAt)
+		conversation.Blocked = conversation.Blocked || seen || !lenient(record.Category)
+		if !seen {
+			conversation.Message = record.Excerpt
+		}
+		refused[record.UserId][record.ConversationKey] = conversation
 	}
-	return blocked, nil
+	return refused, nil
+}
+
+// HasViolationInConversation reports whether a refusal of the conversation,
+// outside exempt mode, was recorded for the user after since.
+func HasViolationInConversation(userId int, conversationKey string, since int64) (bool, error) {
+	var count int64
+	err := DB.Model(&ViolationRecord{}).
+		Where("user_id = ? AND conversation_key = ? AND created_at > ? AND mode <> ?", userId, conversationKey, since, ViolationModeExempt).
+		Count(&count).Error
+	return count > 0, err
 }
 
 // GetRecentClientChecks returns, per user, when each refused client check

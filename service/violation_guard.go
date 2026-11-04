@@ -28,25 +28,38 @@ import (
 // maxViolationExcerptBytes caps the refused message kept for review.
 const maxViolationExcerptBytes = 4096
 
+// refusedMessagePreviewRunes caps how much of the refused message a blocked
+// request quotes back to the customer.
+const refusedMessagePreviewRunes = 40
+
+// refusedMessagePreview is the start of a refused message on one line, for
+// the customer to find the message in the conversation.
+func refusedMessagePreview(message string) string {
+	runes := []rune(strings.Join(strings.Fields(message), " "))
+	if len(runes) <= refusedMessagePreviewRunes {
+		return string(runes)
+	}
+	return string(runes[:refusedMessagePreviewRunes]) + "…"
+}
+
 // minViolationMergeSeconds groups refusals into one strike when suspension is
 // off, so the parallel requests of one incident still count once.
 const minViolationMergeSeconds = 10 * 60
 
 // violationGuardState is what the relay checks on every request: suspended
-// users, the refused conversations of each user with the time each was
-// refused, and when each user's client checks were refused within
-// ClientCheckWindowSeconds, oldest first. It lives in process memory because one new-api instance serves the
-// relay. It loads from the database on first use, and every strike or lift
+// users, the refused conversations of each user, and when each user's client
+// checks were refused within ClientCheckWindowSeconds, oldest first. It lives
+// in process memory because one new-api instance serves the relay. It loads from the database on first use, and every strike or lift
 // writes the database first and then this copy.
 var violationGuardState = struct {
 	sync.RWMutex
 	loaded         bool
 	suspendedUntil map[int]int64
-	conversations  map[int]map[string]int64
+	conversations  map[int]map[string]model.RefusedConversation
 	clientChecks   map[int][]int64
 }{}
 
-func loadViolationGuardState(now, windowStart int64) bool {
+func loadViolationGuardState(setting *operation_setting.ViolationGuardSetting, now, windowStart int64) bool {
 	violationGuardState.RLock()
 	loaded := violationGuardState.loaded
 	violationGuardState.RUnlock()
@@ -54,9 +67,9 @@ func loadViolationGuardState(now, windowStart int64) bool {
 		return true
 	}
 	suspended, err := model.GetActiveViolationSuspensions(now)
-	var conversations map[int]map[string]int64
+	var conversations map[int]map[string]model.RefusedConversation
 	if err == nil {
-		conversations, err = model.GetRefusedViolationConversations(windowStart)
+		conversations, err = model.GetRefusedViolationConversations(windowStart, setting.LenientCategory)
 	}
 	var clientChecks map[int][]int64
 	if err == nil {
@@ -92,8 +105,8 @@ func violationRefusedRecently(userId int) bool {
 	windowStart := common.GetTimestamp() - int64(setting.StrikeWindowDays)*86400
 	violationGuardState.RLock()
 	defer violationGuardState.RUnlock()
-	for _, refusedAt := range violationGuardState.conversations[userId] {
-		if refusedAt > windowStart {
+	for _, conversation := range violationGuardState.conversations[userId] {
+		if conversation.RefusedAt > windowStart {
 			return true
 		}
 	}
@@ -120,7 +133,7 @@ func violationGuardVerdict(c *gin.Context, info *relaycommon.RelayInfo) (string,
 	}
 	now := common.GetTimestamp()
 	windowStart := now - int64(setting.StrikeWindowDays)*86400
-	if !loadViolationGuardState(now, windowStart) {
+	if !loadViolationGuardState(setting, now, windowStart) {
 		return "", nil
 	}
 	enforce := setting.Mode == operation_setting.ViolationGuardModeEnforce
@@ -155,16 +168,16 @@ func violationGuardVerdict(c *gin.Context, info *relaycommon.RelayInfo) (string,
 	}
 
 	keys := violationConversationKeys(humanMessages(info.Request))
-	refused := false
+	var blocked *model.RefusedConversation
 	violationGuardState.RLock()
 	for _, key := range keys {
-		if refusedAt, ok := violationGuardState.conversations[info.UserId][key]; ok && refusedAt > windowStart {
-			refused = true
+		if conversation, ok := violationGuardState.conversations[info.UserId][key]; ok && conversation.Blocked && conversation.RefusedAt > windowStart {
+			blocked = &conversation
 			break
 		}
 	}
 	violationGuardState.RUnlock()
-	if !refused {
+	if blocked == nil {
 		return "", nil
 	}
 	if !enforce {
@@ -172,7 +185,11 @@ func violationGuardVerdict(c *gin.Context, info *relaycommon.RelayInfo) (string,
 		return violationVerdictConversation, nil
 	}
 	RequestPolicy(c).AddEvent(PolicyEvent{ErrorCode: string(types.ErrorCodeViolationConversationBlocked), ErrorSource: "local", Decision: PolicyDecision{Action: "stop", Reason: "local_rejection", Source: "global"}, Health: "unchanged"})
-	return violationVerdictConversation, types.NewErrorWithStatusCode(errors.New(i18n.T(c, i18n.MsgViolationConversationBlocked)),
+	message := i18n.T(c, i18n.MsgViolationConversationBlocked)
+	if preview := refusedMessagePreview(blocked.Message); preview != "" {
+		message = i18n.T(c, i18n.MsgViolationConversationBlockedQuoted, map[string]any{"Message": preview})
+	}
+	return violationVerdictConversation, types.NewErrorWithStatusCode(errors.New(message),
 		types.ErrorCodeViolationConversationBlocked, http.StatusForbidden, types.ErrOptionWithSkipRetry())
 }
 
@@ -196,6 +213,20 @@ func RecordUpstreamRefusal(c *gin.Context, info *relaycommon.RelayInfo) {
 	if messages := humanMessages(info.Request); len(messages) > 0 {
 		keys := violationConversationKeys(messages)
 		record.ConversationKey = keys[len(keys)-1]
+		// A lenient refusal of a conversation the upstream already refused is
+		// recorded under that conversation, so it merges into the first
+		// refusal and blocks the conversation.
+		if setting.LenientCategory(record.Category) {
+			windowStart := common.GetTimestamp() - int64(setting.StrikeWindowDays)*86400
+			violationGuardState.RLock()
+			for _, key := range keys {
+				if conversation, ok := violationGuardState.conversations[info.UserId][key]; ok && conversation.RefusedAt > windowStart {
+					record.ConversationKey = key
+					break
+				}
+			}
+			violationGuardState.RUnlock()
+		}
 		excerpt := strings.TrimSuffix(messages[len(messages)-1], "\n")
 		record.Excerpt = strings.ToValidUTF8(excerpt[:min(len(excerpt), maxViolationExcerptBytes)], "")
 	}
@@ -261,8 +292,11 @@ func violationExempt(role int) bool {
 // at least minViolationMergeSeconds. Strikes count only within the mode they
 // were recorded in, so observe mode is a dry run and enforce mode starts from
 // zero. The first new strike of a lenient category in the window is a warning
-// instead: it blocks the conversation, restricts nothing else, and does not
-// count. Administrators are recorded as exempt.
+// instead: it restricts nothing and does not count. A lenient refusal only
+// holds its conversation, so the customer can continue it; a second refusal
+// of a held conversation merges into the first and blocks it. A refusal of
+// any other category blocks its conversation at once. Administrators are
+// recorded as exempt.
 func applyViolationStrike(setting operation_setting.ViolationGuardSetting, record model.ViolationRecord, now int64) error {
 	user, err := model.GetUserCache(record.UserId)
 	if err != nil {
@@ -285,8 +319,15 @@ func applyViolationStrike(setting operation_setting.ViolationGuardSetting, recor
 	if clientCheckRefusal(setting, record) {
 		record.Action = model.ViolationActionClientCheck
 	} else {
-		newStrike := true
-		if record.ConversationKey != "" {
+		lenient := setting.LenientCategory(record.Category)
+		repeated := false
+		if lenient && record.ConversationKey != "" {
+			if repeated, err = model.HasViolationInConversation(record.UserId, record.ConversationKey, windowStart); err != nil {
+				return err
+			}
+		}
+		newStrike := !repeated
+		if newStrike && record.ConversationKey != "" {
 			counted, err := model.HasViolationStrikeInConversation(record.UserId, record.Mode, record.ConversationKey, windowStart)
 			if err != nil {
 				return err
@@ -301,7 +342,7 @@ func applyViolationStrike(setting operation_setting.ViolationGuardSetting, recor
 		record.Action = model.ViolationActionMerged
 		if newStrike {
 			warned := true
-			if setting.LenientCategory(record.Category) {
+			if lenient {
 				if warned, err = model.HasViolationWarning(record.UserId, record.Mode, windowStart); err != nil {
 					return err
 				}
@@ -344,9 +385,15 @@ func applyViolationStrike(setting operation_setting.ViolationGuardSetting, recor
 	violationGuardState.Lock()
 	if violationGuardState.loaded && record.ConversationKey != "" {
 		if violationGuardState.conversations[record.UserId] == nil {
-			violationGuardState.conversations[record.UserId] = map[string]int64{}
+			violationGuardState.conversations[record.UserId] = map[string]model.RefusedConversation{}
 		}
-		violationGuardState.conversations[record.UserId][record.ConversationKey] = now
+		conversation, seen := violationGuardState.conversations[record.UserId][record.ConversationKey]
+		conversation.RefusedAt = now
+		conversation.Blocked = conversation.Blocked || seen || !setting.LenientCategory(record.Category)
+		if !seen {
+			conversation.Message = record.Excerpt
+		}
+		violationGuardState.conversations[record.UserId][record.ConversationKey] = conversation
 	}
 	if violationGuardState.loaded && record.Action == model.ViolationActionClientCheck {
 		since := now - operation_setting.ClientCheckWindowSeconds
