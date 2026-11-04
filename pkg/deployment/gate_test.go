@@ -353,3 +353,87 @@ func TestHijackedHandlerRemainsActiveUntilReturn(t *testing.T) {
 	await(t, finished)
 	assert.Equal(t, deploymentState{Draining: true}, control(t, client, srv.URL, http.MethodGet, ""))
 }
+
+type countingBody struct {
+	io.Reader
+	read int64
+}
+
+func (b *countingBody) Read(p []byte) (int, error) {
+	n, err := b.Reader.Read(p)
+	b.read += int64(n)
+	return n, err
+}
+
+func (b *countingBody) Close() error { return nil }
+
+func TestEarlyResponseReadsTheRestOfTheBodyFirst(t *testing.T) {
+	const size = 3 << 20
+	var readBeforeResponse int64
+	var body *countingBody
+	early := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "5")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		readBeforeResponse = body.read
+	})
+
+	send := func(gate *Gate) *httptest.ResponseRecorder {
+		body = &countingBody{Reader: strings.NewReader(strings.Repeat("x", size))}
+		req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+		req.Body, req.ContentLength = body, size
+		rec := httptest.NewRecorder()
+		gate.ServeHTTP(rec, req)
+		return rec
+	}
+
+	rec := send(New(early))
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Equal(t, int64(size), readBeforeResponse, "the whole body is read before the status goes out")
+	assert.Empty(t, rec.Header().Get("Connection"))
+
+	limited := New(early)
+	limited.BodyDrainLimit = 1 << 20
+	rec = send(limited)
+	assert.Equal(t, int64(1<<20)+1, body.read, "a body over the limit is not read to the end")
+	assert.Equal(t, "close", rec.Header().Get("Connection"), "and the connection closes instead")
+
+	draining := New(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Fatal("a draining gate admits nothing") }))
+	draining.BeginShutdown()
+	rec = send(draining)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Equal(t, int64(size), body.read, "the gate's own 503 reads the body too")
+
+	// A handler that read the body costs one empty read.
+	read := New(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		_, _ = io.WriteString(w, "ok")
+	}))
+	rec = send(read)
+	assert.Equal(t, "ok", rec.Body.String())
+	assert.Equal(t, int64(size), body.read)
+}
+
+func TestBodyDrainingWriterKeepsWriterInterfaces(t *testing.T) {
+	checked := make(chan struct{})
+	server := httptest.NewServer(New(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(checked)
+		_, flusher := w.(http.Flusher)
+		_, hijacker := w.(http.Hijacker)
+		_, readerFrom := w.(io.ReaderFrom)
+		assert.True(t, flusher && hijacker && readerFrom)
+		assert.NoError(t, http.NewResponseController(w).SetWriteDeadline(time.Now().Add(time.Minute)), "ResponseController reaches the server's writer")
+		conn, buf, err := w.(http.Hijacker).Hijack()
+		require.NoError(t, err)
+		defer conn.Close()
+		_, _ = buf.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+		_ = buf.Flush()
+	})))
+	defer server.Close()
+	res, err := server.Client().Get(server.URL + "/hijack")
+	require.NoError(t, err)
+	defer res.Body.Close()
+	data, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", string(data))
+	await(t, checked)
+}

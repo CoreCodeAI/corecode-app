@@ -27,6 +27,11 @@ const (
 // Gate wraps the entire HTTP handler, including its deferred cleanup. It must be
 // installed outside normal middleware and must not be copied after first use.
 type Gate struct {
+	// BodyDrainLimit caps how much of an unread request body is read before a
+	// response goes out (see bodyDrainingWriter); 0 means defaultBodyDrainLimit.
+	// Set it before the first request.
+	BodyDrainLimit int64
+
 	next     http.Handler
 	mu       sync.Mutex
 	cordoned bool
@@ -57,6 +62,11 @@ func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		g.serveControl(w, r)
 		return
 	}
+	limit := g.BodyDrainLimit
+	if limit <= 0 {
+		limit = defaultBodyDrainLimit
+	}
+	w = &bodyDrainingWriter{ResponseWriter: w, body: r.Body, limit: limit}
 	if r.Method == http.MethodGet && r.URL.Path == "/api/status" {
 		g.next.ServeHTTP(w, r)
 		return
@@ -81,7 +91,8 @@ func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		g.mu.Unlock()
 	}()
 
-	// Preserve the original writer's Flusher, Hijacker and other interfaces.
+	// bodyDrainingWriter keeps the original writer's Flusher, Hijacker and
+	// other interfaces.
 	g.next.ServeHTTP(w, r)
 }
 
