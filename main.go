@@ -223,7 +223,6 @@ func main() {
 	}
 
 	deploymentGate := deployment.New(server)
-	deploymentGate.BodyDrainLimit = int64(constant.MaxRequestBodyMB) << 20
 	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: deploymentGate,

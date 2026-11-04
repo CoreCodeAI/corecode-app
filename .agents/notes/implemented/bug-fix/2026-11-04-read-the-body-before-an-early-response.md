@@ -45,8 +45,21 @@ not cause it; only early responses that came through `reverse_proxy`.
   it: authentication, rate limits, oversized bodies. Once new-api has read the
   body, the relay has forwarded all of it and its connection from the edge
   carries nothing extra.
-- **The read stops at `MAX_REQUEST_BODY_MB`** (`Gate.BodyDrainLimit`, 128 MiB by
-  default). Past it the response sets `Connection: close`.
+- **The read is bounded: 32 MiB and 30 seconds** (`Gate.BodyDrainLimit`,
+  `Gate.BodyDrainTimeout`). The client being read may have been turned away
+  for having no credential. Without bounds, it could hold a connection and a
+  handler, counted as active by the Gate and so delaying a release's drain, for
+  as long as it trickled a large declared body; new-api's server has no read
+  timeout. In the week to 2026-11-04, 14 of 146,513 bodies exceeded 32 MiB.
+  Past either bound the response sets `Connection: close`.
+- **The time bound is a read deadline on the connection, cleared after a
+  complete read.** Left in place, it would fire in the server's background read
+  during a long response, cancel the request's context and cut an SSE stream.
+- **A body the handler closed counts as read.** Its reads fail with
+  `http.ErrBodyReadAfterClose` whether or not it was read to the end. The server
+  already tracks what is left of it and closes the connection if it must.
+  Treating it as unread would close every keep-alive connection whose handler
+  closed its body.
 - **The wrapper keeps the writer's interfaces.** Gin asserts `http.Flusher` for
   SSE and `http.Hijacker` for WebSocket upgrades. `io.ReaderFrom` keeps
   sendfile for static files, and `Unwrap` serves `http.ResponseController`. A
@@ -75,9 +88,14 @@ not cause it; only early responses that came through `reverse_proxy`.
 - An early rejection now waits for the client to finish uploading. A large body
   that took about 0.1 s to reject can take as long as its upload, which the
   client was making anyway. Requests that are served pay nothing.
-- A body larger than `MAX_REQUEST_BODY_MB` that is rejected early still leaves
-  bytes unread; its response closes the connection, so the edge may see a reset
-  as before.
+- A body larger than 32 MiB, or one still uploading after 30 seconds, that is
+  rejected early still leaves bytes unread. Its response closes the connection,
+  so the edge may see a 431 or a reset as before.
+- A client without a credential can make new-api read up to 32 MiB, for up to
+  30 seconds, per request it sends. Before this change it got its 401 without
+  the body being read. The edge and the relay set no request body size or read
+  timeout of their own; an authenticated client could already hold a
+  connection with a slow upload.
 - The relay's Caddy still keeps a connection with unread bytes open when the
   backend answers early. Any future backend behind it needs the same rule.
 
@@ -89,17 +107,29 @@ not cause it; only early responses that came through `reverse_proxy`.
   - the Gate's own draining 503 reads the body;
   - a handler that read the body is unaffected;
   - the wrapped writer still asserts as `http.Flusher`, `http.Hijacker` and
-    `io.ReaderFrom`, and `http.ResponseController` and `Hijack` work through it.
-- With the drain disabled, the first three assertions fail.
+    `io.ReaderFrom`, and `http.ResponseController` and `Hijack` work through it;
+  - over a real connection, a client that stops sending gets its 503 at the
+    300 ms test timeout, with `Connection: close`;
+  - after a complete read, the connection serves another request sent after
+    the timeout, and a body the handler read and closed keeps the connection;
+  - a response that outlasts the timeout is not canceled.
+- Mutations: with the drain disabled, the first three cases fail. Without the
+  deadline, the stalled client waits until the test gives up. Without clearing
+  the deadline, the long response's context is canceled. Counting a closed body
+  as unread closes the connection.
 - End to end, the local Caddy 2.11.7 edge and relay in front of a backend built
   from this package, answering 503 before reading:
   - a 1 MB, 3 MB or 20 MB request answered early, followed by another request
     on the same connection, gave the second request its normal response in
-    15 of 15 runs;
+    every run. A 40 MB one, over the limit, still gave 431 or a reset, as
+    expected;
   - two 90-second runs, 24 parallel uploads at 1 MB/s with the early 503
-    toggled, made 4,506 requests with no 431, no 502 and no proxy error at the
+    toggled, made 4,508 requests with no 431, no 502 and no proxy error at the
     edge. The same load against a backend without the drain gave 431s and 502s;
+  - a 1 MB upload throttled to 2 KB/s and rejected early got its 503 after
+    32 s, having sent 65 KB;
+  - a 45-second SSE stream completed with every event;
   - the median time to first byte of a served 1.2 MB request was 0.129 s, as
-    before.
+    before, measured before the bounds were added.
 - `go vet` and `go test` pass for pkg, router, middleware, controller and
   common.

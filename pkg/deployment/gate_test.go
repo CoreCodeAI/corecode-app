@@ -437,3 +437,91 @@ func TestBodyDrainingWriterKeepsWriterInterfaces(t *testing.T) {
 	assert.Equal(t, "ok", string(data))
 	await(t, checked)
 }
+
+func TestBodyDrainIsBoundedInTimeAndKeepsTheConnectionAfterward(t *testing.T) {
+	gate := New(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/early" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		if r.URL.Path == "/closed" {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}
+		_, _ = io.WriteString(w, "ok")
+	}))
+	gate.BodyDrainTimeout = 300 * time.Millisecond
+	server := httptest.NewServer(gate)
+	defer server.Close()
+	addr := strings.TrimPrefix(server.URL, "http://")
+
+	t.Run("a client that stops sending gets the response at the timeout, and the connection closes", func(t *testing.T) {
+		conn, err := net.Dial("tcp", addr)
+		require.NoError(t, err)
+		defer conn.Close()
+		_, err = io.WriteString(conn, "POST /early HTTP/1.1\r\nHost: x\r\nContent-Length: 1000000\r\n\r\n"+strings.Repeat("x", 1000))
+		require.NoError(t, err)
+		start := time.Now()
+		require.NoError(t, conn.SetReadDeadline(time.Now().Add(5*time.Second)))
+		res, err := http.ReadResponse(bufio.NewReader(conn), nil)
+		require.NoError(t, err)
+		elapsed := time.Since(start)
+		assert.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
+		assert.True(t, res.Close, "the response closes the connection")
+		assert.GreaterOrEqual(t, elapsed, 250*time.Millisecond)
+		assert.Less(t, elapsed, 3*time.Second, "the drain stops at its timeout")
+	})
+
+	t.Run("after a complete drain the deadline is cleared for the next request", func(t *testing.T) {
+		conn, err := net.Dial("tcp", addr)
+		require.NoError(t, err)
+		defer conn.Close()
+		reader := bufio.NewReader(conn)
+		body := strings.Repeat("x", 1<<20)
+		_, err = io.WriteString(conn, fmt.Sprintf("POST /early HTTP/1.1\r\nHost: x\r\nContent-Length: %d\r\n\r\n%s", len(body), body))
+		require.NoError(t, err)
+		res, err := http.ReadResponse(reader, nil)
+		require.NoError(t, err)
+		_, _ = io.Copy(io.Discard, res.Body)
+		assert.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
+		assert.False(t, res.Close, "a fully read body keeps the connection")
+
+		time.Sleep(600 * time.Millisecond) // past the drain timeout
+		_, err = io.WriteString(conn, "POST /closed HTTP/1.1\r\nHost: x\r\nContent-Length: 2\r\n\r\n{}")
+		require.NoError(t, err)
+		res, err = http.ReadResponse(reader, nil)
+		require.NoError(t, err, "the connection is still open")
+		data, _ := io.ReadAll(res.Body)
+		assert.Equal(t, "ok", string(data))
+		assert.False(t, res.Close, "a body the handler read and closed keeps the connection")
+	})
+}
+
+func TestBodyDrainDeadlineDoesNotCancelALongResponse(t *testing.T) {
+	canceled := make(chan bool, 1)
+	gate := New(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		// A stream outlasts the drain timeout; the server watches the idle
+		// connection for the client going away while it writes.
+		select {
+		case <-r.Context().Done():
+			canceled <- true
+		case <-time.After(900 * time.Millisecond):
+			canceled <- false
+		}
+		_, _ = io.WriteString(w, "done")
+	}))
+	gate.BodyDrainTimeout = 300 * time.Millisecond
+	server := httptest.NewServer(gate)
+	defer server.Close()
+
+	res, err := server.Client().Post(server.URL+"/v1/messages", "application/json", strings.NewReader(`{"stream":true}`))
+	require.NoError(t, err)
+	defer res.Body.Close()
+	data, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+	assert.Equal(t, "done", string(data))
+	assert.False(t, <-canceled, "the request is not canceled when the drain deadline would have passed")
+}

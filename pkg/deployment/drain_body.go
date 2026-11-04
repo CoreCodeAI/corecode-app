@@ -2,14 +2,21 @@ package deployment
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"net"
 	"net/http"
+	"time"
 )
 
-// defaultBodyDrainLimit caps how much of an unread request body is read before
-// a response, when Gate.BodyDrainLimit is not set.
-const defaultBodyDrainLimit = 128 << 20
+// The defaults for Gate.BodyDrainLimit and Gate.BodyDrainTimeout. Reading the
+// body is what a client that is turned away, possibly without a credential,
+// gets from the server, so it is bounded in bytes and in time: in the week to
+// 2026-11-04, 14 of 146,513 bodies exceeded 32 MiB.
+const (
+	defaultBodyDrainLimit   = 32 << 20
+	defaultBodyDrainTimeout = 30 * time.Second
+)
 
 // bodyDrainingWriter reads what is left of the request body before the first
 // byte of the response goes out.
@@ -23,12 +30,15 @@ const defaultBodyDrainLimit = 128 << 20
 // larger one a reset connection. Reading the body first lets the proxy forward
 // all of it, so the connection stays in step.
 //
-// A body larger than the limit is not read to the end; the response then
-// closes the connection instead.
+// A body larger than the limit, or one still arriving when the timeout ends,
+// is not read to the end; the response then closes the connection instead.
+// Without the bounds, a client could hold a connection and a handler for as
+// long as it trickles a large declared body.
 type bodyDrainingWriter struct {
 	http.ResponseWriter
 	body    io.ReadCloser
 	limit   int64
+	timeout time.Duration
 	drained bool
 }
 
@@ -40,9 +50,22 @@ func (w *bodyDrainingWriter) drain() {
 	if w.body == nil || w.body == http.NoBody {
 		return
 	}
-	// A body the handler already read or closed returns at once.
-	if n, _ := io.CopyN(io.Discard, w.body, w.limit+1); n > w.limit {
+	// The deadline is set on the connection, so it is cleared again for the
+	// next request on it. A writer without deadlines, such as a test recorder,
+	// is read without one.
+	controller := http.NewResponseController(w.ResponseWriter)
+	timed := controller.SetReadDeadline(time.Now().Add(w.timeout)) == nil
+	// A body the handler already read returns EOF at once. One it closed
+	// returns ErrBodyReadAfterClose, read or not: the server tracks what is
+	// left of it and closes the connection if it has to.
+	n, err := io.CopyN(io.Discard, w.body, w.limit+1)
+	complete := n <= w.limit && (err == io.EOF || errors.Is(err, http.ErrBodyReadAfterClose))
+	if !complete {
 		w.ResponseWriter.Header().Set("Connection", "close")
+		return
+	}
+	if timed {
+		_ = controller.SetReadDeadline(time.Time{})
 	}
 }
 
