@@ -18,9 +18,15 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import { PROVIDER_LABELS, useChargeFormat, useInsightsFormat } from '../lib'
+import {
+  accountPrice,
+  PROVIDER_LABELS,
+  useChargeFormat,
+  useInsightsFormat,
+} from '../lib'
 import type {
   EngineHorizon,
+  EngineRunwayAddition,
   EngineRunway,
   PoolProvider,
   PoolUsage,
@@ -35,8 +41,8 @@ import {
 } from './shared'
 
 /**
- * Whether the Claude pool keeps up, in one sentence, and how many Max 5x
- * accounts would make it: enough to keep up with demand week after week,
+ * Whether the Claude pool keeps up, in one sentence, and how many Team
+ * accounts would make it, Team Tier 1 first and Team Standard beside it: enough to keep up with demand week after week,
  * and enough to last the next 7 days. Beside it, the next 5 and 24 hours'
  * demand against what the pool has left, and new-api's forecast charge
  * over the same hours with its conversion to gpt-load spend.
@@ -50,7 +56,16 @@ export function CapacityVerdict(props: {
   const fmt = useInsightsFormat()
   const charge = useChargeFormat(props.usage)
   const { runway, five } = props
-  const addition = runway.addition
+  const additions =
+    runway.additions ?? (runway.addition ? [runway.addition] : [])
+  const addition = additions[0]
+  const alternative = additions[1]
+  const planName = (item: EngineRunwayAddition) =>
+    accountPrice(item.plan, item.tier)?.label ?? item.tier
+  const plan = addition ? planName(addition) : ''
+  // The count to add: the more of keeping up and lasting the next 7 days.
+  const countToAdd = (item: EngineRunwayAddition) =>
+    Math.max(item.for_load, item.for_week ?? item.for_load)
   const forecast = props.usage?.forecast
   const short = runway.week_load >= 1 || runway.week_hours != null
   const tight =
@@ -70,29 +85,37 @@ export function CapacityVerdict(props: {
   let advice: string
   if (!addition) {
     // The supply panel below gives the shortfall in dollars.
-    advice = t('No measured Max 5x account in the pool to size additions with.')
+    advice = t('No measured Team account in the pool to size additions with.')
   } else if (addition.for_load > 0) {
     advice = t(
-      'To keep up with demand now, add {{count}} × Max 5x; each brings about {{week}} a week.',
-      { count: addition.for_load, week: fmt.usdWhole(addition.week_usd) }
+      'To keep up with demand now, add {{count}} × {{plan}}; each brings about {{week}} a week.',
+      {
+        count: addition.for_load,
+        plan,
+        week: fmt.usdWhole(addition.week_usd),
+      }
     )
     if (addition.for_trend > addition.for_load) {
       advice = [
         advice,
-        t('If use keeps growing, {{count}} × Max 5x by the end of the week.', {
-          count: addition.for_trend,
-        }),
+        t(
+          'If use keeps growing, {{count}} × {{plan}} by the end of the week.',
+          {
+            count: addition.for_trend,
+            plan,
+          }
+        ),
       ].join(' ')
     }
   } else if (addition.for_week != null && addition.for_week > 0) {
     advice = t(
-      'Weekly supply keeps up, but the quota runs out before the next resets: {{count}} more × Max 5x cover the next 7 days.',
-      { count: addition.for_week }
+      'Weekly supply keeps up, but the quota runs out before the next resets: {{count}} more × {{plan}} cover the next 7 days.',
+      { count: addition.for_week, plan }
     )
   } else if (addition.for_trend > 0) {
     advice = t(
-      'No account needed now; if use keeps growing, {{count}} × Max 5x by the end of the week.',
-      { count: addition.for_trend }
+      'No account needed now; if use keeps growing, {{count}} × {{plan}} by the end of the week.',
+      { count: addition.for_trend, plan }
     )
   } else {
     advice = t(
@@ -100,9 +123,7 @@ export function CapacityVerdict(props: {
     )
   }
 
-  const toAdd = addition
-    ? Math.max(addition.for_load, addition.for_week ?? addition.for_load)
-    : null
+  const toAdd = addition ? countToAdd(addition) : null
   const nextFive = forecast?.next_5h_usd
   const fiveLeft = five?.remaining_usd
   let fiveTone: Tone = 'default'
@@ -139,13 +160,13 @@ export function CapacityVerdict(props: {
       title={t('Is capacity enough?')}
       description={[lead, advice].join(' ')}
       help={t(
-        'Demand and the forecasts are gpt-load spend at official prices, the unit the pool’s quota is in. An added Max 5x account is sized by the median measured Max 5x account in the pool, up to its group’s 7-day budget line, and starts a full week now. Keeping up means a weekly load of 100% or less; the 7-day figure also covers the quota running out before resets.'
+        'Demand and the forecasts are gpt-load spend at official prices, the unit the pool’s quota is in. An added account is sized by the median measured account of its plan in the pool, Team Tier 1 first and Team Standard beside it, up to its group’s 7-day budget line, and starts a full week now. Keeping up means a weekly load of 100% or less; the 7-day figure also covers the quota running out before resets.'
       )}
     >
       <MetricGrid
         items={[
           {
-            label: t('Max 5x to add'),
+            label: t('{{plan}} to add', { plan: plan || 'Team' }),
             featured: true,
             help: t(
               'The more of two counts: accounts for a weekly load of 100% at today’s demand, and accounts for no gap in the next 7 days.'
@@ -153,17 +174,27 @@ export function CapacityVerdict(props: {
             value: toAdd == null ? '-' : fmt.num(toAdd),
             tone: toAdd ? tone : 'default',
             hint: addition
-              ? t(
-                  'Keep up {{load}} · 7 days {{week}} · with growth {{trend}}',
-                  {
-                    load: addition.for_load,
-                    week:
-                      addition.for_week == null
-                        ? t('over {{count}}', { count: 30 })
-                        : addition.for_week,
-                    trend: addition.for_trend,
-                  }
-                )
+              ? [
+                  t(
+                    'Keep up {{load}} · 7 days {{week}} · with growth {{trend}}',
+                    {
+                      load: addition.for_load,
+                      week:
+                        addition.for_week == null
+                          ? t('over {{count}}', { count: 30 })
+                          : addition.for_week,
+                      trend: addition.for_trend,
+                    }
+                  ),
+                  alternative &&
+                    countToAdd(alternative) > 0 &&
+                    t('or {{count}} × {{plan}}', {
+                      count: countToAdd(alternative),
+                      plan: planName(alternative),
+                    }),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
               : undefined,
           },
           {

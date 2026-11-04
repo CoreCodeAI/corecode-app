@@ -7667,15 +7667,15 @@
     "Enough capacity.": "용량이 충분합니다.",
     "Not enough capacity.": "용량이 부족합니다.",
     "Capacity is tight.": "용량이 빠듯합니다.",
-    "No measured Max 5x account in the pool to size additions with.": "증설 규모를 산정할 측정된 Max 5x 계정이 풀에 없습니다.",
-    "To keep up with demand now, add {{count}} × Max 5x; each brings about {{week}} a week.": "현재 수요를 따라가려면 Max 5x {{count}}개를 추가하세요. 각각 주당 약 {{week}}을(를) 제공합니다.",
-    "If use keeps growing, {{count}} × Max 5x by the end of the week.": "사용량이 계속 증가하면 주말까지 Max 5x {{count}}개가 필요합니다.",
-    "Weekly supply keeps up, but the quota runs out before the next resets: {{count}} more × Max 5x cover the next 7 days.": "주간 공급은 따라가지만 다음 재설정 전에 한도가 소진됩니다. Max 5x를 {{count}}개 더 추가하면 향후 7일을 충당합니다.",
-    "No account needed now; if use keeps growing, {{count}} × Max 5x by the end of the week.": "지금은 추가 계정이 필요 없지만, 사용량이 계속 증가하면 주말까지 Max 5x {{count}}개가 필요합니다.",
+    "No measured Team account in the pool to size additions with.": "증설 규모를 산정할 측정된 Team 계정이 풀에 없습니다.",
+    "To keep up with demand now, add {{count}} × {{plan}}; each brings about {{week}} a week.": "현재 수요를 따라가려면 {{plan}} {{count}}개를 추가하세요. 각각 주당 약 {{week}}을(를) 제공합니다.",
+    "If use keeps growing, {{count}} × {{plan}} by the end of the week.": "사용량이 계속 증가하면 주말까지 {{plan}} {{count}}개가 필요합니다.",
+    "Weekly supply keeps up, but the quota runs out before the next resets: {{count}} more × {{plan}} cover the next 7 days.": "주간 공급은 따라가지만 다음 재설정 전에 한도가 소진됩니다. {{plan}}를 {{count}}개 더 추가하면 향후 7일을 충당합니다.",
+    "No account needed now; if use keeps growing, {{count}} × {{plan}} by the end of the week.": "지금은 추가 계정이 필요 없지만, 사용량이 계속 증가하면 주말까지 {{plan}} {{count}}개가 필요합니다.",
     "No account needed: supply keeps up with demand and lasts the next 7 days.": "추가 계정이 필요 없습니다. 공급이 수요를 따라가며 향후 7일 동안 유지됩니다.",
     "Is capacity enough?": "용량이 충분한가요?",
-    "Demand and the forecasts are gpt-load spend at official prices, the unit the pool’s quota is in. An added Max 5x account is sized by the median measured Max 5x account in the pool, up to its group’s 7-day budget line, and starts a full week now. Keeping up means a weekly load of 100% or less; the 7-day figure also covers the quota running out before resets.": "수요와 예측은 풀의 한도 단위인 공식 가격 기준 gpt-load 지출입니다. 추가하는 Max 5x 계정은 풀에서 측정된 Max 5x 계정의 중앙값을 그룹의 7일 예산선까지로 산정하며 지금 한 주 전체로 시작합니다. 따라간다는 것은 주간 부하가 100% 이하라는 뜻이며, 7일 수치는 재설정 전에 한도가 소진되는 경우도 포함합니다.",
-    "Max 5x to add": "추가할 Max 5x",
+    "Demand and the forecasts are gpt-load spend at official prices, the unit the pool’s quota is in. An added account is sized by the median measured account of its plan in the pool, Team Tier 1 first and Team Standard beside it, up to its group’s 7-day budget line, and starts a full week now. Keeping up means a weekly load of 100% or less; the 7-day figure also covers the quota running out before resets.": "수요와 예측은 풀의 한도 단위인 공식 가격 기준 gpt-load 지출입니다. 추가하는 계정은 풀에서 측정된 같은 플랜 계정의 중앙값(Team Tier 1 우선, Team Standard 병기)을 그룹의 7일 예산선까지로 산정하며 지금 한 주 전체로 시작합니다. 따라간다는 것은 주간 부하가 100% 이하라는 뜻이며, 7일 수치는 재설정 전에 한도가 소진되는 경우도 포함합니다.",
+    "{{plan}} to add": "추가할 {{plan}}",
     "The more of two counts: accounts for a weekly load of 100% at today’s demand, and accounts for no gap in the next 7 days.": "두 값 중 큰 값입니다: 오늘 수요에서 주간 부하 100%를 위한 계정 수, 그리고 향후 7일 동안 공백이 없도록 하는 계정 수.",
     "Keep up {{load}} · 7 days {{week}} · with growth {{trend}}": "따라가기 {{load}} · 7일 {{week}} · 증가 반영 {{trend}}",
     "over {{count}}": "{{count}} 초과",
@@ -7762,6 +7762,7 @@
     "Pay with USDT / USDC": "USDT / USDC로 결제",
     "About ${{amount}} in USDT or USDC at the site exchange rate.": "사이트 환율 기준 약 ${{amount}}의 USDT 또는 USDC입니다.",
     "{{credit}} credit = {{money}}": "{{credit}} 크레딧 = {{money}}",
-    "Long context": "긴 컨텍스트"
+    "Long context": "긴 컨텍스트",
+    "or {{count}} × {{plan}}": "또는 {{plan}} {{count}}개"
   }
 }

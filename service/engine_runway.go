@@ -98,9 +98,10 @@ type EngineRunway struct {
 	High  *EngineRunwayScenario `json:"high"`
 	// BandForecasts is the past forecasts Low and High are drawn from.
 	BandForecasts int `json:"band_forecasts"`
-	// Addition is how many accounts of runwayAddPlan would close the gap;
-	// nil without demand or without a measured account of the plan.
-	Addition *EngineRunwayAddition `json:"addition"`
+	// Additions size each of runwayAddPlans that has a measured account, in
+	// that order; Addition is the first of them, nil without one.
+	Addition  *EngineRunwayAddition  `json:"addition"`
+	Additions []EngineRunwayAddition `json:"additions"`
 }
 
 // EngineRunwayAddition sizes the accounts to add in one plan, priced by
@@ -146,12 +147,14 @@ type runwayAccount struct {
 // times its demand is not short of quota.
 const runwayMaxScale = 4.0
 
-// The plan additions are sized in, and the most the 7-day search tries.
-const (
-	runwayAddPlan     = "Max"
-	runwayAddTier     = "default_claude_max_5x"
-	runwayMaxAddition = 30
-)
+// The plans additions are sized in, preferred first: the pool buys Team
+// seats. The most the 7-day search tries.
+var runwayAddPlans = []struct{ plan, tier string }{
+	{"Team", "team_tier_1"},
+	{"Team", "team_standard"},
+}
+
+const runwayMaxAddition = 30
 
 // poolRunway sets the channel's demand against its quota supply. Over the next
 // runwayHorizon, demand runs at the last 24 hours' spend, moved through the
@@ -265,20 +268,28 @@ func poolRunway(pool EnginePool, channel string, nowMS int64, profile demandProf
 		}
 		runway.HeadroomScale = &lo
 	}
-	runway.Addition = runwayAddition(pool, groups, channel, &runway, accounts, nowMS, at(1))
+	runway.Additions = []EngineRunwayAddition{}
+	for _, add := range runwayAddPlans {
+		if addition := runwayAddition(pool, groups, channel, &runway, accounts, nowMS, at(1), add.plan, add.tier); addition != nil {
+			runway.Additions = append(runway.Additions, *addition)
+		}
+	}
+	if len(runway.Additions) > 0 {
+		runway.Addition = &runway.Additions[0]
+	}
 	return &runway
 }
 
-// runwayAddition sizes runwayAddPlan accounts against the runway's demand.
+// runwayAddition sizes accounts of one plan and tier against the runway's demand.
 // One account adds its plan's median measured weekly capacity, up to the
 // budget line of the group its plan's accounts are in. Nil without a
 // measured account of the plan.
 func runwayAddition(pool EnginePool, groups map[int]EngineGroup, channel string, runway *EngineRunway,
-	accounts []runwayAccount, nowMS int64, rate func(ms int64) float64) *EngineRunwayAddition {
+	accounts []runwayAccount, nowMS int64, rate func(ms int64) float64, plan, tier string) *EngineRunwayAddition {
 	var value *EnginePlanValue
-	for _, plan := range EnginePlanValues(pool.Accounts) {
-		if plan.Plan == runwayAddPlan && plan.Tier == runwayAddTier {
-			value = &plan
+	for _, candidate := range EnginePlanValues(pool.Accounts) {
+		if candidate.Plan == plan && candidate.Tier == tier {
+			value = &candidate
 			break
 		}
 	}
@@ -288,7 +299,7 @@ func runwayAddition(pool EnginePool, groups map[int]EngineGroup, channel string,
 	budget := 100.0
 	for _, account := range pool.Accounts {
 		group, ok := groups[account.GroupID]
-		if ok && group.Channel == channel && account.Plan == runwayAddPlan && account.Tier == runwayAddTier {
+		if ok && group.Channel == channel && account.Plan == plan && account.Tier == tier {
 			if group.QuotaBudget {
 				budget = group.SevenDayBudget
 			}

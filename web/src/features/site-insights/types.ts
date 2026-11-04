@@ -175,6 +175,8 @@ export type EngineRunway = {
   band_forecasts?: number
   /** Accounts of one plan that would close the gap; absent before the server's release. */
   addition?: EngineRunwayAddition | null
+  /** Each Team tier sized the same way, Team Tier 1 first; absent before the server's release. */
+  additions?: EngineRunwayAddition[] | null
 }
 
 export type EngineRunwayScenario = {

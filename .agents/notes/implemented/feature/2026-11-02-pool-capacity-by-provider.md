@@ -2,6 +2,9 @@
 
 Status: implemented
 
+The Max 5x sizing was superseded on 2026-11-04 by `2026-11-04-size-the-claude-pool-in-team-seats.md`:
+the pool holds no Max 5x account, so additions are sized in Team Tier 1 and Team Standard.
+
 ## Problem
 
 The owner asked whether the pool's capacity is enough and whether to add accounts. The
