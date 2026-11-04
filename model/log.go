@@ -365,7 +365,11 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	if !common.LogConsumeEnabled {
 		return
 	}
-	logger.LogInfo(c, common.LogText("record consume log: userId=%d, params=%s", userId, common.GetJsonString(params)))
+	// The params carry the whole log, including other; serializing them for
+	// every request is only worth it when debugging.
+	if common.DebugEnabled {
+		logger.LogDebug(c, "record consume log: userId=%d, params=%s", userId, common.GetJsonString(params))
+	}
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := upstreamRequestID(c)
@@ -617,7 +621,7 @@ func GetUserLogs(userId int, filter LogFilter, startIdx int, num int) (logs []*L
 	if err != nil {
 		return nil, 0, err
 	}
-	err = tx.Model(&Log{}).Limit(logSearchCountLimit).Count(&total).Error
+	total, err = countUpTo(tx.Model(&Log{}), logSearchCountLimit)
 	if err != nil {
 		common.SysError(common.LogText("failed to count user logs: %s", err.Error()))
 		return nil, 0, common.NewMessage("Failed to query logs")

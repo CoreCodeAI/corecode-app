@@ -297,6 +297,10 @@ var riskGateRefusals = struct {
 	sync.Mutex
 	loadedAt     time.Time
 	fingerprints []riskgate.Fingerprint
+	// loading is set while a load runs outside the lock; remembered collects
+	// the refusals recorded meanwhile, which the loaded set may predate.
+	loading    bool
+	remembered []riskgate.Fingerprint
 	// scores caches the result per latest message: Claude Code resends the
 	// same one on every tool step. It is cleared whenever fingerprints change.
 	scores map[[32]byte]float64
@@ -305,8 +309,17 @@ var riskGateRefusals = struct {
 	generation int
 }{scores: map[[32]byte]float64{}}
 
+// riskGateFirstRefusalLoad joins the checks that arrive before the first load.
+var riskGateFirstRefusalLoad singleflight.Group
+
 // similarRefusal returns the highest similarity between text and a message
 // the upstream refused within the violation guard's window.
+//
+// The first check after a start waits for the refused messages, so it is
+// compared like every later one. After that, a check that finds the set older
+// than riskGateRefusalReload starts a reload in the background and compares
+// against the set it has: the query and the fingerprinting never run under
+// the lock every check takes.
 func similarRefusal(text string) float64 {
 	fingerprint := riskgate.NewFingerprint(text)
 	if fingerprint == nil {
@@ -314,28 +327,25 @@ func similarRefusal(text string) float64 {
 	}
 	key := sha256.Sum256([]byte(text[:min(len(text), riskgate.MaxFingerprintBytes)]))
 	riskGateRefusals.Lock()
-	if time.Since(riskGateRefusals.loadedAt) > riskGateRefusalReload {
-		windowDays := operation_setting.GetViolationGuardSetting().StrikeWindowDays
-		excerpts, err := model.GetRecentRefusedExcerpts(common.GetTimestamp()-int64(windowDays)*86400, riskGateRefusalCapacity)
-		if err != nil {
-			common.SysError(common.LogText("risk gate: failed to load refused messages: %s", err.Error()))
-		} else {
-			// A new slice: readers iterate the old one outside the lock.
-			fingerprints := make([]riskgate.Fingerprint, 0, len(excerpts))
-			for _, excerpt := range excerpts {
-				if riskgate.ClientTemplate(excerpt) {
-					continue
-				}
-				if refused := riskgate.NewFingerprint(excerpt); refused != nil {
-					fingerprints = append(fingerprints, refused)
-				}
+	if riskGateRefusals.loadedAt.IsZero() {
+		riskGateRefusals.Unlock()
+		_, _, _ = riskGateFirstRefusalLoad.Do("refusals", func() (any, error) {
+			riskGateRefusals.Lock()
+			if !riskGateRefusals.loadedAt.IsZero() || riskGateRefusals.loading {
+				riskGateRefusals.Unlock()
+				return nil, nil
 			}
-			riskGateRefusals.fingerprints = fingerprints
-		}
-		// A failed load is retried at the next interval, not on every request.
-		riskGateRefusals.loadedAt = time.Now()
-		riskGateRefusals.generation++
-		clear(riskGateRefusals.scores)
+			riskGateRefusals.loading = true
+			riskGateRefusals.remembered = nil
+			riskGateRefusals.Unlock()
+			loadRefusedMessages()
+			return nil, nil
+		})
+		riskGateRefusals.Lock()
+	} else if !riskGateRefusals.loading && time.Since(riskGateRefusals.loadedAt) > riskGateRefusalReload {
+		riskGateRefusals.loading = true
+		riskGateRefusals.remembered = nil
+		gopool.Go(loadRefusedMessages)
 	}
 	if best, ok := riskGateRefusals.scores[key]; ok {
 		riskGateRefusals.Unlock()
@@ -359,6 +369,46 @@ func similarRefusal(text string) float64 {
 	return best
 }
 
+// loadRefusedMessages replaces the similarity set with the messages refused
+// within the violation guard's window, keeping the ones remembered while it
+// ran. The caller sets loading. A failed load keeps the current set and is
+// retried at the next interval, not on every request.
+func loadRefusedMessages() {
+	windowDays := operation_setting.GetViolationGuardSetting().StrikeWindowDays
+	excerpts, err := model.GetRecentRefusedExcerpts(common.GetTimestamp()-int64(windowDays)*86400, riskGateRefusalCapacity)
+	var fingerprints []riskgate.Fingerprint
+	if err != nil {
+		common.SysError(common.LogText("risk gate: failed to load refused messages: %s", err.Error()))
+	} else {
+		fingerprints = make([]riskgate.Fingerprint, 0, len(excerpts))
+		for _, excerpt := range excerpts {
+			if riskgate.ClientTemplate(excerpt) {
+				continue
+			}
+			if refused := riskgate.NewFingerprint(excerpt); refused != nil {
+				fingerprints = append(fingerprints, refused)
+			}
+		}
+	}
+
+	riskGateRefusals.Lock()
+	defer riskGateRefusals.Unlock()
+	riskGateRefusals.loading = false
+	riskGateRefusals.loadedAt = time.Now()
+	remembered := riskGateRefusals.remembered
+	riskGateRefusals.remembered = nil
+	if err != nil {
+		return
+	}
+	// A new slice: readers iterate the old one outside the lock.
+	merged := make([]riskgate.Fingerprint, 0, min(len(remembered)+len(fingerprints), riskGateRefusalCapacity))
+	merged = append(merged, remembered[:min(len(remembered), riskGateRefusalCapacity)]...)
+	merged = append(merged, fingerprints[:min(len(fingerprints), riskGateRefusalCapacity-len(merged))]...)
+	riskGateRefusals.fingerprints = merged
+	riskGateRefusals.generation++
+	clear(riskGateRefusals.scores)
+}
+
 // rememberRefusedMessage adds a newly refused message to the similarity set,
 // unless it is a client template.
 func rememberRefusedMessage(excerpt string) {
@@ -371,6 +421,9 @@ func rememberRefusedMessage(excerpt string) {
 	}
 	riskGateRefusals.Lock()
 	defer riskGateRefusals.Unlock()
+	if riskGateRefusals.loading {
+		riskGateRefusals.remembered = append([]riskgate.Fingerprint{fingerprint}, riskGateRefusals.remembered...)
+	}
 	if riskGateRefusals.loadedAt.IsZero() {
 		return
 	}

@@ -47,6 +47,8 @@ func resetRiskGateState() {
 	riskGateRefusals.Lock()
 	riskGateRefusals.loadedAt = time.Time{}
 	riskGateRefusals.fingerprints = nil
+	riskGateRefusals.loading = false
+	riskGateRefusals.remembered = nil
 	clear(riskGateRefusals.scores)
 	riskGateRefusals.Unlock()
 	riskGateDecisions.Lock()
