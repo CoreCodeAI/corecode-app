@@ -95,6 +95,50 @@ describe('advanced charts', () => {
     expect(screen.getByText('1 models under 20 requests left out')).toBeTruthy()
   })
 
+  it('moves a crowded label to another side instead of overlapping', () => {
+    const { container } = render(
+      <ModelMap
+        models={[
+          {
+            model: 'claude-opus',
+            vendor: 'claude',
+            requests: 900,
+            error_rate: 0.001,
+            ttft_p50_ms: 1500,
+          },
+          {
+            model: 'claude-haiku',
+            vendor: 'claude',
+            requests: 200,
+            error_rate: 0.001,
+            ttft_p50_ms: 1550,
+          },
+          {
+            model: 'gpt-x',
+            vendor: 'codex',
+            requests: 30,
+            error_rate: 0.3,
+            ttft_p50_ms: 4000,
+          },
+        ]}
+        vendorName={(vendor) => vendor}
+        empty='none'
+      />
+    )
+    const labels = [...container.querySelectorAll('svg text')].filter((node) =>
+      ['claude-opus', 'claude-haiku', 'gpt-x'].includes(node.textContent ?? '')
+    )
+    expect(labels.map((node) => node.textContent).sort()).toEqual([
+      'claude-haiku',
+      'claude-opus',
+      'gpt-x',
+    ])
+    const spots = labels.map(
+      (node) => `${node.getAttribute('x')},${node.getAttribute('y')}`
+    )
+    expect(new Set(spots).size).toBe(3)
+  })
+
   it('shows each funnel step against the first and the step before', () => {
     render(
       <FunnelChart
