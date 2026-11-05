@@ -7845,6 +7845,7 @@
     "{{count}} models under {{min}} requests left out": "{{count}} 个请求数少于 {{min}} 的模型未显示",
     "{{rate}} of sign-ups in this range have paid.": "此时间范围内注册的用户中 {{rate}} 已付费。",
     "{{rate}} went on": "{{rate}} 进入下一步",
-    "{{share}} of {{limit}}": "占 {{limit}} 的 {{share}}"
+    "{{share}} of {{limit}}": "占 {{limit}} 的 {{share}}",
+    "Billed per request; each generated image counts as one request.": "按次计费，生成图片时每张计一次。"
   }
 }

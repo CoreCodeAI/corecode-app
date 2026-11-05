@@ -7845,6 +7845,7 @@
     "{{count}} models under {{min}} requests left out": "Ẩn {{count}} mô hình dưới {{min}} yêu cầu",
     "{{rate}} of sign-ups in this range have paid.": "{{rate}} người đăng ký trong khoảng này đã thanh toán.",
     "{{rate}} went on": "{{rate}} đi tiếp",
-    "{{share}} of {{limit}}": "{{share}} của {{limit}}"
+    "{{share}} of {{limit}}": "{{share}} của {{limit}}",
+    "Billed per request; each generated image counts as one request.": "Tính phí theo yêu cầu; mỗi ảnh được tạo tính là một yêu cầu."
   }
 }

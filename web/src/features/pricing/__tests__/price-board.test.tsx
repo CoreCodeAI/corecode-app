@@ -221,3 +221,70 @@ it('shows a marked-up model at its official price and explains its saving', asyn
 
 const MARKUP_HELP =
   'This model costs more to serve, so it is priced at 1.5× the official price before the group discount.'
+
+const imageModel: PricingModel = {
+  id: 3,
+  model_name: 'gpt-image-2',
+  quota_type: 1,
+  model_ratio: 0,
+  model_price: 0.075,
+  completion_ratio: 0,
+  enable_groups: ['GPT'],
+}
+
+it('lists a per-request model apart, at its price per request in the group', () => {
+  const chat: PricingModel = {
+    ...opus,
+    model_name: 'gpt-6-sol',
+    enable_groups: ['GPT'],
+  }
+  render(
+    <PriceBoard
+      models={[chat, imageModel]}
+      groupRatio={{ GPT: 0.8 }}
+      usableGroup={{ GPT: '' }}
+      priceRate={1}
+      usdExchangeRate={6.8}
+      onModelClick={vi.fn()}
+    />
+  )
+
+  const perRequest = screen.getByRole('table', { name: 'Per-request' })
+  const row = within(perRequest).getByRole('row', { name: /gpt-image-2/ })
+  // 0.075 × 0.8 × ¥1, with no official price beside it.
+  expect(within(row).getByText('¥0.06')).toBeVisible()
+  expect(within(row).queryByText(/Official/)).toBeNull()
+  expect(within(perRequest).queryByText('gpt-6-sol')).toBeNull()
+
+  const [tokenTable] = screen.getAllByRole('table')
+  expect(tokenTable).not.toBe(perRequest)
+  expect(within(tokenTable).getByText('gpt-6-sol')).toBeInTheDocument()
+  expect(within(tokenTable).queryByText('gpt-image-2')).toBeNull()
+})
+
+it('shows only the per-request table for a group of per-request models', () => {
+  render(
+    <PriceBoard
+      models={[
+        {
+          ...imageModel,
+          model_name: 'grok-imagine-image',
+          model_price: 0.05,
+          enable_groups: ['Grok'],
+        },
+      ]}
+      groupRatio={{ Grok: 1.2 }}
+      usableGroup={{ Grok: '' }}
+      priceRate={1}
+      usdExchangeRate={6.8}
+      onModelClick={vi.fn()}
+    />
+  )
+
+  expect(screen.getAllByRole('table')).toHaveLength(1)
+  const row = within(
+    screen.getByRole('table', { name: 'Per-request' })
+  ).getByRole('row', { name: /grok-imagine-image/ })
+  expect(within(row).getByText('¥0.06')).toBeVisible()
+  expect(screen.queryByText('Input price')).toBeNull()
+})
