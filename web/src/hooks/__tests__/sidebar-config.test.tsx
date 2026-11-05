@@ -199,4 +199,26 @@ describe('sidebar group order', () => {
       'admin',
     ])
   })
+
+  it('puts daily operations first in Admin, then the rest in their usual order', () => {
+    const { result } = sidebarFor()
+    const admin = result.current.find((group) => group.id === 'admin')
+    expect(
+      admin?.items.map((item) => ('url' in item ? item.url : item.title))
+    ).toEqual([
+      '/site-insights',
+      '/feedback-admin',
+      '/enterprise-applications',
+      '/topups',
+      '/users',
+      '/affiliates',
+      '/redemption-codes',
+      '/channels',
+      '/models/metadata',
+      '/subscriptions',
+      '/system-info',
+      '/task-plugins',
+      '/system-settings/site',
+    ])
+  })
 })

@@ -164,10 +164,30 @@ export function useSidebarData(): SidebarData {
             icon: MessageSquareText,
           },
           {
+            title: t('Enterprise Applications'),
+            url: '/enterprise-applications',
+            icon: Building2,
+          },
+          {
+            title: t('Top-up Records'),
+            url: '/topups',
+            icon: Receipt,
+          },
+          {
+            title: t('Users'),
+            url: '/users',
+            icon: Users,
+          },
+          {
             title: t('Invitation program'),
             url: '/affiliates',
             icon: HandCoins,
             requiredRole: ROLE.SUPER_ADMIN,
+          },
+          {
+            title: t('Redemption Codes'),
+            url: '/redemption-codes',
+            icon: Ticket,
           },
           {
             title: t('Channels'),
@@ -180,29 +200,9 @@ export function useSidebarData(): SidebarData {
             icon: Box,
           },
           {
-            title: t('Users'),
-            url: '/users',
-            icon: Users,
-          },
-          {
-            title: t('Redemption Codes'),
-            url: '/redemption-codes',
-            icon: Ticket,
-          },
-          {
             title: t('Subscriptions'),
             url: '/subscriptions',
             icon: CreditCard,
-          },
-          {
-            title: t('Top-up Records'),
-            url: '/topups',
-            icon: Receipt,
-          },
-          {
-            title: t('Enterprise Applications'),
-            url: '/enterprise-applications',
-            icon: Building2,
           },
           {
             title: t('System Info'),
