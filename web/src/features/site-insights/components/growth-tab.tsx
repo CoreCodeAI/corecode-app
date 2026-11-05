@@ -35,6 +35,7 @@ import type {
   FunnelRow,
   GrowthInsights,
 } from '../types'
+import { useActivityVerdict, useGrowthVerdict } from '../verdicts'
 import { GroupsPanel, ReferralPanel } from './business-panels'
 import {
   BarSeries,
@@ -44,6 +45,7 @@ import {
   Panel,
   SimpleTable,
   UserLabel,
+  Verdict,
 } from './shared'
 
 export function GrowthTab(props: {
@@ -55,6 +57,7 @@ export function GrowthTab(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const verdict = useGrowthVerdict(props.data, props.previous)
   const label = useSignupMethodLabel()
   const data = props.data
   const previous = props.previous
@@ -113,6 +116,11 @@ export function GrowthTab(props: {
 
   return (
     <div className='grid gap-4'>
+      <Verdict
+        loading={!props.data}
+        tone={verdict?.tone ?? 'default'}
+        text={verdict?.text}
+      />
       <MetricGrid
         loading={!data}
         items={[
@@ -221,6 +229,7 @@ export function ActivityTab(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const verdict = useActivityVerdict(props.data, props.previous)
   const data = props.data
   const charge = useChargeFormat(data)
   const previous = props.previous
@@ -306,6 +315,11 @@ export function ActivityTab(props: {
 
   return (
     <div className='grid gap-4'>
+      <Verdict
+        loading={!props.data}
+        tone={verdict?.tone ?? 'default'}
+        text={verdict?.text}
+      />
       <MetricGrid
         loading={!data}
         items={[
