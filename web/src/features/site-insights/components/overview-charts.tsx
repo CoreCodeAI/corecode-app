@@ -99,9 +99,7 @@ export function ProvidersPanel(props: {
   return (
     <Panel
       title={t('By provider')}
-      help={t(
-        'Accounts, slots and in flight are live, from the engine. Requests, failures, first token and charge cover the range; GPT models run on the Codex accounts.'
-      )}
+      help={t('Accounts and slots are live; the rest covers the range.')}
     >
       <SimpleTable
         rows={props.pool || props.quality ? rows : undefined}
@@ -223,10 +221,7 @@ export function ShareCharts(props: {
 
   return (
     <div className='grid gap-4 lg:grid-cols-3'>
-      <Panel
-        title={t('Requests by provider')}
-        help={t('Requests in the range, by the vendor of the model.')}
-      >
+      <Panel title={t('Requests by provider')}>
         <ShareDonut
           loading={!props.quality}
           slices={requests}
@@ -238,9 +233,7 @@ export function ShareCharts(props: {
       </Panel>
       <Panel
         title={t('Consumption by provider')}
-        help={t(
-          'What requests were charged at list price, root’s own included, by the vendor of the model.'
-        )}
+        help={t('At list price, root included.')}
       >
         <ShareDonut
           loading={!props.finance}

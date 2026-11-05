@@ -7819,17 +7819,16 @@
     "{{vendor}} fails {{rate}} of requests.": "{{vendor}} fails {{rate}} of requests.",
     "All providers": "All providers",
     "Upstream rate limit": "Upstream rate limit",
-    "Accounts, slots and in flight are live, from the engine. Requests, failures, first token and charge cover the range; GPT models run on the Codex accounts.": "Accounts, slots and in flight are live, from the engine. Requests, failures, first token and charge cover the range; GPT models run on the Codex accounts.",
     "Busiest models": "Busiest models",
     "By provider": "By provider",
     "Consumption by provider": "Consumption by provider",
     "No provider has accounts or requests": "No provider has accounts or requests",
     "Nothing was charged in this range": "Nothing was charged in this range",
     "Requests by provider": "Requests by provider",
-    "Requests in the range, by the vendor of the model.": "Requests in the range, by the vendor of the model.",
     "Revenue by payment method": "Revenue by payment method",
     "Top {{count}} of {{all}} models by requests.": "Top {{count}} of {{all}} models by requests.",
-    "What requests were charged at list price, root’s own included, by the vendor of the model.": "What requests were charged at list price, root’s own included, by the vendor of the model.",
-    "Upstream overloaded": "Upstream overloaded"
+    "Upstream overloaded": "Upstream overloaded",
+    "Accounts and slots are live; the rest covers the range.": "Accounts and slots are live; the rest covers the range.",
+    "At list price, root included.": "At list price, root included."
   }
 }

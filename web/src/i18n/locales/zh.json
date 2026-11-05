@@ -7819,17 +7819,16 @@
     "{{vendor}} fails {{rate}} of requests.": "{{vendor}} 失败率 {{rate}}。",
     "All providers": "全部提供商",
     "Upstream rate limit": "上游限流",
-    "Accounts, slots and in flight are live, from the engine. Requests, failures, first token and charge cover the range; GPT models run on the Codex accounts.": "可调度账号、槽位和进行中请求是引擎的实时数据；请求、失败率、首字延迟和消费覆盖所选时间范围。GPT 模型跑在 Codex 账号上。",
     "Busiest models": "请求最多的模型",
     "By provider": "按提供商",
     "Consumption by provider": "消费占比（按提供商）",
     "No provider has accounts or requests": "没有提供商有账号或请求",
     "Nothing was charged in this range": "此时间范围内没有消费",
     "Requests by provider": "请求占比（按提供商）",
-    "Requests in the range, by the vendor of the model.": "时间范围内的请求，按模型所属提供商划分。",
     "Revenue by payment method": "收入占比（按支付方式）",
     "Top {{count}} of {{all}} models by requests.": "按请求数排名前 {{count}} 的模型（共 {{all}} 个）。",
-    "What requests were charged at list price, root’s own included, by the vendor of the model.": "请求按标价计的消费（含 root 自用），按模型所属提供商划分。",
-    "Upstream overloaded": "上游过载"
+    "Upstream overloaded": "上游过载",
+    "Accounts and slots are live; the rest covers the range.": "账号和槽位为实时数据，其余为所选时间范围。",
+    "At list price, root included.": "按标价计，含 root 自用。"
   }
 }

@@ -7819,17 +7819,16 @@
     "{{vendor}} fails {{rate}} of requests.": "У {{vendor}} {{rate}} ошибок.",
     "All providers": "Все провайдеры",
     "Upstream rate limit": "Лимит запросов у поставщика",
-    "Accounts, slots and in flight are live, from the engine. Requests, failures, first token and charge cover the range; GPT models run on the Codex accounts.": "Аккаунты, слоты и запросы в работе — текущие данные движка. Запросы, ошибки, первый токен и списания — за выбранный период; модели GPT работают на аккаунтах Codex.",
     "Busiest models": "Самые загруженные модели",
     "By provider": "По провайдерам",
     "Consumption by provider": "Списания по провайдерам",
     "No provider has accounts or requests": "Ни у одного провайдера нет аккаунтов или запросов",
     "Nothing was charged in this range": "За этот период списаний нет",
     "Requests by provider": "Запросы по провайдерам",
-    "Requests in the range, by the vendor of the model.": "Запросы за период по поставщику модели.",
     "Revenue by payment method": "Выручка по способам оплаты",
     "Top {{count}} of {{all}} models by requests.": "Топ-{{count}} из {{all}} моделей по запросам.",
-    "What requests were charged at list price, root’s own included, by the vendor of the model.": "Списания по прейскуранту, включая собственные запросы root, по поставщику модели.",
-    "Upstream overloaded": "Поставщик перегружен"
+    "Upstream overloaded": "Поставщик перегружен",
+    "Accounts and slots are live; the rest covers the range.": "Аккаунты и слоты — сейчас, остальное — за период.",
+    "At list price, root included.": "По прейскуранту, включая root."
   }
 }
