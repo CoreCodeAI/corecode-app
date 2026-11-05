@@ -7763,6 +7763,8 @@
     "About ${{amount}} in USDT or USDC at the site exchange rate.": "サイトの為替レートで約 ${{amount}} 分の USDT または USDC です。",
     "{{credit}} credit = {{money}}": "{{credit}} 分のクレジット = {{money}}",
     "Long context": "ロングコンテキスト",
-    "or {{count}} × {{plan}}": "または {{plan}} を {{count}} 個"
+    "or {{count}} × {{plan}}": "または {{plan}} を {{count}} 個",
+    "Quick select by vendor": "ベンダーで絞り込み",
+    "{{requests}} requests · {{rate}} failed": "{{requests}} リクエスト · 失敗率 {{rate}}"
   }
 }

@@ -7763,6 +7763,8 @@
     "About ${{amount}} in USDT or USDC at the site exchange rate.": "按站內匯率約合 ${{amount}} 的 USDT 或 USDC。",
     "{{credit}} credit = {{money}}": "{{credit}} 額度 = {{money}}",
     "Long context": "長上下文",
-    "or {{count}} × {{plan}}": "或 {{count}} 個 {{plan}}"
+    "or {{count}} × {{plan}}": "或 {{count}} 個 {{plan}}",
+    "Quick select by vendor": "按廠商快速選擇",
+    "{{requests}} requests · {{rate}} failed": "{{requests}} 次請求 · 失敗率 {{rate}}"
   }
 }

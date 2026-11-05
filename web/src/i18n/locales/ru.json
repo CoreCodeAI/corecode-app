@@ -7763,6 +7763,8 @@
     "About ${{amount}} in USDT or USDC at the site exchange rate.": "Около ${{amount}} в USDT или USDC по курсу сайта.",
     "{{credit}} credit = {{money}}": "{{credit}} кредитов = {{money}}",
     "Long context": "Длинный контекст",
-    "or {{count}} × {{plan}}": "или {{count}} × {{plan}}"
+    "or {{count}} × {{plan}}": "или {{count}} × {{plan}}",
+    "Quick select by vendor": "Быстрый выбор по поставщику",
+    "{{requests}} requests · {{rate}} failed": "{{requests}} запросов · ошибок {{rate}}"
   }
 }

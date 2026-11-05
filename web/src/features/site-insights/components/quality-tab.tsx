@@ -32,7 +32,7 @@ import {
 import { cn } from '@/lib/utils'
 
 import { failureTone, SMALL_SAMPLE, useInsightsFormat } from '../lib'
-import type { BusinessInsights, QualityInsights } from '../types'
+import type { BusinessInsights, QualityInsights, VendorQuality } from '../types'
 import {
   BarSeries,
   Breakdown,
@@ -51,6 +51,102 @@ const RATE_TONES: Record<Tone, string> = {
   danger: 'text-destructive font-medium',
 }
 
+function useVendorLabels(): Record<string, string> {
+  const { t } = useTranslation()
+  return {
+    claude: t('Claude'),
+    codex: t('GPT'),
+    grok: t('Grok'),
+    gemini: t('Gemini'),
+    other: t('Other'),
+  }
+}
+
+function sameModels(a: string[], b: string[]) {
+  return a.length === b.length && a.every((name) => b.includes(name))
+}
+
+/**
+ * One card per vendor, plus one for every model, each with its own figures
+ * whatever the filter selects. A click narrows the tab to that vendor's
+ * models; the all-models card clears the filter.
+ */
+function VendorCards(props: {
+  all?: VendorQuality
+  vendors?: VendorQuality[] | null
+  selected: string[]
+  onChange: (models: string[]) => void
+}) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const labels = useVendorLabels()
+  const vendors = props.vendors ?? []
+  if (!props.all || vendors.length === 0) return null
+  const cards = [
+    { key: 'all', label: t('All models'), models: [], figures: props.all },
+    ...vendors.map((vendor) => ({
+      key: vendor.vendor,
+      label: labels[vendor.vendor] ?? vendor.vendor,
+      models: vendor.models ?? [],
+      figures: vendor,
+    })),
+  ]
+
+  return (
+    <div
+      role='group'
+      aria-label={t('Quick select by vendor')}
+      className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6'
+    >
+      {cards.map((card) => {
+        const active = sameModels(props.selected, card.models)
+        const ttft = card.figures.ttft_p50_ms
+          ? `${fmt.measuredMs(card.figures.ttft_p50_ms)} / ${fmt.measuredMs(card.figures.ttft_p95_ms)}`
+          : '—'
+        return (
+          <button
+            key={card.key}
+            type='button'
+            aria-pressed={active}
+            onClick={() => props.onChange(card.models)}
+            className={cn(
+              'bg-muted/20 hover:bg-muted/50 focus-visible:ring-ring flex min-w-0 flex-col gap-1 rounded-xl border px-3 py-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none',
+              active && 'border-primary bg-primary/5 ring-primary ring-1'
+            )}
+          >
+            <span className='flex items-baseline justify-between gap-2 text-xs'>
+              <span className='truncate font-medium'>{card.label}</span>
+              {card.key !== 'all' && (
+                <span className='text-muted-foreground shrink-0'>
+                  {t('{{count}} models', { count: card.models.length })}
+                </span>
+              )}
+            </span>
+            <span className='text-muted-foreground text-[11px]'>
+              TTFT p50 / p95
+            </span>
+            <span
+              className={cn(
+                'truncate text-lg font-semibold tabular-nums',
+                card.figures.ttft_p95_ms > 10000 &&
+                  'text-amber-600 dark:text-amber-400'
+              )}
+            >
+              {ttft}
+            </span>
+            <span className='text-muted-foreground truncate text-xs tabular-nums'>
+              {t('{{requests}} requests · {{rate}} failed', {
+                requests: fmt.num(card.figures.requests),
+                rate: fmt.pct(card.figures.error_rate),
+              })}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 /**
  * Picks the models the quality figures cover. The options are the table's
  * models, which the filter does not narrow; a selected model with no traffic
@@ -67,13 +163,7 @@ function ModelFilter(props: {
     ...rows.map((row) => row.model),
     ...props.selected.filter((name) => !rows.some((row) => row.model === name)),
   ]
-  const vendorLabels: Record<string, string> = {
-    claude: t('Claude'),
-    codex: t('GPT'),
-    grok: t('Grok'),
-    gemini: t('Gemini'),
-    other: t('Other'),
-  }
+  const vendorLabels = useVendorLabels()
   const vendors = Object.keys(vendorLabels).filter((vendor) =>
     rows.some((row) => row.vendor === vendor)
   )
@@ -184,6 +274,12 @@ export function QualityTab(props: {
 
   return (
     <div className='grid gap-4'>
+      <VendorCards
+        all={data?.all_models}
+        vendors={data?.vendors}
+        selected={props.models.selected}
+        onChange={props.models.onChange}
+      />
       <ModelFilter
         options={data?.models}
         selected={props.models.selected}

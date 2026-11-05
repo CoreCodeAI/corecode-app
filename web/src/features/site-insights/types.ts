@@ -460,6 +460,16 @@ export type ActivityInsights = {
   top10_share: number
 }
 
+export type VendorQuality = {
+  vendor: string
+  models: string[] | null
+  requests: number
+  errors: number
+  error_rate: number
+  ttft_p50_ms: number
+  ttft_p95_ms: number
+}
+
 export type QualityInsights = {
   requests: number
   errors: number
@@ -482,6 +492,10 @@ export type QualityInsights = {
         cache_share: number
       }[]
     | null
+  /** Each vendor's figures over every model, whatever the filter selects. */
+  vendors?: VendorQuality[] | null
+  /** Every model's figures, whatever the filter selects. */
+  all_models?: VendorQuality
   daily: {
     day: number
     read: number

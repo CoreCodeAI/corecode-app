@@ -7763,6 +7763,8 @@
     "About ${{amount}} in USDT or USDC at the site exchange rate.": "Khoảng ${{amount}} bằng USDT hoặc USDC theo tỷ giá của trang.",
     "{{credit}} credit = {{money}}": "{{credit}} tín dụng = {{money}}",
     "Long context": "Ngữ cảnh dài",
-    "or {{count}} × {{plan}}": "or {{count}} × {{plan}}"
+    "or {{count}} × {{plan}}": "or {{count}} × {{plan}}",
+    "Quick select by vendor": "Chọn nhanh theo nhà cung cấp",
+    "{{requests}} requests · {{rate}} failed": "{{requests}} yêu cầu · {{rate}} lỗi"
   }
 }
