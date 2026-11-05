@@ -166,6 +166,8 @@ export type EngineRunway = {
   profile_hours?: number
   peak_hour_usd_per_hour?: number
   growth_per_day?: number
+  /** The trend's demand averaged over the next week. */
+  expected_usd_per_hour?: number
   /** The largest multiple of demand served for 7 days without a gap. */
   headroom_scale?: number | null
   /** Demand growing on, and the 10th and 90th percentile demand. */
@@ -196,10 +198,18 @@ export type EngineRunwayAddition = {
   week_usd: number
   budget_percent: number
   measured: number
+  /**
+   * Accounts for a weekly load of 100% at the expected demand (the trend
+   * averaged over the next week), and at the band's ends of it. Absent from
+   * servers before the expected demand.
+   */
+  for_expected?: number
+  for_low?: number | null
+  for_high?: number | null
   /** Accounts for a weekly load of 100% now, and at the trend's demand in 7 days. */
   for_load: number
   for_trend: number
-  /** Accounts for no gap in the next 7 days; null when even 30 do not. */
+  /** Accounts for no gap in the next 7 days as demand follows the trend; null when even 30 do not. */
   for_week: number | null
 }
 

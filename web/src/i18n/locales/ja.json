@@ -7674,9 +7674,7 @@
     "No account needed now; if use keeps growing, {{count}} × {{plan}} by the end of the week.": "現時点でアカウントの追加は不要です。利用が増え続ける場合、週末までに {{plan}} が {{count}} 個必要です。",
     "No account needed: supply keeps up with demand and lasts the next 7 days.": "アカウントの追加は不要です：供給は需要に追いついており、今後 7 日間持ちます。",
     "Is capacity enough?": "容量は足りていますか？",
-    "Demand and the forecasts are gpt-load spend at official prices, the unit the pool’s quota is in. An added account is sized by the median measured account of its plan in the pool, Team Tier 1 first and Team Standard beside it, up to its group’s 7-day budget line, and starts a full week now. Keeping up means a weekly load of 100% or less; the 7-day figure also covers the quota running out before resets.": "需要と予測は、プールのクォータの単位である公式価格での gpt-load 消費額です。追加するアカウントは、プール内で計測済みの同じプランのアカウントの中央値（Team Tier 1 を優先し、Team Standard を併記）を、そのグループの 7 日予算ラインまでとして見積もり、今から丸 1 週間分で開始するものとします。追いついているとは、週間負荷が 100% 以下であることを指します。7 日間の値には、リセット前にクォータが尽きる場合も含まれます。",
     "{{plan}} to add": "追加する {{plan}}",
-    "The more of two counts: accounts for a weekly load of 100% at today’s demand, and accounts for no gap in the next 7 days.": "次の 2 つの数のうち大きい方です：現在の需要で週間負荷を 100% にするために必要なアカウント数と、今後 7 日間に不足が生じないために必要なアカウント数。",
     "Keep up {{load}} · 7 days {{week}} · with growth {{trend}}": "追いつくには {{load}} · 7 日間 {{week}} · 成長を考慮 {{trend}}",
     "over {{count}}": "{{count}} 超",
     "Next 5 hours · gpt-load": "今後 5 時間 · gpt-load",
@@ -7765,6 +7763,12 @@
     "Long context": "ロングコンテキスト",
     "or {{count}} × {{plan}}": "または {{plan}} を {{count}} 個",
     "Quick select by vendor": "ベンダーで絞り込み",
-    "{{requests}} requests · {{rate}} failed": "{{requests}} リクエスト · 失敗率 {{rate}}"
+    "{{requests}} requests · {{rate}} failed": "{{requests}} リクエスト · 失敗率 {{rate}}",
+    "Use grows {{growth}} a day, so demand over the next week averages about {{demand}}/h: add {{count}} × {{plan}} to keep up; each brings about {{week}} a week.": "利用は 1 日 {{growth}} 伸びており、今後 1 週間の需要は平均約 {{demand}}/時：追いつくには {{plan}} を {{count}} 個追加。1 個で週約 {{week}} 増えます。",
+    "Past forecasts put it between {{low}} and {{high}}.": "過去の予測誤差から見ると {{low}}～{{high}} 個。",
+    "7 days {{week}}": "7 日 {{week}}",
+    "at today’s demand {{count}}": "今日の需要で {{count}}",
+    "The more of two counts: accounts for a weekly load of 100% at the demand expected over the next week, and accounts for no gap in the next 7 days. Below, the range of the first and the count at today’s demand.": "2 つのうち多い方：今後 1 週間の予想需要で週負荷を 100% にするアカウント数と、今後 7 日間途切れないアカウント数。下は前者の範囲と今日の需要での数。",
+    "Demand and the forecasts are gpt-load spend at official prices, the unit the pool’s quota is in. Expected demand is the last 24 hours’ spend grown by the last week’s daily growth, damped, and averaged over the next week; the range is the 10th to 90th percentile of how past forecasts made that way compared with the use that followed. An added account is sized by the median measured account of its plan in the pool, Team Tier 1 first and Team Standard beside it, up to its group’s 7-day budget line, and starts a full week now. Keeping up means a weekly load of 100% or less; the 7-day figure also covers the quota running out before resets, as demand follows the trend.": "需要と予測は公式価格での gpt-load の消費で、プールの枠と同じ単位です。予想需要は直近 24 時間の消費を直近 1 週間の日次成長（減衰あり）で伸ばし、今後 1 週間で平均したもの。範囲は同じ方法の過去予測とその後の実利用の比の 10～90 パーセンタイルです。追加アカウントはプール内の同プラン実測アカウントの中央値で見積もり、Team Tier 1 を優先し Team Standard を併記、グループの 7 日予算ラインまでとし、今から丸 1 週間使える前提です。追いつくとは週負荷 100% 以下のこと。7 日の数は需要がトレンドどおり伸びる前提で、リセット前に枠が尽きる場合も考慮します。"
   }
 }

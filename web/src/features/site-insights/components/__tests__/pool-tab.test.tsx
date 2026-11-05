@@ -620,6 +620,59 @@ describe('capacity verdict', () => {
     expect(screen.getByText('¥1,920 · ≈ $960 in gpt-load')).toBeInTheDocument()
   })
 
+  it('sizes the accounts by the demand expected over the next week', () => {
+    render(
+      <PoolTab
+        data={{
+          ...pool([group({})], [account({})]),
+          runway: runway({
+            growth_per_day: 0.086,
+            expected_usd_per_hour: 81.6,
+            additions: [
+              {
+                plan: 'Team',
+                tier: 'team_tier_1',
+                week_usd: 1392,
+                budget_percent: 98,
+                measured: 5,
+                for_expected: 4,
+                for_low: 2,
+                for_high: 7,
+                for_load: 3,
+                for_trend: 6,
+                for_week: 2,
+              },
+              {
+                plan: 'Team',
+                tier: 'team_standard',
+                week_usd: 278,
+                budget_percent: 98,
+                measured: 5,
+                for_expected: 20,
+                for_low: 7,
+                for_high: 34,
+                for_load: 11,
+                for_trend: 26,
+                for_week: 6,
+              },
+            ],
+          }),
+        }}
+      />
+    )
+
+    expect(
+      screen.getByText(
+        /Use grows 8\.6% a day, so demand over the next week averages about \$82\/h: add 4 × Team Tier 1 to keep up; each brings about \$1,392 a week\. Past forecasts put it between 2 and 7\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Range 2 – 7 · 7 days 2 · at today’s demand 3 · or 20 × Team Standard'
+      )
+    ).toBeInTheDocument()
+  })
+
   it('says when no account is needed', () => {
     render(
       <PoolTab

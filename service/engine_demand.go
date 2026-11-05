@@ -43,9 +43,10 @@ type demandProfile struct {
 	// growth is the daily log growth of use over the last week, bounded by
 	// demandMaxGrowth; 0 without a week of history.
 	growth float64
-	// low and high are the 10th and 90th percentiles of actual over
+	// low and high are the 10th and 90th percentiles of actual over trend
 	// forecast use across demandBandHorizon, scored on past hours; both 0
-	// with fewer than demandMinOrigins forecasts.
+	// with fewer than demandMinOrigins forecasts. A trend forecast grows the
+	// level by the growth read at its own origin.
 	low, high float64
 	origins   int
 }
@@ -107,9 +108,12 @@ func buildDemandProfile(series []float64, firstHour int64) demandProfile {
 			continue
 		}
 		level := mean(series[origin-24 : origin])
+		// Scored against the trend forecast, as the pool is sized by it: a
+		// flat one fell a quarter short over three days while use grew.
+		then := demandProfile{growth: demandGrowth(series[:origin])}
 		forecast, actual := 0.0, 0.0
 		for k := range demandBandHorizon {
-			forecast += level * past[utcHour(origin+k)]
+			forecast += level * past[utcHour(origin+k)] * then.growthAt(float64(k)/24)
 			actual += series[origin+k]
 		}
 		if forecast > 0 {

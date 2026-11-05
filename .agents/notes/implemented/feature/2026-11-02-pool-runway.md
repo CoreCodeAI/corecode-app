@@ -45,6 +45,8 @@ average fell short of what followed.
   - the band: forecasts made over the last week whose 72 hours have passed, each from
     the week before it. The 10th and 90th percentiles of actual over forecast use are
     widened to include 1.
+    Superseded on 2026-11-05 by `2026-11-05-size-the-pool-by-expected-demand.md`: the
+    band is scored against the trend forecast, and `low` and `high` scale the trend.
 
   `quota_data` is billed at the customer's price, about twice the upstream cost, so it
   supplies only the shape. The engine's spend still sets the level. The profile is

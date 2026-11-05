@@ -109,9 +109,9 @@ type PoolForecast struct {
 	Next5hUSD       float64 `json:"next_5h_usd"`
 	Next24hUSD      float64 `json:"next_24h_usd"`
 	Next24hTrendUSD float64 `json:"next_24h_trend_usd"`
-	// Next24hLowUSD and Next24hHighUSD scale it to the 10th and 90th
-	// percentiles of how past forecasts compared with the use that
-	// followed, widened to hold demand as now; nil without the history.
+	// Next24hLowUSD and Next24hHighUSD scale the trend forecast to the 10th
+	// and 90th percentiles of how past trend forecasts compared with the
+	// use that followed, widened to hold the trend; nil without the history.
 	Next24hLowUSD  *float64 `json:"next_24h_low_usd"`
 	Next24hHighUSD *float64 `json:"next_24h_high_usd"`
 	Next5hQuota    float64  `json:"next_5h_quota"`
@@ -209,7 +209,8 @@ func readPoolUsage(provider string, now time.Time) (PoolUsage, error) {
 	forecast.Next24hTrendUSD = next(usdLevel, 24, profile.growth != 0)
 	forecast.Next5hQuota, forecast.Next24hQuota = next(quotaLevel, 5, false), next(quotaLevel, 24, false)
 	if profile.origins > 0 {
-		low, high := forecast.Next24hUSD*min(profile.low, 1), forecast.Next24hUSD*max(profile.high, 1)
+		// The band is scored against the trend forecast, so it scales that.
+		low, high := forecast.Next24hTrendUSD*min(profile.low, 1), forecast.Next24hTrendUSD*max(profile.high, 1)
 		forecast.Next24hLowUSD, forecast.Next24hHighUSD = &low, &high
 	}
 	usage.Forecast = forecast
