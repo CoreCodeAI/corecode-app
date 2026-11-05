@@ -21,8 +21,17 @@ import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 
-import { useErrorCategoryLabel, useInsightsFormat } from '../lib'
-import type { CapacityInsights } from '../types'
+import {
+  groupProvider,
+  PROVIDER_LABELS,
+  useErrorCategoryLabel,
+  useInsightsFormat,
+} from '../lib'
+import {
+  POOL_PROVIDERS,
+  type CapacityInsights,
+  type PoolProvider,
+} from '../types'
 import { useCapacityVerdict } from '../verdicts'
 import { ConcurrencyLimitsPanel } from './concurrency-limits-panel'
 import {
@@ -30,6 +39,7 @@ import {
   Breakdown,
   MetricGrid,
   Panel,
+  ProviderSwitch,
   SimpleTable,
   TruncatedNotice,
   UserLabel,
@@ -39,18 +49,51 @@ import {
 // Where a live user's limit comes from, marked after the limit.
 const LIMIT_MARKS: Record<string, string> = { user: '*', tier: '↑' }
 
+/** What the capacity tab covers: every provider, or one. */
+export type CapacityVendor = 'all' | PoolProvider
+
 export function CapacityTab(props: {
   data: CapacityInsights | undefined
   previous?: CapacityInsights
+  vendor?: CapacityVendor
+  onVendor?: (vendor: CapacityVendor) => void
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
-  const verdict = useCapacityVerdict(props.data, props.previous)
   const categoryLabel = useErrorCategoryLabel()
   const data = props.data
   const previous = props.previous
   const pool = data?.pool
-  const slots = pool?.configured ? pool.effective_slots : 0
+  const vendor = props.vendor ?? 'all'
+  const all = vendor === 'all'
+  // One provider's groups, as the account pool tab reads them.
+  const groups = (pool?.groups ?? []).filter(
+    (row) => all || groupProvider(row) === vendor
+  )
+  const groupIds = new Set(groups.map((row) => row.id))
+  const vendorAccounts = (pool?.accounts ?? []).filter((account) =>
+    groupIds.has(account.group_id)
+  )
+  const accountCounts = new Map<string, number>()
+  for (const row of pool?.groups ?? []) {
+    const key = groupProvider(row)
+    accountCounts.set(key, (accountCounts.get(key) ?? 0) + row.accounts)
+  }
+  let slots = 0
+  if (pool?.configured) {
+    slots = all
+      ? pool.effective_slots
+      : groups.reduce((sum, row) => sum + (row.enabled ? row.slots : 0), 0)
+  }
+  // new-api counts requests in flight per user, for every provider; the
+  // engine counts them per group.
+  const inFlight = all
+    ? (data?.in_flight ?? 0)
+    : groups.reduce((sum, row) => sum + row.in_flight, 0)
+  const verdict = useCapacityVerdict(props.data, props.previous, {
+    slots,
+    userLimits: all,
+  })
   const engineRejectionsOf = (insights: CapacityInsights | undefined) =>
     insights?.error_categories.find(
       (item) => item.name === 'engine_concurrency'
@@ -60,6 +103,14 @@ export function CapacityTab(props: {
     (data?.limit_rejections ?? []).map((point) => [point.at, point.count])
   )
   const hourly = data?.hourly ?? []
+  // Only Claude's upstream says which limit it hit; the rest say rate limit.
+  const upstreamLabel =
+    all || vendor === 'claude'
+      ? t('Claude upstream rate limit')
+      : t('Upstream rate limit')
+  const eligible = all
+    ? (pool?.eligible_accounts ?? 0)
+    : vendorAccounts.filter((account) => account.eligible).length
   // An hourly series marks each day where the viewer's day starts.
   const dayAxis = (hour: number) =>
     new Date(hour * 1000).getHours() === 0 ? fmt.day(hour) : undefined
@@ -69,10 +120,12 @@ export function CapacityTab(props: {
       count: hourly.reduce((sum, hour) => sum + hour.engine_rejections, 0),
     },
     {
-      name: t('Claude upstream rate limit'),
+      name: upstreamLabel,
       count: hourly.reduce((sum, hour) => sum + hour.upstream_rate_limits, 0),
     },
-    { name: t('Per-user limit'), count: data?.limit_rejection_total ?? 0 },
+    ...(all
+      ? [{ name: t('Per-user limit'), count: data?.limit_rejection_total ?? 0 }]
+      : []),
   ]
   const rejected = rejectionTotals.reduce((sum, item) => sum + item.count, 0)
   const mainCause = rejectionTotals.reduce((a, b) =>
@@ -99,6 +152,19 @@ export function CapacityTab(props: {
 
   return (
     <div className='grid gap-4'>
+      <ProviderSwitch
+        ariaLabel={t('Provider')}
+        value={vendor}
+        onChange={props.onVendor}
+        items={[
+          { key: 'all' as const, label: t('All providers') },
+          ...POOL_PROVIDERS.map((key) => ({
+            key,
+            label: PROVIDER_LABELS[key],
+            count: accountCounts.get(key) ?? 0,
+          })),
+        ]}
+      />
       <Verdict
         loading={!props.data}
         tone={verdict?.tone ?? 'default'}
@@ -144,17 +210,12 @@ export function CapacityTab(props: {
           },
           {
             label: t('In flight now'),
-            value: fmt.num(data?.in_flight ?? 0),
-            hint: slots
-              ? t('{{slots}} pool slots', { slots: pool?.effective_slots })
-              : undefined,
+            value: fmt.num(inFlight),
+            hint: slots ? t('{{slots}} pool slots', { slots }) : undefined,
             meter: slots
               ? {
-                  value: (data?.in_flight ?? 0) / slots,
-                  tone:
-                    (data?.in_flight ?? 0) >= slots * 0.8
-                      ? 'danger'
-                      : 'default',
+                  value: inFlight / slots,
+                  tone: inFlight >= slots * 0.8 ? 'danger' : 'default',
                   label: t('In flight now'),
                 }
               : undefined,
@@ -172,18 +233,26 @@ export function CapacityTab(props: {
             },
             tone: engineRejections > 0 ? 'warning' : 'default',
           },
-          {
-            label: t('Per-user limit 429'),
-            value: fmt.num(data?.limit_rejection_total ?? 0),
-            help: t('Turned away before reaching the pool'),
-            delta: {
-              current: data?.limit_rejection_total ?? 0,
-              previous: previous?.limit_rejection_total,
-              better: 'down',
-            },
-            tone:
-              (data?.limit_rejection_total ?? 0) > 0 ? 'warning' : 'default',
-          },
+          // The per-user limit applies before a provider is chosen, so it
+          // has no provider's share.
+          ...(all
+            ? [
+                {
+                  label: t('Per-user limit 429'),
+                  value: fmt.num(data?.limit_rejection_total ?? 0),
+                  help: t('Turned away before reaching the pool'),
+                  delta: {
+                    current: data?.limit_rejection_total ?? 0,
+                    previous: previous?.limit_rejection_total,
+                    better: 'down' as const,
+                  },
+                  tone:
+                    (data?.limit_rejection_total ?? 0) > 0
+                      ? ('warning' as const)
+                      : ('default' as const),
+                },
+              ]
+            : []),
         ]}
       />
       <TruncatedNotice show={!!data?.truncated} />
@@ -198,25 +267,26 @@ export function CapacityTab(props: {
       )}
       {pool?.configured && !pool.error && (
         <p className='text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs'>
-          <span
-            className={cn(
-              pool.eligible_accounts <= 2 && 'text-destructive font-medium'
-            )}
-          >
+          <span className={cn(eligible <= 2 && 'text-destructive font-medium')}>
             {t('Pool: {{eligible}} of {{accounts}} accounts schedulable', {
-              eligible: pool.eligible_accounts,
-              accounts: pool.accounts.length,
+              eligible,
+              accounts: all ? pool.accounts.length : vendorAccounts.length,
             })}
           </span>
           <span>
             {t('{{slots}} slots ({{per}} per account)', {
-              slots: pool.effective_slots,
+              slots,
               per: pool.credential_concurrency,
             })}
           </span>
           <Link
             to='/site-insights'
-            search={(prev) => ({ ...prev, tab: 'pool' as const })}
+            search={(prev) => ({
+              ...prev,
+              tab: 'pool' as const,
+              provider: vendor === 'all' ? prev.provider : vendor,
+              vendor: vendor === 'all' ? undefined : vendor,
+            })}
             className='text-primary font-medium hover:underline'
           >
             {t('See every account in the account pool')}
@@ -244,7 +314,9 @@ export function CapacityTab(props: {
         />
       </Panel>
 
-      <div className='grid gap-4 lg:grid-cols-3'>
+      <div
+        className={cn('grid gap-4', all ? 'lg:grid-cols-3' : 'lg:grid-cols-2')}
+      >
         <Panel
           title={t('Rejections by hour')}
           description={
@@ -261,8 +333,8 @@ export function CapacityTab(props: {
             ariaLabel={t('Rejections by hour')}
             series={[
               { label: t('Engine account concurrency full') },
-              { label: t('Claude upstream rate limit') },
-              { label: t('Per-user limit') },
+              { label: upstreamLabel },
+              ...(all ? [{ label: t('Per-user limit') }] : []),
             ]}
             points={hourly.map((hour) => ({
               key: hour.hour,
@@ -271,36 +343,38 @@ export function CapacityTab(props: {
               values: [
                 hour.engine_rejections,
                 hour.upstream_rate_limits,
-                limitRejections.get(hour.hour) ?? 0,
+                ...(all ? [limitRejections.get(hour.hour) ?? 0] : []),
               ],
             }))}
           />
         </Panel>
-        <Panel
-          title={t('Users turned away by their limit')}
-          help={t(
-            'Requests the per-user concurrency limit answered with 429. They never reach the request logs.'
-          )}
-        >
-          <SimpleTable
-            rows={data?.limit_rejected_users}
-            rowKey={(row) => row.user_id}
-            empty={t('No user hit their limit in this range')}
-            columns={[
-              {
-                key: 'user',
-                label: t('User'),
-                render: (row) => <UserLabel {...row} />,
-              },
-              {
-                key: 'count',
-                label: t('Times turned away'),
-                align: 'right',
-                render: (row) => fmt.num(row.count),
-              },
-            ]}
-          />
-        </Panel>
+        {all && (
+          <Panel
+            title={t('Users turned away by their limit')}
+            help={t(
+              'Requests the per-user concurrency limit answered with 429. They never reach the request logs.'
+            )}
+          >
+            <SimpleTable
+              rows={data?.limit_rejected_users}
+              rowKey={(row) => row.user_id}
+              empty={t('No user hit their limit in this range')}
+              columns={[
+                {
+                  key: 'user',
+                  label: t('User'),
+                  render: (row) => <UserLabel {...row} />,
+                },
+                {
+                  key: 'count',
+                  label: t('Times turned away'),
+                  align: 'right',
+                  render: (row) => fmt.num(row.count),
+                },
+              ]}
+            />
+          </Panel>
+        )}
         <Panel
           title={t('Failures by cause')}
           help={t(
@@ -315,70 +389,74 @@ export function CapacityTab(props: {
         </Panel>
       </div>
 
-      <ConcurrencyLimitsPanel data={data} />
+      {/* Per-user figures span every provider, so one provider's view
+          leaves them out. */}
+      {all && <ConcurrencyLimitsPanel data={data} />}
 
-      <div className='grid gap-4 lg:grid-cols-2'>
-        <Panel
-          title={t('In flight by user')}
-          help={t(
-            'Live, on this server. * marks a user limit and ↑ a paid-total tier; otherwise the limit comes from the group.'
-          )}
-        >
-          <SimpleTable
-            rows={data?.in_flight_users}
-            rowKey={(row) => row.user_id}
-            empty={t('No requests in flight')}
-            columns={[
-              {
-                key: 'user',
-                label: t('User'),
-                render: (row) => <UserLabel {...row} />,
-              },
-              {
-                key: 'n',
-                label: t('In flight'),
-                align: 'right',
-                render: (row) =>
-                  row.limit
-                    ? `${row.in_flight} / ${row.limit}${LIMIT_MARKS[row.limit_source] ?? ''}`
-                    : row.in_flight,
-              },
-            ]}
-          />
-        </Panel>
-        <Panel title={t('Peak concurrency by user')}>
-          <SimpleTable
-            rows={data?.user_peaks}
-            rowKey={(row) => row.user_id}
-            empty={t('No requests in this range')}
-            columns={[
-              {
-                key: 'user',
-                label: t('User'),
-                render: (row) => <UserLabel {...row} />,
-              },
-              {
-                key: 'peak',
-                label: t('Peak'),
-                align: 'right',
-                render: (row) => row.peak,
-              },
-              {
-                key: 'at',
-                label: t('At'),
-                align: 'right',
-                render: (row) => fmt.time(row.peak_at),
-              },
-              {
-                key: 'requests',
-                label: t('Requests'),
-                align: 'right',
-                render: (row) => fmt.num(row.requests),
-              },
-            ]}
-          />
-        </Panel>
-      </div>
+      {all && (
+        <div className='grid gap-4 lg:grid-cols-2'>
+          <Panel
+            title={t('In flight by user')}
+            help={t(
+              'Live, on this server. * marks a user limit and ↑ a paid-total tier; otherwise the limit comes from the group.'
+            )}
+          >
+            <SimpleTable
+              rows={data?.in_flight_users}
+              rowKey={(row) => row.user_id}
+              empty={t('No requests in flight')}
+              columns={[
+                {
+                  key: 'user',
+                  label: t('User'),
+                  render: (row) => <UserLabel {...row} />,
+                },
+                {
+                  key: 'n',
+                  label: t('In flight'),
+                  align: 'right',
+                  render: (row) =>
+                    row.limit
+                      ? `${row.in_flight} / ${row.limit}${LIMIT_MARKS[row.limit_source] ?? ''}`
+                      : row.in_flight,
+                },
+              ]}
+            />
+          </Panel>
+          <Panel title={t('Peak concurrency by user')}>
+            <SimpleTable
+              rows={data?.user_peaks}
+              rowKey={(row) => row.user_id}
+              empty={t('No requests in this range')}
+              columns={[
+                {
+                  key: 'user',
+                  label: t('User'),
+                  render: (row) => <UserLabel {...row} />,
+                },
+                {
+                  key: 'peak',
+                  label: t('Peak'),
+                  align: 'right',
+                  render: (row) => row.peak,
+                },
+                {
+                  key: 'at',
+                  label: t('At'),
+                  align: 'right',
+                  render: (row) => fmt.time(row.peak_at),
+                },
+                {
+                  key: 'requests',
+                  label: t('Requests'),
+                  align: 'right',
+                  render: (row) => fmt.num(row.requests),
+                },
+              ]}
+            />
+          </Panel>
+        </div>
+      )}
     </div>
   )
 }

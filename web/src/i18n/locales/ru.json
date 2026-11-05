@@ -7816,6 +7816,8 @@
     "{{requests}} requests ({{change}}).": "Запросов: {{requests}} ({{change}}).",
     "{{requests}} requests.": "Запросов: {{requests}}.",
     "to {{times}}×": "в {{times}} раза больше",
-    "{{vendor}} fails {{rate}} of requests.": "У {{vendor}} {{rate}} ошибок."
+    "{{vendor}} fails {{rate}} of requests.": "У {{vendor}} {{rate}} ошибок.",
+    "All providers": "Все провайдеры",
+    "Upstream rate limit": "Лимит запросов у поставщика"
   }
 }

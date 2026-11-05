@@ -7816,6 +7816,8 @@
     "{{requests}} requests ({{change}}).": "요청 {{requests}} ({{change}}).",
     "{{requests}} requests.": "요청 {{requests}}.",
     "to {{times}}×": "{{times}}배로",
-    "{{vendor}} fails {{rate}} of requests.": "{{vendor}} 실패율 {{rate}}."
+    "{{vendor}} fails {{rate}} of requests.": "{{vendor}} 실패율 {{rate}}.",
+    "All providers": "모든 제공업체",
+    "Upstream rate limit": "업스트림 속도 제한"
   }
 }

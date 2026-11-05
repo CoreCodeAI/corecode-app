@@ -70,19 +70,26 @@ function useChange() {
 
 const join = joinSentences
 
+/**
+ * The capacity tab's verdict over the slots in view: every pool slot, or one
+ * provider's. The per-user limit is not split by provider, so a provider's
+ * verdict leaves it out.
+ */
 export function useCapacityVerdict(
   data: CapacityInsights | undefined,
-  previous: CapacityInsights | undefined
+  previous: CapacityInsights | undefined,
+  scope?: { slots: number; userLimits: boolean }
 ): TabVerdict | undefined {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const change = useChange()
   if (!data) return undefined
-  const slots = data.pool?.configured ? data.pool.effective_slots : 0
+  const slots =
+    scope?.slots ?? (data.pool?.configured ? data.pool.effective_slots : 0)
   const pool =
     data.error_categories.find((item) => item.name === 'engine_concurrency')
       ?.count ?? 0
-  const limited = data.limit_rejection_total
+  const limited = scope?.userLimits === false ? 0 : data.limit_rejection_total
   let tone: Tone = 'good'
   if (slots && data.peak_concurrency > slots) tone = 'danger'
   else if (pool > 0) tone = 'danger'

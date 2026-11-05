@@ -7816,6 +7816,8 @@
     "{{requests}} requests ({{change}}).": "請求 {{requests}}（{{change}}）。",
     "{{requests}} requests.": "請求 {{requests}}。",
     "to {{times}}×": "增至 {{times}} 倍",
-    "{{vendor}} fails {{rate}} of requests.": "{{vendor}} 失敗率 {{rate}}。"
+    "{{vendor}} fails {{rate}} of requests.": "{{vendor}} 失敗率 {{rate}}。",
+    "All providers": "全部供應商",
+    "Upstream rate limit": "上游限流"
   }
 }

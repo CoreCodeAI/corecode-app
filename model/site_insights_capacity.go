@@ -41,22 +41,42 @@ type CapacityInsights struct {
 	Truncated       bool           `json:"truncated"`
 }
 
+// vendorSummary is an hour's summary reduced to one vendor's capacity
+// figures; an hour without the vendor's requests is empty.
+func vendorSummary(summary insightSummary, vendor string) insightSummary {
+	reduced := insightSummary{Truncated: summary.Truncated}
+	if found := summary.Vendors[vendor]; found != nil {
+		reduced.Requests, reduced.Errors = found.Requests, found.Errors
+		reduced.Peak, reduced.PeakAt = found.Peak, found.PeakAt
+		reduced.PeakRPM, reduced.PeakRPMAt = found.PeakRPM, found.PeakRPMAt
+		reduced.EngineRejections, reduced.UpstreamRateLimit = found.EngineRejections, found.UpstreamRateLimit
+		reduced.Categories = found.Categories
+	}
+	return reduced
+}
+
 type concurrencyEvent struct {
 	at     int64
 	delta  int
 	userID int
 }
 
-func GetCapacityInsights(r InsightsRange) (*CapacityInsights, error) {
+// GetCapacityInsights reads the range's capacity figures, for every vendor or,
+// when vendor is set, for that vendor's models alone. Users' peaks are not
+// split by vendor, so a vendor's view has none.
+func GetCapacityInsights(r InsightsRange, vendor string) (*CapacityInsights, error) {
 	hours, err := loadInsightHours(r)
 	if err != nil {
 		return nil, err
 	}
-	result := &CapacityInsights{Hourly: make([]CapacityHour, 0, len(hours))}
+	result := &CapacityInsights{Hourly: make([]CapacityHour, 0, len(hours)), UserPeaks: []UserPeak{}}
 	categories := make(map[string]int64)
 	users := make(map[int]*UserPeak)
 	for _, hour := range hours {
 		summary := hour.summary
+		if vendor != "" {
+			summary = vendorSummary(hour.summary, vendor)
+		}
 		result.Requests += summary.Requests
 		result.Errors += summary.Errors
 		result.Truncated = result.Truncated || summary.Truncated
@@ -75,6 +95,9 @@ func GetCapacityInsights(r InsightsRange) (*CapacityInsights, error) {
 			EngineRejections:  summary.EngineRejections,
 			UpstreamRateLimit: summary.UpstreamRateLimit,
 		})
+		if vendor != "" {
+			continue
+		}
 		for id, row := range hour.users {
 			user := users[id]
 			if user == nil {

@@ -34,7 +34,7 @@ import {
   VIEW_MAX_DAYS,
   type InsightsView,
 } from './api'
-import { CapacityTab } from './components/capacity-tab'
+import { CapacityTab, type CapacityVendor } from './components/capacity-tab'
 import { FinanceTab } from './components/finance-tab'
 import { ActivityTab, GrowthTab } from './components/growth-tab'
 import { OverviewTab } from './components/overview-tab'
@@ -94,12 +94,22 @@ export function SiteInsights() {
   const models = search.models ?? []
   const filterOf = (view: InsightsView, filtered: boolean) =>
     view === 'quality' && filtered ? models : []
+  // The capacity tab can narrow to one provider; the overview never does.
+  const vendorOf = (view: InsightsView, filtered: boolean) =>
+    view === 'capacity' && filtered ? search.vendor : undefined
   const insightsQuery = (view: InsightsView, filtered = true) => {
     const range = { start_time: now - viewDays(view) * 86400, end_time: now }
     const only = filterOf(view, filtered)
+    const vendor = vendorOf(view, filtered)
     return {
-      queryKey: ['site-insights', view, range, ...(only.length ? [only] : [])],
-      queryFn: () => getInsights(view, range, only),
+      queryKey: [
+        'site-insights',
+        view,
+        range,
+        ...(only.length ? [only] : []),
+        ...(vendor ? [vendor] : []),
+      ],
+      queryFn: () => getInsights(view, range, only, vendor),
       // A tab prefetched on hover is still fresh when it opens.
       staleTime: 30_000,
     }
@@ -108,6 +118,7 @@ export function SiteInsights() {
     const span = viewDays(view) * 86400
     const range = { start_time: now - 2 * span, end_time: now - span }
     const only = filterOf(view, filtered)
+    const vendor = vendorOf(view, filtered)
     return {
       queryKey: [
         'site-insights',
@@ -115,8 +126,9 @@ export function SiteInsights() {
         'previous',
         range,
         ...(only.length ? [only] : []),
+        ...(vendor ? [vendor] : []),
       ],
-      queryFn: () => getInsights(view, range, only),
+      queryFn: () => getInsights(view, range, only, vendor),
       staleTime: PREVIOUS_STALE_MS,
     }
   }
@@ -330,6 +342,16 @@ export function SiteInsights() {
                     ? usage.error.message
                     : undefined,
               }}
+              capacity={{
+                vendor: search.vendor ?? 'all',
+                onVendor: (next) =>
+                  navigate({
+                    search: (prev) => ({
+                      ...prev,
+                      vendor: next === 'all' ? undefined : next,
+                    }),
+                  }),
+              }}
             />
           ) : (
             <OverviewTab
@@ -359,13 +381,24 @@ function InsightsView(props: {
     usage: PoolUsage | undefined
     usageError: string | undefined
   }
+  capacity: {
+    vendor: CapacityVendor
+    onVendor: (vendor: CapacityVendor) => void
+  }
 }) {
   // Each query key includes the view, so data always matches it. The
   // previous period's key does too, and is undefined until it loads.
   const previous = props.previous as never
   switch (props.view) {
     case 'capacity':
-      return <CapacityTab data={props.data as never} previous={previous} />
+      return (
+        <CapacityTab
+          data={props.data as never}
+          previous={previous}
+          vendor={props.capacity.vendor}
+          onVendor={props.capacity.onVendor}
+        />
+      )
     case 'finance':
       return (
         <FinanceTab

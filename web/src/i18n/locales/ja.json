@@ -7816,6 +7816,8 @@
     "{{requests}} requests ({{change}}).": "リクエスト {{requests}}（{{change}}）。",
     "{{requests}} requests.": "リクエスト {{requests}}。",
     "to {{times}}×": "{{times}} 倍に",
-    "{{vendor}} fails {{rate}} of requests.": "{{vendor}} の失敗率は {{rate}}。"
+    "{{vendor}} fails {{rate}} of requests.": "{{vendor}} の失敗率は {{rate}}。",
+    "All providers": "すべてのプロバイダー",
+    "Upstream rate limit": "上流のレート制限"
   }
 }

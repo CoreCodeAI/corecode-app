@@ -84,6 +84,16 @@ type CapacityResponse struct {
 	Pool                service.EnginePool                  `json:"pool"`
 }
 
+// capacityVendor is the vendor the capacity view is narrowed to, one of the
+// pool's providers, or empty for every vendor.
+func capacityVendor(c *gin.Context) string {
+	vendor := c.Query("vendor")
+	if slices.Contains(service.PoolProviders, vendor) {
+		return vendor
+	}
+	return ""
+}
+
 func GetCapacityInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxLogDays, func(r model.InsightsRange) (*CapacityResponse, error) {
 		// Capacity shows the pool's totals, which change slowly, so it takes the
@@ -91,7 +101,7 @@ func GetCapacityInsights(c *gin.Context) {
 		// first read after a start still waits; it runs while the database works.
 		poolDone := make(chan service.EnginePool, 1)
 		go func() { poolDone <- service.RecentEnginePool(2 * time.Minute) }()
-		insights, err := model.GetCapacityInsights(r)
+		insights, err := model.GetCapacityInsights(r, capacityVendor(c))
 		if err != nil {
 			return nil, err
 		}

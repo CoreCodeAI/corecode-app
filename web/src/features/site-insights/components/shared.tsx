@@ -42,6 +42,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
@@ -117,6 +118,42 @@ function HelpPopover(props: {
 }
 
 /** A question-mark icon that explains how a panel's figures are counted. */
+/**
+ * A row of toggles that picks one provider, each with a count beside its
+ * name, as the account pool and capacity tabs switch by.
+ */
+export function ProviderSwitch<K extends string>(props: {
+  value: K
+  items: { key: K; label: string; count?: number }[]
+  onChange?: (value: K) => void
+  ariaLabel: string
+}) {
+  return (
+    <ToggleGroup
+      variant='outline'
+      size='sm'
+      className='max-w-full justify-start overflow-x-auto'
+      aria-label={props.ariaLabel}
+      value={[props.value]}
+      onValueChange={(value: string[]) => {
+        const next = value.at(-1) as K | undefined
+        if (next && next !== props.value) props.onChange?.(next)
+      }}
+    >
+      {props.items.map((item) => (
+        <ToggleGroupItem key={item.key} value={item.key}>
+          {item.label}
+          {item.count != null && (
+            <span className='text-muted-foreground tabular-nums'>
+              {item.count}
+            </span>
+          )}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  )
+}
+
 const VERDICT_TONES: Record<Tone, { bar: string; dot: string }> = {
   default: { bar: 'border-l-muted-foreground/40', dot: 'bg-muted-foreground' },
   good: { bar: 'border-l-emerald-500', dot: 'bg-emerald-500' },
