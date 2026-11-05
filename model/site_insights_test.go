@@ -294,6 +294,20 @@ func TestFinanceRecognizesRevenueAsItIsEarned(t *testing.T) {
 				{Vendor: VendorClaude, Model: "claude-opus-5-5", USD: 30, Requests: 1},
 				{Vendor: VendorCodex, Model: "gpt-6-sol", USD: 4, Requests: 4},
 			}, finance.VendorModels, "largest first")
+			assert.Empty(t, finance.VendorRevenue, "root's use earns nothing")
+
+			// Customers' use shares the recognized revenue out by vendor: 15
+			// of 19 customer dollars on Claude, 4 on Codex; root's are left out.
+			require.NoError(t, DB.Create(&[]QuotaData{
+				{UserID: payer.Id, Username: "payer", ModelName: "claude-sonnet-5-5", CreatedAt: day1, Count: 3, Quota: int(15 * dollar)},
+				{UserID: guest.Id, Username: "guest", ModelName: "gpt-6-sol", CreatedAt: day1 + 86400, Count: 2, Quota: int(4 * dollar)},
+			}).Error)
+			finance, err = GetFinanceInsights(r)
+			require.NoError(t, err)
+			assert.Equal(t, []VendorRevenue{
+				{Vendor: VendorClaude, CustomerUSD: 15, Share: 0.7895, RecognizedRevenue: 13.89},
+				{Vendor: VendorCodex, CustomerUSD: 4, Share: 0.2105, RecognizedRevenue: 3.71},
+			}, finance.VendorRevenue, "17.6 recognized, shared 15 to 4, largest first")
 		})
 	}
 }

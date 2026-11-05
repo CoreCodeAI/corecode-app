@@ -29,7 +29,13 @@ import {
   useInsightsFormat,
   useSignupMethodLabel,
 } from '../lib'
-import type { ActivityInsights, FunnelRow, GrowthInsights } from '../types'
+import type {
+  ActivityInsights,
+  BusinessInsights,
+  FunnelRow,
+  GrowthInsights,
+} from '../types'
+import { GroupsPanel, ReferralPanel } from './business-panels'
 import {
   BarSeries,
   type BarPoint,
@@ -43,6 +49,9 @@ import {
 export function GrowthTab(props: {
   data: GrowthInsights | undefined
   previous?: GrowthInsights
+  /** Read for referrals and groups, which moved here from their own tab. */
+  business?: BusinessInsights
+  businessPrevious?: BusinessInsights
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -197,6 +206,8 @@ export function GrowthTab(props: {
           />
         </Panel>
       </div>
+      <ReferralPanel data={props.business} previous={props.businessPrevious} />
+      <GroupsPanel data={props.business} />
     </div>
   )
 }

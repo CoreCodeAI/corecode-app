@@ -54,7 +54,7 @@ type Signal = {
   tone: 'danger' | 'warning'
   title: string
   detail?: string
-  tab: InsightsView
+  tab: Exclude<InsightsView, 'business'>
 }
 
 // The thresholds the tabs color by, so a signal here matches a colored
@@ -73,7 +73,7 @@ export function OverviewTab(props: {
   current: (view: InsightsView) => InsightsQuery
   previous: (view: InsightsView) => InsightsQuery
   refreshMs: Partial<Record<InsightsView, number>>
-  onOpen: (view: InsightsView) => void
+  onOpen: (view: Exclude<InsightsView, 'business'>) => void
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -98,14 +98,13 @@ export function OverviewTab(props: {
   const previousRisk = earlier[2].data as RiskInsights | undefined
   const clusters = useSharedAddresses(risk)
 
-  const viewLabels: Record<InsightsView, string> = {
+  const viewLabels: Record<Exclude<InsightsView, 'business'>, string> = {
     capacity: t('Capacity'),
     pool: t('Account pool'),
     quality: t('Service quality'),
     finance: t('Funds'),
     growth: t('Growth'),
     activity: t('Activity & retention'),
-    business: t('Models & referrals'),
     risk: t('Risk'),
   }
   const loading = current.filter((result) => result.isPending).length

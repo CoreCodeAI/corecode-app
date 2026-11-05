@@ -57,27 +57,38 @@ func EnginePlanValues(accounts []EngineAccount) []EnginePlanValue {
 	return plans
 }
 
-// EnginePlanCount is how many of the pool's accounts hold one plan and tier,
-// whatever their status: an account costs its plan's price while it is listed.
+// EnginePlanCount is how many of the pool's accounts hold one plan and tier
+// for one vendor, whatever their status: an account costs its plan's price
+// while it is listed. Vendor is the vendor its group's channel serves
+// (ChannelProvider), empty for an account outside every group.
 type EnginePlanCount struct {
+	Vendor   string `json:"vendor"`
 	Plan     string `json:"plan"`
 	Tier     string `json:"tier"`
 	Accounts int    `json:"accounts"`
 	Eligible int    `json:"eligible"`
 }
 
-// EnginePlanCounts counts the pool's accounts by plan and tier.
-func EnginePlanCounts(accounts []EngineAccount) []EnginePlanCount {
-	type key struct{ plan, tier string }
+// EnginePlanCounts counts the pool's accounts by vendor, plan and tier.
+func EnginePlanCounts(pool EnginePool) []EnginePlanCount {
+	channels := make(map[int]string, len(pool.Groups))
+	for _, group := range pool.Groups {
+		channels[group.ID] = group.Channel
+	}
+	type key struct{ vendor, plan, tier string }
 	index := make(map[key]int)
 	counts := []EnginePlanCount{}
-	for _, account := range accounts {
-		group := key{account.Plan, account.Tier}
+	for _, account := range pool.Accounts {
+		vendor := ""
+		if channel, ok := channels[account.GroupID]; ok {
+			vendor = ChannelProvider(channel)
+		}
+		group := key{vendor, account.Plan, account.Tier}
 		at, ok := index[group]
 		if !ok {
 			at = len(counts)
 			index[group] = at
-			counts = append(counts, EnginePlanCount{Plan: account.Plan, Tier: account.Tier})
+			counts = append(counts, EnginePlanCount{Vendor: vendor, Plan: account.Plan, Tier: account.Tier})
 		}
 		counts[at].Accounts++
 		if account.Eligible {
@@ -85,7 +96,7 @@ func EnginePlanCounts(accounts []EngineAccount) []EnginePlanCount {
 		}
 	}
 	slices.SortFunc(counts, func(a, b EnginePlanCount) int {
-		return cmp.Or(cmp.Compare(a.Plan, b.Plan), cmp.Compare(a.Tier, b.Tier))
+		return cmp.Or(cmp.Compare(a.Vendor, b.Vendor), cmp.Compare(a.Plan, b.Plan), cmp.Compare(a.Tier, b.Tier))
 	})
 	return counts
 }

@@ -39,7 +39,7 @@ import { FinanceTab } from './components/finance-tab'
 import { ActivityTab, GrowthTab } from './components/growth-tab'
 import { OverviewTab } from './components/overview-tab'
 import { PoolTab } from './components/pool-tab'
-import { BusinessTab, QualityTab } from './components/quality-tab'
+import { QualityTab } from './components/quality-tab'
 import { RiskTab } from './components/risk-tab'
 import {
   INSIGHTS_PRESETS,
@@ -140,6 +140,18 @@ export function SiteInsights() {
     refetchInterval: 60_000,
     staleTime: 30_000,
   })
+  // The finance, growth and quality tabs each show part of the business
+  // view, which has no tab of its own.
+  const readsBusiness =
+    tab === 'finance' || tab === 'growth' || tab === 'quality'
+  const business = useQuery({
+    ...insightsQuery('business'),
+    enabled: readsBusiness,
+  })
+  const businessPrevious = useQuery({
+    ...previousQuery('business'),
+    enabled: tab === 'growth',
+  })
   // The pool is live and has no earlier period.
   const previous = useQuery({
     ...previousQuery(view ?? 'capacity'),
@@ -159,7 +171,6 @@ export function SiteInsights() {
     finance: t('Funds'),
     growth: t('Growth'),
     activity: t('Activity & retention'),
-    business: t('Models & referrals'),
     risk: t('Risk'),
   }
   const groupLabels: Record<string, string> = {
@@ -293,6 +304,10 @@ export function SiteInsights() {
               view={view}
               data={query.data}
               previous={previous.data}
+              business={{
+                data: business.data,
+                previous: businessPrevious.data,
+              }}
               models={{
                 selected: models,
                 onChange: (next) =>
@@ -333,9 +348,10 @@ export function SiteInsights() {
 }
 
 function InsightsView(props: {
-  view: InsightsView
+  view: Exclude<InsightsView, 'business'>
   data: unknown
   previous: unknown
+  business: { data: unknown; previous: unknown }
   models: { selected: string[]; onChange: (models: string[]) => void }
   pool: {
     provider: PoolProvider
@@ -351,11 +367,24 @@ function InsightsView(props: {
     case 'capacity':
       return <CapacityTab data={props.data as never} previous={previous} />
     case 'finance':
-      return <FinanceTab data={props.data as never} previous={previous} />
+      return (
+        <FinanceTab
+          data={props.data as never}
+          previous={previous}
+          business={props.business.data as never}
+        />
+      )
     case 'risk':
       return <RiskTab data={props.data as never} previous={previous} />
     case 'growth':
-      return <GrowthTab data={props.data as never} previous={previous} />
+      return (
+        <GrowthTab
+          data={props.data as never}
+          previous={previous}
+          business={props.business.data as never}
+          businessPrevious={props.business.previous as never}
+        />
+      )
     case 'activity':
       return <ActivityTab data={props.data as never} previous={previous} />
     case 'quality':
@@ -364,10 +393,9 @@ function InsightsView(props: {
           data={props.data as never}
           previous={previous}
           models={props.models}
+          business={props.business.data as never}
         />
       )
-    case 'business':
-      return <BusinessTab data={props.data as never} previous={previous} />
     case 'pool':
       return <PoolTab data={props.data as never} {...props.pool} />
   }

@@ -21,7 +21,8 @@ import { useTranslation } from 'react-i18next'
 import { getPaymentMethodName } from '@/features/wallet/lib/billing'
 
 import { useInsightsFormat } from '../lib'
-import type { FinanceInsights } from '../types'
+import type { BusinessInsights, FinanceInsights } from '../types'
+import { ModelMixPanel, VendorMarginPanel } from './business-panels'
 import { FinanceSummary } from './finance-summary'
 import { BarSeries, HelpLabel, Panel, SimpleTable, UserLabel } from './shared'
 import { UserSpendPanel } from './user-spend'
@@ -30,6 +31,8 @@ import { VendorTabs } from './vendor-usage'
 export function FinanceTab(props: {
   data: FinanceInsights | undefined
   previous?: FinanceInsights
+  /** Read for the revenue by model, which moved here from its own tab. */
+  business?: BusinessInsights
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -54,7 +57,11 @@ export function FinanceTab(props: {
     <div className='grid gap-4'>
       <FinanceSummary data={data} previous={previous} />
 
+      <VendorMarginPanel data={data} />
+
       <VendorTabs data={data} />
+
+      <ModelMixPanel data={props.business} />
 
       <Panel
         title={t('Daily revenue and consumption')}

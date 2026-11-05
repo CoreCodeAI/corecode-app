@@ -349,6 +349,13 @@ export type FinanceInsights = {
   plan_accounts?: EnginePlanCount[]
   /** new-api's charge by model, root included, largest first. */
   vendor_models?: VendorModel[]
+  /** Revenue earned by vendor, root left out; absent before the server's release. */
+  vendor_revenue?: {
+    vendor: string
+    customer_usd: number
+    share: number
+    recognized_revenue: number
+  }[]
   start_time?: number
   end_time?: number
   /** Where the days the engine reported begin within the range. */
@@ -424,6 +431,8 @@ export type VendorModel = {
 
 /** How many pool accounts hold one plan and tier, whatever their status. */
 export type EnginePlanCount = {
+  /** The vendor the account's group serves; absent before the server's release. */
+  vendor?: string
   plan: string
   tier: string
   accounts: number
