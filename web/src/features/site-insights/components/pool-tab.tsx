@@ -46,6 +46,7 @@ import {
   MetricGrid,
   Meter,
   Panel,
+  ProviderSwitch,
   SimpleTable,
   type MetricItem,
   type Tone,
@@ -239,26 +240,16 @@ export function PoolTab(props: {
 
   return (
     <div className='grid gap-4'>
-      <ToggleGroup
-        variant='outline'
-        size='sm'
-        className='max-w-full justify-start overflow-x-auto'
-        aria-label={t('Provider')}
-        value={[provider]}
-        onValueChange={(value: string[]) => {
-          const next = value.at(-1) as PoolProvider | undefined
-          if (next && next !== provider) props.onProvider?.(next)
-        }}
-      >
-        {POOL_PROVIDERS.map((key) => (
-          <ToggleGroupItem key={key} value={key}>
-            {PROVIDER_LABELS[key]}
-            <span className='text-muted-foreground tabular-nums'>
-              {accountCounts.get(key) ?? 0}
-            </span>
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
+      <ProviderSwitch
+        ariaLabel={t('Provider')}
+        value={provider}
+        onChange={props.onProvider}
+        items={POOL_PROVIDERS.map((key) => ({
+          key,
+          label: PROVIDER_LABELS[key],
+          count: accountCounts.get(key) ?? 0,
+        }))}
+      />
 
       <MetricGrid loading={!pool} items={summary} />
 

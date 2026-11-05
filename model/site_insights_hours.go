@@ -27,7 +27,7 @@ import (
 // can still be unlogged: a log is read up to insightHourLookahead after the
 // hour ends, so a request that runs longer than that is left out.
 const (
-	insightHourVersion    = 2
+	insightHourVersion    = 3
 	insightHourLookahead  = 2 * 3600
 	insightHourSettle     = 10 * 60
 	insightHourMaxLogRows = 200_000
@@ -95,7 +95,53 @@ type insightSummary struct {
 	Clients           map[string]int64 `json:"clients,omitempty"`
 	// RootQuota is what root's own requests cost at list price.
 	RootQuota int64 `json:"root_quota,omitempty"`
-	Truncated bool  `json:"truncated,omitempty"`
+	// Vendors splits the capacity figures by the vendor a model is sold
+	// under (ModelVendor), customers only, as the site-wide ones are.
+	Vendors   map[string]*vendorCapacity `json:"vendors,omitempty"`
+	Truncated bool                       `json:"truncated,omitempty"`
+}
+
+// vendorCapacity is one vendor's capacity figures in an hour.
+type vendorCapacity struct {
+	Requests          int64            `json:"requests"`
+	Errors            int64            `json:"errors"`
+	Peak              int              `json:"peak"`
+	PeakAt            int64            `json:"peak_at"`
+	PeakRPM           int64            `json:"peak_rpm"`
+	PeakRPMAt         int64            `json:"peak_rpm_at"`
+	EngineRejections  int64            `json:"engine_rejections"`
+	UpstreamRateLimit int64            `json:"upstream_rate_limits"`
+	Categories        map[string]int64 `json:"categories,omitempty"`
+}
+
+// peakInHour is the most events in flight at once within [start, end): the
+// count when the hour opens, then after each start inside it. Ends sort
+// before starts at the same second.
+func peakInHour(events []concurrencyEvent, start, end int64) (int, int64) {
+	slices.SortFunc(events, func(a, b concurrencyEvent) int {
+		return cmp.Or(cmp.Compare(a.at, b.at), cmp.Compare(a.delta, b.delta))
+	})
+	current, peak, at := 0, 0, start
+	opened := false
+	for _, event := range events {
+		if event.at >= end {
+			break
+		}
+		if !opened && event.at >= start {
+			opened = true
+			if current > peak {
+				peak, at = current, start
+			}
+		}
+		current += event.delta
+		if event.delta > 0 && event.at >= start && current > peak {
+			peak, at = current, event.at
+		}
+	}
+	if !opened && current > peak {
+		peak, at = current, start
+	}
+	return peak, at
 }
 
 // insightHour is one hour in memory: its summary, users and models.
@@ -251,12 +297,26 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 	summary.Clients = make(map[string]int64)
 	perMinute := make(map[int64]int64)
 	events := make([]concurrencyEvent, 0, len(logs)*2)
+	summary.Vendors = make(map[string]*vendorCapacity)
+	vendorEvents := make(map[string][]concurrencyEvent)
+	vendorMinutes := make(map[string]map[int64]int64)
+	vendorOf := func(name string) *vendorCapacity {
+		vendor := summary.Vendors[name]
+		if vendor == nil {
+			vendor = &vendorCapacity{Categories: make(map[string]int64)}
+			summary.Vendors[name] = vendor
+			vendorMinutes[name] = make(map[int64]int64)
+		}
+		return vendor
+	}
 	for _, log := range logs {
 		began := log.CreatedAt - int64(max(log.UseTime, 0))
 		finished := max(log.CreatedAt, began+1)
 		customer := !scope.roots[log.UserId]
+		vendorName := ModelVendor(log.ModelName)
 		if customer {
 			events = append(events, concurrencyEvent{began, 1, log.UserId}, concurrencyEvent{finished, -1, log.UserId})
+			vendorEvents[vendorName] = append(vendorEvents[vendorName], concurrencyEvent{began, 1, log.UserId}, concurrencyEvent{finished, -1, log.UserId})
 		}
 		if began < start {
 			// In flight during this hour but counted in the hour it began.
@@ -265,6 +325,8 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 		if customer {
 			summary.Requests++
 			perMinute[began-began%60]++
+			vendorOf(vendorName).Requests++
+			vendorMinutes[vendorName][began-began%60]++
 			user := hour.users[log.UserId]
 			if user == nil {
 				user = &InsightUserHour{HourStart: start, UserId: log.UserId}
@@ -286,11 +348,16 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 				summary.Errors++
 				category := classifyErrorLog(log.Content)
 				summary.Categories[category]++
+				vendor := vendorOf(vendorName)
+				vendor.Errors++
+				vendor.Categories[category]++
 				switch category {
 				case ErrorEngineConcurrency:
 					summary.EngineRejections++
+					vendor.EngineRejections++
 				case ErrorUpstreamRateLimit:
 					summary.UpstreamRateLimit++
+					vendor.UpstreamRateLimit++
 				}
 			}
 			continue
@@ -326,6 +393,22 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 	for minute, count := range perMinute {
 		if count > summary.PeakRPM || count == summary.PeakRPM && minute < summary.PeakRPMAt {
 			summary.PeakRPM, summary.PeakRPMAt = count, minute
+		}
+	}
+	// A vendor in flight during the hour but with no request starting in it
+	// still has its peak.
+	for name, list := range vendorEvents {
+		vendor := vendorOf(name)
+		vendor.Peak, vendor.PeakAt = peakInHour(list, start, end)
+		for minute, count := range vendorMinutes[name] {
+			if count > vendor.PeakRPM || count == vendor.PeakRPM && minute < vendor.PeakRPMAt {
+				vendor.PeakRPM, vendor.PeakRPMAt = count, minute
+			}
+		}
+	}
+	for name, vendor := range summary.Vendors {
+		if vendor.Requests == 0 && vendor.Peak == 0 {
+			delete(summary.Vendors, name)
 		}
 	}
 

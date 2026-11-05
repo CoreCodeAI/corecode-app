@@ -49,6 +49,11 @@ const siteInsightsSearchSchema = z.object({
     .enum(['claude', 'codex', 'grok', 'gemini'])
     .optional()
     .catch(undefined),
+  // The capacity tab's provider; every provider when absent.
+  vendor: z
+    .enum(['claude', 'codex', 'grok', 'gemini'])
+    .optional()
+    .catch(undefined),
 })
 
 export const Route = createFileRoute('/_authenticated/site-insights/')({

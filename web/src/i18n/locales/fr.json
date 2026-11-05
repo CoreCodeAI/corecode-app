@@ -7816,6 +7816,8 @@
     "{{requests}} requests ({{change}}).": "{{requests}} requêtes ({{change}}).",
     "{{requests}} requests.": "{{requests}} requêtes.",
     "to {{times}}×": "×{{times}}",
-    "{{vendor}} fails {{rate}} of requests.": "{{vendor}} échoue sur {{rate}} des requêtes."
+    "{{vendor}} fails {{rate}} of requests.": "{{vendor}} échoue sur {{rate}} des requêtes.",
+    "All providers": "Tous les fournisseurs",
+    "Upstream rate limit": "Limite de débit en amont"
   }
 }

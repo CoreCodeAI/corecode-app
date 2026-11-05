@@ -61,7 +61,7 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 			}
 			require.NoError(t, LOG_DB.Create(&logs).Error)
 
-			capacity, err := GetCapacityInsights(r)
+			capacity, err := GetCapacityInsights(r, "")
 			require.NoError(t, err)
 			assert.EqualValues(t, 5, capacity.Requests)
 			assert.EqualValues(t, 2, capacity.Errors)
@@ -77,7 +77,7 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 			var storedHours int64
 			require.NoError(t, DB.Model(&InsightHour{}).Count(&storedHours).Error)
 			assert.EqualValues(t, 48, storedHours, "final hours are stored")
-			again, err := GetCapacityInsights(r)
+			again, err := GetCapacityInsights(r, "")
 			require.NoError(t, err)
 			assert.Equal(t, capacity, again, "stored hours read back the same")
 
@@ -352,13 +352,59 @@ func TestInsightHourSpansHours(t *testing.T) {
 				{UserId: bob.Id, Username: "bob", Type: LogTypeConsume, CreatedAt: hour2 + 900, UseTime: 600, ModelName: "opus", Other: `{}`},
 			}
 			require.NoError(t, LOG_DB.Create(&logs).Error)
-			capacity, err := GetCapacityInsights(InsightsRange{Start: hour1, End: hour2 + 3600})
+			capacity, err := GetCapacityInsights(InsightsRange{Start: hour1, End: hour2 + 3600}, "")
 			require.NoError(t, err)
 			require.Len(t, capacity.Hourly, 2)
 			assert.Equal(t, CapacityHour{Hour: hour1, Requests: 1, PeakConcurrency: 1}, capacity.Hourly[0], "alice's request counts where it began")
 			assert.Equal(t, CapacityHour{Hour: hour2, Requests: 1, PeakConcurrency: 2}, capacity.Hourly[1], "and is still in flight when bob's begins")
 			assert.Equal(t, hour2+300, capacity.PeakAt)
 			assert.Len(t, capacity.UserPeaks, 2)
+		})
+	}
+}
+
+func TestCapacitySplitsByVendor(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			const hour1 = int64(1759248000)
+			hour2 := hour1 + 3600
+			alice := registerAffiliateTestUser(t, "alice", "")
+			bob := registerAffiliateTestUser(t, "bob", "")
+			// Two Claude requests overlap; a GPT request runs beside them, and a
+			// Claude one from hour 1 is still in flight when hour 2 opens.
+			logs := []Log{
+				{UserId: alice.Id, Username: "alice", Type: LogTypeConsume, CreatedAt: hour2 + 600, UseTime: 1200, ModelName: "claude-opus-5-5", Other: `{}`},
+				{UserId: bob.Id, Username: "bob", Type: LogTypeConsume, CreatedAt: hour2 + 900, UseTime: 600, ModelName: "claude-sonnet-5-5", Other: `{}`},
+				{UserId: bob.Id, Username: "bob", Type: LogTypeConsume, CreatedAt: hour2 + 1000, UseTime: 600, ModelName: "gpt-6-luna", Other: `{}`},
+				{UserId: bob.Id, Username: "bob", Type: LogTypeError, CreatedAt: hour2 + 1100, Content: "status_code=429, Credential concurrency limit exceeded.", ModelName: "gpt-6-luna"},
+			}
+			require.NoError(t, LOG_DB.Create(&logs).Error)
+			r := InsightsRange{Start: hour1, End: hour2 + 3600}
+			all, err := GetCapacityInsights(r, "")
+			require.NoError(t, err)
+			assert.EqualValues(t, 4, all.Requests)
+			assert.Equal(t, 3, all.PeakConcurrency)
+
+			claude, err := GetCapacityInsights(r, VendorClaude)
+			require.NoError(t, err)
+			require.Len(t, claude.Hourly, 2)
+			assert.Equal(t, CapacityHour{Hour: hour1, Requests: 1, PeakConcurrency: 1}, claude.Hourly[0])
+			assert.Equal(t, CapacityHour{Hour: hour2, Requests: 1, PeakConcurrency: 2}, claude.Hourly[1], "the request from hour 1 is still in flight")
+			assert.Equal(t, hour2+300, claude.PeakAt)
+			assert.Empty(t, claude.UserPeaks, "users' peaks are not split by vendor")
+
+			codex, err := GetCapacityInsights(r, VendorCodex)
+			require.NoError(t, err)
+			assert.EqualValues(t, 2, codex.Requests)
+			assert.EqualValues(t, 1, codex.Errors)
+			assert.Equal(t, 1, codex.PeakConcurrency, "the rejected request had no use time and ended as it began")
+			assert.Equal(t, []NamedCount{{ErrorEngineConcurrency, 1}}, codex.ErrorCategories)
+			assert.EqualValues(t, 1, codex.Hourly[1].EngineRejections)
+
+			grok, err := GetCapacityInsights(r, VendorGrok)
+			require.NoError(t, err)
+			assert.Zero(t, grok.Requests)
 		})
 	}
 }
@@ -417,17 +463,17 @@ func TestOpenInsightHoursAreReusedWithinTTL(t *testing.T) {
 	}
 
 	logAt(hour + 1)
-	first, err := GetCapacityInsights(r)
+	first, err := GetCapacityInsights(r, "")
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, first.Requests)
 
 	logAt(hour + 2)
-	cached, err := GetCapacityInsights(r)
+	cached, err := GetCapacityInsights(r, "")
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, cached.Requests, "an open hour computed within the TTL is reused")
 
 	insightOpenHourTTL = 0
-	stale, err := GetCapacityInsights(r)
+	stale, err := GetCapacityInsights(r, "")
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, stale.Requests, "an older hour within the stale limit is served at once")
 	assert.Eventually(t, func() bool {
@@ -438,7 +484,7 @@ func TestOpenInsightHoursAreReusedWithinTTL(t *testing.T) {
 
 	logAt(hour + 3)
 	insightOpenHourStaleLimit = 0
-	fresh, err := GetCapacityInsights(r)
+	fresh, err := GetCapacityInsights(r, "")
 	require.NoError(t, err)
 	assert.EqualValues(t, 3, fresh.Requests, "an hour past the stale limit is read from the logs now")
 }
