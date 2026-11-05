@@ -7829,6 +7829,22 @@
     "Top {{count}} of {{all}} models by requests.": "按請求數排名前 {{count}} 的模型（共 {{all}} 個）。",
     "Upstream overloaded": "上游過載",
     "Accounts and slots are live; the rest covers the range.": "帳號和槽位為即時資料，其餘為所選時間範圍。",
-    "At list price, root included.": "按標價計，含 root 自用。"
+    "At list price, root included.": "按標價計，含 root 自用。",
+    "Bubble area: requests": "氣泡大小：請求數",
+    "Busiest: {{day}} {{hour}}:00, {{value}}": "最忙：{{day}} {{hour}}:00，{{value}}",
+    "Each cell is the highest concurrency that hour reached on any matching day in the range. A red ring marks one past the pool slots.": "每格是該時段在所選範圍內同一星期幾出現過的最高並發。紅框表示超過了帳號池槽位。",
+    "Each model at its median first token and failure rate, sized by requests. Up and to the right is slow and failing; the dashed lines are 2% and 5%.": "每個模型按首字延遲中位數和失敗率定位，氣泡大小代表請求數。越靠右上越慢、越容易失敗；虛線分別為 2% 和 5%。",
+    "High": "高",
+    "Highest {{value}}, average {{mean}} over {{days}} days": "最高 {{value}}，{{days}} 天平均 {{mean}}",
+    "Low": "低",
+    "Model map": "模型分布圖",
+    "Models by first token and failure rate": "模型的首字延遲與失敗率",
+    "Past {{limit}}": "超過 {{limit}}",
+    "Peak concurrency by weekday and hour": "按星期和時段的並發峰值",
+    "Sign-up funnel": "註冊轉化漏斗",
+    "{{count}} models under {{min}} requests left out": "{{count}} 個請求數少於 {{min}} 的模型未顯示",
+    "{{rate}} of sign-ups in this range have paid.": "此時間範圍內註冊的使用者中 {{rate}} 已付費。",
+    "{{rate}} went on": "{{rate}} 進入下一步",
+    "{{share}} of {{limit}}": "佔 {{limit}} 的 {{share}}"
   }
 }

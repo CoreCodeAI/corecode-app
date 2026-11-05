@@ -152,7 +152,7 @@ describe('overview charts', () => {
       key,
       label: key.toUpperCase(),
       value: 4 - index,
-      color: { stroke: '', fill: '' },
+      color: 'red',
     }))
     render(
       <ShareDonut

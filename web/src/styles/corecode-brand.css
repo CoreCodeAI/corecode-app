@@ -86,6 +86,11 @@ For commercial licensing, please contact support@quantumnous.com
   --chart-3: #6a9bcc;
   --chart-4: #c46686;
   --chart-5: #a3b9b2;
+  /* Site insights series; checked with the dataviz palette validator. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
   --overview-accent-1: #d97757;
   --overview-accent-2: #788c5d;
   --overview-accent-3: #6a9bcc;
@@ -140,6 +145,10 @@ For commercial licensing, please contact support@quantumnous.com
   --chart-3: #8cb4dc;
   --chart-4: #d88aa4;
   --chart-5: #a9c4bc;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
   --overview-accent-1: #e08264;
   --overview-accent-2: #9bb07d;
   --overview-accent-3: #8cb4dc;

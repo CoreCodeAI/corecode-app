@@ -7829,6 +7829,22 @@
     "Top {{count}} of {{all}} models by requests.": "リクエスト数上位 {{count}} モデル(全 {{all}} モデル)。",
     "Upstream overloaded": "上流の過負荷",
     "Accounts and slots are live; the rest covers the range.": "アカウントとスロットはリアルタイム、それ以外は選択期間の値です。",
-    "At list price, root included.": "定価ベース、root を含みます。"
+    "At list price, root included.": "定価ベース、root を含みます。",
+    "Bubble area: requests": "バブルの大きさ：リクエスト数",
+    "Busiest: {{day}} {{hour}}:00, {{value}}": "最も混雑：{{day}} {{hour}}:00、{{value}}",
+    "Each cell is the highest concurrency that hour reached on any matching day in the range. A red ring marks one past the pool slots.": "各セルは、期間内の同じ曜日のその時間帯で到達した最大同時実行数です。赤枠はプールのスロットを超えたことを示します。",
+    "Each model at its median first token and failure rate, sized by requests. Up and to the right is slow and failing; the dashed lines are 2% and 5%.": "各モデルを初回トークンの中央値と失敗率で配置し、大きさはリクエスト数です。右上ほど遅く失敗が多く、点線は 2% と 5% です。",
+    "High": "高",
+    "Highest {{value}}, average {{mean}} over {{days}} days": "最大 {{value}}、{{days}} 日間の平均 {{mean}}",
+    "Low": "低",
+    "Model map": "モデルマップ",
+    "Models by first token and failure rate": "初回トークンと失敗率によるモデル",
+    "Past {{limit}}": "{{limit}} 超過",
+    "Peak concurrency by weekday and hour": "曜日・時間帯別の同時実行ピーク",
+    "Sign-up funnel": "登録ファネル",
+    "{{count}} models under {{min}} requests left out": "リクエスト {{min}} 未満の {{count}} モデルは非表示",
+    "{{rate}} of sign-ups in this range have paid.": "この期間の登録者のうち {{rate}} が支払い済みです。",
+    "{{rate}} went on": "{{rate}} が次へ",
+    "{{share}} of {{limit}}": "{{limit}} の {{share}}"
   }
 }

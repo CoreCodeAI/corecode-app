@@ -24,8 +24,7 @@ import { cn } from '@/lib/utils'
 import {
   failureTone,
   groupProvider,
-  OTHER_COLOR,
-  SERIES_COLORS,
+  paymentSlices,
   useInsightsFormat,
   useVendorName,
   vendorColor,
@@ -113,10 +112,8 @@ export function ProvidersPanel(props: {
               <span className='flex items-center gap-2 font-medium'>
                 <span
                   aria-hidden
-                  className={cn(
-                    'size-2.5 shrink-0 rounded-sm',
-                    vendorColor(row.key).fill
-                  )}
+                  className='size-2.5 shrink-0 rounded-sm'
+                  style={{ backgroundColor: vendorColor(row.key) }}
                 />
                 {vendorName(row.key)}
               </span>
@@ -207,17 +204,10 @@ export function ShareCharts(props: {
   const charges = [...vendorCharges(props.finance)]
     .sort(([a], [b]) => byVendorOrder(a, b))
     .map(([vendor, usd]) => vendorSlice(vendor, usd))
-  // A method keeps its color while the same methods are paid with: the
-  // slots follow the methods' names, not their amounts.
-  const methods = [...(props.finance?.methods ?? [])].sort((a, b) =>
-    a.payment_method.localeCompare(b.payment_method)
+  const revenue = paymentSlices(
+    props.finance?.methods,
+    (method) => getPaymentMethodName(method, t) || method
   )
-  const revenue = methods.map((row, index) => ({
-    key: row.payment_method,
-    label: getPaymentMethodName(row.payment_method, t) || row.payment_method,
-    value: row.money,
-    color: SERIES_COLORS[index] ?? OTHER_COLOR,
-  }))
 
   return (
     <div className='grid gap-4 lg:grid-cols-3'>
@@ -346,11 +336,9 @@ export function TopModelsPanel(props: {
               </div>
               <div className='bg-muted h-1.5 overflow-hidden rounded-full'>
                 <div
-                  className={cn(
-                    'h-full rounded-full',
-                    vendorColor(row.vendor).fill
-                  )}
+                  className='h-full rounded-full'
                   style={{
+                    backgroundColor: vendorColor(row.vendor),
                     width: `${most ? (row.requests / most) * 100 : 0}%`,
                   }}
                 />

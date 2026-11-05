@@ -7829,6 +7829,22 @@
     "Top {{count}} of {{all}} models by requests.": "Top {{count}} trên {{all}} mô hình theo số yêu cầu.",
     "Upstream overloaded": "Phía nguồn quá tải",
     "Accounts and slots are live; the rest covers the range.": "Tài khoản và slot là trực tiếp; phần còn lại theo khoảng thời gian.",
-    "At list price, root included.": "Theo giá niêm yết, gồm cả root."
+    "At list price, root included.": "Theo giá niêm yết, gồm cả root.",
+    "Bubble area: requests": "Kích thước bong bóng: số yêu cầu",
+    "Busiest: {{day}} {{hour}}:00, {{value}}": "Bận nhất: {{day}} {{hour}}:00, {{value}}",
+    "Each cell is the highest concurrency that hour reached on any matching day in the range. A red ring marks one past the pool slots.": "Mỗi ô là mức đồng thời cao nhất giờ đó đạt được vào cùng thứ trong tuần trong khoảng thời gian. Viền đỏ là vượt số slot của pool.",
+    "Each model at its median first token and failure rate, sized by requests. Up and to the right is slow and failing; the dashed lines are 2% and 5%.": "Mỗi mô hình theo token đầu trung vị và tỷ lệ lỗi, kích thước theo số yêu cầu. Góc trên bên phải là chậm và lỗi nhiều; nét đứt là 2% và 5%.",
+    "High": "Cao",
+    "Highest {{value}}, average {{mean}} over {{days}} days": "Cao nhất {{value}}, trung bình {{mean}} trong {{days}} ngày",
+    "Low": "Thấp",
+    "Model map": "Bản đồ mô hình",
+    "Models by first token and failure rate": "Mô hình theo token đầu và tỷ lệ lỗi",
+    "Past {{limit}}": "Vượt {{limit}}",
+    "Peak concurrency by weekday and hour": "Đồng thời cao nhất theo thứ và giờ",
+    "Sign-up funnel": "Phễu đăng ký",
+    "{{count}} models under {{min}} requests left out": "Ẩn {{count}} mô hình dưới {{min}} yêu cầu",
+    "{{rate}} of sign-ups in this range have paid.": "{{rate}} người đăng ký trong khoảng này đã thanh toán.",
+    "{{rate}} went on": "{{rate}} đi tiếp",
+    "{{share}} of {{limit}}": "{{share}} của {{limit}}"
   }
 }
