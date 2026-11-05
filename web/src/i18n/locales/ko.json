@@ -7829,6 +7829,22 @@
     "Top {{count}} of {{all}} models by requests.": "요청 수 상위 {{count}}개 모델 (전체 {{all}}개).",
     "Upstream overloaded": "업스트림 과부하",
     "Accounts and slots are live; the rest covers the range.": "계정과 슬롯은 실시간, 나머지는 선택 기간 값입니다.",
-    "At list price, root included.": "정가 기준, root 포함."
+    "At list price, root included.": "정가 기준, root 포함.",
+    "Bubble area: requests": "버블 크기: 요청 수",
+    "Busiest: {{day}} {{hour}}:00, {{value}}": "가장 바쁨: {{day}} {{hour}}:00, {{value}}",
+    "Each cell is the highest concurrency that hour reached on any matching day in the range. A red ring marks one past the pool slots.": "각 칸은 기간 내 같은 요일 해당 시간대에 도달한 최대 동시 실행 수입니다. 빨간 테두리는 풀 슬롯 초과를 뜻합니다.",
+    "Each model at its median first token and failure rate, sized by requests. Up and to the right is slow and failing; the dashed lines are 2% and 5%.": "각 모델을 첫 토큰 중앙값과 실패율로 배치하고 크기는 요청 수입니다. 오른쪽 위일수록 느리고 실패가 많으며, 점선은 2%와 5%입니다.",
+    "High": "높음",
+    "Highest {{value}}, average {{mean}} over {{days}} days": "최대 {{value}}, {{days}}일 평균 {{mean}}",
+    "Low": "낮음",
+    "Model map": "모델 맵",
+    "Models by first token and failure rate": "첫 토큰과 실패율별 모델",
+    "Past {{limit}}": "{{limit}} 초과",
+    "Peak concurrency by weekday and hour": "요일·시간대별 최대 동시 실행",
+    "Sign-up funnel": "가입 퍼널",
+    "{{count}} models under {{min}} requests left out": "요청 {{min}}건 미만 모델 {{count}}개 제외",
+    "{{rate}} of sign-ups in this range have paid.": "이 기간 가입자 중 {{rate}}가 결제했습니다.",
+    "{{rate}} went on": "{{rate}} 다음 단계로",
+    "{{share}} of {{limit}}": "{{limit}}의 {{share}}"
   }
 }

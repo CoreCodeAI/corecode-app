@@ -299,35 +299,22 @@ export function useSignupMethodLabel() {
     })[name] ?? name
 }
 
-/** The color a series wears, as a stroke on a chart and a fill on a swatch. */
-export type SeriesColor = { stroke: string; fill: string }
+/** The color a series wears, as a CSS color for a fill or a stroke. */
+export type SeriesColor = string
 
-// Categorical slots in their fixed order, each stepped for the light and the
-// dark surface; checked for color-blind separation between neighbours.
+// Categorical slots in their fixed order. Each is stepped for the light and
+// the dark surface in corecode-brand.css and checked for color-blind
+// separation between neighbours.
 export const SERIES_COLORS: SeriesColor[] = [
-  {
-    stroke: 'stroke-[#2a78d6] dark:stroke-[#3987e5]',
-    fill: 'bg-[#2a78d6] dark:bg-[#3987e5]',
-  },
-  {
-    stroke: 'stroke-[#eb6834] dark:stroke-[#d95926]',
-    fill: 'bg-[#eb6834] dark:bg-[#d95926]',
-  },
-  {
-    stroke: 'stroke-[#1baf7a] dark:stroke-[#199e70]',
-    fill: 'bg-[#1baf7a] dark:bg-[#199e70]',
-  },
-  {
-    stroke: 'stroke-[#eda100] dark:stroke-[#c98500]',
-    fill: 'bg-[#eda100] dark:bg-[#c98500]',
-  },
+  'var(--series-1)',
+  'var(--series-2)',
+  'var(--series-3)',
+  'var(--series-4)',
 ]
 
 /** Whatever is folded together reads as gray, never as a series. */
-export const OTHER_COLOR: SeriesColor = {
-  stroke: 'stroke-muted-foreground/45',
-  fill: 'bg-muted-foreground/45',
-}
+export const OTHER_COLOR: SeriesColor =
+  'color-mix(in oklab, var(--muted-foreground) 45%, transparent)'
 
 /** Each vendor keeps its color whatever else is on the chart. */
 export const VENDOR_ORDER = ['claude', 'codex', 'grok', 'gemini', 'other']
@@ -337,6 +324,65 @@ export function vendorColor(vendor: string): SeriesColor {
   return index >= 0 && index < SERIES_COLORS.length
     ? SERIES_COLORS[index]
     : OTHER_COLOR
+}
+
+export type WeekCell = {
+  /** Monday is 0, in the viewer's time zone. */
+  weekday: number
+  hour: number
+  /** The highest value the slot reached on any day. */
+  max: number
+  /** The slot's mean over the days that had it. */
+  mean: number
+  days: number
+}
+
+/**
+ * Folds an hourly series into the week: one cell per weekday and hour, so a
+ * daily or weekly rhythm shows as a band across the grid.
+ */
+export function foldIntoWeek(
+  points: { hour: number; value: number }[]
+): WeekCell[] {
+  const cells = new Map<string, WeekCell & { sum: number }>()
+  for (const point of points) {
+    const date = new Date(point.hour * 1000)
+    const weekday = (date.getDay() + 6) % 7
+    const hour = date.getHours()
+    const key = `${weekday}-${hour}`
+    const cell = cells.get(key) ?? {
+      weekday,
+      hour,
+      max: 0,
+      mean: 0,
+      days: 0,
+      sum: 0,
+    }
+    cell.max = Math.max(cell.max, point.value)
+    cell.sum += point.value
+    cell.days += 1
+    cell.mean = cell.sum / cell.days
+    cells.set(key, cell)
+  }
+  return [...cells.values()].map(({ sum: _sum, ...cell }) => cell)
+}
+
+/**
+ * Revenue by payment method as share slices. A method takes its slot in name
+ * order, so its color holds while the same methods are paid with.
+ */
+export function paymentSlices(
+  methods: { payment_method: string; money: number }[] | null | undefined,
+  name: (method: string) => string
+) {
+  return [...(methods ?? [])]
+    .sort((a, b) => a.payment_method.localeCompare(b.payment_method))
+    .map((row, index) => ({
+      key: row.payment_method,
+      label: name(row.payment_method),
+      value: row.money,
+      color: SERIES_COLORS[index] ?? OTHER_COLOR,
+    }))
 }
 
 /** A vendor's name as the tabs print it; GPT models sell as codex. */

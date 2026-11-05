@@ -36,6 +36,7 @@ import type {
   GrowthInsights,
 } from '../types'
 import { useActivityVerdict, useGrowthVerdict } from '../verdicts'
+import { FunnelChart } from './advanced-charts'
 import { GroupsPanel, ReferralPanel } from './business-panels'
 import {
   BarSeries,
@@ -194,6 +195,27 @@ export function GrowthTab(props: {
               Math.max(day.registered - day.activated, 0),
             ],
           }))}
+        />
+      </Panel>
+      <Panel
+        title={t('Sign-up funnel')}
+        description={
+          funnel && funnel.registered > 0
+            ? t('{{rate}} of sign-ups in this range have paid.', {
+                rate: fmt.pct(funnel.paid / funnel.registered),
+              })
+            : undefined
+        }
+        help={cohortHelp}
+      >
+        <FunnelChart
+          loading={!data}
+          steps={[
+            { label: t('Registered'), value: funnel?.registered ?? 0 },
+            { label: t('Activated'), value: funnel?.activated ?? 0 },
+            { label: t('Has paid'), value: funnel?.paid ?? 0 },
+            { label: t('Paid again'), value: funnel?.repeat ?? 0 },
+          ]}
         />
       </Panel>
       <div className='grid gap-4 lg:grid-cols-2'>

@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 import {
+  foldIntoWeek,
   groupProvider,
   PROVIDER_LABELS,
   useErrorCategoryLabel,
@@ -33,6 +34,7 @@ import {
   type PoolProvider,
 } from '../types'
 import { useCapacityVerdict } from '../verdicts'
+import { WeekHeatmap } from './advanced-charts'
 import { ConcurrencyLimitsPanel } from './concurrency-limits-panel'
 import {
   BarSeries,
@@ -317,6 +319,25 @@ export function CapacityTab(props: {
             values: [hour.peak_concurrency],
             extra: [{ label: t('Requests'), value: fmt.num(hour.requests) }],
           }))}
+        />
+      </Panel>
+
+      <Panel
+        title={t('Peak concurrency by weekday and hour')}
+        help={t(
+          'Each cell is the highest concurrency that hour reached on any matching day in the range. A red ring marks one past the pool slots.'
+        )}
+      >
+        <WeekHeatmap
+          cells={foldIntoWeek(
+            hourly.map((hour) => ({
+              hour: hour.hour,
+              value: hour.peak_concurrency,
+            }))
+          )}
+          format={fmt.num}
+          limit={slots || undefined}
+          empty={t('No requests in this range')}
         />
       </Panel>
 

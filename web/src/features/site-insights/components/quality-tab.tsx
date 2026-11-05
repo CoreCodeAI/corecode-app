@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils'
 import { failureTone, SMALL_SAMPLE, useInsightsFormat } from '../lib'
 import type { BusinessInsights, QualityInsights, VendorQuality } from '../types'
 import { useQualityVerdict } from '../verdicts'
+import { ModelMap } from './advanced-charts'
 import { ClientsPanel } from './business-panels'
 import {
   BarSeries,
@@ -261,6 +262,7 @@ export function QualityTab(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const modelMapLabels = useVendorLabels()
   const verdict = useQualityVerdict(props.data, props.previous)
   const data = props.data
   const previous = props.previous
@@ -359,6 +361,22 @@ export function QualityTab(props: {
         ]}
       />
       <TruncatedNotice show={!!data?.truncated} />
+      <Panel
+        title={t('Model map')}
+        help={t(
+          'Each model at its median first token and failure rate, sized by requests. Up and to the right is slow and failing; the dashed lines are 2% and 5%.'
+        )}
+      >
+        {data ? (
+          <ModelMap
+            models={data.models ?? []}
+            vendorName={(vendor) => modelMapLabels[vendor] ?? vendor}
+            empty={t('No requests in this range')}
+          />
+        ) : (
+          <div className='bg-muted h-60 animate-pulse rounded-md' />
+        )}
+      </Panel>
       <Panel
         title={t('By model')}
         description={

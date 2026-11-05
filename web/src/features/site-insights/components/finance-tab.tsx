@@ -20,11 +20,12 @@ import { useTranslation } from 'react-i18next'
 
 import { getPaymentMethodName } from '@/features/wallet/lib/billing'
 
-import { useInsightsFormat } from '../lib'
+import { paymentSlices, useInsightsFormat } from '../lib'
 import type { BusinessInsights, FinanceInsights } from '../types'
 import { useFinanceVerdict } from '../verdicts'
 import { ModelMixPanel, VendorMarginPanel } from './business-panels'
 import { FinanceSummary } from './finance-summary'
+import { ShareDonut } from './share-donut'
 import {
   BarSeries,
   HelpLabel,
@@ -172,6 +173,18 @@ export function FinanceTab(props: {
           </dl>
         </Panel>
         <Panel title={t('By payment method')}>
+          <ShareDonut
+            loading={!data}
+            slices={paymentSlices(
+              data?.methods,
+              (method) => getPaymentMethodName(method, t) || method
+            )}
+            format={fmt.cny}
+            ariaLabel={t('Revenue by payment method')}
+            totalLabel={t('Revenue')}
+            empty={t('No successful orders in this range')}
+          />
+          <div className='mt-4' />
           <SimpleTable
             rows={data?.methods}
             rowKey={(row) => row.payment_method}

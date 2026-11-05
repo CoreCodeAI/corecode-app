@@ -7829,6 +7829,22 @@
     "Top {{count}} of {{all}} models by requests.": "Top {{count}} of {{all}} models by requests.",
     "Upstream overloaded": "Upstream overloaded",
     "Accounts and slots are live; the rest covers the range.": "Accounts and slots are live; the rest covers the range.",
-    "At list price, root included.": "At list price, root included."
+    "At list price, root included.": "At list price, root included.",
+    "Bubble area: requests": "Bubble area: requests",
+    "Busiest: {{day}} {{hour}}:00, {{value}}": "Busiest: {{day}} {{hour}}:00, {{value}}",
+    "Each cell is the highest concurrency that hour reached on any matching day in the range. A red ring marks one past the pool slots.": "Each cell is the highest concurrency that hour reached on any matching day in the range. A red ring marks one past the pool slots.",
+    "Each model at its median first token and failure rate, sized by requests. Up and to the right is slow and failing; the dashed lines are 2% and 5%.": "Each model at its median first token and failure rate, sized by requests. Up and to the right is slow and failing; the dashed lines are 2% and 5%.",
+    "High": "High",
+    "Highest {{value}}, average {{mean}} over {{days}} days": "Highest {{value}}, average {{mean}} over {{days}} days",
+    "Low": "Low",
+    "Model map": "Model map",
+    "Models by first token and failure rate": "Models by first token and failure rate",
+    "Past {{limit}}": "Past {{limit}}",
+    "Peak concurrency by weekday and hour": "Peak concurrency by weekday and hour",
+    "Sign-up funnel": "Sign-up funnel",
+    "{{count}} models under {{min}} requests left out": "{{count}} models under {{min}} requests left out",
+    "{{rate}} of sign-ups in this range have paid.": "{{rate}} of sign-ups in this range have paid.",
+    "{{rate}} went on": "{{rate}} went on",
+    "{{share}} of {{limit}}": "{{share}} of {{limit}}"
   }
 }

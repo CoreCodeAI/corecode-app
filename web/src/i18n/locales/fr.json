@@ -7829,6 +7829,22 @@
     "Top {{count}} of {{all}} models by requests.": "Les {{count}} premiers des {{all}} modèles par requêtes.",
     "Upstream overloaded": "Amont surchargé",
     "Accounts and slots are live; the rest covers the range.": "Comptes et emplacements en direct ; le reste couvre la période.",
-    "At list price, root included.": "Au prix catalogue, root compris."
+    "At list price, root included.": "Au prix catalogue, root compris.",
+    "Bubble area: requests": "Taille de la bulle : requêtes",
+    "Busiest: {{day}} {{hour}}:00, {{value}}": "Le plus chargé : {{day}} {{hour}}:00, {{value}}",
+    "Each cell is the highest concurrency that hour reached on any matching day in the range. A red ring marks one past the pool slots.": "Chaque case est la concurrence maximale atteinte à cette heure, les mêmes jours de la semaine sur la période. Un cadre rouge marque un dépassement des emplacements du pool.",
+    "Each model at its median first token and failure rate, sized by requests. Up and to the right is slow and failing; the dashed lines are 2% and 5%.": "Chaque modèle à son premier jeton médian et son taux d’échec, taille selon les requêtes. En haut à droite : lent et défaillant ; pointillés à 2 % et 5 %.",
+    "High": "Élevée",
+    "Highest {{value}}, average {{mean}} over {{days}} days": "Maximum {{value}}, moyenne {{mean}} sur {{days}} jours",
+    "Low": "Faible",
+    "Model map": "Carte des modèles",
+    "Models by first token and failure rate": "Modèles par premier jeton et taux d’échec",
+    "Past {{limit}}": "Au-delà de {{limit}}",
+    "Peak concurrency by weekday and hour": "Pic de concurrence par jour et par heure",
+    "Sign-up funnel": "Entonnoir d’inscription",
+    "{{count}} models under {{min}} requests left out": "{{count}} modèles sous {{min}} requêtes omis",
+    "{{rate}} of sign-ups in this range have paid.": "{{rate}} des inscrits de la période ont payé.",
+    "{{rate}} went on": "{{rate}} ont continué",
+    "{{share}} of {{limit}}": "{{share}} de {{limit}}"
   }
 }

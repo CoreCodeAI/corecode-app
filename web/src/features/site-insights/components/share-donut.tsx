@@ -77,7 +77,12 @@ export function ShareDonut(props: {
   const total = slices.reduce((sum, slice) => sum + slice.value, 0)
 
   if (props.loading) {
-    return <div className='bg-muted h-36 animate-pulse rounded-md' />
+    return (
+      <div
+        className='bg-muted animate-pulse rounded-md'
+        style={{ height: 144 }}
+      />
+    )
   }
   if (total <= 0) {
     return <p className='text-muted-foreground text-sm'>{props.empty}</p>
@@ -95,7 +100,7 @@ export function ShareDonut(props: {
 
   return (
     <div className='flex flex-col items-center gap-4 sm:flex-row sm:items-center'>
-      <div className='relative size-36 shrink-0'>
+      <div className='relative shrink-0' style={{ width: 144, height: 144 }}>
         <svg
           viewBox='0 0 140 140'
           role='img'
@@ -112,9 +117,9 @@ export function ShareDonut(props: {
               strokeWidth={slice.key === active ? WIDTH + 4 : WIDTH}
               strokeDasharray={`${Math.max(length - (slices.length > 1 ? GAP : 0), 0.5)} ${CIRCUMFERENCE}`}
               strokeDashoffset={-start}
+              style={{ stroke: slice.color }}
               className={cn(
-                slice.color.stroke,
-                'cursor-default transition-[stroke-width]',
+                'cursor-default',
                 active && slice.key !== active && 'opacity-40'
               )}
               onPointerEnter={() => setActive(slice.key)}
@@ -151,7 +156,8 @@ export function ShareDonut(props: {
           >
             <span
               aria-hidden
-              className={cn('size-2.5 shrink-0 rounded-sm', slice.color.fill)}
+              className='size-2.5 shrink-0 rounded-sm'
+              style={{ backgroundColor: slice.color }}
             />
             <span className='min-w-0 flex-1 truncate' title={slice.label}>
               {slice.label}

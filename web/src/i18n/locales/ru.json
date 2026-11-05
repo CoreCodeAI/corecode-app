@@ -7829,6 +7829,22 @@
     "Top {{count}} of {{all}} models by requests.": "Топ-{{count}} из {{all}} моделей по запросам.",
     "Upstream overloaded": "Поставщик перегружен",
     "Accounts and slots are live; the rest covers the range.": "Аккаунты и слоты — сейчас, остальное — за период.",
-    "At list price, root included.": "По прейскуранту, включая root."
+    "At list price, root included.": "По прейскуранту, включая root.",
+    "Bubble area: requests": "Размер пузыря: запросы",
+    "Busiest: {{day}} {{hour}}:00, {{value}}": "Пик: {{day}} {{hour}}:00, {{value}}",
+    "Each cell is the highest concurrency that hour reached on any matching day in the range. A red ring marks one past the pool slots.": "Каждая клетка — максимум параллельных запросов в этот час в такие же дни недели за период. Красная рамка — выше числа слотов пула.",
+    "Each model at its median first token and failure rate, sized by requests. Up and to the right is slow and failing; the dashed lines are 2% and 5%.": "Каждая модель по медиане первого токена и доле ошибок, размер — число запросов. Вверху справа — медленные и сбойные; пунктир — 2% и 5%.",
+    "High": "Высокая",
+    "Highest {{value}}, average {{mean}} over {{days}} days": "Максимум {{value}}, в среднем {{mean}} за {{days}} дн.",
+    "Low": "Низкая",
+    "Model map": "Карта моделей",
+    "Models by first token and failure rate": "Модели по первому токену и доле ошибок",
+    "Past {{limit}}": "Выше {{limit}}",
+    "Peak concurrency by weekday and hour": "Пик параллельных запросов по дням недели и часам",
+    "Sign-up funnel": "Воронка регистраций",
+    "{{count}} models under {{min}} requests left out": "{{count}} моделей с менее чем {{min}} запросами не показаны",
+    "{{rate}} of sign-ups in this range have paid.": "{{rate}} зарегистрировавшихся за период уже платили.",
+    "{{rate}} went on": "{{rate}} перешли дальше",
+    "{{share}} of {{limit}}": "{{share}} от {{limit}}"
   }
 }
