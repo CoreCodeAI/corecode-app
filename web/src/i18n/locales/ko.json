@@ -7814,6 +7814,8 @@
     "{{count}} turned away by per-user limits.": "사용자 한도로 {{count}}건 거부.",
     "{{count}} turned away with the pool full.": "풀이 가득 차 {{count}}건 거부.",
     "{{requests}} requests ({{change}}).": "요청 {{requests}} ({{change}}).",
-    "{{requests}} requests.": "요청 {{requests}}."
+    "{{requests}} requests.": "요청 {{requests}}.",
+    "to {{times}}×": "{{times}}배로",
+    "{{vendor}} fails {{rate}} of requests.": "{{vendor}} 실패율 {{rate}}."
   }
 }

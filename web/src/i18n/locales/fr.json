@@ -7814,6 +7814,8 @@
     "{{count}} turned away by per-user limits.": "{{count}} refusées par la limite par utilisateur.",
     "{{count}} turned away with the pool full.": "{{count}} refusées, pool plein.",
     "{{requests}} requests ({{change}}).": "{{requests}} requêtes ({{change}}).",
-    "{{requests}} requests.": "{{requests}} requêtes."
+    "{{requests}} requests.": "{{requests}} requêtes.",
+    "to {{times}}×": "×{{times}}",
+    "{{vendor}} fails {{rate}} of requests.": "{{vendor}} échoue sur {{rate}} des requêtes."
   }
 }

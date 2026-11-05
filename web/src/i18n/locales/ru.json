@@ -7814,6 +7814,8 @@
     "{{count}} turned away by per-user limits.": "{{count}} отклонено по лимиту пользователя.",
     "{{count}} turned away with the pool full.": "{{count}} отклонено: пул заполнен.",
     "{{requests}} requests ({{change}}).": "Запросов: {{requests}} ({{change}}).",
-    "{{requests}} requests.": "Запросов: {{requests}}."
+    "{{requests}} requests.": "Запросов: {{requests}}.",
+    "to {{times}}×": "в {{times}} раза больше",
+    "{{vendor}} fails {{rate}} of requests.": "У {{vendor}} {{rate}} ошибок."
   }
 }

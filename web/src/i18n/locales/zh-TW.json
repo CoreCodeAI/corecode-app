@@ -7814,6 +7814,8 @@
     "{{count}} turned away by per-user limits.": "{{count}} 個請求因使用者併發上限被拒。",
     "{{count}} turned away with the pool full.": "{{count}} 個請求因號池滿載被拒。",
     "{{requests}} requests ({{change}}).": "請求 {{requests}}（{{change}}）。",
-    "{{requests}} requests.": "請求 {{requests}}。"
+    "{{requests}} requests.": "請求 {{requests}}。",
+    "to {{times}}×": "增至 {{times}} 倍",
+    "{{vendor}} fails {{rate}} of requests.": "{{vendor}} 失敗率 {{rate}}。"
   }
 }

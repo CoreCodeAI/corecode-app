@@ -7814,6 +7814,8 @@
     "{{count}} turned away by per-user limits.": "{{count}} bị từ chối do giới hạn mỗi người dùng.",
     "{{count}} turned away with the pool full.": "{{count}} bị từ chối do pool đầy.",
     "{{requests}} requests ({{change}}).": "{{requests}} yêu cầu ({{change}}).",
-    "{{requests}} requests.": "{{requests}} yêu cầu."
+    "{{requests}} requests.": "{{requests}} yêu cầu.",
+    "to {{times}}×": "gấp {{times}} lần",
+    "{{vendor}} fails {{rate}} of requests.": "{{vendor}} lỗi {{rate}} yêu cầu."
   }
 }
