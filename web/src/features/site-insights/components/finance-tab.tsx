@@ -22,9 +22,17 @@ import { getPaymentMethodName } from '@/features/wallet/lib/billing'
 
 import { useInsightsFormat } from '../lib'
 import type { BusinessInsights, FinanceInsights } from '../types'
+import { useFinanceVerdict } from '../verdicts'
 import { ModelMixPanel, VendorMarginPanel } from './business-panels'
 import { FinanceSummary } from './finance-summary'
-import { BarSeries, HelpLabel, Panel, SimpleTable, UserLabel } from './shared'
+import {
+  BarSeries,
+  HelpLabel,
+  Panel,
+  SimpleTable,
+  UserLabel,
+  Verdict,
+} from './shared'
 import { UserSpendPanel } from './user-spend'
 import { VendorTabs } from './vendor-usage'
 
@@ -36,6 +44,7 @@ export function FinanceTab(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const verdict = useFinanceVerdict(props.data, props.previous)
   const data = props.data
   const previous = props.previous
   const daily = data?.daily ?? []
@@ -55,6 +64,11 @@ export function FinanceTab(props: {
   ].reduce((sum, value) => sum + value, 0)
   return (
     <div className='grid gap-4'>
+      <Verdict
+        loading={!props.data}
+        tone={verdict?.tone ?? 'default'}
+        text={verdict?.text}
+      />
       <FinanceSummary data={data} previous={previous} />
 
       <VendorMarginPanel data={data} />

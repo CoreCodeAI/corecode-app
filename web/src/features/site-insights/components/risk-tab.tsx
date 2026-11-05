@@ -26,6 +26,7 @@ import {
   useSignupMethodLabel,
 } from '../lib'
 import type { RiskInsights } from '../types'
+import { useRiskVerdict } from '../verdicts'
 import {
   BarSeries,
   Breakdown,
@@ -34,6 +35,7 @@ import {
   SimpleTable,
   UserLabel,
   type Tone,
+  Verdict,
 } from './shared'
 
 export function RiskTab(props: {
@@ -42,6 +44,7 @@ export function RiskTab(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const verdict = useRiskVerdict(props.data)
   const methodLabel = useSignupMethodLabel()
   const data = props.data
   const previous = props.previous
@@ -58,6 +61,11 @@ export function RiskTab(props: {
 
   return (
     <div className='grid gap-4'>
+      <Verdict
+        loading={!props.data}
+        tone={verdict?.tone ?? 'default'}
+        text={verdict?.text}
+      />
       <MetricGrid
         loading={!data}
         items={[

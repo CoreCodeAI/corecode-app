@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 
 import { useErrorCategoryLabel, useInsightsFormat } from '../lib'
 import type { CapacityInsights } from '../types'
+import { useCapacityVerdict } from '../verdicts'
 import { ConcurrencyLimitsPanel } from './concurrency-limits-panel'
 import {
   BarSeries,
@@ -32,6 +33,7 @@ import {
   SimpleTable,
   TruncatedNotice,
   UserLabel,
+  Verdict,
 } from './shared'
 
 // Where a live user's limit comes from, marked after the limit.
@@ -43,6 +45,7 @@ export function CapacityTab(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const verdict = useCapacityVerdict(props.data, props.previous)
   const categoryLabel = useErrorCategoryLabel()
   const data = props.data
   const previous = props.previous
@@ -96,6 +99,11 @@ export function CapacityTab(props: {
 
   return (
     <div className='grid gap-4'>
+      <Verdict
+        loading={!props.data}
+        tone={verdict?.tone ?? 'default'}
+        text={verdict?.text}
+      />
       <MetricGrid
         loading={!data}
         items={[

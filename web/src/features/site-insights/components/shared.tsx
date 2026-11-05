@@ -117,6 +117,43 @@ function HelpPopover(props: {
 }
 
 /** A question-mark icon that explains how a panel's figures are counted. */
+const VERDICT_TONES: Record<Tone, { bar: string; dot: string }> = {
+  default: { bar: 'border-l-muted-foreground/40', dot: 'bg-muted-foreground' },
+  good: { bar: 'border-l-emerald-500', dot: 'bg-emerald-500' },
+  warning: { bar: 'border-l-amber-500', dot: 'bg-amber-500' },
+  danger: { bar: 'border-l-destructive', dot: 'bg-destructive' },
+}
+
+/**
+ * A tab's answer in one sentence, colored by how it reads: the first thing
+ * on the tab, so the figures below it confirm rather than have to be read
+ * to find out.
+ */
+export function Verdict(props: {
+  tone: Tone
+  text: string | undefined
+  loading?: boolean
+}) {
+  const tone = VERDICT_TONES[props.tone]
+  if (props.loading) return <Skeleton className='h-11 w-full rounded-xl' />
+  if (!props.text) return null
+  return (
+    <div
+      role='status'
+      className={cn(
+        'bg-card flex items-start gap-2.5 rounded-xl border border-l-4 px-4 py-3 text-sm font-medium',
+        tone.bar
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn('mt-1.5 size-2 shrink-0 rounded-full', tone.dot)}
+      />
+      <p className='min-w-0 leading-relaxed'>{props.text}</p>
+    </div>
+  )
+}
+
 export function HelpIcon(props: { help: string; title?: ReactNode }) {
   const { t } = useTranslation()
   return (

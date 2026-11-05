@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils'
 
 import { failureTone, SMALL_SAMPLE, useInsightsFormat } from '../lib'
 import type { BusinessInsights, QualityInsights, VendorQuality } from '../types'
+import { useQualityVerdict } from '../verdicts'
 import { ClientsPanel } from './business-panels'
 import {
   BarSeries,
@@ -42,6 +43,7 @@ import {
   SimpleTable,
   TruncatedNotice,
   type Tone,
+  Verdict,
 } from './shared'
 
 const RATE_TONES: Record<Tone, string> = {
@@ -259,6 +261,7 @@ export function QualityTab(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const verdict = useQualityVerdict(props.data, props.previous)
   const data = props.data
   const previous = props.previous
   const daily = data?.daily ?? []
@@ -276,6 +279,11 @@ export function QualityTab(props: {
 
   return (
     <div className='grid gap-4'>
+      <Verdict
+        loading={!props.data}
+        tone={verdict?.tone ?? 'default'}
+        text={verdict?.text}
+      />
       <VendorCards
         all={data?.all_models}
         vendors={data?.vendors}
