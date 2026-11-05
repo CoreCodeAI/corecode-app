@@ -20,10 +20,14 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import {
+  identifyUser,
+  INTERNAL_TRAFFIC_STORAGE_KEY,
   PURCHASE_LOOKBACK_SECONDS,
   SIGN_UP_WINDOW_SECONDS,
+  trackBeginCheckout,
+  trackCreateApiKey,
+  trackLogin,
   trackPurchases,
-  trackSignUp,
   useReportPurchases,
 } from '../analytics'
 import { api } from '../api'
@@ -59,31 +63,79 @@ afterEach(() => {
   vi.mocked(api.get).mockReset()
 })
 
-describe('trackSignUp', () => {
-  test('reports an account created within the window once', () => {
+describe('trackLogin', () => {
+  test('reports an account created within the window as one sign-up', () => {
     const user = { id: 1, created_at: NOW - SIGN_UP_WINDOW_SECONDS }
-    trackSignUp(user, 'magic_link', NOW)
-    trackSignUp(user, 'magic_link', NOW)
+    trackLogin(user, 'magic_link', NOW)
+    trackLogin(user, 'magic_link', NOW)
     expect(gtag).toHaveBeenCalledTimes(1)
     expect(gtag).toHaveBeenCalledWith('event', 'sign_up', {
       method: 'magic_link',
     })
   })
 
-  test('treats an older account as a login', () => {
-    trackSignUp(
+  test('reports an older account, or one without a date, as a login', () => {
+    trackLogin(
       { id: 1, created_at: NOW - SIGN_UP_WINDOW_SECONDS - 1 },
       'oauth:oidc',
       NOW
     )
-    trackSignUp({ id: 2 }, 'oauth:oidc', NOW)
-    expect(gtag).not.toHaveBeenCalled()
+    trackLogin({ id: 2 }, 'password', NOW)
+    expect(gtag.mock.calls).toEqual([
+      ['event', 'login', { method: 'oauth:oidc' }],
+      ['event', 'login', { method: 'password' }],
+    ])
   })
 
   test('does nothing without the GA tag', () => {
     delete window.gtag
-    trackSignUp({ id: 1, created_at: NOW }, 'magic_link', NOW)
+    trackLogin({ id: 1, created_at: NOW }, 'magic_link', NOW)
     expect(window.localStorage.length).toBe(0)
+  })
+})
+
+describe('identifyUser', () => {
+  test('sends the id and group, never the email, and clears the internal flag', () => {
+    window.localStorage.setItem(INTERNAL_TRAFFIC_STORAGE_KEY, '1')
+    identifyUser({ id: 42, role: 1, group: 'vip' })
+    expect(gtag.mock.calls).toEqual([
+      ['set', { user_id: '42', traffic_type: undefined }],
+      ['set', 'user_properties', { user_group: 'vip' }],
+    ])
+    expect(window.localStorage.getItem(INTERNAL_TRAFFIC_STORAGE_KEY)).toBeNull()
+  })
+
+  test('marks an administrator internal, even before the tag loads', () => {
+    delete window.gtag
+    identifyUser({ id: 1, role: 10 })
+    expect(window.localStorage.getItem(INTERNAL_TRAFFIC_STORAGE_KEY)).toBe('1')
+
+    window.gtag = gtag
+    identifyUser({ id: 1, role: 100 })
+    expect(gtag).toHaveBeenCalledWith('set', {
+      user_id: '1',
+      traffic_type: 'internal',
+    })
+    expect(gtag).toHaveBeenCalledWith('set', 'user_properties', {
+      user_group: 'default',
+    })
+  })
+})
+
+describe('funnel events', () => {
+  test('reports created keys and a confirmed checkout in CNY', () => {
+    trackCreateApiKey(2)
+    trackCreateApiKey(0)
+    trackBeginCheckout(30, 'alipay')
+    trackBeginCheckout(0, 'alipay')
+    expect(gtag.mock.calls).toEqual([
+      ['event', 'create_api_key', { count: 2 }],
+      [
+        'event',
+        'begin_checkout',
+        { value: 30, currency: 'CNY', payment_type: 'alipay' },
+      ],
+    ])
   })
 })
 
