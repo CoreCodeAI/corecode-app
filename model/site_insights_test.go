@@ -184,6 +184,13 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 			assert.Zero(t, sonnetOnly.Daily[1].Requests)
 			assert.Len(t, sonnetOnly.Models, len(quality.Models), "the table keeps every model, as the filter's options")
 			assert.Equal(t, quality.StatusCodes, sonnetOnly.StatusCodes, "counted per hour, not per model")
+			assert.Equal(t, quality.Vendors, sonnetOnly.Vendors, "the vendor cards ignore the filter")
+			assert.Equal(t, VendorQuality{Requests: 6, Errors: 2, ErrorRate: 0.3333, TTFTP50: quality.TTFTP50, TTFTP95: quality.TTFTP95},
+				sonnetOnly.AllModels, "the all-models card ignores the filter")
+			assert.Equal(t, []VendorQuality{{
+				Vendor: VendorOther, Models: []string{"opus", "sonnet"}, Requests: quality.Requests, Errors: quality.Errors,
+				ErrorRate: quality.ErrorRate, TTFTP50: quality.TTFTP50, TTFTP95: quality.TTFTP95,
+			}}, quality.Vendors, "one vendor holds every model, so its figures are the site's")
 
 			business, err := GetBusinessInsights(r)
 			require.NoError(t, err)

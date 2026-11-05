@@ -24,6 +24,19 @@ type ModelQuality struct {
 	CacheShare float64 `json:"cache_share"`
 }
 
+// VendorQuality is one vendor's figures over every model it sells, merged
+// from the models' histograms. The model filter does not narrow it: it is
+// what the quick-select cards show before a vendor is picked.
+type VendorQuality struct {
+	Vendor    string   `json:"vendor"`
+	Models    []string `json:"models"`
+	Requests  int64    `json:"requests"`
+	Errors    int64    `json:"errors"`
+	ErrorRate float64  `json:"error_rate"`
+	TTFTP50   int64    `json:"ttft_p50_ms"`
+	TTFTP95   int64    `json:"ttft_p95_ms"`
+}
+
 // CacheDay is one day of input tokens split by how the cache served them.
 type CacheDay struct {
 	Day        int64   `json:"day"`
@@ -41,18 +54,22 @@ type CacheDay struct {
 // logs. Unlike the performance panel it counts every logged failure,
 // including requests the pool turned away.
 type QualityInsights struct {
-	Requests     int64          `json:"requests"`
-	Errors       int64          `json:"errors"`
-	ErrorRate    float64        `json:"error_rate"`
-	TTFTP50      int64          `json:"ttft_p50_ms"`
-	TTFTP95      int64          `json:"ttft_p95_ms"`
-	CacheShare   float64        `json:"cache_share"`
-	Models       []ModelQuality `json:"models"`
-	Daily        []CacheDay     `json:"daily"`
-	StreamEnds   []NamedCount   `json:"stream_ends"`
-	StatusCodes  []NamedCount   `json:"status_codes"`
-	ErrorReasons []NamedCount   `json:"error_reasons"`
-	Truncated    bool           `json:"truncated"`
+	Requests   int64           `json:"requests"`
+	Errors     int64           `json:"errors"`
+	ErrorRate  float64         `json:"error_rate"`
+	TTFTP50    int64           `json:"ttft_p50_ms"`
+	TTFTP95    int64           `json:"ttft_p95_ms"`
+	CacheShare float64         `json:"cache_share"`
+	Models     []ModelQuality  `json:"models"`
+	Vendors    []VendorQuality `json:"vendors"`
+	// AllModels is every model's figures whatever the filter selects, for
+	// the quick-select card that clears it. Its Vendor and Models are empty.
+	AllModels    VendorQuality `json:"all_models"`
+	Daily        []CacheDay    `json:"daily"`
+	StreamEnds   []NamedCount  `json:"stream_ends"`
+	StatusCodes  []NamedCount  `json:"status_codes"`
+	ErrorReasons []NamedCount  `json:"error_reasons"`
+	Truncated    bool          `json:"truncated"`
 }
 
 // logOtherFields is the part of a log's other column the quality, business
@@ -173,6 +190,12 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 		}
 	}
 	result.TTFTP50, result.TTFTP95 = allTTFT.percentile(0.5), allTTFT.percentile(0.95)
+	type vendorBucket struct {
+		quality VendorQuality
+		ttft    histogram
+	}
+	vendors := make(map[string]*vendorBucket)
+	everything := vendorBucket{ttft: histogram{}}
 	result.ErrorRate = ratio(float64(result.Errors), float64(result.Requests))
 	result.CacheShare = ratio(float64(cacheRead), float64(inputTotal))
 	for _, bucket := range models {
@@ -182,7 +205,33 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 		quality.LatencyP50, quality.LatencyP95 = bucket.latency.percentile(0.5), bucket.latency.percentile(0.95)
 		quality.CacheShare = ratio(float64(bucket.cache), float64(bucket.input))
 		result.Models = append(result.Models, quality)
+		vendor := vendors[quality.Vendor]
+		if vendor == nil {
+			vendor = &vendorBucket{quality: VendorQuality{Vendor: quality.Vendor}, ttft: histogram{}}
+			vendors[quality.Vendor] = vendor
+		}
+		vendor.quality.Models = append(vendor.quality.Models, quality.Model)
+		vendor.quality.Requests += quality.Requests
+		vendor.quality.Errors += quality.Errors
+		vendor.ttft.merge(bucket.ttft)
+		everything.quality.Requests += quality.Requests
+		everything.quality.Errors += quality.Errors
+		everything.ttft.merge(bucket.ttft)
 	}
+	result.AllModels = everything.quality
+	result.AllModels.ErrorRate = ratio(float64(result.AllModels.Errors), float64(result.AllModels.Requests))
+	result.AllModels.TTFTP50, result.AllModels.TTFTP95 = everything.ttft.percentile(0.5), everything.ttft.percentile(0.95)
+	result.Vendors = []VendorQuality{}
+	for _, bucket := range vendors {
+		vendor := bucket.quality
+		slices.Sort(vendor.Models)
+		vendor.ErrorRate = ratio(float64(vendor.Errors), float64(vendor.Requests))
+		vendor.TTFTP50, vendor.TTFTP95 = bucket.ttft.percentile(0.5), bucket.ttft.percentile(0.95)
+		result.Vendors = append(result.Vendors, vendor)
+	}
+	slices.SortFunc(result.Vendors, func(a, b VendorQuality) int {
+		return cmp.Or(cmp.Compare(b.Requests, a.Requests), cmp.Compare(a.Vendor, b.Vendor))
+	})
 	slices.SortFunc(result.Models, func(a, b ModelQuality) int {
 		return cmp.Or(cmp.Compare(b.Requests, a.Requests), cmp.Compare(a.Model, b.Model))
 	})

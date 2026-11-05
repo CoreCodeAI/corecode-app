@@ -7763,6 +7763,8 @@
     "About ${{amount}} in USDT or USDC at the site exchange rate.": "Environ ${{amount}} en USDT ou USDC au taux de change du site.",
     "{{credit}} credit = {{money}}": "{{credit}} de crédit = {{money}}",
     "Long context": "Contexte long",
-    "or {{count}} × {{plan}}": "or {{count}} × {{plan}}"
+    "or {{count}} × {{plan}}": "or {{count}} × {{plan}}",
+    "Quick select by vendor": "Sélection rapide par fournisseur",
+    "{{requests}} requests · {{rate}} failed": "{{requests}} requêtes · {{rate}} d’échecs"
   }
 }

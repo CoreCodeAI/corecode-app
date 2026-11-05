@@ -7763,6 +7763,8 @@
     "About ${{amount}} in USDT or USDC at the site exchange rate.": "사이트 환율 기준 약 ${{amount}}의 USDT 또는 USDC입니다.",
     "{{credit}} credit = {{money}}": "{{credit}} 크레딧 = {{money}}",
     "Long context": "긴 컨텍스트",
-    "or {{count}} × {{plan}}": "또는 {{plan}} {{count}}개"
+    "or {{count}} × {{plan}}": "또는 {{plan}} {{count}}개",
+    "Quick select by vendor": "공급사별 빠른 선택",
+    "{{requests}} requests · {{rate}} failed": "요청 {{requests}}건 · 실패율 {{rate}}"
   }
 }
