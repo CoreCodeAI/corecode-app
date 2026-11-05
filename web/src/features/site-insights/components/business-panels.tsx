@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 
 import {
   clientFamilies,
+  joinSentences,
   MARGIN_VENDORS,
   SMALL_SAMPLE,
   useChargeFormat,
@@ -88,7 +89,7 @@ export function VendorMarginPanel(props: {
   }
 
   const sentence = data
-    ? [
+    ? joinSentences(
         t(
           'Earned {{revenue}} against {{cost}} of accounts: gross margin {{margin}} ({{rate}}).',
           {
@@ -108,12 +109,10 @@ export function VendorMarginPanel(props: {
           t(
             'No price is recorded for the {{vendors}} accounts; they count as free.',
             {
-              vendors: unpriced.map((row) => name(row.vendor)).join(', '),
+              vendors: unpriced.map((row) => name(row.vendor)).join(t(', ')),
             }
-          ),
-      ]
-        .filter(Boolean)
-        .join(' ')
+          )
+      )
     : undefined
 
   return (
@@ -189,7 +188,9 @@ export function VendorMarginPanel(props: {
                     <dd className='text-sm'>{fmt.cny(row.revenue)}</dd>
                   </div>
                   <div>
-                    <dt className='text-muted-foreground'>{t('Cost')}</dt>
+                    <dt className='text-muted-foreground'>
+                      {t('Account cost')}
+                    </dt>
                     <dd className='text-sm'>{fmt.cny(row.cost)}</dd>
                   </div>
                   <div>
@@ -340,7 +341,7 @@ export function ReferralPanel(props: {
       title={t('Referrals')}
       description={
         data
-          ? [
+          ? joinSentences(
               t('Invitees paid {{payments}}, {{share}} of revenue.', {
                 payments: fmt.cny(data.invitee_payments),
                 share: fmt.pct(share),
@@ -349,10 +350,8 @@ export function ReferralPanel(props: {
                 t('Commission of {{commission}} returned {{times}}×.', {
                   commission: fmt.usd(data.commission_usd),
                   times: fmt.num(Math.round(returned * 10) / 10),
-                }),
-            ]
-              .filter(Boolean)
-              .join(' ')
+                })
+            )
           : undefined
       }
       help={t(

@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 import type { Tone } from './components/shared'
 import {
   failureTone,
+  joinSentences,
   useChargeFormat,
   useInsightsFormat,
   useSharedAddresses,
@@ -55,14 +56,19 @@ function useChange() {
     if (previous == null || previous <= 0) return null
     const change = current / previous - 1
     if (Math.abs(change) < 0.005) return t('flat')
+    // Past doubling, a multiple reads more easily than a percentage.
+    if (change >= 1) {
+      return t('to {{times}}×', {
+        times: fmt.num(Math.round((change + 1) * 10) / 10),
+      })
+    }
     return change > 0
       ? t('up {{change}}', { change: fmt.pct(change) })
       : t('down {{change}}', { change: fmt.pct(-change) })
   }
 }
 
-const join = (...parts: (string | false | undefined)[]) =>
-  parts.filter(Boolean).join(' ')
+const join = joinSentences
 
 export function useCapacityVerdict(
   data: CapacityInsights | undefined,
@@ -127,7 +133,20 @@ export function useQualityVerdict(
   const failing = (data.models ?? [])
     .filter((row) => row.requests >= 100 && row.error_rate > 0.05)
     .sort((a, b) => b.error_rate - a.error_rate)
-  let tone: Tone = worse('good', failureTone(data.error_rate))
+  // A vendor failing past 5% is named, even when the site's rate is low.
+  const names: Record<string, string> = {
+    claude: 'Claude',
+    codex: 'GPT',
+    grok: 'Grok',
+    gemini: 'Gemini',
+  }
+  const failingVendors = (data.vendors ?? []).filter(
+    (vendor) =>
+      names[vendor.vendor] && vendor.requests >= 100 && vendor.error_rate > 0.05
+  )
+  const failure = failureTone(data.error_rate)
+  let tone: Tone = failure === 'default' ? 'good' : failure
+  if (failingVendors.length > 0) tone = worse(tone, 'warning')
   if (claude && claude.ttft_p95_ms > 10000) tone = worse(tone, 'warning')
   const points =
     previous && previous.requests > 0
@@ -143,6 +162,12 @@ export function useQualityVerdict(
             points: fmt.num(Math.round(Math.abs(points) * 10) / 10),
           })
         : t('Failure rate {{rate}}.', { rate: fmt.pct(data.error_rate) }),
+      ...failingVendors.map((vendor) =>
+        t('{{vendor}} fails {{rate}} of requests.', {
+          vendor: names[vendor.vendor],
+          rate: fmt.pct(vendor.error_rate),
+        })
+      ),
       claude &&
         t('Claude first token {{p50}} at p50, {{p95}} at p95.', {
           p50: fmt.measuredMs(claude.ttft_p50_ms),

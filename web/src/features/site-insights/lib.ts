@@ -70,6 +70,17 @@ export const ATTENTION = new Set([
 ])
 
 /** A failure rate above 5% needs action; above 2%, a look. */
+/**
+ * Sentences as one paragraph: a space after each, except after the
+ * full-width punctuation that ends a Chinese or Japanese sentence.
+ */
+export function joinSentences(...parts: (string | false | null | undefined)[]) {
+  return parts
+    .filter(Boolean)
+    .join(' ')
+    .replaceAll(/([。！？；：）])\s+/g, '$1')
+}
+
 export function failureTone(rate: number): Tone {
   if (rate > 0.05) return 'danger'
   if (rate > 0.02) return 'warning'

@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { joinSentences } from '../lib'
 import type {
   CapacityInsights,
   GrowthInsights,
@@ -54,8 +55,20 @@ describe('tab verdicts', () => {
       requests: 1000,
       error_rate: 0.03,
       vendors: [
-        { vendor: 'claude', ttft_p50_ms: 1400, ttft_p95_ms: 6800 },
-        { vendor: 'codex', ttft_p50_ms: 5700, ttft_p95_ms: 17000 },
+        {
+          vendor: 'claude',
+          requests: 600,
+          error_rate: 0.001,
+          ttft_p50_ms: 1400,
+          ttft_p95_ms: 6800,
+        },
+        {
+          vendor: 'codex',
+          requests: 400,
+          error_rate: 0.15,
+          ttft_p50_ms: 5700,
+          ttft_p95_ms: 17000,
+        },
       ],
       models: [
         { model: 'gpt-6.1-terra', requests: 400, error_rate: 0.15 },
@@ -66,7 +79,7 @@ describe('tab verdicts', () => {
     const { result } = renderHook(() => useQualityVerdict(data, previous))
     expect(result.current?.tone).toBe('warning')
     expect(result.current?.text).toBe(
-      'Failure rate 3% (+2 points). Claude first token 1.4s at p50, 6.8s at p95. Failing most: gpt-6.1-terra at 15%.'
+      'Failure rate 3% (+2 points). GPT fails 15% of requests. Claude first token 1.4s at p50, 6.8s at p95. Failing most: gpt-6.1-terra at 15%.'
     )
   })
 
@@ -79,6 +92,42 @@ describe('tab verdicts', () => {
       tone: 'warning',
       text: '50 sign-ups. 20% sent a request and 10% paid.',
     })
+  })
+
+  it('reads a change past doubling as a multiple', () => {
+    const data = {
+      requests: 115919,
+      peak_concurrency: 0,
+      error_categories: [],
+      limit_rejection_total: 0,
+      pool: { configured: false },
+    } as unknown as CapacityInsights
+    const previous = { requests: 31740 } as CapacityInsights
+    const { result } = renderHook(() => useCapacityVerdict(data, previous))
+    expect(result.current).toEqual({
+      tone: 'good',
+      text: '115,919 requests (to 3.7×). Nothing turned away.',
+    })
+  })
+
+  it('reads a quiet failure rate as good', () => {
+    const data = {
+      requests: 1000,
+      error_rate: 0.016,
+      vendors: [],
+      models: [],
+    } as unknown as QualityInsights
+    const { result } = renderHook(() => useQualityVerdict(data, undefined))
+    expect(result.current).toEqual({ tone: 'good', text: 'Failure rate 1.6%.' })
+  })
+
+  it('joins Chinese sentences without a space after their full stop', () => {
+    expect(joinSentences('注册 524。', false, '41.6% 发过请求。')).toBe(
+      '注册 524。41.6% 发过请求。'
+    )
+    expect(joinSentences('524 sign-ups.', undefined, 'Nothing to check.')).toBe(
+      '524 sign-ups. Nothing to check.'
+    )
   })
 
   it('lists what the risk tab wants checked, or says nothing does', () => {
