@@ -86,13 +86,18 @@ type EngineRunway struct {
 	// GrowthPerDay is how much use grew a day over the last week; the
 	// Trend scenario carries it on, damped.
 	GrowthPerDay float64 `json:"growth_per_day"`
+	// ExpectedUSDPerHour is the trend scenario's demand averaged over the
+	// next week, the burn without growth. Additions are sized by it: over
+	// the last week a flat forecast fell 24% short over three days and 61%
+	// over seven while the trend landed within a few percent.
+	ExpectedUSDPerHour float64 `json:"expected_usd_per_hour"`
 	// HeadroomScale is the largest multiple of demand the pool serves for
 	// the whole horizon without a gap; nil above runwayMaxScale.
 	HeadroomScale *float64 `json:"headroom_scale"`
-	// Trend projects demand growing on; Low and High scale it to the 10th
-	// and 90th percentiles of how past forecasts compared with the use that
-	// followed, widened to hold demand as now. Each is nil without the
-	// history it needs.
+	// Trend projects demand growing on; Low and High scale the trend to the
+	// 10th and 90th percentiles of how past trend forecasts compared with
+	// the use that followed, widened to hold the trend. Each is nil without
+	// the history it needs.
 	Trend *EngineRunwayScenario `json:"trend"`
 	Low   *EngineRunwayScenario `json:"low"`
 	High  *EngineRunwayScenario `json:"high"`
@@ -114,14 +119,18 @@ type EngineRunwayAddition struct {
 	WeekUSD       float64 `json:"week_usd"`
 	BudgetPercent float64 `json:"budget_percent"`
 	Measured      int     `json:"measured"`
-	// ForLoad brings the weekly load to 100% at today's demand, ForTrend at
-	// the trend's demand at the end of the horizon (ForLoad without one):
-	// what keeps the pool from running down week after week.
-	ForLoad  int `json:"for_load"`
-	ForTrend int `json:"for_trend"`
+	// ForExpected brings the weekly load to 100% at the expected demand,
+	// the trend averaged over the next week; ForLow and ForHigh at the band's
+	// ends of it, nil without a band. ForLoad does at today's demand, ForTrend
+	// at the trend's demand at the end of the horizon (ForLoad without one).
+	ForExpected int  `json:"for_expected"`
+	ForLow      *int `json:"for_low"`
+	ForHigh     *int `json:"for_high"`
+	ForLoad     int  `json:"for_load"`
+	ForTrend    int  `json:"for_trend"`
 	// ForWeek is the fewest added accounts, each starting a full week now,
-	// that leave the next 7 days without a gap at today's demand; nil when
-	// even runwayMaxAddition do not.
+	// that leave the next 7 days without a gap as demand follows the trend;
+	// nil when even runwayMaxAddition do not.
 	ForWeek *int `json:"for_week"`
 }
 
@@ -239,18 +248,26 @@ func poolRunway(pool EnginePool, channel string, nowMS int64, profile demandProf
 	runway.LowestUSD, runway.LowestHours = base.lowestUSD, base.lowestHours
 	runway.WeekHours, runway.FirstShortHours, runway.Curve = base.WeekHours, base.FirstShortHours, base.Curve
 
+	// trending is the trend scenario's demand, scaled; without growth it is
+	// demand as now.
+	trending := func(scale float64) func(ms int64) float64 {
+		return func(ms int64) float64 {
+			return at(scale * profile.growthAt(float64(ms-nowMS)/hourMS/24))(ms)
+		}
+	}
+	runway.ExpectedUSDPerHour = profile.over(burn, nowMS, nowMS+runwayWeek.Milliseconds(), true) / runwayWeek.Hours()
 	if profile.growth != 0 {
-		trend := projectRunway(accounts, nowMS, func(ms int64) float64 {
-			return at(profile.growthAt(float64(ms-nowMS) / hourMS / 24))(ms)
-		})
+		trend := projectRunway(accounts, nowMS, trending(1))
 		trend.DemandScale = profile.growthAt(runwayHorizon.Hours() / 24)
 		runway.Trend = &trend.EngineRunwayScenario
 	}
+	var band *[2]float64
 	if profile.origins > 0 {
-		// The band holds demand as now, even when past forecasts all fell
-		// short of the use that followed.
+		// The band holds the trend, even when past forecasts all fell short
+		// of the use that followed, or all overshot it.
 		lowScale, highScale := min(profile.low, 1), max(profile.high, 1)
-		low, high := projectRunway(accounts, nowMS, at(lowScale)), projectRunway(accounts, nowMS, at(highScale))
+		band = &[2]float64{lowScale, highScale}
+		low, high := projectRunway(accounts, nowMS, trending(lowScale)), projectRunway(accounts, nowMS, trending(highScale))
 		low.DemandScale, high.DemandScale = lowScale, highScale
 		runway.Low, runway.High, runway.BandForecasts = &low.EngineRunwayScenario, &high.EngineRunwayScenario, profile.origins
 	}
@@ -270,7 +287,7 @@ func poolRunway(pool EnginePool, channel string, nowMS int64, profile demandProf
 	}
 	runway.Additions = []EngineRunwayAddition{}
 	for _, add := range runwayAddPlans {
-		if addition := runwayAddition(pool, groups, channel, &runway, accounts, nowMS, at(1), add.plan, add.tier); addition != nil {
+		if addition := runwayAddition(pool, groups, channel, &runway, accounts, nowMS, trending(1), band, add.plan, add.tier); addition != nil {
 			runway.Additions = append(runway.Additions, *addition)
 		}
 	}
@@ -280,12 +297,14 @@ func poolRunway(pool EnginePool, channel string, nowMS int64, profile demandProf
 	return &runway
 }
 
-// runwayAddition sizes accounts of one plan and tier against the runway's demand.
+// runwayAddition sizes accounts of one plan and tier against the runway's
+// demand: rate is the trend the 7-day count is run at, and band, when set,
+// the low and high multiples of the expected demand.
 // One account adds its plan's median measured weekly capacity, up to the
 // budget line of the group its plan's accounts are in. Nil without a
 // measured account of the plan.
 func runwayAddition(pool EnginePool, groups map[int]EngineGroup, channel string, runway *EngineRunway,
-	accounts []runwayAccount, nowMS int64, rate func(ms int64) float64, plan, tier string) *EngineRunwayAddition {
+	accounts []runwayAccount, nowMS int64, rate func(ms int64) float64, band *[2]float64, plan, tier string) *EngineRunwayAddition {
 	var value *EnginePlanValue
 	for _, candidate := range EnginePlanValues(pool.Accounts) {
 		if candidate.Plan == plan && candidate.Tier == tier {
@@ -320,6 +339,11 @@ func runwayAddition(pool EnginePool, groups map[int]EngineGroup, channel string,
 			return 0
 		}
 		return int(math.Ceil(short/week - 1e-9))
+	}
+	addition.ForExpected = closing(runway.ExpectedUSDPerHour)
+	if band != nil {
+		low, high := closing(runway.ExpectedUSDPerHour*band[0]), closing(runway.ExpectedUSDPerHour*band[1])
+		addition.ForLow, addition.ForHigh = &low, &high
 	}
 	addition.ForLoad = closing(runway.BurnUSDPerHour)
 	addition.ForTrend = addition.ForLoad

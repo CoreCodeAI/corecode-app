@@ -7674,9 +7674,7 @@
     "No account needed now; if use keeps growing, {{count}} × {{plan}} by the end of the week.": "지금은 추가 계정이 필요 없지만, 사용량이 계속 증가하면 주말까지 {{plan}} {{count}}개가 필요합니다.",
     "No account needed: supply keeps up with demand and lasts the next 7 days.": "추가 계정이 필요 없습니다. 공급이 수요를 따라가며 향후 7일 동안 유지됩니다.",
     "Is capacity enough?": "용량이 충분한가요?",
-    "Demand and the forecasts are gpt-load spend at official prices, the unit the pool’s quota is in. An added account is sized by the median measured account of its plan in the pool, Team Tier 1 first and Team Standard beside it, up to its group’s 7-day budget line, and starts a full week now. Keeping up means a weekly load of 100% or less; the 7-day figure also covers the quota running out before resets.": "수요와 예측은 풀의 한도 단위인 공식 가격 기준 gpt-load 지출입니다. 추가하는 계정은 풀에서 측정된 같은 플랜 계정의 중앙값(Team Tier 1 우선, Team Standard 병기)을 그룹의 7일 예산선까지로 산정하며 지금 한 주 전체로 시작합니다. 따라간다는 것은 주간 부하가 100% 이하라는 뜻이며, 7일 수치는 재설정 전에 한도가 소진되는 경우도 포함합니다.",
     "{{plan}} to add": "추가할 {{plan}}",
-    "The more of two counts: accounts for a weekly load of 100% at today’s demand, and accounts for no gap in the next 7 days.": "두 값 중 큰 값입니다: 오늘 수요에서 주간 부하 100%를 위한 계정 수, 그리고 향후 7일 동안 공백이 없도록 하는 계정 수.",
     "Keep up {{load}} · 7 days {{week}} · with growth {{trend}}": "따라가기 {{load}} · 7일 {{week}} · 증가 반영 {{trend}}",
     "over {{count}}": "{{count}} 초과",
     "Next 5 hours · gpt-load": "향후 5시간 · gpt-load",
@@ -7765,6 +7763,12 @@
     "Long context": "긴 컨텍스트",
     "or {{count}} × {{plan}}": "또는 {{plan}} {{count}}개",
     "Quick select by vendor": "공급사별 빠른 선택",
-    "{{requests}} requests · {{rate}} failed": "요청 {{requests}}건 · 실패율 {{rate}}"
+    "{{requests}} requests · {{rate}} failed": "요청 {{requests}}건 · 실패율 {{rate}}",
+    "Use grows {{growth}} a day, so demand over the next week averages about {{demand}}/h: add {{count}} × {{plan}} to keep up; each brings about {{week}} a week.": "사용량이 하루 {{growth}}씩 늘어 다음 주 평균 수요는 시간당 약 {{demand}}입니다. 따라잡으려면 {{plan}} {{count}}개를 추가하세요. 하나당 주 약 {{week}}을 더합니다.",
+    "Past forecasts put it between {{low}} and {{high}}.": "과거 예측 오차로 보면 {{low}}~{{high}}개입니다.",
+    "7 days {{week}}": "7일 {{week}}",
+    "at today’s demand {{count}}": "오늘 수요 기준 {{count}}",
+    "The more of two counts: accounts for a weekly load of 100% at the demand expected over the next week, and accounts for no gap in the next 7 days. Below, the range of the first and the count at today’s demand.": "두 값 중 큰 값: 다음 주 예상 수요에서 주간 부하를 100%로 맞추는 계정 수와, 앞으로 7일 동안 끊기지 않는 계정 수. 아래는 앞의 값의 범위와 오늘 수요 기준 수입니다.",
+    "Demand and the forecasts are gpt-load spend at official prices, the unit the pool’s quota is in. Expected demand is the last 24 hours’ spend grown by the last week’s daily growth, damped, and averaged over the next week; the range is the 10th to 90th percentile of how past forecasts made that way compared with the use that followed. An added account is sized by the median measured account of its plan in the pool, Team Tier 1 first and Team Standard beside it, up to its group’s 7-day budget line, and starts a full week now. Keeping up means a weekly load of 100% or less; the 7-day figure also covers the quota running out before resets, as demand follows the trend.": "수요와 예측은 공식 가격 기준 gpt-load 지출로, 풀 할당량과 같은 단위입니다. 예상 수요는 최근 24시간 지출을 지난 1주의 일일 성장률(감쇠 적용)로 늘려 다음 주 동안 평균한 값이며, 범위는 같은 방식의 과거 예측과 이후 실제 사용량 비율의 10~90 백분위입니다. 추가 계정은 풀 안 같은 요금제 실측 계정의 중앙값으로 계산하며, Team Tier 1을 우선하고 Team Standard를 함께 표시하고, 그룹의 7일 예산선까지로 하며, 지금부터 한 주 전체를 쓴다고 가정합니다. 따라잡는다는 것은 주간 부하 100% 이하를 뜻하며, 7일 수치는 수요가 추세대로 늘 때 리셋 전에 할당량이 바닥나는 경우도 고려합니다."
   }
 }

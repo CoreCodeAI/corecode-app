@@ -47,7 +47,13 @@ func TestDemandProfileFollowsGrowthAndBoundsIt(t *testing.T) {
 	profile := buildDemandProfile(growing(math.Log(1.08)), 0)
 	assert.InDelta(t, math.Log(1.08), profile.growth, 1e-9)
 	assert.InDelta(t, 1, profile.shape[0], 0.01, "growth stays out of the shape")
-	assert.Greater(t, profile.low, 1.0, "a flat forecast falls short of growing use")
+	// Scored against the trend: its damping leaves it a little short of
+	// steady growth, where a flat forecast falls short by about 17%.
+	// Three weeks, as the pool reads, give every past forecast a week of
+	// growth behind it.
+	threeWeeks := buildDemandProfile(demandSeries(21, func(i int) float64 { return math.Exp(math.Log(1.08) * float64(i) / 24) }), 0)
+	assert.Greater(t, threeWeeks.low, 1.0)
+	assert.Less(t, threeWeeks.high, 1.08, "the band is scored against the trend, not a flat forecast")
 
 	assert.Equal(t, demandMaxGrowth, buildDemandProfile(growing(0.5), 0).growth)
 

@@ -195,7 +195,7 @@ func TestPoolRunwayProjectsTheScenariosAndTheHeadroom(t *testing.T) {
 	// lasting the week takes demand at or below 100/1680 of it.
 	pool := runwayPool(runwayAccountAt(1, 100, 400, 10, 1000))
 	profile := flatDemand()
-	profile.hours, profile.growth = 24*7, math.Log(1.1)
+	profile.hours = 24 * 7
 	profile.low, profile.high, profile.origins = 0.5, 2, 30
 	runway := poolRunway(pool, "claude", 0, profile)
 
@@ -205,6 +205,15 @@ func TestPoolRunwayProjectsTheScenariosAndTheHeadroom(t *testing.T) {
 	assert.InDelta(t, 5, *runway.High.WeekHours, 1e-9)
 	assert.Equal(t, 0.5, runway.Low.DemandScale)
 	assert.Equal(t, 30, runway.BandForecasts)
+	assert.Nil(t, runway.Trend, "no growth, no trend")
+	assert.InDelta(t, 10, runway.ExpectedUSDPerHour, 1e-9, "without growth the expected demand is the burn")
+
+	profile.growth = math.Log(1.1)
+	runway = poolRunway(pool, "claude", 0, profile)
+	assert.Less(t, *runway.Low.WeekHours, 20.0, "the band rides the trend")
+	assert.Less(t, *runway.High.WeekHours, 5.0)
+	assert.InDelta(t, profile.over(10, 0, runwayWeek.Milliseconds(), true)/168, runway.ExpectedUSDPerHour, 1e-9)
+	assert.Greater(t, runway.ExpectedUSDPerHour, 10.0)
 	require.NotNil(t, runway.Trend)
 	assert.Less(t, *runway.Trend.WeekHours, 10.0, "growing demand runs out sooner")
 	assert.InDelta(t, profile.growthAt(7), runway.Trend.DemandScale, 1e-9)
@@ -239,6 +248,8 @@ func TestPoolRunwaySizesTeamAccountsToCloseTheGap(t *testing.T) {
 	assert.Equal(t, 50.0, addition.BudgetPercent)
 	assert.Equal(t, 8, addition.ForLoad)
 	assert.Equal(t, 8, addition.ForTrend, "without a trend it is the same")
+	assert.Equal(t, 8, addition.ForExpected, "without growth the expected demand is the burn")
+	assert.Nil(t, addition.ForLow, "no band without past forecasts")
 	require.NotNil(t, addition.ForWeek)
 	assert.Positive(t, *addition.ForWeek)
 	assert.LessOrEqual(t, *addition.ForWeek, addition.ForLoad, "a week needs no more than the steady state")
@@ -256,6 +267,32 @@ func TestPoolRunwaySizesTeamAccountsToCloseTheGap(t *testing.T) {
 	}
 	assert.Nil(t, projectRunway(with(*addition.ForWeek), 0, flat).WeekHours)
 	assert.NotNil(t, projectRunway(with(*addition.ForWeek-1), 0, flat).WeekHours)
+}
+
+func TestPoolRunwaySizesAdditionsByTheTrendAndItsBand(t *testing.T) {
+	// $10 an hour growing 10% a day, damped: the week averages more than
+	// today's demand and less than the week's end.
+	pool := runwayPool(teamSeat("team_tier_1", runwayAccountAt(1, 100, 400, 10, 100)))
+	profile := flatDemand()
+	profile.hours, profile.growth = 24*7, math.Log(1.1)
+	profile.low, profile.high, profile.origins = 0.8, 1.3, 30
+	runway := poolRunway(pool, "claude", 0, profile)
+	flat := poolRunway(pool, "claude", 0, flatDemand())
+	addition := runway.Addition
+	require.NotNil(t, addition)
+
+	week := addition.WeekUSD
+	closing := func(demand float64) int { return int(math.Ceil((demand-runway.SustainableUSDPerHour)*168/week - 1e-9)) }
+	assert.Equal(t, closing(runway.ExpectedUSDPerHour), addition.ForExpected)
+	assert.Greater(t, addition.ForExpected, addition.ForLoad)
+	assert.Less(t, addition.ForExpected, addition.ForTrend)
+	require.NotNil(t, addition.ForLow)
+	require.NotNil(t, addition.ForHigh)
+	assert.Equal(t, closing(runway.ExpectedUSDPerHour*0.8), *addition.ForLow)
+	assert.Equal(t, closing(runway.ExpectedUSDPerHour*1.3), *addition.ForHigh)
+	require.NotNil(t, addition.ForWeek)
+	require.NotNil(t, flat.Addition.ForWeek)
+	assert.Greater(t, *addition.ForWeek, *flat.Addition.ForWeek, "the 7 days are run at the trend")
 }
 
 func TestPoolRunwayAddsNothingWhenSupplyKeepsUp(t *testing.T) {

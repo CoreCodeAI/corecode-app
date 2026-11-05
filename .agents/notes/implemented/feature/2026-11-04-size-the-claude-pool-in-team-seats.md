@@ -2,6 +2,8 @@
 
 Status: implemented
 
+Superseded in part on 2026-11-05 by `2026-11-05-size-the-pool-by-expected-demand.md`: the headline count is sized by the demand expected over the next week, and the 7-day count runs at the trend.
+
 ## Problem
 
 `2026-11-02-pool-capacity-by-provider.md` sizes the accounts the Claude pool needs in
