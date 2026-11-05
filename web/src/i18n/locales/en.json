@@ -7845,6 +7845,7 @@
     "{{count}} models under {{min}} requests left out": "{{count}} models under {{min}} requests left out",
     "{{rate}} of sign-ups in this range have paid.": "{{rate}} of sign-ups in this range have paid.",
     "{{rate}} went on": "{{rate}} went on",
-    "{{share}} of {{limit}}": "{{share}} of {{limit}}"
+    "{{share}} of {{limit}}": "{{share}} of {{limit}}",
+    "Billed per request; each generated image counts as one request.": "Billed per request; each generated image counts as one request."
   }
 }

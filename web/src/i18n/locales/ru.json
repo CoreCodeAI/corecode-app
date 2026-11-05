@@ -7845,6 +7845,7 @@
     "{{count}} models under {{min}} requests left out": "{{count}} моделей с менее чем {{min}} запросами не показаны",
     "{{rate}} of sign-ups in this range have paid.": "{{rate}} зарегистрировавшихся за период уже платили.",
     "{{rate}} went on": "{{rate}} перешли дальше",
-    "{{share}} of {{limit}}": "{{share}} от {{limit}}"
+    "{{share}} of {{limit}}": "{{share}} от {{limit}}",
+    "Billed per request; each generated image counts as one request.": "Оплата за запрос; каждое сгенерированное изображение считается одним запросом."
   }
 }

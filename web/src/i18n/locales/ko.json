@@ -7845,6 +7845,7 @@
     "{{count}} models under {{min}} requests left out": "요청 {{min}}건 미만 모델 {{count}}개 제외",
     "{{rate}} of sign-ups in this range have paid.": "이 기간 가입자 중 {{rate}}가 결제했습니다.",
     "{{rate}} went on": "{{rate}} 다음 단계로",
-    "{{share}} of {{limit}}": "{{limit}}의 {{share}}"
+    "{{share}} of {{limit}}": "{{limit}}의 {{share}}",
+    "Billed per request; each generated image counts as one request.": "요청당 과금되며, 생성된 이미지 1장을 요청 1회로 계산합니다."
   }
 }

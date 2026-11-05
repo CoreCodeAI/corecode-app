@@ -29,13 +29,14 @@ import {
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
-import { EXCLUDED_GROUPS } from '../constants'
+import { EXCLUDED_GROUPS, QUOTA_TYPE_VALUES } from '../constants'
 import {
   getBillingDiscount,
   getDiscountKind,
   getOfficialPriceMarkup,
   hasMarkup,
 } from '../lib/billing-discount'
+import { isDynamicPricingModel } from '../lib/dynamic-price'
 import {
   CLAUDE_VENDOR,
   groupVendor,
@@ -113,8 +114,10 @@ function groupDescription(value: unknown): string {
  * Code prices in CNY at the chosen group, the official price struck through
  * beside them, and the share saved. Every figure comes from the live recharge
  * price, exchange rate, group ratios and each model's markup over the official
- * price; a marked-up model's saving explains itself in a tooltip. A lone group
- * is shown, not offered as a choice.
+ * price; a marked-up model's saving explains itself in a tooltip. A model
+ * billed per request, such as an image model, is listed apart with its price
+ * per request; there is no official figure to compare it with. A lone group is
+ * shown, not offered as a choice.
  */
 export function PriceBoard(props: {
   models: PricingModel[]
@@ -151,8 +154,10 @@ export function PriceBoard(props: {
   const combined = discountAt(ratio)
   const saving = getDiscountKind(combined) === 'discount' ? 1 - combined : 0
 
-  const rows = props.models
-    .filter((model) => !group || (model.enable_groups ?? []).includes(group))
+  const groupModels = props.models.filter(
+    (model) => !group || (model.enable_groups ?? []).includes(group)
+  )
+  const rows = groupModels
     .map((model) => ({
       model,
       base: getBaseUnitPrices(model),
@@ -165,6 +170,16 @@ export function PriceBoard(props: {
         Boolean(row.base)
     )
     .sort((a, b) => a.base.prices.input - b.base.prices.input)
+  const requestRows = groupModels
+    .filter(
+      (model) =>
+        model.quota_type === QUOTA_TYPE_VALUES.REQUEST &&
+        !isDynamicPricingModel(model) &&
+        typeof model.model_price === 'number' &&
+        model.model_price >= 0
+    )
+    .map((model) => ({ model, usd: model.model_price ?? 0 }))
+    .sort((a, b) => a.usd - b.usd)
 
   const groupYuan = (usd: number) => usd * ratio * props.priceRate
   const officialYuan = (usd: number, markup: number) =>
@@ -404,79 +419,134 @@ export function PriceBoard(props: {
             </p>
           )}
 
-          <ul className='flex flex-col gap-3 md:hidden'>
-            {rows.map(({ model, base, markup }) => (
-              <li key={model.model_name} className='rounded-lg border p-3'>
-                <div className='flex items-start justify-between gap-2'>
-                  <div className='min-w-0'>
-                    {modelName(model)}
-                    {base.tiered && tierNote}
-                  </div>
-                  {savingChip(markup)}
-                </div>
-                <dl className='mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5'>
-                  {UNIT_PRICE_KEYS.map((key) => (
-                    <div key={key} className='min-w-0'>
-                      <dt className='text-muted-foreground text-xs'>
-                        {t(COLUMN_LABEL[key])}
-                      </dt>
-                      <dd className='text-sm'>
-                        {renderPrice(base.prices[key], markup)}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </li>
-            ))}
-          </ul>
-
-          <div className='hidden overflow-x-auto rounded-lg border md:block'>
-            <table className='w-full min-w-[720px] text-sm'>
-              <thead className='bg-muted/40 text-muted-foreground text-xs'>
-                <tr>
-                  <th scope='col' className='px-4 py-2.5 text-left font-medium'>
-                    {t('Model')}
-                  </th>
-                  {UNIT_PRICE_KEYS.map((key) => (
-                    <th
-                      key={key}
-                      scope='col'
-                      className='px-3 py-2.5 text-left font-medium'
-                    >
-                      {t(COLUMN_LABEL[key])}
-                    </th>
-                  ))}
-                  <th
-                    scope='col'
-                    className='px-4 py-2.5 text-right font-medium'
-                  >
-                    {t('Savings')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className='divide-y'>
-                {rows.map(({ model, base, markup }) => (
-                  <tr key={model.model_name} className='hover:bg-muted/30'>
-                    <th scope='row' className='px-4 py-3 text-left font-normal'>
+          {rows.length > 0 && (
+            <ul className='flex flex-col gap-3 md:hidden'>
+              {rows.map(({ model, base, markup }) => (
+                <li key={model.model_name} className='rounded-lg border p-3'>
+                  <div className='flex items-start justify-between gap-2'>
+                    <div className='min-w-0'>
                       {modelName(model)}
                       {base.tiered && tierNote}
+                    </div>
+                    {savingChip(markup)}
+                  </div>
+                  <dl className='mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5'>
+                    {UNIT_PRICE_KEYS.map((key) => (
+                      <div key={key} className='min-w-0'>
+                        <dt className='text-muted-foreground text-xs'>
+                          {t(COLUMN_LABEL[key])}
+                        </dt>
+                        <dd className='text-sm'>
+                          {renderPrice(base.prices[key], markup)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {rows.length > 0 && (
+            <div className='hidden overflow-x-auto rounded-lg border md:block'>
+              <table className='w-full min-w-[720px] text-sm'>
+                <thead className='bg-muted/40 text-muted-foreground text-xs'>
+                  <tr>
+                    <th
+                      scope='col'
+                      className='px-4 py-2.5 text-left font-medium'
+                    >
+                      {t('Model')}
                     </th>
                     {UNIT_PRICE_KEYS.map((key) => (
-                      <td
+                      <th
                         key={key}
-                        className='px-3 py-3 align-top whitespace-nowrap'
+                        scope='col'
+                        className='px-3 py-2.5 text-left font-medium'
                       >
-                        {renderPrice(base.prices[key], markup)}
-                      </td>
+                        {t(COLUMN_LABEL[key])}
+                      </th>
                     ))}
-                    <td className='px-4 py-3 text-right'>
-                      {savingChip(markup)}
-                    </td>
+                    <th
+                      scope='col'
+                      className='px-4 py-2.5 text-right font-medium'
+                    >
+                      {t('Savings')}
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className='divide-y'>
+                  {rows.map(({ model, base, markup }) => (
+                    <tr key={model.model_name} className='hover:bg-muted/30'>
+                      <th
+                        scope='row'
+                        className='px-4 py-3 text-left font-normal'
+                      >
+                        {modelName(model)}
+                        {base.tiered && tierNote}
+                      </th>
+                      {UNIT_PRICE_KEYS.map((key) => (
+                        <td
+                          key={key}
+                          className='px-3 py-3 align-top whitespace-nowrap'
+                        >
+                          {renderPrice(base.prices[key], markup)}
+                        </td>
+                      ))}
+                      <td className='px-4 py-3 text-right'>
+                        {savingChip(markup)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {requestRows.length > 0 && (
+            <div className='flex flex-col gap-2'>
+              <div className='overflow-x-auto rounded-lg border'>
+                <table aria-label={t('Per-request')} className='w-full text-sm'>
+                  <thead className='bg-muted/40 text-muted-foreground text-xs'>
+                    <tr>
+                      <th
+                        scope='col'
+                        className='px-4 py-2.5 text-left font-medium'
+                      >
+                        {t('Model')}
+                      </th>
+                      <th
+                        scope='col'
+                        className='px-4 py-2.5 text-right font-medium'
+                      >
+                        {t('Per request')}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className='divide-y'>
+                    {requestRows.map(({ model, usd }) => (
+                      <tr key={model.model_name} className='hover:bg-muted/30'>
+                        <th
+                          scope='row'
+                          className='px-4 py-3 text-left font-normal'
+                        >
+                          {modelName(model)}
+                        </th>
+                        <td className='text-primary px-4 py-3 text-right font-mono font-semibold whitespace-nowrap tabular-nums'>
+                          {formatYuan(groupYuan(usd))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className='text-muted-foreground text-xs'>
+                {t(
+                  'Billed per request; each generated image counts as one request.'
+                )}
+              </p>
+            </div>
+          )}
         </div>
       </section>
     </div>
