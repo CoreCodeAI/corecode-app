@@ -7818,6 +7818,18 @@
     "to {{times}}×": "增至 {{times}} 倍",
     "{{vendor}} fails {{rate}} of requests.": "{{vendor}} 失敗率 {{rate}}。",
     "All providers": "全部供應商",
-    "Upstream rate limit": "上游限流"
+    "Upstream rate limit": "上游限流",
+    "Accounts, slots and in flight are live, from the engine. Requests, failures, first token and charge cover the range; GPT models run on the Codex accounts.": "可調度帳號、槽位和進行中請求是引擎的即時資料；請求、失敗率、首字延遲和消費涵蓋所選時間範圍。GPT 模型跑在 Codex 帳號上。",
+    "Busiest models": "請求最多的模型",
+    "By provider": "按供應商",
+    "Consumption by provider": "消費占比（按供應商）",
+    "No provider has accounts or requests": "沒有供應商有帳號或請求",
+    "Nothing was charged in this range": "此時間範圍內沒有消費",
+    "Requests by provider": "請求占比（按供應商）",
+    "Requests in the range, by the vendor of the model.": "時間範圍內的請求，按模型所屬供應商劃分。",
+    "Revenue by payment method": "收入占比（按支付方式）",
+    "Top {{count}} of {{all}} models by requests.": "按請求數排名前 {{count}} 的模型（共 {{all}} 個）。",
+    "What requests were charged at list price, root’s own included, by the vendor of the model.": "請求按標價計的消費（含 root 自用），按模型所屬供應商劃分。",
+    "Upstream overloaded": "上游過載"
   }
 }

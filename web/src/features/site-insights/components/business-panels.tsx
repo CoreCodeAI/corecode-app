@@ -28,6 +28,7 @@ import {
   SMALL_SAMPLE,
   useChargeFormat,
   useInsightsFormat,
+  useVendorName,
   vendorMargins,
 } from '../lib'
 import type { BusinessInsights, FinanceInsights } from '../types'
@@ -39,18 +40,6 @@ import {
   UserLabel,
   type Tone,
 } from './shared'
-
-function useVendorName() {
-  const { t } = useTranslation()
-  const names: Record<string, string> = {
-    claude: 'Claude',
-    codex: 'GPT',
-    grok: 'Grok',
-    gemini: 'Gemini',
-    other: t('Other models'),
-  }
-  return (vendor: string) => names[vendor] ?? vendor
-}
 
 const MARGIN_TONES: Record<Tone, string> = {
   default: '',

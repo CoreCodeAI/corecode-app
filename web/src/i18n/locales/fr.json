@@ -7818,6 +7818,18 @@
     "to {{times}}×": "×{{times}}",
     "{{vendor}} fails {{rate}} of requests.": "{{vendor}} échoue sur {{rate}} des requêtes.",
     "All providers": "Tous les fournisseurs",
-    "Upstream rate limit": "Limite de débit en amont"
+    "Upstream rate limit": "Limite de débit en amont",
+    "Accounts, slots and in flight are live, from the engine. Requests, failures, first token and charge cover the range; GPT models run on the Codex accounts.": "Comptes, emplacements et requêtes en cours sont en direct, depuis le moteur. Requêtes, échecs, premier jeton et consommation couvrent la période ; les modèles GPT tournent sur les comptes Codex.",
+    "Busiest models": "Modèles les plus sollicités",
+    "By provider": "Par fournisseur",
+    "Consumption by provider": "Consommation par fournisseur",
+    "No provider has accounts or requests": "Aucun fournisseur n’a de compte ni de requête",
+    "Nothing was charged in this range": "Rien n’a été consommé sur cette période",
+    "Requests by provider": "Requêtes par fournisseur",
+    "Requests in the range, by the vendor of the model.": "Requêtes de la période, par fournisseur du modèle.",
+    "Revenue by payment method": "Revenus par moyen de paiement",
+    "Top {{count}} of {{all}} models by requests.": "Les {{count}} premiers des {{all}} modèles par requêtes.",
+    "What requests were charged at list price, root’s own included, by the vendor of the model.": "Consommation au prix catalogue, celle de root comprise, par fournisseur du modèle.",
+    "Upstream overloaded": "Amont surchargé"
   }
 }

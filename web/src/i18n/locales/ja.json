@@ -7818,6 +7818,18 @@
     "to {{times}}×": "{{times}} 倍に",
     "{{vendor}} fails {{rate}} of requests.": "{{vendor}} の失敗率は {{rate}}。",
     "All providers": "すべてのプロバイダー",
-    "Upstream rate limit": "上流のレート制限"
+    "Upstream rate limit": "上流のレート制限",
+    "Accounts, slots and in flight are live, from the engine. Requests, failures, first token and charge cover the range; GPT models run on the Codex accounts.": "アカウント・スロット・処理中はエンジンのリアルタイム値です。リクエスト、失敗率、初回トークン、消費は選択期間の値です。GPT モデルは Codex アカウントで動きます。",
+    "Busiest models": "リクエストの多いモデル",
+    "By provider": "プロバイダー別",
+    "Consumption by provider": "プロバイダー別の消費",
+    "No provider has accounts or requests": "アカウントやリクエストのあるプロバイダーはありません",
+    "Nothing was charged in this range": "この期間の消費はありません",
+    "Requests by provider": "プロバイダー別のリクエスト",
+    "Requests in the range, by the vendor of the model.": "期間内のリクエストを、モデルのベンダー別に分けたものです。",
+    "Revenue by payment method": "支払い方法別の売上",
+    "Top {{count}} of {{all}} models by requests.": "リクエスト数上位 {{count}} モデル(全 {{all}} モデル)。",
+    "What requests were charged at list price, root’s own included, by the vendor of the model.": "定価で計算した消費(root 自身を含む)を、モデルのベンダー別に分けたものです。",
+    "Upstream overloaded": "上流の過負荷"
   }
 }
