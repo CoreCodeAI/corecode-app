@@ -33,9 +33,12 @@ const siteInsightsSearchSchema = z.object({
       'growth',
       'activity',
       'quality',
+      // The business tab was split up: its models went to funds, referrals
+      // and groups to growth, clients to quality. An old link opens funds.
       'business',
       'pool',
     ])
+    .transform((tab) => (tab === 'business' ? 'finance' : tab))
     .optional()
     .catch(undefined),
   days: z.number().int().positive().optional().catch(undefined),

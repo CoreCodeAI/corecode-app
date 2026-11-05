@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils'
 
 import { failureTone, SMALL_SAMPLE, useInsightsFormat } from '../lib'
 import type { BusinessInsights, QualityInsights, VendorQuality } from '../types'
+import { ClientsPanel } from './business-panels'
 import {
   BarSeries,
   Breakdown,
@@ -40,7 +41,6 @@ import {
   Panel,
   SimpleTable,
   TruncatedNotice,
-  UserLabel,
   type Tone,
 } from './shared'
 
@@ -253,6 +253,8 @@ function ModelFilter(props: {
 export function QualityTab(props: {
   data: QualityInsights | undefined
   previous?: QualityInsights
+  /** Read for the clients panel, which moved here from its own tab. */
+  business?: BusinessInsights
   models: { selected: string[]; onChange: (models: string[]) => void }
 }) {
   const { t } = useTranslation()
@@ -498,184 +500,7 @@ export function QualityTab(props: {
           />
         </Panel>
       </div>
-    </div>
-  )
-}
-
-export function BusinessTab(props: {
-  data: BusinessInsights | undefined
-  previous?: BusinessInsights
-}) {
-  const { t } = useTranslation()
-  const fmt = useInsightsFormat()
-  const data = props.data
-  const previous = props.previous
-
-  return (
-    <div className='grid gap-4'>
-      <MetricGrid
-        loading={!data}
-        items={[
-          {
-            label: t('Invitee consumption'),
-            featured: true,
-            value: fmt.usd(data?.invitee_spend_usd ?? 0),
-            delta: {
-              current: data?.invitee_spend_usd ?? 0,
-              previous: previous?.invitee_spend_usd,
-              better: 'up',
-            },
-            hint: t('{{inviters}} inviters brought {{invitees}} invitees', {
-              inviters: fmt.num(data?.inviters ?? 0),
-              invitees: fmt.num(data?.invitees ?? 0),
-            }),
-          },
-          {
-            label: t('Invitee payments'),
-            value: fmt.cny(data?.invitee_payments ?? 0),
-            delta: {
-              current: data?.invitee_payments ?? 0,
-              previous: previous?.invitee_payments,
-              better: 'up',
-            },
-          },
-          {
-            label: t('Commission credited'),
-            value: fmt.usd(data?.commission_usd ?? 0),
-            delta: {
-              current: data?.commission_usd ?? 0,
-              previous: previous?.commission_usd,
-              better: 'neutral',
-            },
-          },
-          {
-            label: t('Commission ÷ invitee consumption'),
-            value: fmt.pct(data?.commission_to_spend ?? 0),
-            help: t('Colored above 30%, where commission eats the margin.'),
-            tone:
-              (data?.commission_to_spend ?? 0) > 0.3 ? 'warning' : 'default',
-          },
-        ]}
-      />
-      <Panel
-        title={t('Model economics')}
-        description={
-          data
-            ? t('{{revenue}} of revenue in this range, split by consumption.', {
-                revenue: fmt.cny(data.revenue),
-              })
-            : undefined
-        }
-        help={t(
-          'Revenue is allocated to models by their share of list-price consumption; it is an estimate. Models with under 100 requests are faded.'
-        )}
-      >
-        <SimpleTable
-          rows={data?.models}
-          rowKey={(row) => row.model}
-          faded={(row) => row.requests < SMALL_SAMPLE}
-          empty={t('No consumption in this range')}
-          columns={[
-            {
-              key: 'model',
-              label: t('Model'),
-              render: (row) => (
-                <span className='font-mono text-xs'>{row.model}</span>
-              ),
-            },
-            {
-              key: 'usd',
-              label: t('Consumption'),
-              align: 'right',
-              render: (row) => fmt.usd(row.quota_usd),
-            },
-            {
-              key: 'share',
-              label: t('Share'),
-              align: 'right',
-              render: (row) => fmt.pct(row.share),
-            },
-            {
-              key: 'rev',
-              label: t('Revenue (est.)'),
-              align: 'right',
-              render: (row) => fmt.cny(row.revenue_estimate),
-            },
-            {
-              key: 'per',
-              label: t('Per request'),
-              align: 'right',
-              render: (row) => fmt.usd(row.per_request_usd),
-            },
-            {
-              key: 'users',
-              label: t('Users'),
-              align: 'right',
-              render: (row) => fmt.num(row.users),
-            },
-            {
-              key: 'cache',
-              label: t('Cache read share'),
-              align: 'right',
-              render: (row) => fmt.pct(row.cache_share),
-            },
-          ]}
-        />
-      </Panel>
-      <Panel title={t('Referral return by inviter')}>
-        <SimpleTable
-          rows={data?.top_inviters}
-          rowKey={(row) => row.user_id}
-          empty={t('No referrals')}
-          columns={[
-            {
-              key: 'user',
-              label: t('Inviter'),
-              render: (row) => <UserLabel {...row} />,
-            },
-            {
-              key: 'inv',
-              label: t('Invitees (active)'),
-              align: 'right',
-              render: (row) => `${row.invitees} (${row.active_invitees})`,
-            },
-            {
-              key: 'spend',
-              label: t('Invitee consumption'),
-              align: 'right',
-              render: (row) => fmt.usd(row.spend_usd),
-            },
-            {
-              key: 'pay',
-              label: t('Invitee payments'),
-              align: 'right',
-              render: (row) => fmt.cny(row.payments),
-            },
-            {
-              key: 'com',
-              label: t('Commission'),
-              align: 'right',
-              render: (row) => fmt.usd(row.commission_usd),
-            },
-          ]}
-        />
-      </Panel>
-      <div className='grid gap-4 lg:grid-cols-2'>
-        <Panel
-          title={t('Clients')}
-          help={t(
-            'Requests by client and version. Logs written before this was recorded count as unknown.'
-          )}
-        >
-          <Breakdown
-            items={data?.clients}
-            empty={t('No requests in this range')}
-          />
-        </Panel>
-        <Panel title={t('Users by group')}>
-          <Breakdown items={data?.groups} empty={t('No users')} />
-        </Panel>
-      </div>
+      <ClientsPanel data={props.business} />
     </div>
   )
 }

@@ -64,6 +64,17 @@ type VendorModel struct {
 	Requests int64   `json:"requests"`
 }
 
+// VendorRevenue is the revenue earned on one vendor's models: the range's
+// recognized revenue shared out by the vendor's part of what customers, not
+// root, consumed at list price. Revenue per list-price dollar is not known by
+// model, so every vendor earns the site's average; it is an estimate.
+type VendorRevenue struct {
+	Vendor            string  `json:"vendor"`
+	CustomerUSD       float64 `json:"customer_usd"`
+	Share             float64 `json:"share"`
+	RecognizedRevenue float64 `json:"recognized_revenue"`
+}
+
 // FinanceDay is one day of revenue, revenue earned and customers'
 // list-price consumption.
 type FinanceDay struct {
@@ -131,6 +142,8 @@ type FinanceInsights struct {
 	// VendorModels is the range's charge by model, largest first; each
 	// vendor's charge is the sum of its models.
 	VendorModels []VendorModel `json:"vendor_models"`
+	// VendorRevenue is the recognized revenue by vendor, largest first.
+	VendorRevenue []VendorRevenue `json:"vendor_revenue"`
 	// RevenuePerUSD is revenue divided by list-price consumption: what one
 	// dollar of consumption brought in over the range.
 	RevenuePerUSD                 float64 `json:"revenue_per_usd"`
@@ -253,8 +266,16 @@ func GetFinanceInsights(r InsightsRange) (*FinanceInsights, error) {
 	}
 	var claude int64
 	models := make(map[string]*VendorModel)
+	var roots []int
+	if err := DB.Model(&User{}).Unscoped().Where("role >= ?", common.RoleRootUser).Pluck("id", &roots).Error; err != nil {
+		return nil, err
+	}
+	customer := make(map[string]int64)
 	for _, row := range quota {
 		vendor := ModelVendor(row.ModelName)
+		if !slices.Contains(roots, row.UserID) {
+			customer[vendor] += int64(row.Quota)
+		}
 		model := models[row.ModelName]
 		if model == nil {
 			model = &VendorModel{Vendor: vendor, Model: row.ModelName}
@@ -295,6 +316,21 @@ func GetFinanceInsights(r InsightsRange) (*FinanceInsights, error) {
 	result.RecognizedSubscriptionRevenue = roundTo(subscriptions, 2)
 	result.RecognizedRevenue = roundTo(wallet+subscriptions, 2)
 	result.RecognizedPerUSD = ratio(result.RecognizedRevenue, result.ConsumptionUSD)
+	var customerTotal int64
+	for _, quota := range customer {
+		customerTotal += quota
+	}
+	result.VendorRevenue = []VendorRevenue{}
+	for vendor, quota := range customer {
+		share := ratio(float64(quota), float64(customerTotal))
+		result.VendorRevenue = append(result.VendorRevenue, VendorRevenue{
+			Vendor: vendor, CustomerUSD: quotaUSD(quota), Share: share,
+			RecognizedRevenue: roundTo(float64(quota)/float64(max(customerTotal, 1))*(wallet+subscriptions), 2),
+		})
+	}
+	slices.SortFunc(result.VendorRevenue, func(a, b VendorRevenue) int {
+		return cmp.Or(cmp.Compare(b.RecognizedRevenue, a.RecognizedRevenue), cmp.Compare(a.Vendor, b.Vendor))
+	})
 	for _, day := range days {
 		day.Topup, day.Subscription, day.ConsumptionUSD = roundTo(day.Topup, 2), roundTo(day.Subscription, 2), roundTo(day.ConsumptionUSD, 4)
 		day.RecognizedRevenue = roundTo(day.RecognizedRevenue, 2)

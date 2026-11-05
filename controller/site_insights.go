@@ -211,7 +211,7 @@ func GetFinanceInsights(c *gin.Context) {
 		}
 		pool := <-poolDone
 		response.Plans = service.EnginePlanValues(pool.Accounts)
-		response.PlanAccounts = service.EnginePlanCounts(pool.Accounts)
+		response.PlanAccounts = service.EnginePlanCounts(pool)
 		response.PlansError = cmp.Or(pool.Error, pool.EstimateError)
 		return response, nil
 	})

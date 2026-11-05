@@ -25,16 +25,21 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import type { InsightsView } from './api'
 import type { Tone } from './components/shared'
-import type { FinanceInsights, PoolProvider, RiskInsights } from './types'
+import type {
+  FinanceInsights,
+  NamedCount,
+  PoolProvider,
+  RiskInsights,
+} from './types'
 
 /** A tab of the page: one view, or the overview that reads several. */
-export type InsightsTab = 'overview' | InsightsView
+export type InsightsTab = 'overview' | Exclude<InsightsView, 'business'>
 
 /** Tabs in the order shown, grouped by what they answer. */
 export const INSIGHTS_TAB_GROUPS: { key: string; tabs: InsightsTab[] }[] = [
   { key: 'overview', tabs: ['overview'] },
   { key: 'operations', tabs: ['capacity', 'pool', 'quality'] },
-  { key: 'business', tabs: ['finance', 'growth', 'activity', 'business'] },
+  { key: 'business', tabs: ['finance', 'growth', 'activity'] },
   { key: 'risk', tabs: ['risk'] },
 ]
 
@@ -116,6 +121,29 @@ const ACCOUNT_PRICES: {
 
 /** Days a monthly account price covers. */
 export const PRICE_MONTH_DAYS = 30
+
+/**
+ * What one account of a vendor other than Claude costs a month, in US
+ * dollars: Codex runs on ChatGPT Pro. A vendor missing here has no recorded
+ * price, and its accounts count as free.
+ */
+const VENDOR_ACCOUNT_MONTHLY_USD: Record<string, number> = {
+  codex: 200,
+}
+
+/**
+ * What one pool account costs a month, in US dollars: a Claude account by
+ * its plan and tier, another vendor's by the vendor. Undefined without a
+ * recorded price.
+ */
+export function accountMonthlyUSD(
+  vendor: string,
+  plan: string,
+  tier: string
+): number | undefined {
+  if (vendor === 'claude') return accountPrice(plan, tier)?.monthlyUSD
+  return VENDOR_ACCOUNT_MONTHLY_USD[vendor]
+}
 
 export function accountPrice(plan: string, tier: string) {
   return ACCOUNT_PRICES.find(
@@ -274,4 +302,91 @@ const CHANNEL_PROVIDERS: Record<string, string> = { antigravity: 'gemini' }
 /** The vendor a pool group's channel serves. */
 export function groupProvider(group: { channel: string; provider?: string }) {
   return group.provider ?? CHANNEL_PROVIDERS[group.channel] ?? group.channel
+}
+
+/** The vendors in the order the margin lists them; other models last. */
+export const MARGIN_VENDORS = [
+  'claude',
+  'codex',
+  'grok',
+  'gemini',
+  'other',
+] as const
+
+export type VendorMarginRow = {
+  vendor: string
+  revenue: number
+  cost: number
+  margin: number
+  accounts: number
+  unpriced: number
+}
+
+/**
+ * Revenue earned against what the pool's accounts cost, by vendor, in yuan.
+ * Revenue is the server's recognized revenue shared out by each vendor's
+ * part of customers' consumption; cost is each listed account's monthly
+ * price over the range's days, at the site's exchange rate.
+ */
+export function vendorMargins(
+  data: FinanceInsights,
+  rate: number
+): VendorMarginRow[] {
+  const days = Math.max(
+    ((data.end_time ?? 0) - (data.start_time ?? 0)) / 86400,
+    0
+  )
+  const rows = new Map<string, VendorMarginRow>()
+  const row = (vendor: string) => {
+    let found = rows.get(vendor)
+    if (!found) {
+      found = {
+        vendor,
+        revenue: 0,
+        cost: 0,
+        margin: 0,
+        accounts: 0,
+        unpriced: 0,
+      }
+      rows.set(vendor, found)
+    }
+    return found
+  }
+  for (const item of data.vendor_revenue ?? []) {
+    row(item.vendor).revenue += item.recognized_revenue
+  }
+  for (const plan of data.plan_accounts ?? []) {
+    if (!plan.vendor) continue
+    const target = row(plan.vendor)
+    target.accounts += plan.accounts
+    const monthly = accountMonthlyUSD(plan.vendor, plan.plan, plan.tier)
+    if (monthly == null) {
+      target.unpriced += plan.accounts
+      continue
+    }
+    target.cost += (monthly * plan.accounts * days * rate) / PRICE_MONTH_DAYS
+  }
+  return [...rows.values()]
+    .map((item) => ({ ...item, margin: item.revenue - item.cost }))
+    .filter((item) => item.revenue > 0 || item.accounts > 0)
+    .sort(
+      (a, b) =>
+        MARGIN_VENDORS.indexOf(a.vendor as never) -
+        MARGIN_VENDORS.indexOf(b.vendor as never)
+    )
+}
+
+/**
+ * Splits client names such as claude-cli/2.1.3 into the client and its
+ * version, and counts requests by client.
+ */
+export function clientFamilies(items: NamedCount[] | null | undefined) {
+  const families = new Map<string, number>()
+  for (const item of items ?? []) {
+    const family = item.name.split('/')[0] || item.name
+    families.set(family, (families.get(family) ?? 0) + item.count)
+  }
+  return [...families.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 }

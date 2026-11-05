@@ -43,20 +43,28 @@ func TestMatchClaudeCost(t *testing.T) {
 }
 
 func TestEnginePlanCounts(t *testing.T) {
-	accounts := []EngineAccount{
-		{Plan: "Team", Tier: "team_tier_1", Eligible: true},
-		{Plan: "Pro", Tier: "default_claude_ai", Eligible: true},
-		{Plan: "Pro", Tier: "default_claude_ai", Status: "suspended"},
-		{Plan: "Team", Tier: "team_standard", Eligible: true},
-		{},
+	pool := EnginePool{
+		Groups: []EngineGroup{{ID: 1, Channel: "claude"}, {ID: 2, Channel: "codex"}, {ID: 3, Channel: "antigravity"}},
+		Accounts: []EngineAccount{
+			{GroupID: 1, Plan: "Team", Tier: "team_tier_1", Eligible: true},
+			{GroupID: 1, Plan: "Pro", Tier: "default_claude_ai", Eligible: true},
+			{GroupID: 1, Plan: "Pro", Tier: "default_claude_ai", Status: "suspended"},
+			{GroupID: 1, Plan: "Team", Tier: "team_standard", Eligible: true},
+			{GroupID: 2, Eligible: true},
+			{GroupID: 3},
+			{GroupID: 3},
+			{},
+		},
 	}
 	assert.Equal(t, []EnginePlanCount{
 		{Accounts: 1},
-		{Plan: "Pro", Tier: "default_claude_ai", Accounts: 2, Eligible: 1},
-		{Plan: "Team", Tier: "team_standard", Accounts: 1, Eligible: 1},
-		{Plan: "Team", Tier: "team_tier_1", Accounts: 1, Eligible: 1},
-	}, EnginePlanCounts(accounts), "every account counts, whatever its status or plan")
-	assert.Equal(t, []EnginePlanCount{}, EnginePlanCounts(nil))
+		{Vendor: "claude", Plan: "Pro", Tier: "default_claude_ai", Accounts: 2, Eligible: 1},
+		{Vendor: "claude", Plan: "Team", Tier: "team_standard", Accounts: 1, Eligible: 1},
+		{Vendor: "claude", Plan: "Team", Tier: "team_tier_1", Accounts: 1, Eligible: 1},
+		{Vendor: "codex", Accounts: 1, Eligible: 1},
+		{Vendor: "gemini", Accounts: 2},
+	}, EnginePlanCounts(pool), "every account counts, whatever its status or plan, under its group's vendor")
+	assert.Equal(t, []EnginePlanCount{}, EnginePlanCounts(EnginePool{}))
 }
 
 func TestMatchedSince(t *testing.T) {
