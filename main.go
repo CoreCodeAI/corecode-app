@@ -300,6 +300,10 @@ func InjectGoogleAnalytics(indexPage []byte) []byte {
 		analyticsInjectBuilder.WriteString("window.dataLayer = window.dataLayer || [];")
 		analyticsInjectBuilder.WriteString("function gtag(){dataLayer.push(arguments);}")
 		analyticsInjectBuilder.WriteString("gtag('js', new Date());")
+		// CoreCode: the console sets this flag while an administrator is signed
+		// in (web/src/lib/analytics.ts); reading it before config marks the
+		// first page view internal too, so GA's Internal Traffic filter drops it.
+		analyticsInjectBuilder.WriteString("try{if(localStorage.getItem('corecode:analytics:internal')==='1')gtag('set',{traffic_type:'internal'});}catch(e){}")
 		analyticsInjectBuilder.WriteString("gtag('config', '")
 		analyticsInjectBuilder.WriteString(gaID)
 		analyticsInjectBuilder.WriteString("');")

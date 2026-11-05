@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
+import { trackBeginCheckout } from '@/lib/analytics'
 import { getSelf } from '@/lib/api'
 
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
@@ -199,6 +200,7 @@ export function Wallet(props: WalletProps) {
   const handlePaymentConfirm = async () => {
     if (!selectedPaymentMethod) return
 
+    trackBeginCheckout(paymentAmount, selectedPaymentMethod.type)
     const success = await dispatchSelectedPayment(
       selectedPaymentMethod,
       topupAmount,
