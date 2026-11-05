@@ -299,6 +299,59 @@ export function useSignupMethodLabel() {
     })[name] ?? name
 }
 
+/** The color a series wears, as a stroke on a chart and a fill on a swatch. */
+export type SeriesColor = { stroke: string; fill: string }
+
+// Categorical slots in their fixed order, each stepped for the light and the
+// dark surface; checked for color-blind separation between neighbours.
+export const SERIES_COLORS: SeriesColor[] = [
+  {
+    stroke: 'stroke-[#2a78d6] dark:stroke-[#3987e5]',
+    fill: 'bg-[#2a78d6] dark:bg-[#3987e5]',
+  },
+  {
+    stroke: 'stroke-[#eb6834] dark:stroke-[#d95926]',
+    fill: 'bg-[#eb6834] dark:bg-[#d95926]',
+  },
+  {
+    stroke: 'stroke-[#1baf7a] dark:stroke-[#199e70]',
+    fill: 'bg-[#1baf7a] dark:bg-[#199e70]',
+  },
+  {
+    stroke: 'stroke-[#eda100] dark:stroke-[#c98500]',
+    fill: 'bg-[#eda100] dark:bg-[#c98500]',
+  },
+]
+
+/** Whatever is folded together reads as gray, never as a series. */
+export const OTHER_COLOR: SeriesColor = {
+  stroke: 'stroke-muted-foreground/45',
+  fill: 'bg-muted-foreground/45',
+}
+
+/** Each vendor keeps its color whatever else is on the chart. */
+export const VENDOR_ORDER = ['claude', 'codex', 'grok', 'gemini', 'other']
+
+export function vendorColor(vendor: string): SeriesColor {
+  const index = VENDOR_ORDER.indexOf(vendor)
+  return index >= 0 && index < SERIES_COLORS.length
+    ? SERIES_COLORS[index]
+    : OTHER_COLOR
+}
+
+/** A vendor's name as the tabs print it; GPT models sell as codex. */
+export function useVendorName() {
+  const { t } = useTranslation()
+  const names: Record<string, string> = {
+    claude: 'Claude',
+    codex: 'GPT',
+    grok: 'Grok',
+    gemini: 'Gemini',
+    other: t('Other models'),
+  }
+  return (vendor: string) => names[vendor] ?? vendor
+}
+
 export const PROVIDER_LABELS: Record<PoolProvider, string> = {
   claude: 'Claude',
   codex: 'Codex',

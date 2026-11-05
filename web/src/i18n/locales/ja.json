@@ -7818,6 +7818,17 @@
     "to {{times}}×": "{{times}} 倍に",
     "{{vendor}} fails {{rate}} of requests.": "{{vendor}} の失敗率は {{rate}}。",
     "All providers": "すべてのプロバイダー",
-    "Upstream rate limit": "上流のレート制限"
+    "Upstream rate limit": "上流のレート制限",
+    "Busiest models": "リクエストの多いモデル",
+    "By provider": "プロバイダー別",
+    "Consumption by provider": "プロバイダー別の消費",
+    "No provider has accounts or requests": "アカウントやリクエストのあるプロバイダーはありません",
+    "Nothing was charged in this range": "この期間の消費はありません",
+    "Requests by provider": "プロバイダー別のリクエスト",
+    "Revenue by payment method": "支払い方法別の売上",
+    "Top {{count}} of {{all}} models by requests.": "リクエスト数上位 {{count}} モデル(全 {{all}} モデル)。",
+    "Upstream overloaded": "上流の過負荷",
+    "Accounts and slots are live; the rest covers the range.": "アカウントとスロットはリアルタイム、それ以外は選択期間の値です。",
+    "At list price, root included.": "定価ベース、root を含みます。"
   }
 }

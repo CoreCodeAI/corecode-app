@@ -7818,6 +7818,17 @@
     "to {{times}}×": "×{{times}}",
     "{{vendor}} fails {{rate}} of requests.": "{{vendor}} échoue sur {{rate}} des requêtes.",
     "All providers": "Tous les fournisseurs",
-    "Upstream rate limit": "Limite de débit en amont"
+    "Upstream rate limit": "Limite de débit en amont",
+    "Busiest models": "Modèles les plus sollicités",
+    "By provider": "Par fournisseur",
+    "Consumption by provider": "Consommation par fournisseur",
+    "No provider has accounts or requests": "Aucun fournisseur n’a de compte ni de requête",
+    "Nothing was charged in this range": "Rien n’a été consommé sur cette période",
+    "Requests by provider": "Requêtes par fournisseur",
+    "Revenue by payment method": "Revenus par moyen de paiement",
+    "Top {{count}} of {{all}} models by requests.": "Les {{count}} premiers des {{all}} modèles par requêtes.",
+    "Upstream overloaded": "Amont surchargé",
+    "Accounts and slots are live; the rest covers the range.": "Comptes et emplacements en direct ; le reste couvre la période.",
+    "At list price, root included.": "Au prix catalogue, root compris."
   }
 }

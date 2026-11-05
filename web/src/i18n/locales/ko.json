@@ -7818,6 +7818,17 @@
     "to {{times}}×": "{{times}}배로",
     "{{vendor}} fails {{rate}} of requests.": "{{vendor}} 실패율 {{rate}}.",
     "All providers": "모든 제공업체",
-    "Upstream rate limit": "업스트림 속도 제한"
+    "Upstream rate limit": "업스트림 속도 제한",
+    "Busiest models": "요청이 많은 모델",
+    "By provider": "제공업체별",
+    "Consumption by provider": "제공업체별 소비",
+    "No provider has accounts or requests": "계정이나 요청이 있는 제공업체가 없습니다",
+    "Nothing was charged in this range": "이 기간에는 소비가 없습니다",
+    "Requests by provider": "제공업체별 요청",
+    "Revenue by payment method": "결제 수단별 매출",
+    "Top {{count}} of {{all}} models by requests.": "요청 수 상위 {{count}}개 모델 (전체 {{all}}개).",
+    "Upstream overloaded": "업스트림 과부하",
+    "Accounts and slots are live; the rest covers the range.": "계정과 슬롯은 실시간, 나머지는 선택 기간 값입니다.",
+    "At list price, root included.": "정가 기준, root 포함."
   }
 }

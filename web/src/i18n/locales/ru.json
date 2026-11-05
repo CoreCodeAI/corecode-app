@@ -7818,6 +7818,17 @@
     "to {{times}}×": "в {{times}} раза больше",
     "{{vendor}} fails {{rate}} of requests.": "У {{vendor}} {{rate}} ошибок.",
     "All providers": "Все провайдеры",
-    "Upstream rate limit": "Лимит запросов у поставщика"
+    "Upstream rate limit": "Лимит запросов у поставщика",
+    "Busiest models": "Самые загруженные модели",
+    "By provider": "По провайдерам",
+    "Consumption by provider": "Списания по провайдерам",
+    "No provider has accounts or requests": "Ни у одного провайдера нет аккаунтов или запросов",
+    "Nothing was charged in this range": "За этот период списаний нет",
+    "Requests by provider": "Запросы по провайдерам",
+    "Revenue by payment method": "Выручка по способам оплаты",
+    "Top {{count}} of {{all}} models by requests.": "Топ-{{count}} из {{all}} моделей по запросам.",
+    "Upstream overloaded": "Поставщик перегружен",
+    "Accounts and slots are live; the rest covers the range.": "Аккаунты и слоты — сейчас, остальное — за период.",
+    "At list price, root included.": "По прейскуранту, включая root."
   }
 }

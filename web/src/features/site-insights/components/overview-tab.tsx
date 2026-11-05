@@ -41,6 +41,7 @@ import type {
   QualityInsights,
   RiskInsights,
 } from '../types'
+import { ProvidersPanel, ShareCharts, TopModelsPanel } from './overview-charts'
 import { MetricGrid, Panel } from './shared'
 
 type InsightsQuery = {
@@ -484,7 +485,7 @@ export function OverviewTab(props: {
                   <div className='min-w-0 flex-1'>
                     <p className='text-sm font-medium'>{signal.title}</p>
                     {signal.detail && (
-                      <p className='text-muted-foreground truncate text-xs'>
+                      <p className='text-muted-foreground text-xs break-words'>
                         {signal.detail}
                       </p>
                     )}
@@ -503,6 +504,13 @@ export function OverviewTab(props: {
           </ul>
         )}
       </Panel>
+
+      <ProvidersPanel pool={pool} quality={quality} finance={finance} />
+      <ShareCharts quality={quality} finance={finance} />
+      <TopModelsPanel
+        quality={quality}
+        onOpen={() => props.onOpen('quality')}
+      />
     </div>
   )
 }

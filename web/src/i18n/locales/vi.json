@@ -7818,6 +7818,17 @@
     "to {{times}}×": "gấp {{times}} lần",
     "{{vendor}} fails {{rate}} of requests.": "{{vendor}} lỗi {{rate}} yêu cầu.",
     "All providers": "Tất cả nhà cung cấp",
-    "Upstream rate limit": "Giới hạn tốc độ phía nguồn"
+    "Upstream rate limit": "Giới hạn tốc độ phía nguồn",
+    "Busiest models": "Mô hình được dùng nhiều nhất",
+    "By provider": "Theo nhà cung cấp",
+    "Consumption by provider": "Tiêu thụ theo nhà cung cấp",
+    "No provider has accounts or requests": "Không nhà cung cấp nào có tài khoản hoặc yêu cầu",
+    "Nothing was charged in this range": "Không có tiêu thụ trong khoảng này",
+    "Requests by provider": "Yêu cầu theo nhà cung cấp",
+    "Revenue by payment method": "Doanh thu theo phương thức thanh toán",
+    "Top {{count}} of {{all}} models by requests.": "Top {{count}} trên {{all}} mô hình theo số yêu cầu.",
+    "Upstream overloaded": "Phía nguồn quá tải",
+    "Accounts and slots are live; the rest covers the range.": "Tài khoản và slot là trực tiếp; phần còn lại theo khoảng thời gian.",
+    "At list price, root included.": "Theo giá niêm yết, gồm cả root."
   }
 }

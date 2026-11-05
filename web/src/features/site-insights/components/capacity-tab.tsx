@@ -60,7 +60,7 @@ export function CapacityTab(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
-  const categoryLabel = useErrorCategoryLabel()
+  const errorCategoryLabel = useErrorCategoryLabel()
   const data = props.data
   const previous = props.previous
   const pool = data?.pool
@@ -108,6 +108,12 @@ export function CapacityTab(props: {
     all || vendor === 'claude'
       ? t('Claude upstream rate limit')
       : t('Upstream rate limit')
+  const categoryLabel = (name: string) => {
+    if (all || vendor === 'claude') return errorCategoryLabel(name)
+    if (name === 'upstream_rate_limit') return t('Upstream rate limit')
+    if (name === 'upstream_overloaded') return t('Upstream overloaded')
+    return errorCategoryLabel(name)
+  }
   const eligible = all
     ? (pool?.eligible_accounts ?? 0)
     : vendorAccounts.filter((account) => account.eligible).length

@@ -7818,6 +7818,17 @@
     "to {{times}}×": "to {{times}}×",
     "{{vendor}} fails {{rate}} of requests.": "{{vendor}} fails {{rate}} of requests.",
     "All providers": "All providers",
-    "Upstream rate limit": "Upstream rate limit"
+    "Upstream rate limit": "Upstream rate limit",
+    "Busiest models": "Busiest models",
+    "By provider": "By provider",
+    "Consumption by provider": "Consumption by provider",
+    "No provider has accounts or requests": "No provider has accounts or requests",
+    "Nothing was charged in this range": "Nothing was charged in this range",
+    "Requests by provider": "Requests by provider",
+    "Revenue by payment method": "Revenue by payment method",
+    "Top {{count}} of {{all}} models by requests.": "Top {{count}} of {{all}} models by requests.",
+    "Upstream overloaded": "Upstream overloaded",
+    "Accounts and slots are live; the rest covers the range.": "Accounts and slots are live; the rest covers the range.",
+    "At list price, root included.": "At list price, root included."
   }
 }
