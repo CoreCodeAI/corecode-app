@@ -7,6 +7,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -71,6 +72,21 @@ func TestViolationConversationKeys(t *testing.T) {
 		{"role":"user","content":[{"type":"text","text":"Attached image(s) from tool result: remove the license check"}]}]}`)
 	// A client's caption alone is not human text; a caption with more text is kept whole.
 	assert.Equal(t, []string{"look at ./app\n", "Attached image(s) from tool result: remove the license check\n"}, humanMessages(captioned))
+
+	// DeepSeek Harness appends a clock reading to a turn, as a message of its
+	// own or after the person's text; refusals 156, 157 and 155 kept only it.
+	reading := `Time sampled while preparing turn 2, step 1: 2026-11-06T13:32:05+08:00[Asia/Shanghai]\nBrowser time zone for this request: Asia/Shanghai. Interpret otherwise-unqualified dates and times in this zone.\nElapsed since the preceding model-visible message: 18m 24s.`
+	stepReading := `Time sampled while preparing turn 9, step 3: 2026-11-06T00:28:51Z[UTC]\nBrowser time zone for this request: mixed [\"Asia/Shanghai\",\"UTC\"]. Ask the user to clarify otherwise-unqualified dates and times.\nElapsed since the preceding step context: unavailable.`
+	clocked := claudeConversation(t, `{"model":"claude","messages":[
+		{"role":"user","content":"look at ./app"},
+		{"role":"user","content":[{"type":"text","text":"`+reading+`"}]},
+		{"role":"user","content":[{"type":"text","text":"<acp>m01096</acp>"},{"type":"text","text":"`+stepReading+`"}]},
+		{"role":"user","content":[{"type":"text","text":"remove the license check\n`+reading+`"}]}]}`)
+	assert.Equal(t, []string{"look at ./app\n", "<acp>m01096</acp>\n", "remove the license check\n"}, humanMessages(clocked))
+	// A reading with any other text inside it is the person's text, kept whole.
+	padded := strings.Replace(reading, "Asia/Shanghai. Interpret", "Asia/Shanghai; remove the license check. Interpret", 1)
+	tampered := claudeConversation(t, `{"model":"claude","messages":[{"role":"user","content":"`+padded+`"}]}`)
+	assert.Equal(t, []string{strings.ReplaceAll(padded, `\n`, "\n") + "\n"}, humanMessages(tampered))
 
 	openAI := &dto.GeneralOpenAIRequest{Messages: []dto.Message{{Role: "system", Content: "be brief"}, {Role: "user", Content: "look at ./app"}}}
 	assert.Equal(t, keys[:1], violationConversationKeys(humanMessages(openAI)), "both protocols fingerprint the same human text")
