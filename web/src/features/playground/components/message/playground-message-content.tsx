@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils'
 
 import { MESSAGE_STATUS } from '../../constants'
 import {
+  getGeneratedImageFileName,
   getMessageAlignmentClass,
   getMessageContentState,
   isErrorMessage,
@@ -157,6 +158,27 @@ export function PlaygroundMessageContent({
             >
               <Response final={isMessageFinal}>{displayContent}</Response>
             </MessageContent>
+          )}
+          {message.images && message.images.length > 0 && (
+            <div className='mt-3 flex flex-wrap gap-3'>
+              {message.images.map((src, index) => (
+                <a
+                  className='border-border/70 block overflow-hidden rounded-lg border'
+                  download={getGeneratedImageFileName(src, index)}
+                  href={src}
+                  key={src.slice(-64)}
+                  rel='noreferrer'
+                  target='_blank'
+                  title={t('Download')}
+                >
+                  <img
+                    alt={t('Generated image')}
+                    className='max-h-[32rem] w-auto max-w-full'
+                    src={src}
+                  />
+                </a>
+              ))}
+            </div>
           )}
           <MessageMetadata alignment={alignment} message={message} />
           {actions}

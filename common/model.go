@@ -29,6 +29,7 @@ var (
 		"prefix:imagen-",
 		"flux-",
 		"flux.1-",
+		"grok-imagine-image",
 	}
 )
 

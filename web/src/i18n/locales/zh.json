@@ -7846,6 +7846,8 @@
     "{{rate}} of sign-ups in this range have paid.": "此时间范围内注册的用户中 {{rate}} 已付费。",
     "{{rate}} went on": "{{rate}} 进入下一步",
     "{{share}} of {{limit}}": "占 {{limit}} 的 {{share}}",
-    "Billed per request; each generated image counts as one request.": "按次计费，生成图片时每张计一次。"
+    "Billed per request; each generated image counts as one request.": "按次计费，生成图片时每张计一次。",
+    "Describe the image to generate": "描述要生成的图片",
+    "Image generated. Images are not saved; download any you want to keep before leaving.": "图片已生成。图片不会保存，离开前请下载需要保留的图片。"
   }
 }

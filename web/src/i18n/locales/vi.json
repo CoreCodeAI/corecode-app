@@ -7846,6 +7846,8 @@
     "{{rate}} of sign-ups in this range have paid.": "{{rate}} người đăng ký trong khoảng này đã thanh toán.",
     "{{rate}} went on": "{{rate}} đi tiếp",
     "{{share}} of {{limit}}": "{{share}} của {{limit}}",
-    "Billed per request; each generated image counts as one request.": "Tính phí theo yêu cầu; mỗi ảnh được tạo tính là một yêu cầu."
+    "Billed per request; each generated image counts as one request.": "Tính phí theo yêu cầu; mỗi ảnh được tạo tính là một yêu cầu.",
+    "Describe the image to generate": "Mô tả hình ảnh cần tạo",
+    "Image generated. Images are not saved; download any you want to keep before leaving.": "Đã tạo hình ảnh. Hình ảnh không được lưu; hãy tải xuống những hình bạn muốn giữ trước khi rời trang."
   }
 }

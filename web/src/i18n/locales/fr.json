@@ -7846,6 +7846,8 @@
     "{{rate}} of sign-ups in this range have paid.": "{{rate}} des inscrits de la période ont payé.",
     "{{rate}} went on": "{{rate}} ont continué",
     "{{share}} of {{limit}}": "{{share}} de {{limit}}",
-    "Billed per request; each generated image counts as one request.": "Facturé par requête ; chaque image générée compte comme une requête."
+    "Billed per request; each generated image counts as one request.": "Facturé par requête ; chaque image générée compte comme une requête.",
+    "Describe the image to generate": "Décrivez l'image à générer",
+    "Image generated. Images are not saved; download any you want to keep before leaving.": "Image générée. Les images ne sont pas enregistrées ; téléchargez celles que vous souhaitez conserver avant de quitter la page."
   }
 }

@@ -49,6 +49,9 @@ export interface Message {
   isContentComplete?: boolean
   status?: MessageStatus
   errorCode?: string | null
+  // Generated images as data or http URLs. Kept in memory only: a few
+  // images would exceed the stored conversation's size cap.
+  images?: string[]
 }
 
 // API payload types
@@ -115,6 +118,23 @@ export interface ChatCompletionResponse {
     completion_tokens: number
     total_tokens: number
   }
+}
+
+export interface ImageGenerationRequest {
+  model: string
+  group?: string
+  prompt: string
+  n: number
+  response_format: 'b64_json'
+}
+
+export interface ImageGenerationResponse {
+  created?: number
+  data?: Array<{
+    b64_json?: string
+    url?: string
+    revised_prompt?: string
+  }>
 }
 
 // Configuration types
