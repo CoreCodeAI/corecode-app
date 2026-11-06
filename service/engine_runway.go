@@ -28,10 +28,14 @@ var runwayExcluded = map[string]bool{
 // EngineRunway is one channel's quota supply against its recent demand.
 type EngineRunway struct {
 	Channel string `json:"channel"`
-	// BurnUSDPerHour is the channel's demand: every account's logged spend
-	// over the last 24 hours, per hour, including accounts paused now, since
-	// their traffic moves to the others.
+	// BurnUSDPerHour is the channel's demand: LastDayUSDPerHour moved to the
+	// level the latest hours hold (demandLevel), read from the console's use
+	// of the same models.
 	BurnUSDPerHour float64 `json:"burn_usd_per_hour"`
+	// LastDayUSDPerHour is every account's logged spend over the last 24
+	// hours, per hour, including accounts paused now, since their traffic
+	// moves to the others.
+	LastDayUSDPerHour float64 `json:"last_day_usd_per_hour"`
 	// WeekToDateUSDPerHour checks it over a longer span: what each counted
 	// account has used since its weekly reset, per hour, with the last day's
 	// rate for an account whose window is younger than runwayMinElapsed.
@@ -189,7 +193,7 @@ func poolRunway(pool EnginePool, channel string, nowMS int64, profile demandProf
 		}
 		seen = true
 		burn := deref(account.BurnUSDPerHour)
-		runway.BurnUSDPerHour += burn
+		runway.LastDayUSDPerHour += burn
 		if !group.Enabled || runwayExcluded[account.Status] {
 			continue
 		}
@@ -226,6 +230,7 @@ func poolRunway(pool EnginePool, channel string, nowMS int64, profile demandProf
 		return nil
 	}
 	runway.SustainableUSDPerHour = runway.WeekCapacityUSD / runwayWeek.Hours()
+	runway.BurnUSDPerHour = runway.LastDayUSDPerHour * profile.levelScale()
 	burn := runway.BurnUSDPerHour
 	if burn <= 0 {
 		runway.ServedShare = 1

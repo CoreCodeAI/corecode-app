@@ -190,6 +190,18 @@ func TestPoolRunwayMovesDemandThroughTheDay(t *testing.T) {
 	assert.InDelta(t, 100, runway.Curve[11], 1e-9)
 }
 
+func TestPoolRunwayRunsAtTheLevelTheLatestHoursHold(t *testing.T) {
+	// $10/h over the last day, with the latest hours half as busy again.
+	profile := flatDemand()
+	profile.recent = 1.5
+	runway := poolRunway(runwayPool(runwayAccountAt(1, 150, 400, 10, 1000)), "claude", 0, profile)
+	assert.InDelta(t, 10, runway.LastDayUSDPerHour, 1e-9)
+	assert.InDelta(t, 15, runway.BurnUSDPerHour, 1e-9)
+	require.NotNil(t, runway.WeekHours)
+	assert.InDelta(t, 10, *runway.WeekHours, 1e-9, "$150 at $15/h")
+	assert.InDelta(t, 15*168/200.0, runway.WeekLoad, 1e-9)
+}
+
 func TestPoolRunwayProjectsTheScenariosAndTheHeadroom(t *testing.T) {
 	// $100 left and no reset in the week: at $10/h it lasts 10 hours, and
 	// lasting the week takes demand at or below 100/1680 of it.

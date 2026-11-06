@@ -63,6 +63,35 @@ func TestDemandProfileFollowsGrowthAndBoundsIt(t *testing.T) {
 	assert.Less(t, profile2(0.1).growthAt(100), math.Exp(0.1*5)+1e-9)
 }
 
+func TestDemandProfileReadsTheLevelTheLatestHoursHold(t *testing.T) {
+	busy := func(i int) float64 {
+		if i%24 == 5 {
+			return 3
+		}
+		return 1
+	}
+	// Ending on the busy hour: the shape expects it, so the level holds.
+	// A first hour at UTC 06:00 puts the last of 14 days at 05:00.
+	steady := buildDemandProfile(demandSeries(14, func(i int) float64 { return busy(i + 6) }), 6*3600)
+	assert.InDelta(t, 1, steady.levelScale(), 1e-9)
+
+	// The last four days count, halving every 12 hours back: use doubled
+	// over the last 12 hours carries half the weight.
+	var flat [24]float64
+	for hour := range flat {
+		flat[hour] = 1
+	}
+	stepped := demandSeries(14, func(i int) float64 {
+		if i >= 14*24-12 {
+			return 2
+		}
+		return 1
+	})
+	assert.InDelta(t, 1+0.5/(1-1/256.0), demandLevel(stepped, len(stepped), flat, func(int) int { return 0 }), 1e-9)
+
+	assert.InDelta(t, 1, demandProfile{}.levelScale(), 1e-9, "a profile without a level reads as the last day")
+}
+
 func profile2(growth float64) demandProfile {
 	profile := flatDemand()
 	profile.growth = growth
