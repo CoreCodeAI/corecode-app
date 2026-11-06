@@ -16,9 +16,10 @@ The owner pays two promotion channels a monthly fee: Magpie $1,000 and linux.do 
   - **Unspent**: what is left now on running gift plans, plus wallets' unpaid share.
 - **Fees are an option row, `ChannelCosts`.** It holds JSON entries `{user_id, monthly_usd, start, end, note}`. `PUT /api/site-insights/channel-costs` (root, `billing:write`) replaces the whole list after validating each entry. A fee counts a thirtieth of the month for each day of the range from `start` to `end`; an `end` of 0 runs until now. A changed fee is a new entry. The view reads the row from the database, not `OptionMap`, so both colors agree during a release.
 - **The console computes net and ROI** (`channelEconomics`), all in yuan:
-  - net = revenue − fee × site exchange rate − commission − gift spent. Commission and gift are quota dollars, which customers buy at ¥1 each.
+  - net = revenue − fee × site exchange rate − gift spent, less commission only for a channel without a fee. Gift and commission are quota dollars, which customers buy at ¥1 each.
   - ROI = net ÷ fee.
   - Fee per new payer = fee ÷ accounts that first paid in the range.
+- **A channel paid a fee is not charged its commission.** The owner set this on 2026-11-06: Magpie and linux.do hold affiliate accounts only so that their sign-ups can be attributed, and the monthly fee is the whole deal. The tab still shows their commission, struck through. A distributor without a fee is paid by commission, so its commission stays a cost.
 
 ## Alternatives considered
 

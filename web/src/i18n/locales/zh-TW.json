@@ -7867,7 +7867,7 @@
     "Granted": "發放",
     "Granted: gift plans and administrators’ balance changes in the range. Spent: given credit used in the range. Unspent: what is left now on running gift plans and in the unpaid share of wallets, which can still be spent.": "發放：時間範圍內贈送的方案和管理員調整的餘額。消耗：時間範圍內用掉的贈送額度。未用：目前仍有效的贈送方案剩餘額度，加上錢包裡未付費部分的餘額，之後仍可能被用掉。",
     "Last day": "最後一天",
-    "Money is in yuan. Revenue is what the source’s accounts paid in the range, whenever they signed up. Cost is the channel fee over the range at the site’s exchange rate, the commission it earned, and the given credit its accounts spent (gift plans, administrators’ credits, and the unpaid share of each wallet), at list price. Net is revenue less cost; ROI is net over the fee.": "金額單位為人民幣。收入：該來源的帳號在時間範圍內的付款，不限註冊時間。成本包括三項：時間範圍內的渠道費（按站點匯率換算）、渠道獲得的佣金、這些帳號用掉的贈送額度（贈送方案、管理員補發的額度、錢包裡未付費的部分，按標價計）。淨收入 = 收入 − 成本；ROI = 淨收入 ÷ 渠道費。",
+    "Money is in yuan. Revenue is what the source’s accounts paid in the range, whenever they signed up. Cost is the channel fee over the range at the site’s exchange rate, and the given credit its accounts spent (gift plans, administrators’ credits, and the unpaid share of each wallet), at list price. A channel with a fee is not charged its commission, shown struck through: its affiliate account only attributes sign-ups. A channel without a fee is charged the commission it earned. Net is revenue less cost; ROI is net over the fee.": "金額單位為人民幣。收入：該來源的帳號在時間範圍內的付款，不限註冊時間。成本包括：時間範圍內的渠道費（按站點匯率換算），以及這些帳號用掉的贈送額度（贈送方案、管理員補發的額度、錢包裡未付費的部分，按標價計）。錄了月費的渠道，返佣不計入成本（顯示為刪除線），它的邀請帳號只用來統計來源；沒有月費的渠道，返佣計入成本。淨收入 = 收入 − 成本；ROI = 淨收入 ÷ 渠道費。",
     "Net": "淨收入",
     "Net after channel cost": "扣除渠道成本後淨收入",
     "No channel fees recorded": "尚未錄入渠道費用",
