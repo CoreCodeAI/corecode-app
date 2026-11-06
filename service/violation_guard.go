@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -514,14 +515,30 @@ var clientCaptions = []string{
 	"Attached image(s) from tool result:",
 }
 
+// clientClockReading matches the three-line clock reading that DeepSeek
+// Harness's time-context plugin appends to a turn, usually as a user message
+// of its own:
+//
+//	Time sampled while preparing turn 2, step 1: 2026-11-06T13:32:05+08:00[Asia/Shanghai]
+//	Browser time zone for this request: Asia/Shanghai. Interpret otherwise-unqualified dates and times in this zone.
+//	Elapsed since the preceding model-visible message: 18m 24s.
+//
+// Every variable part is a number, a timestamp, a zone name or a duration, so
+// removing a match removes nothing a person could have written.
+var clientClockReading = regexp.MustCompile(`(?m)^Time sampled while preparing turn \d+, step \d+: ` +
+	`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})\[[A-Za-z0-9_+/-]{1,64}\]\n` +
+	`Browser time zone for this request: (?:[A-Za-z0-9_+/-]{1,64}\. Interpret otherwise-unqualified dates and times in this zone|` +
+	`(?:mixed \[[A-Za-z0-9_+/",-]{0,512}\]|unavailable)\. Ask the user to clarify otherwise-unqualified dates and times)\.\n` +
+	`Elapsed since the preceding (?:model-visible message|step context): (?:unavailable|(?:\d+d )?(?:\d+h )?(?:\d+m )?\d+s)\.$`)
+
 // humanMessageText joins the text blocks of one user message that a person
 // wrote, leaving out injected <system-reminder> blocks, including the ones
 // hooks write with attributes, such as <system-reminder data-role="hook">,
-// and client captions.
+// client captions, and client clock readings.
 func humanMessageText(texts []string) string {
 	var builder strings.Builder
 	for _, text := range texts {
-		trimmed := strings.TrimSpace(text)
+		trimmed := strings.TrimSpace(clientClockReading.ReplaceAllString(text, ""))
 		reminder := strings.HasPrefix(trimmed, "<system-reminder>") || strings.HasPrefix(trimmed, "<system-reminder ")
 		if trimmed == "" || (reminder && strings.HasSuffix(trimmed, "</system-reminder>")) || slices.Contains(clientCaptions, trimmed) {
 			continue
