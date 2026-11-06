@@ -200,10 +200,16 @@ export function PublicHeader(props: PublicHeaderProps) {
   return (
     <>
       <header className='pointer-events-none fixed inset-x-0 top-0 z-50'>
+        {/* CoreCode: on desktop the scrolled pill is as wide as its links
+            (w-fit), not a fixed 52rem; the console's links and version
+            outgrew 52rem, and every link shrank into an ellipsis. Widths
+            ease into fit-content where the browser can interpolate it. */}
         <div
           className={cn(
-            'pointer-events-auto mx-auto transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]',
-            scrolled ? 'max-w-[52rem] px-3 pt-3' : 'max-w-7xl px-4 pt-0 md:px-6'
+            'pointer-events-auto mx-auto w-full transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] [interpolate-size:allow-keywords]',
+            scrolled
+              ? 'max-w-[52rem] px-3 pt-3 lg:w-fit lg:max-w-7xl'
+              : 'max-w-7xl px-4 pt-0 md:px-6'
           )}
         >
           <nav
