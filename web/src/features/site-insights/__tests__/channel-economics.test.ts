@@ -42,17 +42,19 @@ const row: ChannelRow = {
 }
 
 describe('channelEconomics', () => {
-  it('takes the fee at the exchange rate, and commission and gifts at ¥1 a quota dollar', () => {
+  it('takes the fee at the exchange rate and gifts at ¥1 a quota dollar, leaving a paid channel’s commission out', () => {
     expect(channelEconomics(row, 7)).toEqual({
       fee: 3500,
-      net: 6000 - 3500 - 100 - 200,
-      roi: (6000 - 3500 - 100 - 200) / 3500,
+      commission: 0,
+      net: 6000 - 3500 - 200,
+      roi: (6000 - 3500 - 200) / 3500,
       cac: 350,
     })
   })
 
-  it('has no ROI or fee per payer without a fee', () => {
+  it('charges commission to a channel without a fee, which has no ROI or fee per payer', () => {
     const free = channelEconomics({ ...row, fee_usd: 0 }, 7)
+    expect(free.commission).toBe(100)
     expect(free.net).toBe(5700)
     expect(free.roi).toBeNull()
     expect(free.cac).toBeNull()

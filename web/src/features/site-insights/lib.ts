@@ -531,15 +531,19 @@ export function writePoolRefresh(seconds: number) {
 /**
  * A source's return over the range, in yuan. The fee is in US dollars and
  * converts at the site's rate; commission and given credit are quota
- * dollars, which customers buy at ¥1 each. ROI is net over the fee, and cac
- * the fee per account that paid for the first time in the range; both are
- * null without a fee.
+ * dollars, which customers buy at ¥1 each. A channel paid a fee keeps its
+ * affiliate account only to attribute sign-ups, so its commission is not a
+ * cost; a channel without a fee is paid by commission. ROI is net over the
+ * fee, and cac the fee per account that paid for the first time in the
+ * range; both are null without a fee.
  */
 export function channelEconomics(row: ChannelRow, rate: number) {
   const fee = row.fee_usd * rate
-  const net = row.revenue - fee - row.commission_usd - row.gift_consumption_usd
+  const commission = fee > 0 ? 0 : row.commission_usd
+  const net = row.revenue - fee - commission - row.gift_consumption_usd
   return {
     fee,
+    commission,
     net,
     roi: fee > 0 ? net / fee : null,
     cac: fee > 0 && row.new_payers > 0 ? fee / row.new_payers : null,

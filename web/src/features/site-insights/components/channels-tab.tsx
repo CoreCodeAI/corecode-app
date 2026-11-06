@@ -57,7 +57,8 @@ function useSegmentLabel() {
 
 /**
  * What each acquisition source brought in against what it cost: the
- * channel's fee, its commission, and the given credit its accounts spent.
+ * channel's fee or, without one, its commission, and the given credit its
+ * accounts spent.
  */
 export function ChannelsTab(props: { data: ChannelInsights | undefined }) {
   const { t } = useTranslation()
@@ -95,7 +96,7 @@ export function ChannelsTab(props: { data: ChannelInsights | undefined }) {
     good: 'text-emerald-600 dark:text-emerald-400',
   }
   const economicsHelp = t(
-    'Money is in yuan. Revenue is what the source’s accounts paid in the range, whenever they signed up. Cost is the channel fee over the range at the site’s exchange rate, the commission it earned, and the given credit its accounts spent (gift plans, administrators’ credits, and the unpaid share of each wallet), at list price. Net is revenue less cost; ROI is net over the fee.'
+    'Money is in yuan. Revenue is what the source’s accounts paid in the range, whenever they signed up. Cost is the channel fee over the range at the site’s exchange rate, and the given credit its accounts spent (gift plans, administrators’ credits, and the unpaid share of each wallet), at list price. A channel with a fee is not charged its commission, shown struck through: its affiliate account only attributes sign-ups. A channel without a fee is charged the commission it earned. Net is revenue less cost; ROI is net over the fee.'
   )
   const cohortHelp = t(
     'Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.'
@@ -184,8 +185,17 @@ export function ChannelsTab(props: { data: ChannelInsights | undefined }) {
               key: 'commission',
               label: t('Commission'),
               align: 'right',
-              render: (row) =>
-                row.commission_usd ? fmt.cny(row.commission_usd) : '-',
+              render: (row) => {
+                if (!row.commission_usd) return '-'
+                if (row.fee_usd > 0) {
+                  return (
+                    <span className='text-muted-foreground tabular-nums line-through'>
+                      {fmt.cny(row.commission_usd)}
+                    </span>
+                  )
+                }
+                return fmt.cny(row.commission_usd)
+              },
             },
             {
               key: 'gift',
