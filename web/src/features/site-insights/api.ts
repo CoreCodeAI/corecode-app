@@ -24,6 +24,8 @@ import type {
   ActivityInsights,
   BusinessInsights,
   CapacityInsights,
+  ChannelCost,
+  ChannelInsights,
   EnginePool,
   FinanceInsights,
   GrowthInsights,
@@ -45,6 +47,7 @@ export type InsightsView =
   | 'quality'
   | 'business'
   | 'pool'
+  | 'channels'
 
 export type InsightsByView = {
   capacity: CapacityInsights
@@ -55,6 +58,7 @@ export type InsightsByView = {
   quality: QualityInsights
   business: BusinessInsights
   pool: EnginePool
+  channels: ChannelInsights
 }
 
 /** The longest range, in days, each view's endpoint accepts. */
@@ -68,6 +72,7 @@ export const VIEW_MAX_DAYS: Record<InsightsView, number> = {
   business: 92,
   // The pool is live; it takes no range.
   pool: 1,
+  channels: 366,
 }
 
 export async function getInsights<V extends InsightsView>(
@@ -92,6 +97,17 @@ export async function getInsights<V extends InsightsView>(
     throw createServerError(res.data, 'Failed to load site insights')
   }
   return res.data.data
+}
+
+/** Replaces the fees paid to promotion channels with costs. */
+export async function saveChannelCosts(costs: ChannelCost[]) {
+  const res = await api.put<ApiResponse<null>>(
+    '/api/site-insights/channel-costs',
+    { costs }
+  )
+  if (!res.data.success) {
+    throw createServerError(res.data, 'Failed to save channel costs')
+  }
 }
 
 /** One provider's use on new-api and gpt-load, with a forecast. */

@@ -105,6 +105,7 @@ export function OverviewTab(props: {
     quality: t('Service quality'),
     finance: t('Funds'),
     growth: t('Growth'),
+    channels: t('Promotion channels'),
     activity: t('Activity & retention'),
     risk: t('Risk'),
   }

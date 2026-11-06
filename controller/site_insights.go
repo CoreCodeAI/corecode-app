@@ -302,6 +302,39 @@ func GetQualityInsights(c *gin.Context) {
 	})
 }
 
+// ChannelResponse adds the site's exchange rate to the channel view: revenue
+// is in yuan, fees in US dollars.
+type ChannelResponse struct {
+	*model.ChannelInsights
+	USDExchangeRate float64 `json:"usd_exchange_rate"`
+}
+
+func GetChannelInsights(c *gin.Context) {
+	serveInsights(c, model.InsightsMaxDays, func(r model.InsightsRange) (*ChannelResponse, error) {
+		insights, err := model.GetChannelInsights(r)
+		if err != nil {
+			return nil, err
+		}
+		return &ChannelResponse{ChannelInsights: insights, USDExchangeRate: operation_setting.USDExchangeRate}, nil
+	})
+}
+
+// SetChannelCosts replaces the fees paid to promotion channels.
+func SetChannelCosts(c *gin.Context) {
+	var request struct {
+		Costs []model.ChannelCost `json:"costs"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.SaveChannelCosts(request.Costs); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
 func GetBusinessInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxLogDays, model.GetBusinessInsights)
 }
