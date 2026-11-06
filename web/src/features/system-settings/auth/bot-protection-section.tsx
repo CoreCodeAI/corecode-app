@@ -84,13 +84,17 @@ export function BotProtectionSection({
       ([key, value]) =>
         value !== defaultValues[key as keyof BotProtectionFormValues]
     )
+    const turnstileEnableUpdate = updates.find(
+      ([key, value]) => key === 'TurnstileCheckEnabled' && value === true
+    )
+    const orderedUpdates = turnstileEnableUpdate
+      ? [
+          ...updates.filter(([key]) => key !== 'TurnstileCheckEnabled'),
+          turnstileEnableUpdate,
+        ]
+      : updates
 
-    // A switch turning on is saved after the fields it needs: the server
-    // refuses Turnstile until its site key is stored, and a refusal stops the
-    // remaining saves.
-    updates.sort(([, a], [, b]) => Number(a === true) - Number(b === true))
-
-    for (const [key, value] of updates) {
+    for (const [key, value] of orderedUpdates) {
       await updateOption.mutateAsync({ key, value: value ?? '' })
     }
   }
