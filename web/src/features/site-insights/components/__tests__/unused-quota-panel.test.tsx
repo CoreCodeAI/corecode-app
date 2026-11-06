@@ -19,8 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import type { EngineAccount } from '../../types'
-import { expiringAccounts } from '../unused-quota'
+import type { EngineAccount, EngineRunway } from '../../types'
+import { expiringAccounts, poolRunsShort } from '../unused-quota'
 import { UnusedQuotaPanel } from '../unused-quota-panel'
 
 const NOW = 1_800_000_000_000
@@ -131,6 +131,61 @@ describe('accounts whose weekly quota will expire unused', () => {
         accounts={[account({ seven_day_unused_usd: 0 })]}
         observedAt={NOW}
         total={{ usd: 0, counted: 11 }}
+      />
+    )
+    expect(container.textContent).toBe('')
+  })
+})
+
+// The runway fields the verdict reads; the rest of the shape is not needed here.
+function runway(overrides: Partial<EngineRunway>): EngineRunway {
+  return { week_load: 0.7, week_hours: null, ...overrides } as EngineRunway
+}
+
+describe('a pool that runs short uses what one account would leave', () => {
+  it('reads the same test as the capacity verdict', () => {
+    expect(poolRunsShort(undefined)).toBe(false)
+    expect(poolRunsShort(null)).toBe(false)
+    expect(poolRunsShort(runway({}))).toBe(false)
+    expect(poolRunsShort(runway({ week_load: 1 }))).toBe(true)
+    expect(poolRunsShort(runway({ week_hours: 84 }))).toBe(true)
+    // Tight is not short: 0.9 of the supply still leaves room.
+    expect(poolRunsShort(runway({ week_load: 0.9 }))).toBe(false)
+  })
+
+  it('lists the accounts while the pool keeps up', () => {
+    render(
+      <UnusedQuotaPanel
+        accounts={[account({ email_mask: 'j***@alphafox.xyz' })]}
+        observedAt={NOW}
+        total={{ usd: 683, counted: 11 }}
+        runway={runway({ week_load: 0.7 })}
+      />
+    )
+    expect(screen.getByText('j***@alphafox.xyz')).toBeTruthy()
+  })
+
+  it('says the quota will be used, and lists no account, when the pool runs short', () => {
+    render(
+      <UnusedQuotaPanel
+        accounts={[account({ email_mask: 'j***@alphafox.xyz' })]}
+        observedAt={NOW}
+        total={{ usd: 683, counted: 11 }}
+        runway={runway({ week_hours: 84 })}
+      />
+    )
+    expect(screen.queryByText('j***@alphafox.xyz')).toBeNull()
+    expect(screen.getByText(/most likely be used/)).toBeTruthy()
+    expect(screen.getByText('Quota that will expire unused')).toBeTruthy()
+  })
+
+  it('stays out of the way when no account qualifies, short or not', () => {
+    const { container } = render(
+      <UnusedQuotaPanel
+        accounts={[account({ seven_day_unused_usd: 0 })]}
+        observedAt={NOW}
+        total={{ usd: 0, counted: 11 }}
+        runway={runway({ week_hours: 84 })}
       />
     )
     expect(container.textContent).toBe('')

@@ -16,7 +16,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { EngineAccount } from '../types'
+import type { EngineAccount, EngineRunway } from '../types'
+
+/**
+ * Whether the engine's runway projects the pool running short within its
+ * horizon: demand at or above what the weekly resets bring back, or a gap in
+ * the next seven days. CapacityVerdict reads the same test for "not enough
+ * capacity", so the two never disagree.
+ */
+export function poolRunsShort(runway: EngineRunway | null | undefined) {
+  return runway != null && (runway.week_load >= 1 || runway.week_hours != null)
+}
 
 /**
  * Waste below the larger of this floor and a share of the account's weekly

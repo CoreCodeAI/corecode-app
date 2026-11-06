@@ -52,6 +52,7 @@ import {
   type Tone,
 } from './shared'
 import { SubscriptionRenewalsPanel } from './subscription-renewals-panel'
+import { poolRunsShort } from './unused-quota'
 import { UnusedQuotaPanel } from './unused-quota-panel'
 
 function statusVariant(account: EngineAccount) {
@@ -240,13 +241,22 @@ export function PoolTab(props: {
     // Only an engine with the projection sends it; the tile is skipped without it.
     if (pool?.week_unused) {
       const unused = pool.week_unused.usd
+      // A pool projected to run short will use it: the figure holds each
+      // account at its own recent rate, and the others hit their lines first.
+      const short = poolRunsShort(pool.runway)
       summary.push({
         label: t('Unused at reset'),
         value: `≈ ${usd(unused)}`,
         help: t(
           'Weekly quota the pool will not spend before the resets, at the last 24 hours’ spend rates.'
         ),
-        tone: week && unused >= week.capacity_usd * 0.05 ? 'warning' : 'default',
+        hint: short
+          ? t('Most of this will be used: the pool is projected to run short.')
+          : undefined,
+        tone:
+          !short && week && unused >= week.capacity_usd * 0.05
+            ? 'warning'
+            : 'default',
       })
     }
   }
@@ -279,6 +289,7 @@ export function PoolTab(props: {
           accounts={accounts}
           observedAt={pool?.observed_at_ms ?? 0}
           total={pool?.week_unused}
+          runway={pool?.runway}
         />
       )}
 

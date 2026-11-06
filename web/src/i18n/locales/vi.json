@@ -7199,6 +7199,8 @@
     "About {{amount}} of weekly quota resets unused if each account keeps its last 24 hours’ spend rate.": "Nếu mỗi tài khoản giữ tốc độ chi tiêu của 24 giờ gần nhất, khoảng {{amount}} hạn mức tuần sẽ được đặt lại mà chưa dùng.",
     "Projected from the pool estimate: each account’s weekly quota left, minus its last 24 hours’ average spend over the hours until its reset. Accounts whose unused quota is under {{floor}} or {{share}} of their weekly capacity are left out as rounding noise.": "Dự báo từ ước tính của pool: hạn mức tuần còn lại của mỗi tài khoản, trừ đi mức chi tiêu trung bình 24 giờ gần nhất nhân với số giờ còn lại đến lúc đặt lại. Tài khoản có phần chưa dùng dưới {{floor}} hoặc dưới {{share}} dung lượng tuần được loại ra như sai số làm tròn.",
     "Unused at reset": "Chưa dùng khi đặt lại",
+    "The pool is projected to run short, so the {{amount}} the accounts would leave at their own recent rates will most likely be used: accounts that reach their budget lines first send their traffic to the rest.": "Pool dự kiến sẽ thiếu, nên {{amount}} mà các tài khoản sẽ để lại theo tốc độ gần đây rất có thể sẽ được dùng hết: tài khoản chạm ngưỡng ngân sách trước sẽ chuyển lưu lượng sang các tài khoản còn lại.",
+    "Most of this will be used: the pool is projected to run short.": "Phần lớn sẽ được dùng: pool dự kiến sẽ thiếu.",
     "Resets in": "Đặt lại sau",
     "Spending / needed": "Chi tiêu / cần",
     "{{spend}}/h of {{needed}}/h": "{{spend}}/h trên {{needed}}/h",

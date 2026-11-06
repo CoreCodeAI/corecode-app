@@ -7199,6 +7199,8 @@
     "About {{amount}} of weekly quota resets unused if each account keeps its last 24 hours’ spend rate.": "각 계정이 최근 24시간의 소비 속도를 유지하면 약 {{amount}}의 주간 쿼터가 사용되지 않은 채 초기화됩니다.",
     "Projected from the pool estimate: each account’s weekly quota left, minus its last 24 hours’ average spend over the hours until its reset. Accounts whose unused quota is under {{floor}} or {{share}} of their weekly capacity are left out as rounding noise.": "풀 추정에서 계산한 예측: 각 계정의 남은 주간 쿼터에서, 최근 24시간 평균 소비액이 초기화까지 남은 시간 동안 쌓이는 만큼을 뺀 값입니다. 미사용분이 {{floor}} 미만이거나 주간 용량의 {{share}} 미만인 계정은 반올림 오차로 보고 제외합니다.",
     "Unused at reset": "초기화 시 미사용분",
+    "The pool is projected to run short, so the {{amount}} the accounts would leave at their own recent rates will most likely be used: accounts that reach their budget lines first send their traffic to the rest.": "풀이 부족해질 것으로 예상되므로, 각 계정이 최근 속도를 유지할 때 남는 {{amount}}는 대부분 사용될 가능성이 큽니다. 예산선에 먼저 도달한 계정의 트래픽이 나머지 계정으로 넘어가기 때문입니다.",
+    "Most of this will be used: the pool is projected to run short.": "이 중 대부분은 사용될 것입니다. 풀이 부족해질 것으로 예상됩니다.",
     "Resets in": "초기화까지",
     "Spending / needed": "소비 / 필요",
     "{{spend}}/h of {{needed}}/h": "{{spend}}/h (필요 {{needed}}/h)",

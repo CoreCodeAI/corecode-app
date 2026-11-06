@@ -39,6 +39,7 @@ import {
   type BarPoint,
   type Tone,
 } from './shared'
+import { poolRunsShort } from './unused-quota'
 
 /**
  * Whether the Claude pool keeps up, in one sentence, and how many Team
@@ -81,7 +82,7 @@ export function CapacityVerdict(props: {
       : null
   const band = addition ? range(addition) : null
   const forecast = props.usage?.forecast
-  const short = runway.week_load >= 1 || runway.week_hours != null
+  const short = poolRunsShort(runway)
   const tight =
     !short &&
     (runway.week_load >= 0.85 ||
