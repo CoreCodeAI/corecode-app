@@ -56,6 +56,9 @@ func PrepareRequestBilling(c *gin.Context, info *relaycommon.RelayInfo) *types.N
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeCountTokenFailed)
 	}
+	if constant.CountToken {
+		tokens += claudeThreadKeptTokens(c, info)
+	}
 	info.SetEstimatePromptTokens(tokens)
 
 	defer service.TimePreChannel(c, service.PreChannelBillingReserve)()
@@ -68,6 +71,26 @@ func PrepareRequestBilling(c *gin.Context, info *relaycommon.RelayInfo) *types.N
 		return nil
 	}
 	return service.PreConsumeBilling(c, priceData.QuotaToPreConsume, info)
+}
+
+// claudeThreadKeptTokens is the context a Claude thread continuation carries
+// upstream beyond its own messages: it sends only the new turn, and Anthropic
+// bills the conversation it keeps. 0 for any other request, or when the
+// previous response's context is not known.
+func claudeThreadKeptTokens(c *gin.Context, info *relaycommon.RelayInfo) int {
+	request, ok := info.Request.(*dto.ClaudeRequest)
+	if !ok {
+		return 0
+	}
+	previous := service.ClaudeThreadContinues(request.Thread)
+	if previous == "" {
+		return 0
+	}
+	kept, found := service.ClaudeThreadContextTokens(info.UserId, previous)
+	if !found {
+		logger.LogInfo(c, common.LogText("claude thread continues %s, whose context is not known; estimating the new messages only", previous))
+	}
+	return kept
 }
 
 // RefundFailedRequestBilling applies the common final-failure policy after all

@@ -363,7 +363,19 @@ func ClaudeStreamHandler(c *gin.Context, resp *http.Response, info *relaycommon.
 	}
 
 	HandleStreamFinalResponse(c, info, claudeInfo)
+	rememberClaudeThread(info, claudeInfo.ResponseId, claudeInfo.Usage)
 	return claudeInfo.Usage, nil
+}
+
+// rememberClaudeThread keeps the context size of a response to a threaded
+// request, which the next continuation is estimated with.
+func rememberClaudeThread(info *relaycommon.RelayInfo, messageID string, usage *dto.Usage) {
+	request, ok := info.Request.(*dto.ClaudeRequest)
+	if !ok || len(request.Thread) == 0 || usage == nil {
+		return
+	}
+	kept := buildOpenAIStyleUsageFromClaudeUsage(usage)
+	service.RememberClaudeThreadContext(info.UserId, messageID, kept.PromptTokens+kept.CompletionTokens)
 }
 
 func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claudeInfo *ClaudeResponseInfo, httpResp *http.Response, data []byte) *types.NewAPIError {
@@ -443,6 +455,7 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 	}
 	if claudeResponse.Usage != nil {
 		recordClaudeServerToolUse(info, claudeResponse.Usage.ServerToolUse)
+		rememberClaudeThread(info, claudeResponse.Id, claudeInfo.Usage)
 	}
 
 	service.IOCopyBytesGracefully(c, httpResp, responseData)

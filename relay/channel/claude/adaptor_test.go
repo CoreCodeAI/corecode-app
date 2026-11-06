@@ -222,6 +222,44 @@ func TestConvertClaudeRequestForwardsThinkingBlockBinding(t *testing.T) {
 	}
 }
 
+func TestConvertClaudeRequestForwardsTheMessageThread(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	// What Claude Code 2.1.318 sends with CLAUDE_CODE_TETHER_LIVE on: the first
+	// turn creates the thread, the next sends only the tool result.
+	for _, thread := range []string{
+		`{"type":"create"}`,
+		`{"type":"continue","previous_message_id":"msg_01AbC","future_field":1}`,
+	} {
+		t.Run(thread, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			body := `{"model":"claude-opus-5-5","max_tokens":1024,"stream":true,"thread":` + thread +
+				`,"messages":[{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01X","content":"hi"}]}]}`
+			var original dto.ClaudeRequest
+			require.NoError(t, common.UnmarshalJsonStr(body, &original))
+			info := &relaycommon.RelayInfo{
+				OriginModelName: "claude-opus-5-5",
+				Request:         &original,
+				ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: "claude-opus-5-5"},
+			}
+			outbound, err := common.DeepCopy(&original)
+			require.NoError(t, err)
+			require.NoError(t, helper.ModelMappedHelper(c, info, outbound))
+
+			out, err := (&Adaptor{}).ConvertClaudeRequest(c, info, outbound)
+			require.NoError(t, err)
+			encoded, err := common.Marshal(out)
+			require.NoError(t, err)
+			encoded, err = relaycommon.RemoveDisabledFields(encoded, dto.ChannelOtherSettings{}, false)
+			require.NoError(t, err)
+			var upstream struct {
+				Thread json.RawMessage `json:"thread"`
+			}
+			require.NoError(t, common.Unmarshal(encoded, &upstream))
+			assert.JSONEq(t, thread, string(upstream.Thread))
+		})
+	}
+}
+
 func TestSetupRequestHeaderForwardsEveryAnthropicBetaValue(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
