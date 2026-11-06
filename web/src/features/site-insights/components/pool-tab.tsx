@@ -52,6 +52,7 @@ import {
   type Tone,
 } from './shared'
 import { SubscriptionRenewalsPanel } from './subscription-renewals-panel'
+import { UnusedQuotaPanel } from './unused-quota-panel'
 
 function statusVariant(account: EngineAccount) {
   if (account.eligible) return 'outline'
@@ -236,6 +237,18 @@ export function PoolTab(props: {
           : undefined,
       }
     )
+    // Only an engine with the projection sends it; the tile is skipped without it.
+    if (pool?.week_unused) {
+      const unused = pool.week_unused.usd
+      summary.push({
+        label: t('Unused at reset'),
+        value: `≈ ${usd(unused)}`,
+        help: t(
+          'Weekly quota the pool will not spend before the resets, at the last 24 hours’ spend rates.'
+        ),
+        tone: week && unused >= week.capacity_usd * 0.05 ? 'warning' : 'default',
+      })
+    }
   }
 
   return (
@@ -258,6 +271,14 @@ export function PoolTab(props: {
           runway={pool.runway}
           five={pool.five_hour_estimate}
           usage={props.usage}
+        />
+      )}
+
+      {claude && (
+        <UnusedQuotaPanel
+          accounts={accounts}
+          observedAt={pool?.observed_at_ms ?? 0}
+          total={pool?.week_unused}
         />
       )}
 

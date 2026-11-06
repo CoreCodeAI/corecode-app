@@ -72,6 +72,10 @@ export type EngineAccount = {
   five_hour_remaining_usd: number | null
   seven_day_remaining_usd: number | null
   burn_usd_per_hour: number | null
+  /** What a full week of the account serves at official prices, as the engine calibrated it; absent before the server's release. */
+  seven_day_capacity_usd?: number | null
+  /** Weekly quota projected unused at the reset if the last 24 hours' spend rate holds; absent or null without a projection. */
+  seven_day_unused_usd?: number | null
   /** The provider organization; seats of one team share it. Absent before the server's release. */
   organization?: string
   /** Keys the renewal date an operator enters for the organization. */
@@ -129,6 +133,8 @@ export type EnginePool = {
   five_hour_estimate: EngineHorizon | null
   week_estimate: EngineHorizon | null
   refills: { credential_id: number; at_ms: number; adds_usd: number }[]
+  /** Weekly quota the counted accounts will not spend before their resets; absent or null before the engine's projection. */
+  week_unused?: { usd: number; counted: number } | null
   /** Absent before the server's release, null without an estimate. */
   runway?: EngineRunway | null
   estimate_error?: string

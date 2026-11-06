@@ -68,6 +68,10 @@ type EngineAccount struct {
 	FiveHourRemainingUSD *float64 `json:"five_hour_remaining_usd"`
 	SevenDayRemainingUSD *float64 `json:"seven_day_remaining_usd"`
 	BurnUSDPerHour       *float64 `json:"burn_usd_per_hour"`
+	// SevenDayUnusedUSD is the weekly quota the account is projected to leave
+	// at its reset if its last 24 hours' spend rate holds; nil when the
+	// engine has no projection for it.
+	SevenDayUnusedUSD *float64 `json:"seven_day_unused_usd"`
 	// SevenDayCapacityUSD is what a full week of the account serves at
 	// official prices, as the engine calibrated it from the account's own
 	// requests; Source is measured, recent, peer or unknown.
@@ -148,10 +152,20 @@ type EnginePool struct {
 	FiveHour       *EngineHorizon  `json:"five_hour_estimate"`
 	Week           *EngineHorizon  `json:"week_estimate"`
 	Refills        []EngineRefill  `json:"refills"`
+	// WeekUnused totals the accounts' projected unused weekly quota; nil
+	// from an engine before the projection.
+	WeekUnused *EngineUnused `json:"week_unused"`
 	// Runway is how long the Claude accounts last at their recent spend; nil
 	// without an estimate or without Claude accounts.
 	Runway        *EngineRunway `json:"runway"`
 	EstimateError string        `json:"estimate_error,omitempty"`
+}
+
+// EngineUnused is the weekly quota, in USD, that the counted accounts will not
+// spend before their resets if their recent spend rate holds.
+type EngineUnused struct {
+	USD     float64 `json:"usd"`
+	Counted int     `json:"counted"`
 }
 
 type engineEnvelope[T any] struct {
@@ -235,7 +249,9 @@ type engineEstimate struct {
 	FiveHour engineEstimateHorizon `json:"five_hour"`
 	Week     engineEstimateHorizon `json:"week"`
 	Refills  []EngineRefill        `json:"refills"`
-	Accounts []struct {
+	// WeekUnused is absent from an engine before the projection.
+	WeekUnused *EngineUnused `json:"week_unused"`
+	Accounts   []struct {
 		CredentialID int `json:"credential_id"`
 		FiveHour     struct {
 			RemainingUSD *float64 `json:"remaining_usd"`
@@ -247,6 +263,7 @@ type engineEstimate struct {
 			Source       string   `json:"source"`
 		} `json:"seven_day"`
 		BurnUSDPerHour *float64 `json:"burn_usd_per_hour"`
+		WeekUnusedUSD  *float64 `json:"week_unused_usd"`
 	} `json:"accounts"`
 }
 
@@ -534,6 +551,7 @@ func readEnginePool(base, key string) EnginePool {
 	if estimate.Refills != nil {
 		pool.Refills = estimate.Refills
 	}
+	pool.WeekUnused = estimate.WeekUnused
 	byID := make(map[int]int, len(pool.Accounts))
 	for i, account := range pool.Accounts {
 		byID[account.CredentialID] = i
@@ -543,6 +561,7 @@ func readEnginePool(base, key string) EnginePool {
 			pool.Accounts[i].FiveHourRemainingUSD = row.FiveHour.RemainingUSD
 			pool.Accounts[i].SevenDayRemainingUSD = row.SevenDay.RemainingUSD
 			pool.Accounts[i].BurnUSDPerHour = row.BurnUSDPerHour
+			pool.Accounts[i].SevenDayUnusedUSD = row.WeekUnusedUSD
 			pool.Accounts[i].SevenDayCapacityUSD = row.SevenDay.CapacityUSD
 			pool.Accounts[i].SevenDayCapacitySource = row.SevenDay.Source
 			pool.Accounts[i].FiveHourCapacityUSD = row.FiveHour.CapacityUSD
