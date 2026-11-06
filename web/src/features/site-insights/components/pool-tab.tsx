@@ -699,7 +699,7 @@ function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
       title={t('Claude pool supply')}
       description={[supply, week, trend].filter(Boolean).join(' ')}
       help={t(
-        'Demand is every Claude account’s spend over the last 24 hours, per hour, moved through the day by the last week’s hourly use. Supply is each counted account’s weekly capacity up to its budget line, refilled at its weekly reset; quota left at a reset is lost. Turned-away requests are not in the demand.'
+        'Demand is every Claude account’s spend per hour at its current level, read from the last four days with each hour counting half as much as the one 12 hours later, moved through the day by the last week’s hourly use. Supply is each counted account’s weekly capacity up to its budget line, refilled at its weekly reset; quota left at a reset is lost. Turned-away requests are not in the demand.'
       )}
     >
       <MetricGrid
@@ -795,7 +795,7 @@ function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
           {
             label: t('Demand per hour'),
             help: t(
-              'The last 24 hours’ spend per hour, used for the projection. Week to date is use since each account’s weekly reset; close figures mean the last day was typical.'
+              'Spend per hour at its current level, used for the projection: the last four days, each hour counting half as much as the one 12 hours later. Week to date is use since each account’s weekly reset; close figures mean demand was steady.'
             ),
             value: fmt.usd(burn),
             hint: runway.trend

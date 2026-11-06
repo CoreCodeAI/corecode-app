@@ -22,6 +22,10 @@ const (
 	demandMinHours = 3 * 24
 	// demandMinOrigins is the least past forecasts a band is drawn from.
 	demandMinOrigins = 24
+	// demandLevelHalfLife and demandLevelSpan weigh the hours the level is
+	// read from: each hour counts half as much as the one 12 hours later.
+	demandLevelHalfLife = 12
+	demandLevelSpan     = 4 * 24
 	// demandMaxGrowth bounds the daily growth the trend scenario carries on.
 	demandMaxGrowth = 0.15
 	// demandGrowthDamping is the share of a day's growth the next day keeps,
@@ -32,8 +36,9 @@ const (
 
 // demandProfile is how the pool's demand moves around its 24-hour average.
 // The engine's spend gives the level; the console's own hourly use of the
-// same models gives the shape, which is all it is used for, since it is
-// billed at the customer's price, not at the upstream cost.
+// same models gives the shape and how far the level has moved from the last
+// 24 hours' mean, since it is billed at the customer's price, not at the
+// upstream cost, and is used only for shares and multiples.
 type demandProfile struct {
 	// shape is demand in each UTC hour of the day over the daily mean: 24
 	// values averaging 1. All 1 without enough history.
@@ -43,6 +48,10 @@ type demandProfile struct {
 	// growth is the daily log growth of use over the last week, bounded by
 	// demandMaxGrowth; 0 without a week of history.
 	growth float64
+	// recent is the level now over the last 24 hours' mean use: above 1
+	// when the latest hours run above what the shape expects of them. 0
+	// reads as 1.
+	recent float64
 	// low and high are the 10th and 90th percentiles of actual over trend
 	// forecast use across demandBandHorizon, scored on past hours; both 0
 	// with fewer than demandMinOrigins forecasts. A trend forecast grows the
@@ -98,6 +107,9 @@ func buildDemandProfile(series []float64, firstHour int64) demandProfile {
 	}
 	profile.shape, profile.hours = shape, hours
 	profile.growth = demandGrowth(series)
+	if day := mean(series[len(series)-24:]); day > 0 {
+		profile.recent = demandLevel(series, len(series), shape, utcHour) / day
+	}
 
 	var ratios []float64
 	// Only the last week's forecasts: older ones score a younger pool.
@@ -107,7 +119,7 @@ func buildDemandProfile(series []float64, firstHour int64) demandProfile {
 		if pastHours == 0 {
 			continue
 		}
-		level := mean(series[origin-24 : origin])
+		level := demandLevel(series, origin, past, utcHour)
 		// Scored against the trend forecast, as the pool is sized by it: a
 		// flat one fell a quarter short over three days while use grew.
 		then := demandProfile{growth: demandGrowth(series[:origin])}
@@ -126,6 +138,34 @@ func buildDemandProfile(series []float64, firstHour int64) demandProfile {
 		profile.low, profile.high, profile.origins = quantile(0.1), quantile(0.9), len(ratios)
 	}
 	return profile
+}
+
+// demandLevel is the use an average hour of the day holds at end: the last
+// demandLevelSpan hours, weighted by demandLevelHalfLife, over the shape's
+// multiples for the same hours. Backtested on the Claude models from
+// 2026-10-26 to 11-06, it was closer than the last 24 hours' mean at every
+// horizon: a mean absolute log error of 0.18 against 0.21 over 24 hours,
+// 0.14 against 0.16 over 72, 0.08 against 0.11 over a week. Reading only
+// the last 6 or 12 hours did worse, at 0.29 to 0.37 over 24 hours.
+func demandLevel(series []float64, end int, shape [24]float64, utcHour func(int) int) float64 {
+	used, expected := 0.0, 0.0
+	for k := max(0, end-demandLevelSpan); k < end; k++ {
+		weight := math.Exp2(-float64(end-1-k) / demandLevelHalfLife)
+		used += weight * series[k]
+		expected += weight * shape[utcHour(k)]
+	}
+	if expected <= 0 {
+		return mean(series[max(0, end-24):end])
+	}
+	return used / expected
+}
+
+// levelScale is the multiple of the last 24 hours' mean the level stands at.
+func (profile demandProfile) levelScale() float64 {
+	if profile.recent <= 0 {
+		return 1
+	}
+	return profile.recent
 }
 
 // demandShape averages each hour's use over the mean of the 24 hours around

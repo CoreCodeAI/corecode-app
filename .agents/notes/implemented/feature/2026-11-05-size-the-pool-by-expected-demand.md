@@ -2,6 +2,8 @@
 
 Status: implemented
 
+The level was changed on 2026-11-06 by `2026-11-06-read-the-demand-level-from-four-days.md`: forecasts start from four days weighted to the latest hours, not from the last 24 hours alone.
+
 ## Problem
 
 The capacity card's headline count kept the weekly load at 100% at today's demand: the last 24 hours' spend, held flat. Backtested on the Claude models' hourly `quota_data` from 2026-10-17 to 11-05, a flat forecast from the last 24 hours fell short of the use that followed. Over the last week of forecast origins, actual over forecast had a median of 1.24 over 72 hours, and over every origin with seven days ahead, 1.61. The same level grown by the damped trend landed at 1.03 and 1.10. The card showed the trend only as a side figure at the end of the week, and the band of past errors was scored against the flat forecast, so it measured mostly the missing growth.

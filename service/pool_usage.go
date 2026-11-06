@@ -101,13 +101,16 @@ type PoolUsageHour struct {
 	EngineUSD float64 `json:"engine_usd"`
 }
 
-// PoolForecast projects the provider's demand: the last 24 hours' use as
-// the level, moved through the day by the shape of the last week's hourly
-// use, as the Claude runway does. The USD figures take gpt-load's level,
-// the Quota figures new-api's.
+// PoolForecast projects the provider's demand as the Claude runway does: the
+// last 24 hours' use moved to the level the latest hours hold, through the
+// day by the shape of the last week's hourly use, growing by the trend. The
+// USD figures take gpt-load's level, the Quota figures new-api's.
 type PoolForecast struct {
-	Next5hUSD       float64 `json:"next_5h_usd"`
-	Next24hUSD      float64 `json:"next_24h_usd"`
+	Next5hUSD  float64 `json:"next_5h_usd"`
+	Next24hUSD float64 `json:"next_24h_usd"`
+	// Next24hTrendUSD equals Next24hUSD, which carries the trend since
+	// 2026-11-06: backtested over 24 hours, the use that followed ran a
+	// median 8% above the flat forecast and 2% above the trend.
 	Next24hTrendUSD float64 `json:"next_24h_trend_usd"`
 	// Next24hLowUSD and Next24hHighUSD scale the trend forecast to the 10th
 	// and 90th percentiles of how past trend forecasts compared with the
@@ -201,13 +204,13 @@ func readPoolUsage(provider string, now time.Time) (PoolUsage, error) {
 	day := usage.Windows[slices.Index(PoolUsageWindowHours, 24)]
 	profile := vendorDemandProfile(provider, now)
 	forecast := PoolForecast{ProfileHours: profile.hours, GrowthPerDay: profile.growthPerDay(), BandForecasts: profile.origins}
-	next := func(level float64, hours int64, growing bool) float64 {
-		return profile.over(level, nowMS, nowMS+hours*time.Hour.Milliseconds(), growing)
+	next := func(level float64, hours int64) float64 {
+		return profile.over(level*profile.levelScale(), nowMS, nowMS+hours*time.Hour.Milliseconds(), profile.growth != 0)
 	}
 	usdLevel, quotaLevel := day.EngineUSD/24, day.Quota/24
-	forecast.Next5hUSD, forecast.Next24hUSD = next(usdLevel, 5, false), next(usdLevel, 24, false)
-	forecast.Next24hTrendUSD = next(usdLevel, 24, profile.growth != 0)
-	forecast.Next5hQuota, forecast.Next24hQuota = next(quotaLevel, 5, false), next(quotaLevel, 24, false)
+	forecast.Next5hUSD, forecast.Next24hUSD = next(usdLevel, 5), next(usdLevel, 24)
+	forecast.Next24hTrendUSD = forecast.Next24hUSD
+	forecast.Next5hQuota, forecast.Next24hQuota = next(quotaLevel, 5), next(quotaLevel, 24)
 	if profile.origins > 0 {
 		// The band is scored against the trend forecast, so it scales that.
 		low, high := forecast.Next24hTrendUSD*min(profile.low, 1), forecast.Next24hTrendUSD*max(profile.high, 1)

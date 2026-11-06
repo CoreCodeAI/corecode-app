@@ -190,7 +190,7 @@ export function CapacityVerdict(props: {
       title={t('Is capacity enough?')}
       description={[lead, advice].join(' ')}
       help={t(
-        'Demand and the forecasts are gpt-load spend at official prices, the unit the pool’s quota is in. Expected demand is the last 24 hours’ spend grown by the last week’s daily growth, damped, and averaged over the next week; the range is the 10th to 90th percentile of how past forecasts made that way compared with the use that followed. An added account is sized by the median measured account of its plan in the pool, Team Tier 1 first and Team Standard beside it, up to its group’s 7-day budget line, and starts a full week now. Keeping up means a weekly load of 100% or less; the 7-day figure also covers the quota running out before resets, as demand follows the trend.'
+        'Demand and the forecasts are gpt-load spend at official prices, the unit the pool’s quota is in. Expected demand is the current level of spend, read from the last four days with each hour counting half as much as the one 12 hours later, grown by the last week’s daily growth, damped, and averaged over the next week; the range is the 10th to 90th percentile of how past forecasts made that way compared with the use that followed. An added account is sized by the median measured account of its plan in the pool, Team Tier 1 first and Team Standard beside it, up to its group’s 7-day budget line, and starts a full week now. Keeping up means a weekly load of 100% or less; the 7-day figure also covers the quota running out before resets, as demand follows the trend.'
       )}
     >
       <MetricGrid
@@ -264,7 +264,7 @@ export function CapacityVerdict(props: {
           {
             label: t('Next 24 hours · gpt-load'),
             help: t(
-              'Forecast gpt-load spend over the next 24 hours: the last 24 hours’ spend moved through the day by the last week’s hourly use. The range spans the 10th to 90th percentile of how past forecasts compared with the use that followed.'
+              'Forecast gpt-load spend over the next 24 hours: the current level of spend moved through the day by the last week’s hourly use and grown by the trend. The range spans the 10th to 90th percentile of how past forecasts compared with the use that followed.'
             ),
             value:
               forecast == null
