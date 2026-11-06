@@ -7199,6 +7199,8 @@
     "About {{amount}} of weekly quota resets unused if each account keeps its last 24 hours’ spend rate.": "Если каждый аккаунт сохранит темп расхода за последние 24 часа, около {{amount}} недельной квоты сбросится неиспользованным.",
     "Projected from the pool estimate: each account’s weekly quota left, minus its last 24 hours’ average spend over the hours until its reset. Accounts whose unused quota is under {{floor}} or {{share}} of their weekly capacity are left out as rounding noise.": "Прогноз по оценке пула: недельная квота, оставшаяся у каждого аккаунта, за вычетом его среднего расхода за последние 24 часа на оставшиеся до сброса часы. Аккаунты, у которых неиспользованная часть меньше {{floor}} или {{share}} недельной ёмкости, не показываются как погрешность округления.",
     "Unused at reset": "Не использовано к сбросу",
+    "The pool is projected to run short, so the {{amount}} the accounts would leave at their own recent rates will most likely be used: accounts that reach their budget lines first send their traffic to the rest.": "Ожидается, что пула не хватит, поэтому {{amount}}, которые остались бы у аккаунтов при их недавнем темпе, скорее всего будут израсходованы: аккаунты, первыми достигшие своих границ бюджета, передают трафик остальным.",
+    "Most of this will be used: the pool is projected to run short.": "Большая часть будет израсходована: ожидается, что пула не хватит.",
     "Resets in": "До сброса",
     "Spending / needed": "Расход / нужно",
     "{{spend}}/h of {{needed}}/h": "{{spend}}/ч из {{needed}}/ч",

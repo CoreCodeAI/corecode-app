@@ -7199,6 +7199,8 @@
     "About {{amount}} of weekly quota resets unused if each account keeps its last 24 hours’ spend rate.": "About {{amount}} of weekly quota resets unused if each account keeps its last 24 hours’ spend rate.",
     "Projected from the pool estimate: each account’s weekly quota left, minus its last 24 hours’ average spend over the hours until its reset. Accounts whose unused quota is under {{floor}} or {{share}} of their weekly capacity are left out as rounding noise.": "Projected from the pool estimate: each account’s weekly quota left, minus its last 24 hours’ average spend over the hours until its reset. Accounts whose unused quota is under {{floor}} or {{share}} of their weekly capacity are left out as rounding noise.",
     "Unused at reset": "Unused at reset",
+    "The pool is projected to run short, so the {{amount}} the accounts would leave at their own recent rates will most likely be used: accounts that reach their budget lines first send their traffic to the rest.": "The pool is projected to run short, so the {{amount}} the accounts would leave at their own recent rates will most likely be used: accounts that reach their budget lines first send their traffic to the rest.",
+    "Most of this will be used: the pool is projected to run short.": "Most of this will be used: the pool is projected to run short.",
     "Resets in": "Resets in",
     "Spending / needed": "Spending / needed",
     "{{spend}}/h of {{needed}}/h": "{{spend}}/h of {{needed}}/h",

@@ -7199,6 +7199,8 @@
     "About {{amount}} of weekly quota resets unused if each account keeps its last 24 hours’ spend rate.": "各アカウントが過去 24 時間の消費ペースを維持すると、約 {{amount}} の週間クォータが未使用のままリセットされます。",
     "Projected from the pool estimate: each account’s weekly quota left, minus its last 24 hours’ average spend over the hours until its reset. Accounts whose unused quota is under {{floor}} or {{share}} of their weekly capacity are left out as rounding noise.": "プール推定からの予測：各アカウントの週間クォータ残量から、過去 24 時間の平均消費額がリセットまでの時間で積み上がる分を引いた値です。未使用分が {{floor}} 未満、または週間容量の {{share}} 未満のアカウントは丸め誤差として除外します。",
     "Unused at reset": "リセット時の未使用分",
+    "The pool is projected to run short, so the {{amount}} the accounts would leave at their own recent rates will most likely be used: accounts that reach their budget lines first send their traffic to the rest.": "プールは不足する見込みのため、各アカウントが直近のペースのままだと残る {{amount}} は、おそらく使われます。予算ラインに先に達したアカウントのトラフィックが、残りのアカウントに回るためです。",
+    "Most of this will be used: the pool is projected to run short.": "この大半は使われます。プールは不足する見込みです。",
     "Resets in": "リセットまで",
     "Spending / needed": "消費 / 必要",
     "{{spend}}/h of {{needed}}/h": "{{spend}}/h（必要 {{needed}}/h）",

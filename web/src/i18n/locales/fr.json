@@ -7199,6 +7199,8 @@
     "About {{amount}} of weekly quota resets unused if each account keeps its last 24 hours’ spend rate.": "Si chaque compte garde son rythme de dépense des dernières 24 heures, environ {{amount}} de quota hebdomadaire sera réinitialisé sans avoir servi.",
     "Projected from the pool estimate: each account’s weekly quota left, minus its last 24 hours’ average spend over the hours until its reset. Accounts whose unused quota is under {{floor}} or {{share}} of their weekly capacity are left out as rounding noise.": "Projection issue de l’estimation du pool : le quota hebdomadaire restant de chaque compte, moins sa dépense moyenne des dernières 24 heures sur les heures restantes avant sa réinitialisation. Les comptes dont la part inutilisée est sous {{floor}} ou sous {{share}} de leur capacité hebdomadaire sont écartés comme bruit d’arrondi.",
     "Unused at reset": "Inutilisé à la réinitialisation",
+    "The pool is projected to run short, so the {{amount}} the accounts would leave at their own recent rates will most likely be used: accounts that reach their budget lines first send their traffic to the rest.": "Le pool devrait manquer de capacité : les {{amount}} que les comptes laisseraient à leur rythme récent seront très probablement utilisés, car les comptes qui atteignent leur seuil de budget en premier envoient leur trafic aux autres.",
+    "Most of this will be used: the pool is projected to run short.": "Une grande partie sera utilisée : le pool devrait manquer de capacité.",
     "Resets in": "Réinitialisation dans",
     "Spending / needed": "Dépense / nécessaire",
     "{{spend}}/h of {{needed}}/h": "{{spend}}/h sur {{needed}}/h",

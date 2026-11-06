@@ -7199,6 +7199,8 @@
     "About {{amount}} of weekly quota resets unused if each account keeps its last 24 hours’ spend rate.": "若各帳號維持近 24 小時的消耗速度，約有 {{amount}} 的週額度會在重置時用不完。",
     "Projected from the pool estimate: each account’s weekly quota left, minus its last 24 hours’ average spend over the hours until its reset. Accounts whose unused quota is under {{floor}} or {{share}} of their weekly capacity are left out as rounding noise.": "依帳號池估算推算：各帳號剩餘的週額度，減去其近 24 小時平均消耗在重置前剩餘小時數內的累計值。未用額度低於 {{floor}} 或週容量 {{share}} 的帳號視為四捨五入誤差，不列出。",
     "Unused at reset": "重置時用不完",
+    "The pool is projected to run short, so the {{amount}} the accounts would leave at their own recent rates will most likely be used: accounts that reach their budget lines first send their traffic to the rest.": "帳號池預計會不夠用，所以各帳號依自己近期速度會剩下的 {{amount}} 大概率會被用掉：先到預算線的帳號會把流量讓給其餘帳號。",
+    "Most of this will be used: the pool is projected to run short.": "這部分大概率會被用掉：帳號池預計會不夠用。",
     "Resets in": "距重置",
     "Spending / needed": "消耗 / 所需",
     "{{spend}}/h of {{needed}}/h": "{{spend}}/h，需 {{needed}}/h",
