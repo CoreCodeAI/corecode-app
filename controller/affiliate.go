@@ -7,10 +7,8 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
-	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/gin-gonic/gin"
 )
 
@@ -127,42 +125,16 @@ func GetSelfAffiliateInvitees(c *gin.Context) {
 	})
 }
 
-// notifyAffiliateGift emails the invitee about a gift in the background, so
-// a slow mail server never holds up the sign-up. Tests replace it.
-var notifyAffiliateGift = func(lang string, inviterId int, inviteeId int, plan *model.SubscriptionPlan, subscription *model.UserSubscription) {
-	gopool.Go(func() {
-		invitee, err := model.GetUserById(inviteeId, false)
-		if err != nil {
-			common.SysLog(common.LogText("failed to load invitee %d for the gift email: %v", inviteeId, err))
-			return
-		}
-		inviter, err := model.GetUserById(inviterId, false)
-		if err != nil {
-			common.SysLog(common.LogText("failed to load inviter %d for the gift email: %v", inviterId, err))
-			return
-		}
-		if err := service.NotifyAffiliateGift(lang, invitee, inviter, plan, subscription); err != nil {
-			common.SysLog(common.LogText("failed to send the gift email to user %d: %v", inviteeId, err))
-		}
-	})
-}
-
 // giveAffiliateSignupGift gives a user who just signed up their channel
-// inviter's gift plan and emails them about it. A failure is logged and never
-// fails the sign-up, which has already committed.
+// inviter's gift plan. A failure is logged and never fails the sign-up, which
+// has already committed.
 func giveAffiliateSignupGift(c *gin.Context, userId int, inviterId int) {
 	if userId <= 0 || inviterId <= 0 {
 		return
 	}
-	plan, subscription, err := model.GiveAffiliateSignupGift(userId, inviterId, c.ClientIP())
-	if err != nil {
+	if _, _, err := model.GiveAffiliateSignupGift(userId, inviterId, c.ClientIP()); err != nil {
 		common.SysLog(common.LogText("failed to give user %d the sign-up gift of inviter %d: %v", userId, inviterId, err))
-		return
 	}
-	if plan == nil {
-		return
-	}
-	notifyAffiliateGift(service.AccountMailLanguage(c, userId), inviterId, userId, plan, subscription)
 }
 
 // GiftSelfAffiliateInvitee is the retired manual gift. Invitees receive the

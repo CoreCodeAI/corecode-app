@@ -241,8 +241,7 @@ func TestMagicLinkSignUpBindsTheInviterFromItsCode(t *testing.T) {
 }
 
 // A retail channel's invitee receives the tier's gift plan when the emailed
-// link creates the account, without anyone clicking anything, and is told by
-// email.
+// link creates the account, without anyone clicking anything.
 func TestMagicLinkSignUpGivesTheChannelGiftPlan(t *testing.T) {
 	messages := setupMagicLinkTest(t)
 	require.NoError(t, model.DB.AutoMigrate(&model.Affiliate{}, &model.AffiliateReferral{}, &model.AffiliateSignupGift{},
@@ -257,12 +256,6 @@ func TestMagicLinkSignUpGivesTheChannelGiftPlan(t *testing.T) {
 	model.InvalidateSubscriptionPlanCache(plan.Id)
 	t.Cleanup(func() { model.InvalidateSubscriptionPlanCache(plan.Id) })
 	affiliateSetting.RetailGiftPlanId = plan.Id
-	notified := make(chan int, 1)
-	previousNotify := notifyAffiliateGift
-	notifyAffiliateGift = func(_ string, _ int, inviteeId int, _ *model.SubscriptionPlan, _ *model.UserSubscription) {
-		notified <- inviteeId
-	}
-	t.Cleanup(func() { notifyAffiliateGift = previousNotify })
 
 	inviter := &model.User{Username: "magic_channel", DisplayName: "magic_channel", Role: common.RoleCommonUser, Status: common.UserStatusEnabled}
 	require.NoError(t, inviter.Insert(0))
@@ -286,12 +279,6 @@ func TestMagicLinkSignUpGivesTheChannelGiftPlan(t *testing.T) {
 	var subscription model.UserSubscription
 	require.NoError(t, model.DB.Where("user_id = ? AND plan_id = ?", user.Id, plan.Id).First(&subscription).Error)
 	assert.Equal(t, model.SubscriptionSourceAffiliateGift, subscription.Source)
-	select {
-	case inviteeId := <-notified:
-		assert.Equal(t, user.Id, inviteeId)
-	case <-time.After(5 * time.Second):
-		t.Fatal("the invitee was not emailed about the gift")
-	}
 }
 
 // Two mailboxes can share a local part. The link is spent before the account

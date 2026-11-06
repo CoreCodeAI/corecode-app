@@ -189,35 +189,3 @@ func TestChannelNoticesFollowEachAdministratorsSwitch(t *testing.T) {
 		},
 	}, received)
 }
-
-// The gift notice names the inviter, the plan, its quota and the end date in
-// UTC+8, links to the recipient's subscription, keys and the setup guide in
-// their language, and escapes what the inviter and the plan's author typed.
-func TestAffiliateGiftMail(t *testing.T) {
-	previousServer, previousName := system_setting.ServerAddress, common.SystemName
-	t.Cleanup(func() { system_setting.ServerAddress, common.SystemName = previousServer, previousName })
-	system_setting.ServerAddress = "https://corecode.live/"
-	common.SystemName = "CoreCode"
-	// 2026-11-03 06:30 UTC is 14:30 in UTC+8.
-	endTime := int64(1793687400)
-	plan := &model.SubscriptionPlan{Title: "新人体验包", Subtitle: "7 天 <b>体验</b>", TotalAmount: int64(10 * common.QuotaPerUnit)}
-
-	subject, content := affiliateGiftMail("zh-CN", `<img src=x onerror=alert(1)>`, plan, endTime)
-	assert.Equal(t, "您收到了一份CoreCode订阅：新人体验包", subject)
-	assert.NotContains(t, content, "<img")
-	assert.Contains(t, content, "&lt;img src=x onerror=alert(1)&gt;")
-	assert.Contains(t, content, "7 天 &lt;b&gt;体验&lt;/b&gt;")
-	assert.Contains(t, content, "＄10<")
-	assert.Contains(t, content, "2026-11-03 14:30（北京时间）")
-	assert.Contains(t, content, `href="https://corecode.live/wallet"`)
-	assert.Contains(t, content, "href='https://corecode.live/keys'")
-	assert.Contains(t, content, "href='https://corecode.live/docs/claude-code/'")
-
-	plan.TotalAmount = 0
-	subject, content = affiliateGiftMail("en", "Acme", plan, endTime)
-	assert.Equal(t, "You've received a CoreCode subscription: 新人体验包", subject)
-	assert.Contains(t, content, "Acme gave you 新人体验包")
-	assert.Contains(t, content, "2026-11-03 14:30 (UTC+8)")
-	assert.Contains(t, content, "href='https://corecode.live/docs/en/claude-code/'")
-	assert.NotContains(t, content, ">Quota<", "an unlimited plan shows no quota")
-}
