@@ -500,3 +500,29 @@ export function clientFamilies(items: NamedCount[] | null | undefined) {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 }
+
+/** How often the pool tab can refresh, in seconds; 0 turns it off. */
+export const POOL_REFRESH_CHOICES = [5, 10, 15, 30, 60, 300, 0] as const
+export const POOL_REFRESH_DEFAULT = 15
+const POOL_REFRESH_KEY = 'site-insights:pool-refresh-seconds'
+
+/** The pool tab's refresh interval this browser last chose. */
+export function readPoolRefresh(): number {
+  try {
+    const stored = localStorage.getItem(POOL_REFRESH_KEY)
+    const seconds = stored === null ? Number.NaN : Number(stored)
+    return (POOL_REFRESH_CHOICES as readonly number[]).includes(seconds)
+      ? seconds
+      : POOL_REFRESH_DEFAULT
+  } catch {
+    return POOL_REFRESH_DEFAULT
+  }
+}
+
+export function writePoolRefresh(seconds: number) {
+  try {
+    localStorage.setItem(POOL_REFRESH_KEY, String(seconds))
+  } catch {
+    // Storage may be full or blocked; the choice then lasts for this visit.
+  }
+}

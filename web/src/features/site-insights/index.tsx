@@ -25,6 +25,14 @@ import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
@@ -45,6 +53,9 @@ import {
   INSIGHTS_PRESETS,
   INSIGHTS_TAB_GROUPS,
   OVERVIEW_VIEWS,
+  POOL_REFRESH_CHOICES,
+  readPoolRefresh,
+  writePoolRefresh,
   type InsightsTab,
 } from './lib'
 import type { PoolProvider, PoolUsage } from './types'
@@ -52,6 +63,7 @@ import type { PoolProvider, PoolUsage } from './types'
 const route = getRouteApi('/_authenticated/site-insights/')
 
 // The capacity view carries live in-flight counts; the pool is all live.
+// The pool tab itself refreshes at the interval chosen on it.
 const REFRESH_MS: Partial<Record<InsightsView, number>> = {
   capacity: 30_000,
   pool: 15_000,
@@ -85,6 +97,7 @@ export function SiteInsights() {
   // The end is fixed when the page or range changes, so cached results do
   // not refetch on every render; Refresh moves it to now.
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
+  const [poolRefresh, setPoolRefresh] = useState(readPoolRefresh)
 
   const queryClient = useQueryClient()
   const viewDays = (view: InsightsView) =>
@@ -136,7 +149,10 @@ export function SiteInsights() {
   const query = useQuery({
     ...insightsQuery(view ?? 'capacity'),
     enabled: view !== undefined,
-    refetchInterval: (view && REFRESH_MS[view]) ?? false,
+    refetchInterval:
+      view === 'pool'
+        ? poolRefresh * 1000 || false
+        : ((view && REFRESH_MS[view]) ?? false),
     // A new range keeps the old figures on screen until its own arrive. Only
     // the same tab's data fits its component, so another tab starts empty.
     placeholderData: (previous, previousQuery) =>
@@ -149,7 +165,7 @@ export function SiteInsights() {
     queryKey: ['site-insights', 'pool-usage', provider],
     queryFn: () => getPoolUsage(provider),
     enabled: tab === 'pool',
-    refetchInterval: 60_000,
+    refetchInterval: poolRefresh ? 60_000 : false,
     staleTime: 30_000,
   })
   // The finance, growth and quality tabs each show part of the business
@@ -191,6 +207,15 @@ export function SiteInsights() {
   }
   const presetLabel = (preset: number) =>
     preset === 1 ? t('24 hours') : t('{{count}} days', { count: preset })
+  const refreshLabel = (seconds: number) => {
+    if (seconds === 0) return t('Off')
+    if (seconds < 60) return t('Every {{count}} seconds', { count: seconds })
+    return t('Every {{count}} minutes', { count: seconds / 60 })
+  }
+  const refreshItems = POOL_REFRESH_CHOICES.map((seconds) => ({
+    value: String(seconds),
+    label: refreshLabel(seconds),
+  }))
   const fetching = view ? query.isFetching : false
 
   // On a narrow screen the tabs scroll sideways in one row; the open one is
@@ -269,9 +294,29 @@ export function SiteInsights() {
             </Tabs>
             <div className='flex items-center gap-2'>
               {tab === 'pool' ? (
-                <span className='text-muted-foreground text-xs'>
-                  {t('Live · refreshes every 15 seconds')}
-                </span>
+                <Select
+                  items={refreshItems}
+                  value={String(poolRefresh)}
+                  onValueChange={(value) => {
+                    if (value === null) return
+                    const next = Number(value)
+                    setPoolRefresh(next)
+                    writePoolRefresh(next)
+                  }}
+                >
+                  <SelectTrigger className='h-8' aria-label={t('Auto refresh')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectGroup>
+                      {refreshItems.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               ) : (
                 <ToggleGroup
                   variant='outline'
