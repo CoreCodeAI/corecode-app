@@ -43,6 +43,15 @@ neither, so an operator had to read the engine's own API to see it.
 - **The helpers live in `unused-quota.ts`**, apart from the panel component, because the
   console's lint gate rejects a component file that also exports functions.
 
+- **The `/sign-in` first-load budget goes from 350 to 351 KB.** The first-load check failed on
+  this change by 42 bytes (350.042 KB). The only file that differed among the page's 26 was the
+  entry bundle, by 17 bytes of brotli, and the two builds' entry files have the same length.
+  What differs is the async chunk hash table: a new chunk id replaced another and every hash
+  changed, which compresses a little differently. Any change that touches an async chunk
+  reshuffles those hashes, and the budget had no margin, so main itself builds at 350.025 KB
+  locally and passes in CI by a hair. A kilobyte of margin covers that jitter; this change adds
+  no code to the page.
+
 ## Alternatives considered
 
 **A new engine endpoint for the projection.** The estimate the app already reads carries it, so
