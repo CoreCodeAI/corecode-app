@@ -245,6 +245,16 @@ var (
 	CriticalRateLimitNum            = 20
 	CriticalRateLimitDuration int64 = 20 * 60
 
+	// Session refresh and logout carry a session cookie, so they cannot be
+	// used to guess credentials; they get a bucket apart from sign-in.
+	SessionRateLimitNum            = 120
+	SessionRateLimitDuration int64 = 20 * 60
+
+	// Usage and log reads authenticated by an API key, which clients such as
+	// status lines poll; they get a bucket apart from sign-in.
+	TokenQueryRateLimitNum            = 300
+	TokenQueryRateLimitDuration int64 = 20 * 60
+
 	UploadRateLimitNum            = 10
 	UploadRateLimitDuration int64 = 60
 

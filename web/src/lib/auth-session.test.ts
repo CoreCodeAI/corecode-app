@@ -171,6 +171,35 @@ describe('authentication session coordination', () => {
     expect(transientCount).toBe(1)
   })
 
+  test('a rate limited refresh pauses further refreshes instead of retrying', async () => {
+    let requests = 0
+    let pausedUntil = 0
+    const runtime: AuthRefreshRuntime = {
+      request: async () => {
+        requests += 1
+        return { status: 429 }
+      },
+      getExpectedSID: () => bundle.session.sid,
+      parseBundle: () => null,
+      acceptBundle: () => undefined,
+      clear: () => undefined,
+      markTransient: () => undefined,
+      wait: async () => undefined,
+      isRateLimited: () => Date.now() < pausedUntil,
+      markRateLimited: () => {
+        pausedUntil = Date.now() + 30_000
+      },
+    }
+
+    expect((await createRefreshRunner(runtime)()).kind).toBe('transient_error')
+    expect((await createRefreshRunner(runtime)()).kind).toBe('transient_error')
+    expect(requests).toBe(1)
+
+    pausedUntil = 0
+    await createRefreshRunner(runtime)()
+    expect(requests).toBe(2)
+  })
+
   test('an exhausted refresh race clears the unusable local session', async () => {
     const requestedDelays: number[] = []
     const clears: Array<[boolean, string | undefined]> = []

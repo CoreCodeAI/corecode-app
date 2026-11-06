@@ -194,6 +194,25 @@ func CriticalRateLimit() func(c *gin.Context) {
 	return defNext
 }
 
+// SessionRateLimit limits session refresh and logout per IP. They share the
+// critical switch but not its bucket, so a console that refreshes often does
+// not lock its owner out of signing in.
+func SessionRateLimit() func(c *gin.Context) {
+	if common.CriticalRateLimitEnable {
+		return rateLimitFactory(common.SessionRateLimitNum, common.SessionRateLimitDuration, "SN")
+	}
+	return defNext
+}
+
+// TokenQueryRateLimit limits the API-key usage and log reads per IP, apart
+// from the sign-in bucket.
+func TokenQueryRateLimit() func(c *gin.Context) {
+	if common.CriticalRateLimitEnable {
+		return rateLimitFactory(common.TokenQueryRateLimitNum, common.TokenQueryRateLimitDuration, "TQ")
+	}
+	return defNext
+}
+
 func UserCriticalRateLimit(scope string) func(c *gin.Context) {
 	if !common.CriticalRateLimitEnable {
 		return defNext
