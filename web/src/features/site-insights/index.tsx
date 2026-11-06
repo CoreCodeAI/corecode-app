@@ -43,6 +43,7 @@ import {
   type InsightsView,
 } from './api'
 import { CapacityTab, type CapacityVendor } from './components/capacity-tab'
+import { ChannelsTab } from './components/channels-tab'
 import { FinanceTab } from './components/finance-tab'
 import { ActivityTab, GrowthTab } from './components/growth-tab'
 import { OverviewTab } from './components/overview-tab'
@@ -198,6 +199,7 @@ export function SiteInsights() {
     quality: t('Service quality'),
     finance: t('Funds'),
     growth: t('Growth'),
+    channels: t('Promotion channels'),
     activity: t('Activity & retention'),
     risk: t('Risk'),
   }
@@ -476,5 +478,7 @@ function InsightsView(props: {
       )
     case 'pool':
       return <PoolTab data={props.data as never} {...props.pool} />
+    case 'channels':
+      return <ChannelsTab data={props.data as never} />
   }
 }

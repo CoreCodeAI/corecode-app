@@ -26,6 +26,7 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 import type { InsightsView } from './api'
 import type { Tone } from './components/shared'
 import type {
+  ChannelRow,
   FinanceInsights,
   NamedCount,
   PoolProvider,
@@ -39,7 +40,7 @@ export type InsightsTab = 'overview' | Exclude<InsightsView, 'business'>
 export const INSIGHTS_TAB_GROUPS: { key: string; tabs: InsightsTab[] }[] = [
   { key: 'overview', tabs: ['overview'] },
   { key: 'operations', tabs: ['capacity', 'pool', 'quality'] },
-  { key: 'business', tabs: ['finance', 'growth', 'activity'] },
+  { key: 'business', tabs: ['finance', 'growth', 'channels', 'activity'] },
   { key: 'risk', tabs: ['risk'] },
 ]
 
@@ -524,5 +525,23 @@ export function writePoolRefresh(seconds: number) {
     localStorage.setItem(POOL_REFRESH_KEY, String(seconds))
   } catch {
     // Storage may be full or blocked; the choice then lasts for this visit.
+  }
+}
+
+/**
+ * A source's return over the range, in yuan. The fee is in US dollars and
+ * converts at the site's rate; commission and given credit are quota
+ * dollars, which customers buy at ¥1 each. ROI is net over the fee, and cac
+ * the fee per account that paid for the first time in the range; both are
+ * null without a fee.
+ */
+export function channelEconomics(row: ChannelRow, rate: number) {
+  const fee = row.fee_usd * rate
+  const net = row.revenue - fee - row.commission_usd - row.gift_consumption_usd
+  return {
+    fee,
+    net,
+    roi: fee > 0 ? net / fee : null,
+    cac: fee > 0 && row.new_payers > 0 ? fee / row.new_payers : null,
   }
 }

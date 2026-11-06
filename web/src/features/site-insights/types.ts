@@ -410,6 +410,47 @@ export type GrowthInsights = {
   subscription_to_topup: number
 }
 
+/** A fee paid to a promotion channel: monthly_usd every 30 days from start until end, or until now when end is 0. Unix seconds. */
+export type ChannelCost = {
+  user_id: number
+  monthly_usd: number
+  start: number
+  end: number
+  note: string
+}
+
+/**
+ * One acquisition source over the range. The funnel follows accounts created
+ * in the range; the money covers every account the source ever brought.
+ * Revenue is in yuan; the *_usd figures are quota dollars, which customers
+ * buy at ¥1 each, except fee_usd, which is real US dollars.
+ */
+export type ChannelRow = {
+  segment: 'channel' | 'invited' | 'organic'
+  channel: UserRef
+  tier: string
+  accounts: number
+  registered: number
+  activated: number
+  paid: number
+  repeat: number
+  revenue: number
+  payers: number
+  new_payers: number
+  consumption_usd: number
+  gift_consumption_usd: number
+  granted_usd: number
+  gift_outstanding_usd: number
+  commission_usd: number
+  fee_usd: number
+}
+
+export type ChannelInsights = {
+  channels: ChannelRow[]
+  costs: ChannelCost[]
+  usd_exchange_rate: number
+}
+
 /** What one plan's accounts serve in a full week at official prices. */
 export type EnginePlanValue = {
   plan: string

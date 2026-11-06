@@ -37,6 +37,7 @@ const siteInsightsSearchSchema = z.object({
       // and groups to growth, clients to quality. An old link opens funds.
       'business',
       'pool',
+      'channels',
     ])
     .transform((tab) => (tab === 'business' ? 'finance' : tab))
     .optional()
