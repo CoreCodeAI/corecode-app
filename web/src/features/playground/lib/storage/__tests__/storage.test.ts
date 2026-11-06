@@ -107,3 +107,20 @@ test('storage calls without a signed-in user do not persist shared data', () => 
   expect(loadParameterEnabled()).toEqual({})
   expect(localStorage.length).toBe(0)
 })
+
+test('generated images stay out of stored messages', () => {
+  useAuthStore.getState().auth.setUser({ id: 1, username: 'A', role: 1 })
+  const imageMessage: Message = {
+    key: 'an-image',
+    from: 'assistant',
+    versions: [{ id: 'an-image-version', content: 'Image generated.' }],
+    status: 'complete',
+    images: [`data:image/jpeg;base64,${'A'.repeat(2 * 1024 * 1024)}`],
+  }
+
+  saveMessages([...messages, imageMessage])
+
+  const stored = localStorage.getItem(`${STORAGE_KEYS.MESSAGES}:1`) ?? ''
+  expect(stored.length).toBeLessThan(10_000)
+  expect(loadMessages()?.[1]).not.toHaveProperty('images')
+})

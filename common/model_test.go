@@ -27,6 +27,18 @@ func TestWanEndpointsDistinguishImagesFromVideos(t *testing.T) {
 	}
 }
 
+// The console playground and the pricing page find Grok Imagine's image
+// models by this endpoint; its video model is not one.
+func TestGrokImagineImageModelsReportImageGeneration(t *testing.T) {
+	for _, name := range []string{"grok-imagine-image", "grok-imagine-image-quality", "grok-imagine-image-2.0"} {
+		t.Run(name, func(t *testing.T) {
+			assert.Contains(t, common.GetEndpointTypesByChannelType(constant.ChannelTypeOpenAI, name), constant.EndpointTypeImageGeneration)
+		})
+	}
+	assert.NotContains(t, common.GetEndpointTypesByChannelType(constant.ChannelTypeOpenAI, "grok-imagine-video"), constant.EndpointTypeImageGeneration)
+	assert.NotContains(t, common.GetEndpointTypesByChannelType(constant.ChannelTypeOpenAI, "grok-4.7"), constant.EndpointTypeImageGeneration)
+}
+
 // /v1/models reports the DeepSeek Search and Fetch routing names with their
 // own endpoint on the channels that relay them; chat models keep their list.
 func TestDeepSeekToolRoutingNamesReportTheirEndpoint(t *testing.T) {

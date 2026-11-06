@@ -7846,6 +7846,8 @@
     "{{rate}} of sign-ups in this range have paid.": "이 기간 가입자 중 {{rate}}가 결제했습니다.",
     "{{rate}} went on": "{{rate}} 다음 단계로",
     "{{share}} of {{limit}}": "{{limit}}의 {{share}}",
-    "Billed per request; each generated image counts as one request.": "요청당 과금되며, 생성된 이미지 1장을 요청 1회로 계산합니다."
+    "Billed per request; each generated image counts as one request.": "요청당 과금되며, 생성된 이미지 1장을 요청 1회로 계산합니다.",
+    "Describe the image to generate": "생성할 이미지를 설명하세요",
+    "Image generated. Images are not saved; download any you want to keep before leaving.": "이미지가 생성되었습니다. 이미지는 저장되지 않으니 보관하려면 페이지를 떠나기 전에 다운로드하세요."
   }
 }

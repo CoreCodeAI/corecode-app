@@ -7846,6 +7846,8 @@
     "{{rate}} of sign-ups in this range have paid.": "{{rate}} of sign-ups in this range have paid.",
     "{{rate}} went on": "{{rate}} went on",
     "{{share}} of {{limit}}": "{{share}} of {{limit}}",
-    "Billed per request; each generated image counts as one request.": "Billed per request; each generated image counts as one request."
+    "Billed per request; each generated image counts as one request.": "Billed per request; each generated image counts as one request.",
+    "Describe the image to generate": "Describe the image to generate",
+    "Image generated. Images are not saved; download any you want to keep before leaving.": "Image generated. Images are not saved; download any you want to keep before leaving."
   }
 }

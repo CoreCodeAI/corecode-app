@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
+
 import { PlaygroundChat } from './components/chat/playground-chat'
 import { PlaygroundInput } from './components/input/playground-input'
 import {
@@ -41,8 +43,16 @@ export function Playground() {
     clearMessages,
   } = usePlaygroundState()
 
+  const { models: pricedModels } = usePricingData()
+  const isImageModel = pricedModels.some(
+    (model) =>
+      model.model_name === config.model &&
+      model.supported_endpoint_types?.includes('image-generation')
+  )
+
   const { sendChat, stopGeneration, isGenerating } = useChatHandler({
     config,
+    isImageModel,
     parameterEnabled,
     onMessageUpdate: updateMessages,
   })
@@ -101,6 +111,7 @@ export function Playground() {
           groups={groups}
           groupValue={config.group}
           isGenerating={isGenerating}
+          isImageModel={isImageModel}
           isModelLoading={isLoadingModels}
           modelValue={config.model}
           models={models}

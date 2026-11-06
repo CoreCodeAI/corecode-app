@@ -7846,6 +7846,8 @@
     "{{rate}} of sign-ups in this range have paid.": "この期間の登録者のうち {{rate}} が支払い済みです。",
     "{{rate}} went on": "{{rate}} が次へ",
     "{{share}} of {{limit}}": "{{limit}} の {{share}}",
-    "Billed per request; each generated image counts as one request.": "リクエストごとの課金です。画像は 1 枚ごとに 1 リクエストとして計算します。"
+    "Billed per request; each generated image counts as one request.": "リクエストごとの課金です。画像は 1 枚ごとに 1 リクエストとして計算します。",
+    "Describe the image to generate": "生成したい画像を説明してください",
+    "Image generated. Images are not saved; download any you want to keep before leaving.": "画像を生成しました。画像は保存されないため、残したい画像はページを離れる前にダウンロードしてください。"
   }
 }

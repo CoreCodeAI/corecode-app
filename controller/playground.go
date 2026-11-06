@@ -14,7 +14,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Playground relays a console chat request on the signed-in user's quota.
 func Playground(c *gin.Context) {
+	playground(c, types.RelayFormatOpenAI)
+}
+
+// PlaygroundImageGeneration relays a console image request the same way.
+func PlaygroundImageGeneration(c *gin.Context) {
+	playground(c, types.RelayFormatOpenAIImage)
+}
+
+func playground(c *gin.Context, relayFormat types.RelayFormat) {
 	var newAPIError *types.NewAPIError
 
 	defer func() {
@@ -31,7 +41,7 @@ func Playground(c *gin.Context) {
 		return
 	}
 
-	relayInfo, err := relaycommon.GenRelayInfo(c, types.RelayFormatOpenAI, nil, nil)
+	relayInfo, err := relaycommon.GenRelayInfo(c, relayFormat, nil, nil)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
 		return
@@ -54,5 +64,5 @@ func Playground(c *gin.Context) {
 	}
 	_ = middleware.SetupContextForToken(c, tempToken)
 
-	Relay(c, types.RelayFormatOpenAI)
+	Relay(c, relayFormat)
 }

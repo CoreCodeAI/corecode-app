@@ -7846,6 +7846,8 @@
     "{{rate}} of sign-ups in this range have paid.": "{{rate}} зарегистрировавшихся за период уже платили.",
     "{{rate}} went on": "{{rate}} перешли дальше",
     "{{share}} of {{limit}}": "{{share}} от {{limit}}",
-    "Billed per request; each generated image counts as one request.": "Оплата за запрос; каждое сгенерированное изображение считается одним запросом."
+    "Billed per request; each generated image counts as one request.": "Оплата за запрос; каждое сгенерированное изображение считается одним запросом.",
+    "Describe the image to generate": "Опишите изображение, которое нужно создать",
+    "Image generated. Images are not saved; download any you want to keep before leaving.": "Изображение создано. Изображения не сохраняются: скачайте нужные, прежде чем покинуть страницу."
   }
 }
