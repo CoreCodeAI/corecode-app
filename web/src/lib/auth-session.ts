@@ -52,6 +52,9 @@ export interface AuthRefreshRuntime {
   markTransient: () => void
   wait: (delay: number) => Promise<void>
   isCurrent?: () => boolean
+  /** True while a 429 asked this page to stop refreshing for a while. */
+  isRateLimited?: () => boolean
+  markRateLimited?: () => void
 }
 
 export interface AuthTokenRotation {
@@ -78,8 +81,19 @@ const authClient = axios.create({
 })
 
 const refreshRaceDelays = [80, 200, 500] as const
+// After a 429 the page waits this long before asking again: every refresh
+// counts against the per-IP limit, so retrying only keeps it exhausted.
+const RATE_LIMITED_REFRESH_PAUSE_MS = 30_000
 let refreshPromise: Promise<RefreshOutcome> | null = null
+let refreshRateLimitedUntil = 0
 let authEpoch = 0
+
+class AuthRefreshRateLimitedError extends Error {
+  constructor() {
+    super('Authentication refresh is paused after a rate limit')
+    this.name = 'AuthRefreshRateLimitedError'
+  }
+}
 
 class AuthRefreshSupersededError extends Error {
   constructor() {
@@ -154,6 +168,7 @@ export function applyAuthBundle(
 ): void {
   const previousSID = useAuthStore.getState().auth.session?.sid
   authEpoch += 1
+  refreshRateLimitedUntil = 0
   useAuthStore.getState().auth.setBundle(bundle)
   if (synchronizeTabs && previousSID !== bundle.session.sid) {
     publishAuthSessionEvent('authenticated', bundle.session.sid)
@@ -221,6 +236,13 @@ export function createRefreshRunner(
     allowMismatchRetry: boolean
   ): Promise<RefreshOutcome> => {
     if (runtime.isCurrent && !runtime.isCurrent()) return superseded()
+    if (runtime.isRateLimited?.()) {
+      runtime.markTransient()
+      return {
+        kind: 'transient_error',
+        error: new AuthRefreshRateLimitedError(),
+      }
+    }
     const response = await runtime.request(runtime.getExpectedSID())
     if (runtime.isCurrent && !runtime.isCurrent()) return superseded()
     const responseData = isRecord(response.data) ? response.data : undefined
@@ -257,6 +279,7 @@ export function createRefreshRunner(
     }
 
     if (!response.status || response.status >= 500 || response.status === 429) {
+      if (response.status === 429) runtime.markRateLimited?.()
       runtime.markTransient()
       return {
         kind: 'transient_error',
@@ -318,6 +341,10 @@ function runRefresh(refreshEpoch: number): Promise<RefreshOutcome> {
     markTransient: () => useAuthStore.getState().auth.setBootstrapState('idle'),
     wait: waitForRefreshRace,
     isCurrent: () => authEpoch === refreshEpoch,
+    isRateLimited: () => Date.now() < refreshRateLimitedUntil,
+    markRateLimited: () => {
+      refreshRateLimitedUntil = Date.now() + RATE_LIMITED_REFRESH_PAUSE_MS
+    },
   })()
 }
 

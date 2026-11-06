@@ -290,3 +290,43 @@ func TestGlobalWebRateLimitCountsFrontendFilesInStaticBucket(t *testing.T) {
 		assert.Equal(t, "1", webCount)
 	})
 }
+
+func TestSessionAndTokenQueryLimitsDoNotShareTheCriticalBucket(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	redisServer, _ := useRateLimitMiniRedis(t)
+	previous := []any{common.CriticalRateLimitEnable, common.CriticalRateLimitNum, common.SessionRateLimitNum, common.TokenQueryRateLimitNum}
+	t.Cleanup(func() {
+		common.CriticalRateLimitEnable = previous[0].(bool)
+		common.CriticalRateLimitNum = previous[1].(int)
+		common.SessionRateLimitNum = previous[2].(int)
+		common.TokenQueryRateLimitNum = previous[3].(int)
+	})
+	common.CriticalRateLimitEnable = true
+	common.CriticalRateLimitNum, common.SessionRateLimitNum, common.TokenQueryRateLimitNum = 1, 2, 2
+
+	router := gin.New()
+	require.NoError(t, router.SetTrustedProxies(nil))
+	ok := func(c *gin.Context) { c.Status(http.StatusNoContent) }
+	router.GET("/login", CriticalRateLimit(), ok)
+	router.GET("/refresh", SessionRateLimit(), ok)
+	router.GET("/usage", TokenQueryRateLimit(), ok)
+
+	const clientIP = "192.0.2.80"
+	const remoteAddr = clientIP + ":12345"
+	assert.Equal(t, http.StatusNoContent, performRateLimitRequest(router, "/login", remoteAddr).Code)
+	assert.Equal(t, http.StatusTooManyRequests, performRateLimitRequest(router, "/login", remoteAddr).Code)
+
+	// Sign-in is exhausted; refresh and API-key reads still have their own budgets.
+	for _, path := range []string{"/refresh", "/usage"} {
+		assert.Equal(t, http.StatusNoContent, performRateLimitRequest(router, path, remoteAddr).Code, path)
+		assert.Equal(t, http.StatusNoContent, performRateLimitRequest(router, path, remoteAddr).Code, path)
+		assert.Equal(t, http.StatusTooManyRequests, performRateLimitRequest(router, path, remoteAddr).Code, path)
+	}
+
+	// Refreshing does not spend the sign-in budget.
+	count, err := redisServer.Get(redisIPRateLimitKey("CT", clientIP))
+	require.NoError(t, err)
+	assert.Equal(t, "2", count)
+	assert.True(t, redisServer.Exists(redisIPRateLimitKey("SN", clientIP)))
+	assert.True(t, redisServer.Exists(redisIPRateLimitKey("TQ", clientIP)))
+}
