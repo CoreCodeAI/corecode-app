@@ -2,6 +2,9 @@
 
 Status: implemented
 
+Superseded on 2026-11-06 by `2026-11-06-drop-gift-plan-email.md`: the notice is
+no longer sent.
+
 ## Problem
 
 A promotion channel can gift its invitees the gift plan
