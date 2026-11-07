@@ -27,11 +27,44 @@ type Input struct {
 
 // Hit describes the first match. A zero Hit means no rule matched. Excerpt is
 // the latest user text, for the caller's existing event-excerpt handling.
+// Context is the matched text with up to matchContextRunes on each side, as
+// the hard rules saw it, so a reviewer can tell a real ask from a word that
+// only looks like one.
 type Hit struct {
 	Stage   string
 	Rule    string
 	Detail  string
 	Excerpt string
+	Context string
+}
+
+const matchContextRunes = 40
+
+// matchContext cuts the text around the first occurrence of match in
+// document, marking a cut end with "…".
+func matchContext(document, match string) string {
+	at := strings.Index(document, match)
+	if match == "" || at < 0 {
+		return ""
+	}
+	before := []rune(document[:at])
+	after := []rune(document[at+len(match):])
+	var builder strings.Builder
+	if len(before) > matchContextRunes {
+		builder.WriteString("…")
+		before = before[len(before)-matchContextRunes:]
+	}
+	builder.WriteString(string(before))
+	builder.WriteString("[")
+	builder.WriteString(match)
+	builder.WriteString("]")
+	if len(after) > matchContextRunes {
+		builder.WriteString(string(after[:matchContextRunes]))
+		builder.WriteString("…")
+	} else {
+		builder.WriteString(string(after))
+	}
+	return builder.String()
 }
 
 func needleHit(hay string, needles []namedText) *namedText {
@@ -182,7 +215,7 @@ func matchHard(rules []hardRule, document string, distillOn, hardOn, openai bool
 		if rule.distill {
 			stage = "distill"
 		}
-		return Hit{Stage: stage, Rule: rule.name, Detail: keyword, Excerpt: excerpt}, nil
+		return Hit{Stage: stage, Rule: rule.name, Detail: keyword, Excerpt: excerpt, Context: matchContext(document, match)}, nil
 	}
 	return Hit{}, fault
 }

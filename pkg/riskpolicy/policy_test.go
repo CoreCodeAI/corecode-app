@@ -165,20 +165,48 @@ func TestHardRulesHistoryAndGates(t *testing.T) {
 			assert.Equal(t, tt.rule, hit.Rule)
 		})
 	}
+	// Only the latest user text is matched: an earlier turn was matched when it
+	// was the latest, and the caller holds a conversation it blocked.
 	input := testInput(`{"messages":[{"role":"user","content":"old needle"},{"role":"assistant","content":"ok"},{"role":"user","content":"hello"}]}`)
 	hit, err := Evaluate(emptyConfig, rules, input, true, true)
 	require.NoError(t, err)
+	assert.Empty(t, hit.Stage, "a word in an earlier turn does not block the latest")
+	input = testInput(`{"messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"ok"},{"role":"user","content":"a needle now"}]}`)
+	hit, err = Evaluate(emptyConfig, rules, input, true, true)
+	require.NoError(t, err)
 	assert.Equal(t, "vm2api.demo.01", hit.Rule)
-	assert.Equal(t, "hello", hit.Excerpt)
-	// Joined users are normalized and deduplicated, then the latest is repeated.
-	input = testInput(`{"messages":[{"role":"user","content":"first"},{"role":"user","content":"second"}]}`)
-	hit, err = Evaluate(emptyConfig, `repeat | second\s+second`, input, false, true)
+	assert.Equal(t, "a needle now", hit.Excerpt)
+	assert.Equal(t, "a [needle] now", hit.Context)
+	// A user turn holding only a tool result or a reminder is not the latest text.
+	input = testInput(`{"messages":[{"role":"user","content":"a needle now"},{"role":"assistant","content":"ok"},{"role":"user","content":[{"type":"tool_result","content":"fine"},{"type":"text","text":"<system-reminder>x</system-reminder>"}]}]}`)
+	hit, err = Evaluate(emptyConfig, rules, input, true, true)
 	require.NoError(t, err)
-	assert.Equal(t, "repeat", hit.Rule)
-	input = testInput(`{"messages":[{"role":"user","content":"same"},{"role":"user","content":"SAME"}]}`)
-	hit, err = Evaluate(emptyConfig, `repeat | same\s+same`, input, false, true)
-	require.NoError(t, err)
-	assert.Empty(t, hit.Stage)
+	assert.Equal(t, "vm2api.demo.01", hit.Rule, "the person's last text is still the latest")
+}
+
+func TestHardRulesSkipClientGeneratedTurns(t *testing.T) {
+	rules := "vm2api.demo.01 | (?<![\\w-])needle(?![\\w-])"
+	for _, text := range []string{
+		"<conversation-checkpoint> The following is a summary of earlier work: the needle module",
+		"<transcript> {\"user\":\"build the needle\"}",
+		"This session is being continued from a previous conversation that ran out of context. needle",
+		"The following is the Codex agent history whose request action you are assessing. needle",
+		"[Compaction summary — written by the assistant] needle",
+	} {
+		input := testInput(fmt.Sprintf(`{"messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"ok"},{"role":"user","content":%q}]}`, text))
+		hit, err := Evaluate(emptyConfig, rules, input, false, true)
+		require.NoError(t, err)
+		assert.Empty(t, hit.Stage, text)
+		assert.True(t, ClientGenerated(text), text)
+	}
+	assert.False(t, ClientGenerated("please explain the transcript format"))
+}
+
+func TestMatchContext(t *testing.T) {
+	long := strings.Repeat("a", 50) + "keygen" + strings.Repeat("b", 50)
+	assert.Equal(t, "…"+strings.Repeat("a", 40)+"[keygen]"+strings.Repeat("b", 40)+"…", matchContext(long, "keygen"))
+	assert.Equal(t, "实现 ml-kem [keygen] 函数", matchContext("实现 ml-kem keygen 函数", "keygen"))
+	assert.Empty(t, matchContext("text", "absent"))
 }
 
 func TestHardTextPreparationAndResponses(t *testing.T) {

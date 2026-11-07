@@ -101,11 +101,14 @@ func CheckRiskGate(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIErr
 				if hit.latest == "" {
 					hit.latest = verdict.Excerpt
 				}
-				strike := gate.HardRegexStrike
 				if verdict.Stage == model.RiskGateStageDistill {
-					strike = gate.DistillStrike
+					return hit.apply(verdict.Stage, verdict.Rule, verdict.Detail, gate.DistillStrike)
 				}
-				return hit.apply(verdict.Stage, verdict.Rule, verdict.Detail, strike)
+				detail := verdict.Detail
+				if verdict.Context != "" {
+					detail += " · " + verdict.Context
+				}
+				return hit.blockKeyword(verdict.Rule, detail, verdict.Detail)
 			}
 		}
 	} else {
@@ -114,10 +117,23 @@ func CheckRiskGate(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIErr
 				return hit.apply(model.RiskGateStageDistill, rule, "", gate.DistillStrike)
 			}
 		}
-		if gate.HardRegexEnabled {
-			if rule := riskgate.CompileRules(gate.HardRegexRules).Match(messages...); rule != "" {
-				return hit.apply(model.RiskGateStageHardRegex, rule, "", gate.HardRegexStrike)
+		// Like the structured rules, the line rules match only the latest
+		// message a person wrote; a blocked one is held below.
+		if gate.HardRegexEnabled && latest != "" && !riskpolicy.ClientGenerated(latest) {
+			if rule := riskgate.CompileRules(gate.HardRegexRules).Match(latest); rule != "" {
+				return hit.blockKeyword(rule, "", "")
 			}
+		}
+	}
+
+	// A conversation the hard rules blocked stays held: the client resends
+	// the blocked message with every later one.
+	if gate.HardRegexEnabled && gate.Mode == operation_setting.RiskGateModeEnforce && len(messages) > 0 {
+		if preview, held := riskGateHeld(info.UserId, messages, common.GetTimestamp()); held {
+			hit.record(model.RiskGateStageHardRegex, riskGateRuleHeld, "", model.RiskGateActionBlocked)
+			RequestPolicy(c).AddEvent(PolicyEvent{ErrorCode: string(types.ErrorCodeRiskGateBlocked), ErrorSource: "local", Decision: PolicyDecision{Action: "stop", Reason: "local_rejection", Source: "global"}, Health: "unchanged"})
+			return types.NewErrorWithStatusCode(errors.New(i18n.T(c, i18n.MsgRiskGateHeld, map[string]any{"Message": preview})),
+				types.ErrorCodeRiskGateBlocked, http.StatusForbidden, types.ErrOptionWithSkipRetry())
 		}
 	}
 
@@ -174,13 +190,36 @@ func (h riskGateHit) apply(stage, rule, detail string, strike bool) *types.NewAP
 		types.ErrorCodeRiskGateBlocked, http.StatusForbidden, types.ErrOptionWithSkipRetry())
 }
 
+// riskGateRuleHeld is the rule of an event that rejected a request for
+// resending a conversation the hard rules blocked.
+const riskGateRuleHeld = "held"
+
+// blockKeyword applies a hard rule hit. In enforce mode it tells the customer
+// which words matched and holds the conversation, so the blocked message
+// cannot reach the upstream inside a later request's history.
+func (h riskGateHit) blockKeyword(rule, detail, keyword string) *types.NewAPIError {
+	apiErr := h.apply(model.RiskGateStageHardRegex, rule, detail, h.gate.HardRegexStrike)
+	if apiErr == nil {
+		return nil
+	}
+	if len(h.messages) > 0 {
+		keys := violationConversationKeys(h.messages)
+		holdRiskGateConversation(h.info.UserId, keys[len(keys)-1], h.latest, common.GetTimestamp())
+	}
+	if keyword == "" {
+		return apiErr
+	}
+	return types.NewErrorWithStatusCode(errors.New(i18n.T(h.c, i18n.MsgRiskGateKeyword, map[string]any{"Keyword": keyword})),
+		types.ErrorCodeRiskGateBlocked, http.StatusForbidden, types.ErrOptionWithSkipRetry())
+}
+
 func (h riskGateHit) record(stage, rule, detail, action string) {
 	event := model.RiskGateEvent{
 		CreatedAt: common.GetTimestamp(),
 		Stage:     stage,
 		Rule:      rule[:min(len(rule), 64)],
 		Action:    action,
-		Detail:    detail[:min(len(detail), 255)],
+		Detail:    strings.ToValidUTF8(detail[:min(len(detail), 255)], ""),
 		UserId:    h.info.UserId,
 		TokenId:   h.info.TokenId,
 		ModelName: h.info.OriginModelName,

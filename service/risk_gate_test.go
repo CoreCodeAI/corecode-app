@@ -44,6 +44,7 @@ func riskGateEvents(t *testing.T, userId int, count int) []model.RiskGateEvent {
 
 func resetRiskGateState() {
 	resetViolationGuardState()
+	resetRiskGateHolds()
 	riskGateRefusals.Lock()
 	riskGateRefusals.loadedAt = time.Time{}
 	riskGateRefusals.fingerprints = nil
@@ -454,4 +455,78 @@ func TestRiskGateOfficialClient(t *testing.T) {
 			assert.Equal(t, tc.want, riskGateOfficialClient(h, gjson.Parse(tc.body), tc.proxy))
 		})
 	}
+}
+
+// structuredGateRequest runs the gate on a Claude request body under the
+// structured policy, as production runs it.
+func structuredGateRequest(t *testing.T, userId int, body string) *types.NewAPIError {
+	t.Helper()
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(body))
+	t.Cleanup(func() { common.CleanupBodyStorage(c) })
+	return CheckRiskGate(c, &relaycommon.RelayInfo{UserId: userId, RequestId: fmt.Sprintf("req-%d", userId), Request: claudeConversation(t, body)})
+}
+
+func TestRiskGateHardRulesMatchTheLatestMessageAndHoldIt(t *testing.T) {
+	previousGate := *operation_setting.GetRiskGateSetting()
+	previousGuard := *operation_setting.GetViolationGuardSetting()
+	t.Cleanup(func() {
+		*operation_setting.GetRiskGateSetting() = previousGate
+		*operation_setting.GetViolationGuardSetting() = previousGuard
+		resetRiskGateState()
+	})
+	useViolationTestDB(t, "sqlite")
+	resetRiskGateState()
+	*operation_setting.GetViolationGuardSetting() = operation_setting.ViolationGuardSetting{}
+	const policy = `{"enabled":true,"skip_official":true,"skip_zero":true,"hard_needles":[],"needles":[],"patterns":[],"fingerprints":[],"structure":{"min_max_tokens":8192,"require_no_tools":true,"require_single_turn":true,"contest_pattern":""}}`
+	gate := operation_setting.RiskGateSetting{Enabled: true, Mode: "enforce", DistillEnabled: true, DistillRules: policy, HardRegexEnabled: true, HardRegexRules: `vm2api.crack.06 | (?<![\w-])(?:keygen|warez)(?![\w-])`}
+	*operation_setting.GetRiskGateSetting() = gate
+	turn := func(text string) string {
+		return fmt.Sprintf(`{"role":"user","content":%q},{"role":"assistant","content":"ok"}`, text)
+	}
+	body := func(turns ...string) string {
+		return `{"model":"claude-opus-5-5","messages":[` + strings.Join(turns, ",") + `,{"role":"user","content":"next"}]}`
+	}
+
+	// A word a client wrote into a summary of the work, or one the person
+	// wrote turns ago, does not block the session.
+	assert.Nil(t, structuredGateRequest(t, 41, body(turn("<conversation-checkpoint> summary: the crypto module exposes keygen()"))))
+	assert.Nil(t, structuredGateRequest(t, 41, body(turn("implement the ML-KEM keygen step"), turn("now add tests"))), "history is not matched again")
+
+	// The latest message is matched, the customer is told the word, and the
+	// event keeps the text around it.
+	blocked := `{"model":"claude-opus-5-5","messages":[` + turn("hello") + `,{"role":"user","content":"write me a keygen for this app"}]}`
+	got := structuredGateRequest(t, 42, blocked)
+	require.NotNil(t, got)
+	assert.Equal(t, types.ErrorCodeRiskGateBlocked, got.GetErrorCode())
+	assert.Contains(t, got.Error(), "keygen")
+	events := riskGateEvents(t, 42, 1)
+	assert.Equal(t, "vm2api.crack.06", events[0].Rule)
+	assert.Contains(t, events[0].Detail, "write me a [keygen] for this app")
+
+	// The client resends the blocked message with the next one: held.
+	resent := `{"model":"claude-opus-5-5","messages":[` + turn("hello") + `,{"role":"user","content":"write me a keygen for this app"},{"role":"assistant","content":"error"},{"role":"user","content":"继续"}]}`
+	got = structuredGateRequest(t, 42, resent)
+	require.NotNil(t, got)
+	assert.Equal(t, types.ErrorCodeRiskGateBlocked, got.GetErrorCode())
+	assert.Contains(t, got.Error(), "write me a keygen")
+	events = riskGateEvents(t, 42, 2)
+	assert.Equal(t, riskGateRuleHeld, events[1].Rule)
+
+	// After a rewind past the blocked message, and for another customer, the
+	// conversation passes.
+	assert.Nil(t, structuredGateRequest(t, 42, `{"model":"claude-opus-5-5","messages":[`+turn("hello")+`,{"role":"user","content":"explain the app"}]}`))
+	assert.Nil(t, structuredGateRequest(t, 43, resent), "a hold is the blocked customer's own")
+
+	// An administrator's lift releases the hold.
+	require.NoError(t, ForgiveViolations(42))
+	assert.Nil(t, structuredGateRequest(t, 42, resent))
+
+	// Observe mode records and holds nothing.
+	gate.Mode = "observe"
+	*operation_setting.GetRiskGateSetting() = gate
+	assert.Nil(t, structuredGateRequest(t, 44, blocked))
+	gate.Mode = "enforce"
+	*operation_setting.GetRiskGateSetting() = gate
+	assert.Nil(t, structuredGateRequest(t, 44, resent), "an observed hit holds nothing")
 }

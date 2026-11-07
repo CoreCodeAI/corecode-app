@@ -441,6 +441,7 @@ func ForgiveViolations(userId int) error {
 	if err := model.ForgiveUserViolations(userId, common.GetTimestamp()); err != nil {
 		return err
 	}
+	releaseRiskGateHolds(userId)
 	violationGuardState.Lock()
 	defer violationGuardState.Unlock()
 	delete(violationGuardState.suspendedUntil, userId)
