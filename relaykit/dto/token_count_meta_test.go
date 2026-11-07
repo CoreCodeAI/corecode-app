@@ -28,11 +28,12 @@ func TestTokenCountMetaCountsAgentLoopContent(t *testing.T) {
 			name: "chat",
 			raw: `{"model":"m","messages":[
 				{"role":"user","content":[{"type":"text","text":"show main.go"},{"type":"image_url","image_url":{"url":"data:image/png;base64,` + imageData + `"}}]},
-				{"role":"assistant","content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"read_file","arguments":"{\"path\":\"main.go\"}"}}]},
-				{"role":"tool","tool_call_id":"c1","content":"package main\n\nfunc main() {\n\tprintln(\"hi\")\n}"}],
+				{"role":"assistant","content":null,"reasoning_content":"Read main.go first.","tool_calls":[{"id":"c1","type":"function","function":{"name":"read_file","arguments":"{\"path\":\"main.go\"}"}}]},
+				{"role":"tool","tool_call_id":"c1","content":"package main\n\nfunc main() {\n\tprintln(\"hi\")\n}"},
+				{"role":"assistant","content":"It prints hi.","reasoning":"The file only prints."}],
 				"tools":[{"type":"function","function":{"name":"read_file","description":"Read a file","parameters":{"type":"object","properties":{"path":{"type":"string"}}}}}]}`,
 			request:  &GeneralOpenAIRequest{},
-			contains: []string{"read_file", `{"path":"main.go"}`, toolOutput, "Read a file", `"properties":{"path":{"type":"string"}}`},
+			contains: []string{"read_file", `{"path":"main.go"}`, toolOutput, "Read a file", `"properties":{"path":{"type":"string"}}`, "Read main.go first.", "The file only prints."},
 			// An omitted detail stays empty so the estimate uses the upstream default (auto).
 			files:     1,
 			toolCount: 1,
