@@ -7911,6 +7911,21 @@
     "{{count}} new payers": "신규 결제자 {{count}}명",
     "{{count}} paid channels": "유료 채널 {{count}}개",
     "{{count}} payers": "결제자 {{count}}명",
-    "Last day (optional)": "마지막 날(선택)"
+    "Last day (optional)": "마지막 날(선택)",
+    "Terms update notice": "약관 업데이트 안내",
+    "Our terms were updated on {{version}}. Please read and agree before signing in or creating an account.": "약관이 {{version}}에 업데이트되었습니다. 로그인하거나 계정을 만들기 전에 읽고 동의해 주세요.",
+    "Decline": "거부",
+    "Agree and continue": "동의하고 계속",
+    "Related documents": "관련 문서",
+    "Terms of service": "서비스 약관",
+    "Acceptable use policy": "허용 가능한 사용 정책",
+    "Refunds": "환불",
+    "Privacy notice": "개인정보 안내",
+    "You cannot sign up or use quick sign-in until you agree to the latest terms.": "최신 약관에 동의하기 전에는 가입하거나 빠른 로그인을 사용할 수 없습니다.",
+    "You need to agree to the latest terms before signing in.": "로그인하기 전에 최신 약관에 동의해야 합니다.",
+    "Inputs and quick sign-in stay disabled until you agree.": "동의하기 전까지 입력란과 빠른 로그인은 비활성화됩니다.",
+    "View terms": "약관 보기",
+    "Failed to record your agreement": "동의 기록을 저장하지 못했습니다",
+    "The terms have been updated, please reload the page": "약관이 업데이트되었습니다. 페이지를 새로고침해 주세요"
   }
 }

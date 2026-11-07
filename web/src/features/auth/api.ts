@@ -365,3 +365,15 @@ export async function bindEmail(
   )
   return res.data
 }
+
+// Record that the signed-in user accepted the current terms version.
+export async function acceptTermsConsent(
+  version: string
+): Promise<ApiResponse<{ terms_version: string }>> {
+  const res = await api.post(
+    '/api/user/terms/consent',
+    { version },
+    { skipErrorHandler: true }
+  )
+  return res.data
+}

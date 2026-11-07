@@ -109,6 +109,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"POST /api/user/nowpayments/pay":               accessTokenScopeRule("wallet:write"),
 	"POST /api/user/aff_transfer":                  accessTokenScopeRule("wallet:write"),
 	"PUT /api/user/setting":                        accessTokenScopeRule("profile:write"),
+	"POST /api/user/terms/consent":                 accessTokenSessionRule,
 	"GET /api/user/2fa/status":                     accessTokenScopeRule("account_security:read"),
 	"POST /api/user/2fa/setup":                     accessTokenScopeRule("account_security:write"),
 	"POST /api/user/2fa/enable":                    accessTokenScopeRule("account_security:write"),

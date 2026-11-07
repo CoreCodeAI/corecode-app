@@ -22,6 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
+import { getTermsVersion } from '../lib/terms-consent'
 import type { SystemStatus } from '../types'
 
 interface LegalConsentProps {
@@ -42,6 +43,10 @@ export function LegalConsent({
   const hasPrivacyPolicy = Boolean(status?.privacy_policy_enabled)
 
   if (!hasUserAgreement && !hasPrivacyPolicy) {
+    return null
+  }
+  // The terms dialog asks for consent instead while a terms version is set.
+  if (getTermsVersion(status)) {
     return null
   }
 

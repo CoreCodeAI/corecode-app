@@ -390,6 +390,7 @@ func migrateDB() error {
 		&AffiliateRetiredCode{},
 		&EnterpriseApplication{},
 		&Feedback{},
+		&UserTermsConsent{},
 		&UserConcurrencyRejection{},
 		&InsightHour{},
 		&InsightUserHour{},

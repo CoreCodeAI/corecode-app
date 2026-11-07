@@ -20,6 +20,7 @@ import { AnimatedOutlet } from '@/components/page-transition'
 import { SkipToMain } from '@/components/skip-to-main'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { LayoutProvider } from '@/context/layout-provider'
+import { TermsConsentPrompt } from '@/features/auth/components/terms-consent-prompt'
 import { useFeedbackReplyToast } from '@/features/feedback/hooks/use-feedback-unread'
 import { useReportPurchases } from '@/lib/analytics'
 import { getCookie } from '@/lib/cookies'
@@ -50,6 +51,7 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
   return (
     <LayoutProvider>
       <SignedInEffects />
+      <TermsConsentPrompt />
       <SidebarProvider defaultOpen={defaultOpen} className='flex-col'>
         <SkipToMain />
         <AppHeader />

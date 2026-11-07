@@ -125,6 +125,7 @@ func GetStatus(c *gin.Context) {
 		"setup":                       constant.Setup,
 		"user_agreement_enabled":      legalSetting.UserAgreement != "",
 		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
+		"terms_version":               legalSetting.TermsVersion,
 		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
 		"log_export_enabled":          operation_setting.GetLogSetting().UserExportEnabled,
 		"log_max_range_days":          operation_setting.GetLogSetting().MaxRangeDays,

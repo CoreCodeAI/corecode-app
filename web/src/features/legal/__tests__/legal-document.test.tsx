@@ -58,6 +58,32 @@ describe('LegalDocument', () => {
     )
   })
 
+  it('carries a section anchor over to the linked document', async () => {
+    const replace = vi.fn()
+    vi.stubGlobal('location', { ...window.location, hash: '#aup', replace })
+
+    renderDocument('https://corecode.live/docs/terms/')
+
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith(
+        'https://corecode.live/docs/terms/#aup'
+      )
+    )
+  })
+
+  it('keeps the anchor the configured link already names', async () => {
+    const replace = vi.fn()
+    vi.stubGlobal('location', { ...window.location, hash: '#aup', replace })
+
+    renderDocument('https://corecode.live/docs/terms/#privacy')
+
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith(
+        'https://corecode.live/docs/terms/#privacy'
+      )
+    )
+  })
+
   it('renders a document written in Markdown in place', async () => {
     const replace = vi.fn()
     vi.stubGlobal('location', { ...window.location, replace })

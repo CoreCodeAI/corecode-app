@@ -55,6 +55,8 @@ export interface AuthUser {
   stripe_customer?: string
   /** Unix seconds; analytics reads it to tell a registration from a login */
   created_at?: number
+  /** The current terms version when the user accepted it, otherwise empty */
+  terms_version?: string
   sidebar_modules?: string
   permissions?: UserPermissions
 }
