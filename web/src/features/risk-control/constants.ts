@@ -16,23 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useTranslation } from 'react-i18next'
-
-import { SettingsSection } from '../components/settings-section'
-import { RiskGateDashboard } from './risk-gate-dashboard'
-import { RiskGateForm, type RiskGateValues } from './risk-gate-form'
-
-type RiskGateSectionProps = {
-  defaultValues: RiskGateValues
-}
-
-export function RiskGateSection(props: RiskGateSectionProps) {
-  const { t } = useTranslation()
-
-  return (
-    <SettingsSection title={t('Risk audit')}>
-      <RiskGateDashboard />
-      <RiskGateForm defaultValues={props.defaultValues} />
-    </SettingsSection>
-  )
-}
+// The route's search schema reads these, so they live apart from the page:
+// importing them from index.tsx would put the whole page in the entry bundle.
+export const RISK_CONTROL_TABS = ['violations', 'audit'] as const
+export type RiskControlTab = (typeof RISK_CONTROL_TABS)[number]

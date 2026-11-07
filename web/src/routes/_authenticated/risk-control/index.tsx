@@ -16,26 +16,28 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useTranslation } from 'react-i18next'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import z from 'zod'
 
-import { SettingsSection } from '../components/settings-section'
-import {
-  ViolationGuardForm,
-  type ViolationGuardValues,
-} from './violation-guard-form'
-import { ViolationRecords } from './violation-records'
+import { RiskControl } from '@/features/risk-control'
+import { RISK_CONTROL_TABS } from '@/features/risk-control/constants'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
-type ViolationGuardSectionProps = {
-  defaultValues: ViolationGuardValues
-}
+const riskControlSearchSchema = z.object({
+  tab: z.enum(RISK_CONTROL_TABS).optional().catch(undefined),
+})
 
-export function ViolationGuardSection(props: ViolationGuardSectionProps) {
-  const { t } = useTranslation()
+export const Route = createFileRoute('/_authenticated/risk-control/')({
+  beforeLoad: () => {
+    const { auth } = useAuthStore.getState()
 
-  return (
-    <SettingsSection title={t('Usage policy violations')}>
-      <ViolationGuardForm defaultValues={props.defaultValues} />
-      <ViolationRecords />
-    </SettingsSection>
-  )
-}
+    if (auth.user?.role !== ROLE.SUPER_ADMIN) {
+      throw redirect({
+        to: '/403',
+      })
+    }
+  },
+  validateSearch: riskControlSearchSchema,
+  component: RiskControl,
+})

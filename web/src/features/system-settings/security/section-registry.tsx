@@ -33,16 +33,6 @@ const TokenLimitSection = lazySection(() =>
   )
 )
 
-const ViolationGuardSection = lazySection(() =>
-  import('../violation-guard/violation-guard-section').then(
-    (m) => m.ViolationGuardSection
-  )
-)
-
-const RiskGateSection = lazySection(() =>
-  import('../risk-gate/risk-gate-section').then((m) => m.RiskGateSection)
-)
-
 const SECURITY_SECTIONS = [
   {
     id: 'rate-limit',
@@ -96,80 +86,6 @@ const SECURITY_SECTIONS = [
             settings['token_setting.max_user_tokens'],
           'token_setting.concurrency_limits':
             settings['token_setting.concurrency_limits'],
-        }}
-      />
-    ),
-  },
-  {
-    id: 'violation-guard',
-    titleKey: 'Usage policy violations',
-    build: (settings: SecuritySettings) => (
-      <ViolationGuardSection
-        defaultValues={{
-          'violation_guard_setting.enabled':
-            settings['violation_guard_setting.enabled'],
-          'violation_guard_setting.mode':
-            settings['violation_guard_setting.mode'],
-          'violation_guard_setting.suspend_hours':
-            settings['violation_guard_setting.suspend_hours'],
-          'violation_guard_setting.ban_strikes':
-            settings['violation_guard_setting.ban_strikes'],
-          'violation_guard_setting.strike_window_days':
-            settings['violation_guard_setting.strike_window_days'],
-          'violation_guard_setting.lenient_categories':
-            settings['violation_guard_setting.lenient_categories'],
-          'violation_guard_setting.lenient_warnings':
-            settings['violation_guard_setting.lenient_warnings'],
-          'violation_guard_setting.client_check_limit':
-            settings['violation_guard_setting.client_check_limit'],
-        }}
-      />
-    ),
-  },
-  {
-    id: 'risk-gate',
-    titleKey: 'Risk audit',
-    build: (settings: SecuritySettings) => (
-      <RiskGateSection
-        defaultValues={{
-          'risk_gate_setting.enabled': settings['risk_gate_setting.enabled'],
-          'risk_gate_setting.mode': settings['risk_gate_setting.mode'],
-          'risk_gate_setting.distill_enabled':
-            settings['risk_gate_setting.distill_enabled'],
-          'risk_gate_setting.distill_rules':
-            settings['risk_gate_setting.distill_rules'],
-          'risk_gate_setting.distill_strike':
-            settings['risk_gate_setting.distill_strike'],
-          'risk_gate_setting.hard_regex_enabled':
-            settings['risk_gate_setting.hard_regex_enabled'],
-          'risk_gate_setting.hard_regex_rules':
-            settings['risk_gate_setting.hard_regex_rules'],
-          'risk_gate_setting.hard_regex_strike':
-            settings['risk_gate_setting.hard_regex_strike'],
-          'risk_gate_setting.similarity_enabled':
-            settings['risk_gate_setting.similarity_enabled'],
-          'risk_gate_setting.similarity_threshold':
-            settings['risk_gate_setting.similarity_threshold'],
-          'risk_gate_setting.decision_enabled':
-            settings['risk_gate_setting.decision_enabled'],
-          'risk_gate_setting.decision_base_url':
-            settings['risk_gate_setting.decision_base_url'],
-          'risk_gate_setting.decision_api_key':
-            settings['risk_gate_setting.decision_api_key'],
-          'risk_gate_setting.decision_model':
-            settings['risk_gate_setting.decision_model'],
-          'risk_gate_setting.decision_questions':
-            settings['risk_gate_setting.decision_questions'],
-          'risk_gate_setting.decision_threshold':
-            settings['risk_gate_setting.decision_threshold'],
-          'risk_gate_setting.decision_timeout_ms':
-            settings['risk_gate_setting.decision_timeout_ms'],
-          'risk_gate_setting.decision_fail_open':
-            settings['risk_gate_setting.decision_fail_open'],
-          'risk_gate_setting.decision_strike':
-            settings['risk_gate_setting.decision_strike'],
-          'risk_gate_setting.decision_skip_official':
-            settings['risk_gate_setting.decision_skip_official'],
         }}
       />
     ),

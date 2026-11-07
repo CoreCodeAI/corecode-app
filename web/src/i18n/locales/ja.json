@@ -7469,6 +7469,7 @@
     "Model failed, let through": "モデル障害のため通過",
     "Stage": "段階",
     "Message": "メッセージ",
+    "Risk Control": "リスク管理",
     "Risk audit": "リスク監査",
     "name | regular expression, one per line": "名前 | 正規表現（1 行に 1 つ）",
     "vm2api distill-rules.json or name | regular expression, one per line": "vm2api の distill-rules.json、または 名前 | 正規表現（1 行に 1 つ）",

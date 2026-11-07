@@ -37,6 +37,7 @@ import {
   ServerCog,
   ChartNoAxesCombined,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   Ticket,
   User,
@@ -156,6 +157,12 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             title: t('Site Insights'),
             url: '/site-insights',
             icon: ChartNoAxesCombined,
+            requiredRole: ROLE.SUPER_ADMIN,
+          },
+          {
+            title: t('Risk Control'),
+            url: '/risk-control',
+            icon: ShieldAlert,
             requiredRole: ROLE.SUPER_ADMIN,
           },
           {
