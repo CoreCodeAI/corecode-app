@@ -226,26 +226,52 @@ func extractPrompt(input Input) prompt {
 	return prompt{user: latest, joined: strings.Join(parts, "\n")}
 }
 
+// clientGeneratedPrefixes start user turns that agent clients write from
+// earlier work rather than from what the person typed: Claude Code's
+// compaction summary and conversation checkpoint, the transcript its client
+// checks carry, and Codex's reviewer prompt. Their words come from code and
+// tool output, so a forbidden word in a repository would block every later
+// request of the session. They are compared after normalizeText, lowercase.
+var clientGeneratedPrefixes = []string{
+	"<conversation-checkpoint>",
+	"<transcript>",
+	"this session is being continued from a previous conversation",
+	"the following is the codex agent history",
+	"[compaction summary",
+}
+
+func clientGenerated(normalized string) bool {
+	for _, prefix := range clientGeneratedPrefixes {
+		if strings.HasPrefix(normalized, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// ClientGenerated reports whether a user turn is one an agent client wrote
+// from earlier work, by the same test the hard rules use.
+func ClientGenerated(text string) bool {
+	return clientGenerated(normalizeText(stripEnvironment(stripReminders(text))))
+}
+
+// hardDocument is the latest user text that a person wrote, which the hard
+// rules match. Earlier turns were matched when each was the latest; a turn the
+// gate blocked is held by the caller, so the history is not matched again.
+// Matching it again blocked a whole session over a word a client had written
+// into a summary of the work.
 func hardDocument(input Input) string {
-	seen := make(map[string]struct{})
-	var parts []string
+	latest := ""
 	for _, src := range input.sources() {
 		for _, text := range userTexts(src, true) {
 			text = normalizeText(stripEnvironment(stripReminders(text)))
-			if text == "" {
+			if text == "" || clientGenerated(text) {
 				continue
 			}
-			if _, found := seen[text]; found {
-				continue
-			}
-			seen[text] = struct{}{}
-			parts = append(parts, text)
+			latest = text
 		}
 	}
-	if len(parts) > 1 {
-		parts = append(parts, parts[len(parts)-1])
-	}
-	return prepareText(strings.Join(parts, "\n"))
+	return prepareText(latest)
 }
 
 func jsTruthy(value gjson.Result) bool {
