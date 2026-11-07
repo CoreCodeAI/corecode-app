@@ -247,7 +247,7 @@ func registerMagicLinkUser(c *gin.Context, email string, aff string) (*model.Use
 	if err := cleanUser.Insert(inviterId); err != nil {
 		return nil, err
 	}
-	giveAffiliateSignupGift(c, cleanUser.Id, inviterId)
+	giveAffiliateSignupGift(c, cleanUser.Id, inviterId, false)
 	if err := issueDefaultAPIToken(c, &cleanUser); err != nil {
 		common.SysLog(common.LogText("failed to create default token for magic link user: %v", err))
 		return nil, model.ErrDatabase

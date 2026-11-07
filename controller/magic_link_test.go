@@ -240,9 +240,10 @@ func TestMagicLinkSignUpBindsTheInviterFromItsCode(t *testing.T) {
 	assert.EqualValues(t, 1, referrals, "the new invitee starts counting toward commission at once")
 }
 
-// A retail channel's invitee receives the tier's gift plan when the emailed
-// link creates the account, without anyone clicking anything.
-func TestMagicLinkSignUpGivesTheChannelGiftPlan(t *testing.T) {
+// A retail channel's invitee who signs up through the emailed link is bound
+// to the channel but receives no gift plan: only OAuth sign-ups do, since a
+// farm can buy email addresses far more cheaply. The row records why.
+func TestMagicLinkSignUpWithholdsTheChannelGiftPlan(t *testing.T) {
 	messages := setupMagicLinkTest(t)
 	require.NoError(t, model.DB.AutoMigrate(&model.Affiliate{}, &model.AffiliateReferral{}, &model.AffiliateSignupGift{},
 		&model.SubscriptionPlan{}, &model.UserSubscription{}))
@@ -276,9 +277,13 @@ func TestMagicLinkSignUpGivesTheChannelGiftPlan(t *testing.T) {
 
 	user, err := model.GetUniqueUserByEmail(magicLinkTestEmail)
 	require.NoError(t, err)
-	var subscription model.UserSubscription
-	require.NoError(t, model.DB.Where("user_id = ? AND plan_id = ?", user.Id, plan.Id).First(&subscription).Error)
-	assert.Equal(t, model.SubscriptionSourceAffiliateGift, subscription.Source)
+	assert.Equal(t, inviter.Id, user.InviterId)
+	var subscriptions int64
+	require.NoError(t, model.DB.Model(&model.UserSubscription{}).Where("user_id = ?", user.Id).Count(&subscriptions).Error)
+	assert.Zero(t, subscriptions)
+	var gift model.AffiliateSignupGift
+	require.NoError(t, model.DB.Where("user_id = ?", user.Id).First(&gift).Error)
+	assert.Equal(t, model.AffiliateSignupGiftEmailSignup, gift.Status)
 }
 
 // Two mailboxes can share a local part. The link is spent before the account

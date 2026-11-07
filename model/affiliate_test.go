@@ -473,7 +473,7 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 					require.NoError(t, DB.Model(&User{}).Where("id = ?", user.Id).Update("email", email).Error)
 				}
 				ip++
-				plan, _, err := GiveAffiliateSignupGift(user.Id, user.InviterId, fmt.Sprintf("203.0.113.%d", ip))
+				plan, _, err := GiveAffiliateSignupGift(user.Id, user.InviterId, fmt.Sprintf("203.0.%d.113", ip), true)
 				require.NoError(t, err)
 				return user, plan
 			}
@@ -501,7 +501,7 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 			require.NoError(t, DB.Where("user_id = ? AND plan_id = ?", d1.Id, trial.Id).First(&subscription).Error)
 			assert.Equal(t, SubscriptionSourceAffiliateGift, subscription.Source)
 			assert.Equal(t, "active", subscription.Status)
-			again, _, err := GiveAffiliateSignupGift(d1.Id, d.Id, "198.51.100.1")
+			again, _, err := GiveAffiliateSignupGift(d1.Id, d.Id, "198.51.1.100", true)
 			require.NoError(t, err)
 			assert.Nil(t, again, "a user is handled once")
 
@@ -520,7 +520,7 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 			// A second sign-up from an address that received a gift in the last
 			// 24 hours receives none; the row records why.
 			r2 := registerAffiliateTestUser(t, "aff_r2", r.AffCode)
-			plan, _, err = GiveAffiliateSignupGift(r2.Id, r.Id, fmt.Sprintf("203.0.113.%d", ip))
+			plan, _, err = GiveAffiliateSignupGift(r2.Id, r.Id, fmt.Sprintf("203.0.%d.113", ip), true)
 			require.NoError(t, err)
 			assert.Nil(t, plan)
 			assert.Equal(t, AffiliateSignupGiftIpUsed, giftStatus(r2))
@@ -528,10 +528,36 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 			require.NoError(t, DB.Model(&AffiliateSignupGift{}).Where("user_id = ?", r1.Id).
 				Update("created_at", common.GetTimestamp()-affiliateSignupGiftWindow-1).Error)
 			require.NoError(t, DB.Model(&AffiliateSignupGift{}).Where("user_id = ?", r2.Id).Update("ip", "").Error)
-			r1Ip := fmt.Sprintf("203.0.113.%d", ip)
-			plan, _, err = GiveAffiliateSignupGift(r3.Id, r.Id, r1Ip)
+			r1Ip := fmt.Sprintf("203.0.%d.113", ip)
+			plan, _, err = GiveAffiliateSignupGift(r3.Id, r.Id, r1Ip, true)
 			require.NoError(t, err)
 			require.NotNil(t, plan, "an address's earlier gift stops counting after 24 hours")
+
+			// Another address in a gifted /24 receives nothing; an older row
+			// without a network still counts by its address.
+			r6 := registerAffiliateTestUser(t, "aff_r6", r.AffCode)
+			plan, _, err = GiveAffiliateSignupGift(r6.Id, r.Id, fmt.Sprintf("203.0.%d.200", ip), true)
+			require.NoError(t, err)
+			assert.Nil(t, plan, "the address shares r3's /24")
+			assert.Equal(t, AffiliateSignupGiftIpUsed, giftStatus(r6))
+			require.NoError(t, DB.Model(&AffiliateSignupGift{}).Where("user_id = ?", r3.Id).Update("network", "").Error)
+			r7 := registerAffiliateTestUser(t, "aff_r7", r.AffCode)
+			plan, _, err = GiveAffiliateSignupGift(r7.Id, r.Id, r1Ip, true)
+			require.NoError(t, err)
+			assert.Nil(t, plan, "a row from before networks were stored matches by address")
+			assert.Equal(t, AffiliateSignupGiftIpUsed, giftStatus(r7))
+
+			// A sign-up by email rather than an OAuth provider receives
+			// nothing; the row records why, and the address stays free.
+			byEmail := registerAffiliateTestUser(t, "aff_mail", r.AffCode)
+			plan, _, err = GiveAffiliateSignupGift(byEmail.Id, r.Id, "198.51.7.100", false)
+			require.NoError(t, err)
+			assert.Nil(t, plan)
+			assert.Equal(t, AffiliateSignupGiftEmailSignup, giftStatus(byEmail))
+			viaOAuth := registerAffiliateTestUser(t, "aff_oauth", r.AffCode)
+			plan, _, err = GiveAffiliateSignupGift(viaOAuth.Id, r.Id, "198.51.7.101", true)
+			require.NoError(t, err)
+			assert.NotNil(t, plan, "a withheld email sign-up does not use up its network")
 
 			// A blocked address domain, or a parent of it, receives nothing.
 			setting.GiftBlockedEmailDomains = "mailinator.com\n@throwaway.test"
@@ -551,7 +577,7 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 					r.Id, AffiliateSignupGiftGiven, common.GetTimestamp()-affiliateSignupGiftWindow).Count(&given).Error)
 			}
 			countGiven()
-			require.EqualValues(t, 2, given, "R's gifts inside the window: r3 and r5")
+			require.EqualValues(t, 3, given, "R's gifts inside the window: r3, aff_oauth and r5")
 			users := make([]*User, 0, 8)
 			for i := range 8 {
 				users = append(users, registerAffiliateTestUser(t, fmt.Sprintf("aff_cap%d", i), r.AffCode))
@@ -559,7 +585,7 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 			var wg sync.WaitGroup
 			for i, user := range users {
 				wg.Go(func() {
-					_, _, err := GiveAffiliateSignupGift(user.Id, r.Id, fmt.Sprintf("192.0.2.%d", i))
+					_, _, err := GiveAffiliateSignupGift(user.Id, r.Id, fmt.Sprintf("192.0.%d.2", i), true)
 					assert.NoError(t, err)
 				})
 			}
@@ -568,7 +594,7 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 			assert.EqualValues(t, 5, given)
 			var capped int64
 			require.NoError(t, DB.Model(&AffiliateSignupGift{}).Where("inviter_id = ? AND status = ?", r.Id, AffiliateSignupGiftCapReached).Count(&capped).Error)
-			assert.EqualValues(t, 5, capped)
+			assert.EqualValues(t, 6, capped, "two of the eight fit under the cap")
 			_, plan = signUp("aff_d2", d, "")
 			assert.NotNil(t, plan, "another channel has its own cap")
 			setting.GiftDailyCap = 0
@@ -579,7 +605,7 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 			require.NoError(t, err)
 			late := registerAffiliateTestUser(t, "aff_late", "")
 			require.NoError(t, DB.Model(&User{}).Where("id = ?", late.Id).Update("inviter_id", r.Id).Error)
-			plan, _, err = GiveAffiliateSignupGift(late.Id, r.Id, "198.51.100.2")
+			plan, _, err = GiveAffiliateSignupGift(late.Id, r.Id, "198.51.2.100", true)
 			require.NoError(t, err)
 			assert.Nil(t, plan)
 			require.NoError(t, DB.Model(&SubscriptionPlan{}).Where("id = ?", trial.Id).Update("enabled", false).Error)
@@ -591,18 +617,18 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 			setting.Enabled = false
 			stray := registerAffiliateTestUser(t, "aff_stray", d.AffCode)
 			setting.Enabled = true
-			plan, _, err = GiveAffiliateSignupGift(stray.Id, d.Id, "198.51.100.3")
+			plan, _, err = GiveAffiliateSignupGift(stray.Id, d.Id, "198.51.3.100", true)
 			require.NoError(t, err)
 			assert.NotNil(t, plan, "the binding, not the program at sign-up, decides; the program is on again")
 			setting.Enabled = false
 			offline := registerAffiliateTestUser(t, "aff_offline", d.AffCode)
-			plan, _, err = GiveAffiliateSignupGift(offline.Id, d.Id, "198.51.100.4")
+			plan, _, err = GiveAffiliateSignupGift(offline.Id, d.Id, "198.51.4.100", true)
 			require.NoError(t, err)
 			assert.Nil(t, plan, "the program is off")
 			setting.Enabled = true
 
 			// The gift is for the inviter the user is bound to.
-			plan, _, err = GiveAffiliateSignupGift(offline.Id, r.Id, "198.51.100.5")
+			plan, _, err = GiveAffiliateSignupGift(offline.Id, r.Id, "198.51.5.100", true)
 			require.NoError(t, err)
 			assert.Nil(t, plan)
 
@@ -634,7 +660,7 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 			require.NoError(t, DB.Model(&User{}).Where("id = ?", newcomer.Id).Update("created_at", cutoff).Error)
 			assert.NoError(t, CheckSubscriptionPurchase(early.Id, trial))
 			assert.ErrorIs(t, CheckSubscriptionPurchase(newcomer.Id, trial), ErrSubscriptionNotEligible)
-			plan, _, err = GiveAffiliateSignupGift(newcomer.Id, d.Id, "198.51.100.6")
+			plan, _, err = GiveAffiliateSignupGift(newcomer.Id, d.Id, "198.51.6.100", true)
 			require.NoError(t, err)
 			assert.NotNil(t, plan, "a gift ignores the registration window")
 

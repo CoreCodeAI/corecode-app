@@ -302,7 +302,7 @@ func Register(c *gin.Context) {
 		common.ApiErrorT(c, "User registration failed or user ID retrieval failed")
 		return
 	}
-	giveAffiliateSignupGift(c, insertedUser.Id, inviterId)
+	giveAffiliateSignupGift(c, insertedUser.Id, inviterId, false)
 	// 生成默认令牌
 	if err := issueDefaultAPIToken(c, &insertedUser); err != nil {
 		common.ApiErrorT(c, "Failed to create default token")

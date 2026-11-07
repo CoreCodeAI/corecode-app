@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"net"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -12,7 +13,7 @@ import (
 
 // AffiliateSignupGift records what happened when a channel's invitee signed
 // up: the gift plan was given, or why it was withheld. One row per invitee
-// keeps a user from receiving it twice, and the rows are what the per-address
+// keeps a user from receiving it twice, and the rows are what the per-network
 // and per-channel limits count.
 type AffiliateSignupGift struct {
 	Id        int    `json:"id"`
@@ -20,6 +21,9 @@ type AffiliateSignupGift struct {
 	InviterId int    `json:"inviter_id" gorm:"index"`
 	PlanId    int    `json:"plan_id"`
 	Ip        string `json:"ip" gorm:"type:varchar(64);index"`
+	// Network is the address's signupGiftNetwork. Rows from before it existed
+	// leave it empty and are matched by Ip.
+	Network   string `json:"network" gorm:"type:varchar(64);index"`
 	Status    string `json:"status" gorm:"type:varchar(16);not null"`
 	CreatedAt int64  `json:"created_at" gorm:"autoCreateTime;index"`
 }
@@ -29,6 +33,7 @@ const (
 	AffiliateSignupGiftIpUsed       = "ip_used"
 	AffiliateSignupGiftCapReached   = "cap_reached"
 	AffiliateSignupGiftEmailBlocked = "email_blocked"
+	AffiliateSignupGiftEmailSignup  = "email_signup"
 
 	// affiliateSignupGiftWindow is how far back the per-address and
 	// per-channel limits look.
@@ -41,13 +46,16 @@ const (
 // channel or its tier has no plan, the user was already handled, or a limit
 // withheld it.
 //
-// The limits are an address that already received a gift in the last 24
-// hours, a channel whose invitees already received GiftDailyCap gifts in that
-// time, and an address domain on GiftBlockedEmailDomains. A withheld gift is
+// Only a sign-up through an OAuth provider, such as Google or linux.do,
+// receives it: an email address costs a farm far less than one of those
+// accounts. The other limits are a network, an IPv4 /24 or an IPv6 /64, that
+// already received a gift in the last 24 hours, a channel whose invitees
+// already received GiftDailyCap gifts in that time, and an address domain on
+// GiftBlockedEmailDomains. A withheld gift is
 // recorded with its reason and never given later. The inviter's affiliate row
 // is locked first, so concurrent sign-ups through one channel count the cap
 // one at a time.
-func GiveAffiliateSignupGift(userId int, inviterId int, ip string) (*SubscriptionPlan, *UserSubscription, error) {
+func GiveAffiliateSignupGift(userId int, inviterId int, ip string, viaOAuth bool) (*SubscriptionPlan, *UserSubscription, error) {
 	setting := operation_setting.GetAffiliateSetting()
 	if userId <= 0 || inviterId <= 0 || !setting.Enabled {
 		return nil, nil, nil
@@ -89,16 +97,20 @@ func GiveAffiliateSignupGift(userId int, inviterId int, ip string) (*Subscriptio
 
 		status := AffiliateSignupGiftGiven
 		since := common.GetTimestamp() - affiliateSignupGiftWindow
-		if setting.GiftEmailDomainBlocked(invitee.Email) {
+		network := signupGiftNetwork(ip)
+		switch {
+		case !viaOAuth:
+			status = AffiliateSignupGiftEmailSignup
+		case setting.GiftEmailDomainBlocked(invitee.Email):
 			status = AffiliateSignupGiftEmailBlocked
 		}
 		if status == AffiliateSignupGiftGiven && ip != "" {
-			var sameIp int64
-			if err := tx.Model(&AffiliateSignupGift{}).Where("ip = ? AND status = ? AND created_at >= ?", ip, AffiliateSignupGiftGiven, since).
-				Count(&sameIp).Error; err != nil {
+			var sameNetwork int64
+			if err := tx.Model(&AffiliateSignupGift{}).Where("(network = ? OR ip = ?) AND status = ? AND created_at >= ?", network, ip, AffiliateSignupGiftGiven, since).
+				Count(&sameNetwork).Error; err != nil {
 				return err
 			}
-			if sameIp > 0 {
+			if sameNetwork > 0 {
 				status = AffiliateSignupGiftIpUsed
 			}
 		}
@@ -118,6 +130,7 @@ func GiveAffiliateSignupGift(userId int, inviterId int, ip string) (*Subscriptio
 			InviterId: inviterId,
 			PlanId:    plan.Id,
 			Ip:        ip,
+			Network:   network,
 			Status:    status,
 		})
 		if result.Error != nil {
@@ -145,4 +158,19 @@ func GiveAffiliateSignupGift(userId int, inviterId int, ip string) (*Subscriptio
 	RecordLog(userId, LogTypeSystem, common.NewMessage("Your inviter gave you the plan {{plan}}", map[string]any{"plan": plan.Title}))
 	RecordLog(inviterId, LogTypeSystem, common.NewMessage("You gave {{user}} the plan {{plan}}", map[string]any{"user": invitee.Username, "plan": plan.Title}))
 	return plan, subscription, nil
+}
+
+// signupGiftNetwork is the network the per-address limit counts an address
+// in: its IPv4 /24 or IPv6 /64. A farm rotates through the addresses of a few
+// proxy subnets, so one gift per address let a subnet collect dozens. An
+// address that does not parse is its own network.
+func signupGiftNetwork(ip string) string {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return ip
+	}
+	if v4 := parsed.To4(); v4 != nil {
+		return (&net.IPNet{IP: v4.Mask(net.CIDRMask(24, 32)), Mask: net.CIDRMask(24, 32)}).String()
+	}
+	return (&net.IPNet{IP: parsed.Mask(net.CIDRMask(64, 128)), Mask: net.CIDRMask(64, 128)}).String()
 }
