@@ -57,6 +57,9 @@ unusable until the visitor agrees.
 
 ## Consequences
 
+- The terms dialog and the signed-in prompt load lazily, so `/dashboard/overview` keeps its
+  first-load budget. The sign-in gate itself must disable the forms before the dialog arrives,
+  so `/sign-in` carries it and its budget rose from 351 KB to 352 KB.
 - API keys keep working for a customer who has not accepted new terms; the terms state that API
   use continues under the updated version. Only the console asks.
 - An operator who sets a new version is asked on their next console load as well.

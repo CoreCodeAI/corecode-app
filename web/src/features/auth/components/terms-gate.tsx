@@ -16,12 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ShieldAlert } from 'lucide-react'
-import { type ReactNode, useState } from 'react'
+import { lazy, type ReactNode, Suspense, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 
 import {
@@ -30,7 +28,14 @@ import {
   storeTermsConsent,
 } from '../lib/terms-consent'
 import type { SystemStatus } from '../types'
-import { TermsUpdateDialog } from './terms-update-dialog'
+
+// The dialog loads on first use, so the sign-in page's first load does not
+// carry it when no terms version is configured.
+const LazyTermsUpdateDialog = lazy(() =>
+  import('./terms-update-dialog').then((m) => ({
+    default: m.TermsUpdateDialog,
+  }))
+)
 
 type TermsGateProps = {
   status: SystemStatus | null
@@ -69,37 +74,41 @@ export function TermsGate(props: TermsGateProps) {
   return (
     <div className='grid gap-5'>
       {!agreed && (
-        <Alert>
-          <ShieldAlert aria-hidden='true' />
-          <AlertTitle>
+        <div
+          role='status'
+          className='border-border/60 bg-muted/40 grid gap-2 rounded-md border p-3 text-xs leading-5'
+        >
+          <p className='text-foreground font-medium'>
             {t('You need to agree to the latest terms before signing in.')}
-          </AlertTitle>
-          <AlertDescription className='grid gap-2'>
-            <span>
-              {t('Inputs and quick sign-in stay disabled until you agree.')}
-            </span>
-            <Button
-              type='button'
-              size='sm'
-              variant='outline'
-              className='justify-self-start'
-              onClick={() => setDialogOpen(true)}
-            >
-              {t('View terms')}
-            </Button>
-          </AlertDescription>
-        </Alert>
+          </p>
+          <p className='text-muted-foreground'>
+            {t('Inputs and quick sign-in stay disabled until you agree.')}
+          </p>
+          <Button
+            type='button'
+            size='sm'
+            variant='outline'
+            className='justify-self-start'
+            onClick={() => setDialogOpen(true)}
+          >
+            {t('View terms')}
+          </Button>
+        </div>
       )}
       <fieldset disabled={!agreed} className='m-0 min-w-0 border-0 p-0'>
         {props.children}
       </fieldset>
-      <TermsUpdateDialog
-        open={!agreed && dialogOpen}
-        version={version}
-        dismissible
-        onAgree={handleAgree}
-        onReject={handleReject}
-      />
+      {!agreed && (
+        <Suspense fallback={null}>
+          <LazyTermsUpdateDialog
+            open={dialogOpen}
+            version={version}
+            dismissible
+            onAgree={handleAgree}
+            onReject={handleReject}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }

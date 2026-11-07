@@ -16,11 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { lazy, Suspense } from 'react'
+
 import { AnimatedOutlet } from '@/components/page-transition'
 import { SkipToMain } from '@/components/skip-to-main'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { LayoutProvider } from '@/context/layout-provider'
-import { TermsConsentPrompt } from '@/features/auth/components/terms-consent-prompt'
 import { useFeedbackReplyToast } from '@/features/feedback/hooks/use-feedback-unread'
 import { useReportPurchases } from '@/lib/analytics'
 import { getCookie } from '@/lib/cookies'
@@ -29,6 +30,14 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { AppHeader } from './app-header'
 import { AppSidebar } from './app-sidebar'
+
+// Loaded after the first render: it only shows a dialog when the terms change,
+// so it stays out of every console page's first load.
+const LazyTermsConsentPrompt = lazy(() =>
+  import('@/features/auth/components/terms-consent-prompt').then((m) => ({
+    default: m.TermsConsentPrompt,
+  }))
+)
 
 type AuthenticatedLayoutProps = {
   children?: React.ReactNode
@@ -51,7 +60,9 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
   return (
     <LayoutProvider>
       <SignedInEffects />
-      <TermsConsentPrompt />
+      <Suspense fallback={null}>
+        <LazyTermsConsentPrompt />
+      </Suspense>
       <SidebarProvider defaultOpen={defaultOpen} className='flex-col'>
         <SkipToMain />
         <AppHeader />
