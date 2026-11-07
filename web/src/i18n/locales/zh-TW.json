@@ -4710,7 +4710,7 @@
     "Purchase Limit": "限購",
     "Purchase limit cannot be negative": "購買上限不能為負數",
     "Purchase limit for this plan has been reached": "已達到該訂閱方案購買上限",
-    "This plan has already been bought from your network": "此網路已有帳號購買過該方案",
+    "This plan has already been bought from your network. Contact support if you need it": "此網路已有帳號購買過該方案，如需購買請聯繫客服",
     "Purchase limit reached": "已達到購買上限",
     "Purchase Subscription": "購買訂閱套餐",
     "Pure Claude,": "純血 Claude，",

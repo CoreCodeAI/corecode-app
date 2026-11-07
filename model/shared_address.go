@@ -21,7 +21,7 @@ const (
 	sharedExitWindowSeconds = 7 * 24 * 60 * 60
 )
 
-var ErrSubscriptionAddressTaken error = common.NewMessage("This plan has already been bought from your network")
+var ErrSubscriptionAddressTaken error = common.NewMessage("This plan has already been bought from your network. Contact support if you need it")
 
 // sharedExit reports whether an address carried requests for so many accounts
 // that it is a proxy or NAT exit rather than one person's.
@@ -129,7 +129,8 @@ func SharesAddress(a int, b int, now int64) (bool, error) {
 }
 
 // CheckSubscriptionPurchaseFrom is CheckSubscriptionPurchase for a purchase
-// opened from ip. A plan limited per user is also limited per address: it is
+// opened from ip. The refusal asks the customer to contact support, who can
+// bind the plan from the console when the address is a household or office. A plan limited per user is also limited per address: it is
 // refused when another account that bought it in the last 30 days signed in,
 // ordered or sent requests from the same address, unless the address is a
 // shared exit.
