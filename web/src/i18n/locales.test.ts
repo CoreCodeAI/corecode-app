@@ -38,3 +38,16 @@ it('gives every locale a non-empty value for every en key', () => {
     expect(missing, name).toEqual([])
   }
 })
+
+// `bun run i18n:sync` treats en as the base, so a key only another locale
+// has is dropped from it on the next sync. Add the key to en.json first.
+it('gives no locale a key en lacks', () => {
+  const locales = { fr, ja, ko, ru, vi, zhTW, zh }
+  const keys = new Set(Object.keys(en.translation))
+  for (const [name, locale] of Object.entries(locales)) {
+    const extra = Object.keys(locale.translation).filter(
+      (key) => !keys.has(key)
+    )
+    expect(extra, name).toEqual([])
+  }
+})

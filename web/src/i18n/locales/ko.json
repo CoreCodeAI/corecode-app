@@ -5832,7 +5832,6 @@
     "Task Plugins": "작업 플러그인",
     "Task pricing": "작업 가격",
     "Task pricing must be converted manually using the task usage schema.": "작업 가격은 작업 사용량 스키마에 따라 수동으로 변환해야 합니다.",
-    "Task pricing not configured": "작업 가격이 설정되지 않았습니다",
     "Task timed out": "작업 시간 초과",
     "Task timed out (a task left by the old system is not refunded; contact the administrator)": "작업 시간 초과(기존 시스템에서 남은 작업은 환불되지 않습니다. 관리자에게 문의하세요)",
     "Task usage data is required to estimate this expression. Check the model's task plugin configuration.": "이 수식을 추정하려면 작업 사용량 데이터가 필요합니다. 모델의 작업 플러그인 설정을 확인하세요.",

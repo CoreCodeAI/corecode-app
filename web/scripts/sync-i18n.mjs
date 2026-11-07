@@ -21,7 +21,7 @@ import path from 'node:path'
 
 // This script is executed from the web/ package root (see package.json script).
 const LOCALES_DIR = path.resolve('src/i18n/locales')
-const FALLBACK_COMPARE_LOCALE = 'en' // used for "still English" detection only
+const FALLBACK_COMPARE_LOCALE = 'en' // the base locale, and the "still English" reference
 const OBFUSCATED_KEYS = [
   {
     runtime: ['footer', 'new' + 'api', 'projectAttributionSuffix'].join('.'),
@@ -128,18 +128,6 @@ function stableStringify(obj) {
   return text + '\n'
 }
 
-function countLeafKeys(obj) {
-  if (Array.isArray(obj)) return obj.length
-  if (!isPlainObject(obj)) return 0
-  let count = 0
-  for (const k of Object.keys(obj)) {
-    const v = obj[k]
-    if (isPlainObject(v) || Array.isArray(v)) count += countLeafKeys(v)
-    else count += 1
-  }
-  return count
-}
-
 function reorderLikeBase(
   base,
   target,
@@ -244,7 +232,6 @@ async function main() {
     .map((e) => e.name)
     .sort((a, b) => a.localeCompare(b))
 
-  // Auto-pick base locale as the one with the most leaf keys under translation (most "rich").
   const parsedByLocale = {}
   for (const filename of localeFiles) {
     const locale = filename.replace(/\.json$/i, '')
@@ -252,17 +239,14 @@ async function main() {
     parsedByLocale[locale] = JSON.parse(raw)
   }
 
-  const baseLocale = Object.keys(parsedByLocale)
-    .map((locale) => {
-      const json = parsedByLocale[locale]
-      const trans = json?.translation ?? {}
-      return { locale, score: countLeafKeys(trans) }
-    })
-    .sort(
-      (a, b) => b.score - a.score || a.locale.localeCompare(b.locale)
-    )[0]?.locale
+  // Keys are the English source strings, so en is the base. Picking the
+  // locale with the most keys let one stray key promote another locale,
+  // whose values then filled every other locale's gaps.
+  const baseLocale = parsedByLocale[FALLBACK_COMPARE_LOCALE]
+    ? FALLBACK_COMPARE_LOCALE
+    : undefined
 
-  if (!baseLocale) throw new Error('No locale files found.')
+  if (!baseLocale) throw new Error(`No ${FALLBACK_COMPARE_LOCALE}.json found.`)
 
   const baseFile = `${baseLocale}.json`
   const baseJson = parsedByLocale[baseLocale]
