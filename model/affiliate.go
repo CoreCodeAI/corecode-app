@@ -306,9 +306,32 @@ func affiliateCreditsFor(tx *gorm.DB, inviterId int) ([]affiliateCredit, error) 
 // same transaction as the credits, so repeated or concurrent runs pay once.
 //
 // Consumption counts only up to what the invitee paid; with the program off
-// or an ineligible inviter it still counts, it just earns nothing.
+// or an ineligible inviter it still counts, it just earns nothing. Nor does
+// an inviter who shares an address with the invitee (SharesAddress): one
+// person inviting their own accounts would pay themselves commission.
 func SettleAffiliateReferral(userId int) (bool, error) {
 	credited := false
+	// Addresses are read before the transaction: the request log may be the
+	// same database, and SQLite serves one connection.
+	selfInvited := map[int]bool{}
+	var inviterId int
+	if err := DB.Model(&User{}).Where("id = ?", userId).Pluck("inviter_id", &inviterId).Error; err != nil {
+		return false, err
+	}
+	if inviterId > 0 {
+		credits, err := affiliateCreditsFor(DB, inviterId)
+		if err != nil {
+			return false, err
+		}
+		now := common.GetTimestamp()
+		for _, credit := range credits {
+			shared, err := SharesAddress(credit.userId, userId, now)
+			if err != nil {
+				return false, err
+			}
+			selfInvited[credit.userId] = shared
+		}
+	}
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		var referral AffiliateReferral
 		if err := lockForUpdate(tx).Where("user_id = ?", userId).First(&referral).Error; err != nil {
@@ -348,6 +371,10 @@ func SettleAffiliateReferral(userId int) (bool, error) {
 			return err
 		}
 		for _, credit := range credits {
+			if selfInvited[credit.userId] {
+				common.SysLog(common.LogText("affiliate: no commission to user %d on user %d, who shares an address with them", credit.userId, userId))
+				continue
+			}
 			amount, err := affiliateCommissionAmount(base, credit.rate)
 			if err != nil {
 				return err
