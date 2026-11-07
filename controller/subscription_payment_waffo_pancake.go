@@ -63,7 +63,7 @@ func SubscriptionRequestWaffoPancakePay(c *gin.Context) {
 		return
 	}
 
-	if err := model.CheckSubscriptionPurchase(userId, plan); err != nil {
+	if err := model.CheckSubscriptionPurchaseFrom(userId, plan, c.ClientIP()); err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -73,6 +73,7 @@ func SubscriptionRequestWaffoPancakePay(c *gin.Context) {
 	tradeNo := fmt.Sprintf("WAFFO_PANCAKE_SUB-%d-%d-%s", userId, time.Now().UnixMilli(), randstr.String(6))
 
 	order := &model.SubscriptionOrder{
+		Ip:              c.ClientIP(),
 		UserId:          userId,
 		PlanId:          plan.Id,
 		Money:           plan.PriceAmount,

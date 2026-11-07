@@ -4710,6 +4710,7 @@
     "Purchase Limit": "구매 한도",
     "Purchase limit cannot be negative": "구매 한도는 음수일 수 없습니다",
     "Purchase limit for this plan has been reached": "이 플랜의 구매 한도에 도달했습니다",
+    "This plan has already been bought from your network": "이 플랜은 이미 사용 중인 네트워크에서 구매되었습니다",
     "Purchase limit reached": "구매 한도 도달",
     "Purchase Subscription": "구독 구매",
     "Pure Claude,": "순수 Claude,",

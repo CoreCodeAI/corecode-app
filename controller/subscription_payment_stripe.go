@@ -64,7 +64,7 @@ func SubscriptionRequestStripePay(c *gin.Context) {
 		return
 	}
 
-	if err := model.CheckSubscriptionPurchase(userId, plan); err != nil {
+	if err := model.CheckSubscriptionPurchaseFrom(userId, plan, c.ClientIP()); err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -80,6 +80,7 @@ func SubscriptionRequestStripePay(c *gin.Context) {
 	}
 
 	order := &model.SubscriptionOrder{
+		Ip:              c.ClientIP(),
 		UserId:          userId,
 		PlanId:          plan.Id,
 		Money:           plan.PriceAmount,
