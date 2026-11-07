@@ -78,6 +78,19 @@ describe('getBaseUnitPrices', () => {
     expect(base?.prices.cacheRead).toBeCloseTo(0.05)
   })
 
+  test('marks a one-tier expression as not tiered', () => {
+    // Production's gpt-6.1-sol on 2026-11-07: one price at every length.
+    const base = getBaseUnitPrices({
+      ...haiku,
+      model_name: 'gpt-6.1-sol',
+      billing_expr: 'tier("base", p * 2 + c * 10 + cr * 0.1)',
+    })
+    expect(base?.tiered).toBe(false)
+    expect(base?.prices.input).toBeCloseTo(2)
+    expect(base?.prices.output).toBeCloseTo(10)
+    expect(base?.prices.cacheRead).toBeCloseTo(0.1)
+  })
+
   test('has no token prices for a per-request model', () => {
     expect(getBaseUnitPrices({ ...opus, quota_type: 1 })).toBeNull()
   })
