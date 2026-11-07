@@ -26,6 +26,7 @@ import { useSystemConfig } from '@/hooks/use-system-config'
 
 import { AuthLayout } from '../auth-layout'
 import { TermsFooter } from '../components/terms-footer'
+import { TermsGate } from '../components/terms-gate'
 import { MagicLinkForm } from './components/magic-link-form'
 import { UserAuthForm } from './components/user-auth-form'
 
@@ -83,15 +84,17 @@ export function SignIn() {
           )}
         </div>
 
-        {showPasswordForm ? (
-          <UserAuthForm redirectTo={redirect} />
-        ) : (
-          <MagicLinkForm
-            redirectTo={redirect}
-            registrationEnabled={magicLinkRegisterEnabled}
-            showOAuthProviders
-          />
-        )}
+        <TermsGate status={status}>
+          {showPasswordForm ? (
+            <UserAuthForm redirectTo={redirect} />
+          ) : (
+            <MagicLinkForm
+              redirectTo={redirect}
+              registrationEnabled={magicLinkRegisterEnabled}
+              showOAuthProviders
+            />
+          )}
+        </TermsGate>
 
         {showOtherWays && (
           <Button

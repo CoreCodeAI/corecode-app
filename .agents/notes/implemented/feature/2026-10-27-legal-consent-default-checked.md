@@ -1,6 +1,6 @@
 # Agent Note: Start legal consent checked and open linked documents directly
 
-Status: implemented
+Status: implemented — superseded by [2026-11-07-terms-update-gate](2026-11-07-terms-update-gate.md) while `legal.terms_version` is set
 
 ## Problem
 

@@ -7910,6 +7910,21 @@
     "{{count}} new payers": "{{count}} nouveaux payeurs",
     "{{count}} paid channels": "{{count}} canaux payants",
     "{{count}} payers": "{{count}} payeurs",
-    "Last day (optional)": "Dernier jour (facultatif)"
+    "Last day (optional)": "Dernier jour (facultatif)",
+    "Terms update notice": "Mise à jour des conditions",
+    "Our terms were updated on {{version}}. Please read and agree before signing in or creating an account.": "Nos conditions ont été mises à jour le {{version}}. Veuillez les lire et les accepter avant de vous connecter ou de créer un compte.",
+    "Decline": "Refuser",
+    "Agree and continue": "Accepter et continuer",
+    "Related documents": "Documents associés",
+    "Terms of service": "Conditions d'utilisation",
+    "Acceptable use policy": "Politique d'utilisation acceptable",
+    "Refunds": "Remboursements",
+    "Privacy notice": "Avis de confidentialité",
+    "You cannot sign up or use quick sign-in until you agree to the latest terms.": "Vous ne pouvez pas vous inscrire ni utiliser la connexion rapide tant que vous n'avez pas accepté les dernières conditions.",
+    "You need to agree to the latest terms before signing in.": "Vous devez accepter les dernières conditions avant de vous connecter.",
+    "Inputs and quick sign-in stay disabled until you agree.": "Les champs et la connexion rapide restent désactivés tant que vous n'avez pas accepté.",
+    "View terms": "Voir les conditions",
+    "Failed to record your agreement": "Impossible d'enregistrer votre accord",
+    "The terms have been updated, please reload the page": "Les conditions ont été mises à jour, veuillez recharger la page"
   }
 }

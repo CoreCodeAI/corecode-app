@@ -7910,6 +7910,21 @@
     "{{count}} new payers": "{{count}} người trả tiền mới",
     "{{count}} paid channels": "{{count}} kênh trả phí",
     "{{count}} payers": "{{count}} người trả tiền",
-    "Last day (optional)": "Ngày cuối (không bắt buộc)"
+    "Last day (optional)": "Ngày cuối (không bắt buộc)",
+    "Terms update notice": "Thông báo cập nhật điều khoản",
+    "Our terms were updated on {{version}}. Please read and agree before signing in or creating an account.": "Điều khoản của chúng tôi đã được cập nhật vào {{version}}. Vui lòng đọc và đồng ý trước khi đăng nhập hoặc tạo tài khoản.",
+    "Decline": "Từ chối",
+    "Agree and continue": "Đồng ý và tiếp tục",
+    "Related documents": "Tài liệu liên quan",
+    "Terms of service": "Điều khoản dịch vụ",
+    "Acceptable use policy": "Chính sách sử dụng được chấp nhận",
+    "Refunds": "Hoàn tiền",
+    "Privacy notice": "Thông báo quyền riêng tư",
+    "You cannot sign up or use quick sign-in until you agree to the latest terms.": "Bạn không thể đăng ký hoặc dùng đăng nhập nhanh cho đến khi đồng ý với điều khoản mới nhất.",
+    "You need to agree to the latest terms before signing in.": "Bạn cần đồng ý với điều khoản mới nhất trước khi đăng nhập.",
+    "Inputs and quick sign-in stay disabled until you agree.": "Ô nhập liệu và đăng nhập nhanh sẽ bị vô hiệu hóa cho đến khi bạn đồng ý.",
+    "View terms": "Xem điều khoản",
+    "Failed to record your agreement": "Không thể lưu xác nhận đồng ý của bạn",
+    "The terms have been updated, please reload the page": "Điều khoản đã được cập nhật, vui lòng tải lại trang"
   }
 }

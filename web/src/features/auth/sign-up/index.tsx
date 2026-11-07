@@ -23,6 +23,7 @@ import { useStatus } from '@/hooks/use-status'
 
 import { AuthLayout } from '../auth-layout'
 import { TermsFooter } from '../components/terms-footer'
+import { TermsGate } from '../components/terms-gate'
 import { MagicLinkForm } from '../sign-in/components/magic-link-form'
 import { SignUpForm } from './components/sign-up-form'
 
@@ -61,11 +62,13 @@ export function SignUp() {
           </p>
         </div>
 
-        {magicLinkEnabled && magicLinkRegisterEnabled ? (
-          <MagicLinkForm showOAuthProviders={oauthRegisterEnabled} />
-        ) : (
-          <SignUpForm />
-        )}
+        <TermsGate status={status}>
+          {magicLinkEnabled && magicLinkRegisterEnabled ? (
+            <MagicLinkForm showOAuthProviders={oauthRegisterEnabled} />
+          ) : (
+            <SignUpForm />
+          )}
+        </TermsGate>
 
         <TermsFooter
           variant='sign-up'

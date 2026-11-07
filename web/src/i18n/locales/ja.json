@@ -7910,6 +7910,21 @@
     "{{count}} new payers": "新規課金者 {{count}} 人",
     "{{count}} paid channels": "有料チャネル {{count}} 件",
     "{{count}} payers": "課金者 {{count}} 人",
-    "Last day (optional)": "最終日（任意）"
+    "Last day (optional)": "最終日（任意）",
+    "Terms update notice": "規約更新のお知らせ",
+    "Our terms were updated on {{version}}. Please read and agree before signing in or creating an account.": "利用規約は {{version}} に更新されました。ログインまたは登録の前に、内容をお読みのうえ同意してください。",
+    "Decline": "同意しない",
+    "Agree and continue": "同意して続行",
+    "Related documents": "関連ドキュメント",
+    "Terms of service": "利用規約",
+    "Acceptable use policy": "利用ポリシー",
+    "Refunds": "返金",
+    "Privacy notice": "プライバシーに関する説明",
+    "You cannot sign up or use quick sign-in until you agree to the latest terms.": "最新の規約に同意するまで、登録やクイックログインは利用できません。",
+    "You need to agree to the latest terms before signing in.": "ログインする前に、最新の規約に同意する必要があります。",
+    "Inputs and quick sign-in stay disabled until you agree.": "同意するまで、入力欄とクイックログインは無効のままです。",
+    "View terms": "規約を見る",
+    "Failed to record your agreement": "同意の記録に失敗しました",
+    "The terms have been updated, please reload the page": "規約が更新されました。ページを再読み込みしてください"
   }
 }

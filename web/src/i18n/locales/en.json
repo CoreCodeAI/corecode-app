@@ -7910,6 +7910,21 @@
     "{{count}} new payers": "{{count}} new payers",
     "{{count}} paid channels": "{{count}} paid channels",
     "{{count}} payers": "{{count}} payers",
-    "Last day (optional)": "Last day (optional)"
+    "Last day (optional)": "Last day (optional)",
+    "Terms update notice": "Terms update notice",
+    "Our terms were updated on {{version}}. Please read and agree before signing in or creating an account.": "Our terms were updated on {{version}}. Please read and agree before signing in or creating an account.",
+    "Decline": "Decline",
+    "Agree and continue": "Agree and continue",
+    "Related documents": "Related documents",
+    "Terms of service": "Terms of service",
+    "Acceptable use policy": "Acceptable use policy",
+    "Refunds": "Refunds",
+    "Privacy notice": "Privacy notice",
+    "You cannot sign up or use quick sign-in until you agree to the latest terms.": "You cannot sign up or use quick sign-in until you agree to the latest terms.",
+    "You need to agree to the latest terms before signing in.": "You need to agree to the latest terms before signing in.",
+    "Inputs and quick sign-in stay disabled until you agree.": "Inputs and quick sign-in stay disabled until you agree.",
+    "View terms": "View terms",
+    "Failed to record your agreement": "Failed to record your agreement",
+    "The terms have been updated, please reload the page": "The terms have been updated, please reload the page"
   }
 }

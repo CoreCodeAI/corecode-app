@@ -57,9 +57,15 @@ export function LegalDocument({
   const success = data?.success ?? false
 
   // A document configured as a link opens that page directly; the card below
-  // stays as a fallback while the browser navigates.
+  // stays as a fallback while the browser navigates. A section anchor on this
+  // route, such as /user-agreement#privacy, carries over to that page.
   useEffect(() => {
-    if (success && isUrl) window.location.replace(rawContent)
+    if (!success || !isUrl) return
+    const target = new URL(rawContent)
+    if (!target.hash && window.location.hash) {
+      target.hash = window.location.hash
+    }
+    window.location.replace(target.toString())
   }, [success, isUrl, rawContent])
 
   if (isLoading) {

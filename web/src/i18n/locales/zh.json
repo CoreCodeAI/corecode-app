@@ -7910,6 +7910,21 @@
     "{{count}} new payers": "{{count}} 个新付费用户",
     "{{count}} paid channels": "{{count}} 个付费渠道",
     "{{count}} payers": "{{count}} 人付费",
-    "Last day (optional)": "最后一天（可不填）"
+    "Last day (optional)": "最后一天（可不填）",
+    "Terms update notice": "条款更新通知",
+    "Our terms were updated on {{version}}. Please read and agree before signing in or creating an account.": "我们的条款已于 {{version}} 更新。登录或注册前，请先阅读并同意以下条款。",
+    "Decline": "拒绝",
+    "Agree and continue": "同意并继续",
+    "Related documents": "相关文档",
+    "Terms of service": "服务条款",
+    "Acceptable use policy": "可接受使用政策",
+    "Refunds": "退款",
+    "Privacy notice": "隐私说明",
+    "You cannot sign up or use quick sign-in until you agree to the latest terms.": "未同意最新条款前，无法注册或使用快捷登录。",
+    "You need to agree to the latest terms before signing in.": "继续登录前需要先同意最新条款。",
+    "Inputs and quick sign-in stay disabled until you agree.": "未同意前，输入框和快捷登录会保持禁用。",
+    "View terms": "查看条款",
+    "Failed to record your agreement": "同意记录保存失败",
+    "The terms have been updated, please reload the page": "条款已更新，请刷新页面"
   }
 }

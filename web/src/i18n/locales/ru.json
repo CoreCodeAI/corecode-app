@@ -7910,6 +7910,21 @@
     "{{count}} new payers": "Новых плательщиков: {{count}}",
     "{{count}} paid channels": "Платных каналов: {{count}}",
     "{{count}} payers": "Плательщиков: {{count}}",
-    "Last day (optional)": "Последний день (необязательно)"
+    "Last day (optional)": "Последний день (необязательно)",
+    "Terms update notice": "Обновление условий",
+    "Our terms were updated on {{version}}. Please read and agree before signing in or creating an account.": "Наши условия обновлены {{version}}. Прочитайте и примите их, прежде чем войти или создать аккаунт.",
+    "Decline": "Отклонить",
+    "Agree and continue": "Принять и продолжить",
+    "Related documents": "Связанные документы",
+    "Terms of service": "Условия обслуживания",
+    "Acceptable use policy": "Правила допустимого использования",
+    "Refunds": "Возвраты",
+    "Privacy notice": "Уведомление о конфиденциальности",
+    "You cannot sign up or use quick sign-in until you agree to the latest terms.": "Вы не сможете зарегистрироваться или использовать быстрый вход, пока не примете последние условия.",
+    "You need to agree to the latest terms before signing in.": "Перед входом необходимо принять последние условия.",
+    "Inputs and quick sign-in stay disabled until you agree.": "Поля ввода и быстрый вход недоступны, пока вы не примете условия.",
+    "View terms": "Посмотреть условия",
+    "Failed to record your agreement": "Не удалось сохранить ваше согласие",
+    "The terms have been updated, please reload the page": "Условия обновлены, перезагрузите страницу"
   }
 }
