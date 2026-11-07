@@ -52,6 +52,9 @@ const EXPRESSION_VARIABLE = {
   cacheRead: 'cr',
 } as const
 
+// Longer than any context window, so it reaches an expression's last length tier.
+const LONG_CONTEXT = 100 * MILLION
+
 const TOKEN_PRICE_TYPE = {
   input: 'input',
   output: 'output',
@@ -63,6 +66,7 @@ const TOKEN_PRICE_TYPE = {
  * Base prices of a token-priced model, or null for per-request and task
  * models. A context-priced model is evaluated at a context length of zero,
  * which is its first tier; the expression is linear in each token count.
+ * It is `tiered` only when a long context costs more than that first tier.
  */
 export function getBaseUnitPrices(model: PricingModel): BaseUnitPrices | null {
   if (
@@ -71,16 +75,20 @@ export function getBaseUnitPrices(model: PricingModel): BaseUnitPrices | null {
     !model.billing_plugin_variants?.length
   ) {
     const prices = {} as Record<UnitPriceKey, number>
+    let tiered = false
     for (const key of UNIT_PRICE_KEYS) {
-      const cost = expressionTurnCost(
+      const variable = EXPRESSION_VARIABLE[key]
+      const cost = expressionTurnCost(model, { [variable]: MILLION, len: 0 }, 1)
+      const longCost = expressionTurnCost(
         model,
-        { [EXPRESSION_VARIABLE[key]]: MILLION, len: 0 },
+        { [variable]: MILLION, len: LONG_CONTEXT },
         1
       )
       prices[key] = cost ? cost.usd : Number.NaN
+      if (cost && longCost && longCost.usd > cost.usd) tiered = true
     }
     if (!Number.isFinite(prices.input)) return null
-    return { prices, tiered: true }
+    return { prices, tiered }
   }
 
   if (!isTokenBasedModel(model) || isDynamicPricingModel(model)) return null
