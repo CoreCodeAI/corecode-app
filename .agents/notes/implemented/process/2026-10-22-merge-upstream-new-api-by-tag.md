@@ -97,6 +97,12 @@ commits (N1–N5 and the theme) above upstream `633b4c5b1`, which is
   17th Lua argument while N1 had already put `UpstreamKey` there. Both sides
   moved the TTL from `ARGV[17]` to `ARGV[18]`, so git merged those lines without
   a conflict. The resolution numbers them 17, 18 and 19.
+  In `v1.0.0-rc.48` upstream appended four arguments after `AllowUserQuotaQuery`
+  for the cache MAC. git merged the Go argument list, which keeps `UpstreamKey`
+  at 17, while the Lua conflicted; upstream's half reads each of them one place
+  early. The resolution reads them at 20–23, and the MAC names `UpstreamKey`
+  beside `AutoGroups`, both `json:"-"` on `Token`.
+  `model/token_cache_upstream_key_test.go` fails on either mistake.
   Read every Lua `ARGV` list and every positional argument list a sync touches,
   not only the conflicted hunks.
 - Dependabot's open pull requests (`corecode-app-pre-fork` #1–#5) stayed in the

@@ -161,9 +161,6 @@
   "src/components/layout/lib/url-utils.ts": {
     "eslint(curly)": 1
   },
-  "src/components/layout/types.ts": {
-    "typescript(no-import-type-side-effects)": 2
-  },
   "src/components/long-text.tsx": {
     "eslint(curly)": 1
   },
