@@ -72,6 +72,10 @@ operator lifted it. The operator lifted ten users by hand during that week.
   warning again.
 - The option row does not exist until it is saved, so production runs on the
   default 2 after the release.
+- The new zhCN strings add 0.1 KB to the first load of `/dashboard/overview`,
+  which the terms dialog (`../feature/2026-11-07-terms-update-gate.md`) had
+  left at its 525 KB budget. Its budget in `web/first-load-budget.json` is
+  now 526 KB.
 
 ## Verification
 
@@ -88,3 +92,6 @@ operator lifted it. The operator lifted ten users by hand during that week.
   controller, middleware, model, service and setting passes.
 - Console: `bun run typecheck` (1,615 files), `lint:check`, `format:check`, and
   `vitest` on system-settings and i18n (29 files, 252 tests) pass.
+- `bun run build` then `first-load:check` on the branch rebased onto
+  `736df4af2`: `/dashboard/overview` 525.1 KB of 526 KB, the same size CI
+  measured.
