@@ -126,13 +126,14 @@ func GetSelfAffiliateInvitees(c *gin.Context) {
 }
 
 // giveAffiliateSignupGift gives a user who just signed up their channel
-// inviter's gift plan. A failure is logged and never fails the sign-up, which
-// has already committed.
-func giveAffiliateSignupGift(c *gin.Context, userId int, inviterId int) {
+// inviter's gift plan; viaOAuth reports whether the sign-up came through an
+// OAuth provider, and only those receive it. A failure is logged and never
+// fails the sign-up, which has already committed.
+func giveAffiliateSignupGift(c *gin.Context, userId int, inviterId int, viaOAuth bool) {
 	if userId <= 0 || inviterId <= 0 {
 		return
 	}
-	if _, _, err := model.GiveAffiliateSignupGift(userId, inviterId, c.ClientIP()); err != nil {
+	if _, _, err := model.GiveAffiliateSignupGift(userId, inviterId, c.ClientIP(), viaOAuth); err != nil {
 		common.SysLog(common.LogText("failed to give user %d the sign-up gift of inviter %d: %v", userId, inviterId, err))
 	}
 }
