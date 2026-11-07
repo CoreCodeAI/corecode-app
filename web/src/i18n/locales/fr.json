@@ -7469,6 +7469,7 @@
     "Model failed, let through": "Échec du modèle, laissée passer",
     "Stage": "Étape",
     "Message": "Message",
+    "Risk Control": "Contrôle des risques",
     "Risk audit": "Audit des risques",
     "name | regular expression, one per line": "nom | expression régulière, une par ligne",
     "vm2api distill-rules.json or name | regular expression, one per line": "distill-rules.json de vm2api ou nom | expression régulière, une par ligne",

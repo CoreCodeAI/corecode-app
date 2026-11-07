@@ -7469,6 +7469,7 @@
     "Model failed, let through": "模型故障，已放行",
     "Stage": "關卡",
     "Message": "訊息",
+    "Risk Control": "風控中心",
     "Risk audit": "風險稽核",
     "name | regular expression, one per line": "名稱 | 正規表示式，一行一條",
     "vm2api distill-rules.json or name | regular expression, one per line": "vm2api distill-rules.json 或名稱 | 正規表示式，一行一條",

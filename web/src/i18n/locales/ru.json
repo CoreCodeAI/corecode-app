@@ -7469,6 +7469,7 @@
     "Model failed, let through": "Сбой модели, пропущен",
     "Stage": "Этап",
     "Message": "Сообщение",
+    "Risk Control": "Контроль рисков",
     "Risk audit": "Аудит рисков",
     "name | regular expression, one per line": "имя | регулярное выражение, по одному в строке",
     "vm2api distill-rules.json or name | regular expression, one per line": "distill-rules.json из vm2api или имя | регулярное выражение, по одному в строке",

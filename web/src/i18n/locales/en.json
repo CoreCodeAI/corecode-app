@@ -7469,6 +7469,7 @@
     "Model failed, let through": "Model failed, let through",
     "Stage": "Stage",
     "Message": "Message",
+    "Risk Control": "Risk Control",
     "Risk audit": "Risk audit",
     "name | regular expression, one per line": "name | regular expression, one per line",
     "vm2api distill-rules.json or name | regular expression, one per line": "vm2api distill-rules.json or name | regular expression, one per line",

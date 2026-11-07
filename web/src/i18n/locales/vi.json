@@ -7469,6 +7469,7 @@
     "Model failed, let through": "Mô hình lỗi, đã cho qua",
     "Stage": "Giai đoạn",
     "Message": "Tin nhắn",
+    "Risk Control": "Kiểm soát rủi ro",
     "Risk audit": "Kiểm tra rủi ro",
     "name | regular expression, one per line": "tên | biểu thức chính quy, mỗi dòng một mục",
     "vm2api distill-rules.json or name | regular expression, one per line": "distill-rules.json của vm2api hoặc tên | biểu thức chính quy, mỗi dòng một mục",

@@ -431,34 +431,6 @@ export type SecuritySettings = {
   'fetch_setting.apply_ip_filter_for_domain': boolean
   'token_setting.max_user_tokens': number
   'token_setting.concurrency_limits': string
-  'violation_guard_setting.enabled': boolean
-  'violation_guard_setting.mode': 'observe' | 'enforce'
-  'violation_guard_setting.suspend_hours': number
-  'violation_guard_setting.ban_strikes': number
-  'violation_guard_setting.strike_window_days': number
-  'violation_guard_setting.lenient_categories': string
-  'violation_guard_setting.lenient_warnings': number
-  'violation_guard_setting.client_check_limit': number
-  'risk_gate_setting.enabled': boolean
-  'risk_gate_setting.mode': 'observe' | 'enforce'
-  'risk_gate_setting.distill_enabled': boolean
-  'risk_gate_setting.distill_rules': string
-  'risk_gate_setting.distill_strike': boolean
-  'risk_gate_setting.hard_regex_enabled': boolean
-  'risk_gate_setting.hard_regex_rules': string
-  'risk_gate_setting.hard_regex_strike': boolean
-  'risk_gate_setting.similarity_enabled': boolean
-  'risk_gate_setting.similarity_threshold': number
-  'risk_gate_setting.decision_enabled': boolean
-  'risk_gate_setting.decision_base_url': string
-  'risk_gate_setting.decision_api_key': string
-  'risk_gate_setting.decision_model': string
-  'risk_gate_setting.decision_questions': string
-  'risk_gate_setting.decision_threshold': number
-  'risk_gate_setting.decision_timeout_ms': number
-  'risk_gate_setting.decision_fail_open': boolean
-  'risk_gate_setting.decision_strike': boolean
-  'risk_gate_setting.decision_skip_official': boolean
 }
 
 export type UpstreamChannel = {

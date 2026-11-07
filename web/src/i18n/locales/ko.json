@@ -7470,6 +7470,7 @@
     "Model failed, let through": "모델 실패, 통과 처리",
     "Stage": "단계",
     "Message": "메시지",
+    "Risk Control": "리스크 관리",
     "Risk audit": "위험 감사",
     "name | regular expression, one per line": "이름 | 정규식, 한 줄에 하나",
     "vm2api distill-rules.json or name | regular expression, one per line": "vm2api distill-rules.json 또는 이름 | 정규식, 한 줄에 하나",

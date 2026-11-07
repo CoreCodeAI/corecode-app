@@ -36,6 +36,19 @@ export const Route = createFileRoute(
         replace: true,
       })
     }
+    // Both moved to the risk control page beside site insights.
+    if (
+      params.section === 'violation-guard' ||
+      params.section === 'risk-gate'
+    ) {
+      throw redirect({
+        to: '/risk-control',
+        search: {
+          tab: params.section === 'risk-gate' ? 'audit' : 'violations',
+        },
+        replace: true,
+      })
+    }
     const validSections = SECURITY_SECTION_IDS as unknown as string[]
     if (!validSections.includes(params.section)) {
       throw redirect({
