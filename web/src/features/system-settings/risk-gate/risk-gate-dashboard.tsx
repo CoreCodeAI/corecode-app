@@ -296,6 +296,8 @@ export function RiskGateDashboard() {
             hideMobile
             className='h-auto min-h-0'
             applyHeaderSize
+            // The risk control page shows two tables; each keeps its own pages.
+            paginationInFooter={false}
           />
         </div>
       </div>

@@ -21,20 +21,11 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createInstance } from 'i18next'
 import { I18nextProvider } from 'react-i18next'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 
 import en from '@/i18n/locales/en.json'
 
 import { RiskControl } from '..'
-
-const search: { tab?: 'violations' | 'audit' } = {}
-
-vi.mock('@tanstack/react-router', () => ({
-  getRouteApi: () => ({
-    useSearch: () => search,
-    useNavigate: () => vi.fn(),
-  }),
-}))
 
 // One stable payload, as react-query hands back between refetches.
 const OPTIONS = {
@@ -85,32 +76,30 @@ async function renderPage() {
   return { ...view, rerenderPage: () => view.rerender(tree()) }
 }
 
-beforeEach(() => {
-  delete search.tab
-})
-
 afterEach(() => {
   cleanup()
 })
 
-it('shows the violation records with their settings folded away', async () => {
+it('shows the risk audit and the violation records on one page, settings folded', async () => {
   await renderPage()
 
+  expect(screen.getByText('risk gate dashboard')).toBeTruthy()
   expect(screen.getByText('violation records')).toBeTruthy()
-  expect(screen.queryByText('risk gate dashboard')).toBeNull()
-  expect(
-    screen.queryByRole('button', { name: /Save violation settings/ })
-  ).toBeNull()
+  expect(screen.queryByRole('tablist')).toBeNull()
+  expect(screen.queryByRole('button', { name: /^Save/ })).toBeNull()
 })
 
-it('opens the settings with the saved values and its own save button', async () => {
+it('opens each settings panel with the saved values and its own save button', async () => {
   const { rerenderPage } = await renderPage()
 
-  await userEvent.click(screen.getByRole('button', { name: 'Settings' }))
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Usage policy violations · Settings' })
+  )
   const input = screen.getByLabelText('Warn-first categories')
   expect((input as HTMLInputElement).value).toBe('cyber')
+  const panel = input.closest('[data-slot=collapsible]') as HTMLElement
   expect(
-    screen.getByRole('button', { name: /Save violation settings/ })
+    within(panel).getByRole('button', { name: /Save violation settings/ })
   ).toBeTruthy()
 
   // An unsaved edit survives the page rendering again.
@@ -119,18 +108,9 @@ it('opens the settings with the saved values and its own save button', async () 
   expect(
     (screen.getByLabelText('Warn-first categories') as HTMLInputElement).value
   ).toBe('cyber,jailbreak')
-})
 
-it('shows the risk audit on its tab', async () => {
-  search.tab = 'audit'
-  await renderPage()
-
-  expect(screen.getByText('risk gate dashboard')).toBeTruthy()
-  expect(screen.queryByText('violation records')).toBeNull()
-  const tabs = screen.getByRole('tablist')
-  expect(
-    within(tabs)
-      .getByRole('tab', { name: 'Risk audit' })
-      .getAttribute('aria-selected')
-  ).toBe('true')
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Risk audit · Settings' })
+  )
+  expect(screen.getAllByRole('button', { name: /^Save/ })).toHaveLength(2)
 })
