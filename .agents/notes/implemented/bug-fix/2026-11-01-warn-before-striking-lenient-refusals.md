@@ -2,6 +2,8 @@
 
 Status: implemented
 
+Superseded in part on 2026-11-07 by `2026-11-07-warn-per-category-within-a-day.md`: a lenient category warns per category, `lenient_warnings` times within 24 hours, not once per counting window.
+
 ## Problem
 
 The violation guard (`../feature/2026-10-25-violation-guard.md`) entered enforce

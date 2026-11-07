@@ -195,6 +195,7 @@ func TestViolationStrikePolicy(t *testing.T) {
 	observe.Mode = operation_setting.ViolationGuardModeObserve
 	lenient := enforce
 	lenient.LenientCategories = "cyber, reasoning_extraction"
+	lenient.LenientWarnings = 1
 	const day = int64(86400)
 
 	refused := claudeConversation(t, `{"model":"claude","messages":[`+refusedTurn+`]}`)
@@ -205,7 +206,7 @@ func TestViolationStrikePolicy(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
 			useViolationTestDB(t, dialect)
-			for id, role := range map[int]int{1: common.RoleCommonUser, 2: common.RoleCommonUser, 3: common.RoleAdminUser, 4: common.RoleCommonUser, 5: common.RoleCommonUser, 6: common.RoleCommonUser, 7: common.RoleCommonUser, 8: common.RoleCommonUser, 9: common.RoleCommonUser, 10: common.RoleCommonUser, 11: common.RoleCommonUser, 12: common.RoleCommonUser, 13: common.RoleCommonUser, 14: common.RoleCommonUser, 15: common.RoleCommonUser} {
+			for id, role := range map[int]int{1: common.RoleCommonUser, 2: common.RoleCommonUser, 3: common.RoleAdminUser, 4: common.RoleCommonUser, 5: common.RoleCommonUser, 6: common.RoleCommonUser, 7: common.RoleCommonUser, 8: common.RoleCommonUser, 9: common.RoleCommonUser, 10: common.RoleCommonUser, 11: common.RoleCommonUser, 12: common.RoleCommonUser, 13: common.RoleCommonUser, 14: common.RoleCommonUser, 15: common.RoleCommonUser, 16: common.RoleCommonUser} {
 				require.NoError(t, model.DB.Create(&model.User{Id: id, Username: fmt.Sprintf("violation-user-%d", id), AffCode: fmt.Sprintf("vg%d", id), Password: "unused", Role: role, Status: common.UserStatusEnabled, Group: "default"}).Error)
 			}
 
@@ -239,7 +240,7 @@ func TestViolationStrikePolicy(t *testing.T) {
 				assert.Equal(t, common.UserStatusDisabled, user.Status)
 			})
 
-			t.Run("the first refusal of a lenient category warns, and the next one strikes", func(t *testing.T) {
+			t.Run("the first refusal of a lenient category in a day warns, and the next one strikes", func(t *testing.T) {
 				resetViolationGuardState()
 				*operation_setting.GetViolationGuardSetting() = lenient
 				now := common.GetTimestamp()
@@ -262,8 +263,29 @@ func TestViolationStrikePolicy(t *testing.T) {
 				// that, the next lenient refusal is the first strike, not a ban.
 				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 8, Category: "reasoning_extraction", ConversationKey: "second"}, now+300))
 				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 8, Category: "reasoning_extraction", ConversationKey: "third"}, now+3600))
+				// A day later the warnings start over, but the strike still counts
+				// toward disabling the account.
 				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 8, Category: "reasoning_extraction", ConversationKey: "fourth"}, now+day+7200))
-				assert.Equal(t, []string{"enforce:merged", "enforce:suspend", "enforce:ban"}, violationActions(t, 8)[8:])
+				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 8, Category: "reasoning_extraction", ConversationKey: "fifth"}, now+day+8400))
+				assert.Equal(t, []string{"enforce:merged", "enforce:suspend", "enforce:warn", "enforce:ban"}, violationActions(t, 8)[8:])
+			})
+
+			t.Run("each lenient category has its own warnings, and the incident after them strikes", func(t *testing.T) {
+				resetViolationGuardState()
+				twice := lenient
+				twice.SuspendHours = 3
+				twice.LenientWarnings = 2
+				*operation_setting.GetViolationGuardSetting() = twice
+				now := common.GetTimestamp()
+				// Refusal 157 suspended user 1042 at a first cyber refusal because
+				// a reasoning_extraction refusal had used the one warning.
+				for i, category := range []string{"reasoning_extraction", "cyber", "cyber", "cyber"} {
+					require.NoError(t, applyViolationStrike(twice, model.ViolationRecord{UserId: 16, Category: category, ConversationKey: fmt.Sprintf("conversation-%d", i)}, now+int64(i)*1200))
+				}
+				assert.Equal(t, []string{"enforce:warn", "enforce:warn", "enforce:warn", "enforce:suspend"}, violationActions(t, 16))
+				apiErr := checkViolationGuard(t, 16, fresh)
+				require.NotNil(t, apiErr)
+				assert.Equal(t, types.ErrorCodeViolationSuspended, apiErr.GetErrorCode())
 			})
 
 			t.Run("a lenient refusal of the client's own transcript check counts against no one", func(t *testing.T) {

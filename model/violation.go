@@ -13,7 +13,7 @@ const (
 	ViolationActionStrike  = "strike"  // counted, nothing restricted
 	ViolationActionSuspend = "suspend" // counted, relay access suspended
 	ViolationActionBan     = "ban"     // counted, account disabled
-	ViolationActionWarn    = "warn"    // first refusal of a lenient category, not counted
+	ViolationActionWarn    = "warn"    // lenient incident within the warnings allowed, not counted
 	// ViolationActionClientCheck is a lenient refusal of a request the client
 	// sent on its own, such as Claude Code's auto mode check: not counted.
 	ViolationActionClientCheck = "client_check"
@@ -107,13 +107,14 @@ func HasViolationStrikeInConversation(userId int, mode string, conversationKey s
 	return count > 0, err
 }
 
-// HasViolationWarning reports whether the user was warned in mode after since.
-func HasViolationWarning(userId int, mode string, since int64) (bool, error) {
+// CountViolationIncidents counts the incidents of category, warnings and
+// strikes, that the user started in mode after since.
+func CountViolationIncidents(userId int, mode string, category string, since int64) (int64, error) {
 	var count int64
 	err := DB.Model(&ViolationRecord{}).
-		Where("user_id = ? AND mode = ? AND created_at > ? AND action = ?", userId, mode, since, ViolationActionWarn).
+		Where("user_id = ? AND mode = ? AND category = ? AND created_at > ? AND action IN ?", userId, mode, category, since, violationIncidentActions).
 		Count(&count).Error
-	return count > 0, err
+	return count, err
 }
 
 // ShortenViolationMerge moves the start of the user's last incident from
