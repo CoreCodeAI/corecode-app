@@ -43,9 +43,7 @@ export const Route = createFileRoute(
     ) {
       throw redirect({
         to: '/risk-control',
-        search: {
-          tab: params.section === 'risk-gate' ? 'audit' : 'violations',
-        },
+        hash: params.section === 'risk-gate' ? 'audit' : 'violations',
         replace: true,
       })
     }

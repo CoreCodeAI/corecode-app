@@ -17,16 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import z from 'zod'
 
 import { RiskControl } from '@/features/risk-control'
-import { RISK_CONTROL_TABS } from '@/features/risk-control/constants'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
-
-const riskControlSearchSchema = z.object({
-  tab: z.enum(RISK_CONTROL_TABS).optional().catch(undefined),
-})
 
 export const Route = createFileRoute('/_authenticated/risk-control/')({
   beforeLoad: () => {
@@ -38,6 +32,5 @@ export const Route = createFileRoute('/_authenticated/risk-control/')({
       })
     }
   },
-  validateSearch: riskControlSearchSchema,
   component: RiskControl,
 })

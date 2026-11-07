@@ -18,10 +18,12 @@ panel beside Site Insights in the Admin group.
   `beforeLoad` sends anyone else to `/403`, as `/site-insights` does. Saving either form writes
   `/api/option`, which is root-only on the server, so a lower role would see forms it cannot
   save.
-- **Two tabs, records first.** `?tab=violations` (default) shows `ViolationRecords`;
-  `?tab=audit` shows `RiskGateDashboard`. Under each, the matching form sits in a collapsed
-  "Settings" panel. The tab names reuse the old section titles, "Usage policy violations" and
-  "Risk audit".
+- **One page, no tabs.** The page first shipped with a tab for each control. The operator asked
+  for one screen, since the two are read together: the risk audit's counters and intercept log
+  come first (`#audit`), the violation records next (`#violations`), and each control's form
+  last, in collapsed panels titled "Usage policy violations · Settings" and "Risk audit ·
+  Settings". Both tables page below themselves (`paginationInFooter={false}`); in the page
+  footer their two paginations would share one bar.
 - **The existing components move unchanged.** The page imports the forms, the records table and
   the dashboard from `features/system-settings/{violation-guard,risk-gate}`. Only the two
   `*-section.tsx` wrappers are deleted, along with the sections' registry entries, their keys in
@@ -35,19 +37,18 @@ panel beside Site Insights in the Admin group.
   re-render does not wipe an unsaved edit. A test types into a field, re-renders the page, and
   fails without the memo.
 - **Old links still land.** The security route's loader redirects `violation-guard` to
-  `/risk-control?tab=violations` and `risk-gate` to `?tab=audit`, as it already does for
+  `/risk-control#violations` and `risk-gate` to `#audit`, as it already does for
   `sensitive-words`.
-- **The tab list lives in `features/risk-control/constants.ts`,** apart from the page, so the
-  route's search schema does not pull the page into the entry bundle (infra lesson
-  `keep-route-options-off-page-modules`).
 
 ## Alternatives considered
 
 - **A tab on Site Insights.** Site Insights is a read-only dashboard with a day-range control;
   these views carry editable settings and their own pagination, and Site Insights already has a
   "Risk" tab about sign-up abuse. A separate page keeps the two apart.
-- **Settings as a third tab.** It would separate each form from the records it governs and put
-  two unrelated forms side by side. Rejected.
+- **Settings on a page of their own.** The folded panels keep the forms out of the way without
+  taking them away from the records they govern.
+- **One merged timeline of both record kinds.** It reads best for one customer, but needs a new
+  server endpoint that pages across two tables. The page order gives most of it without one.
 - **Move the components into `features/risk-control/`.** A larger diff with no change in
   behavior; the import paths can move later if the settings tree stops using them.
 

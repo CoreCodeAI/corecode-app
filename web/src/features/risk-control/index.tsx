@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { getRouteApi } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -29,7 +28,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SettingsPageProvider } from '@/features/system-settings/components/settings-page-context'
 import {
   getOptionValue,
@@ -46,10 +44,6 @@ import {
 } from '@/features/system-settings/violation-guard/violation-guard-form'
 import { ViolationRecords } from '@/features/system-settings/violation-guard/violation-records'
 import { cn } from '@/lib/utils'
-
-import type { RiskControlTab } from './constants'
-
-const route = getRouteApi('/_authenticated/risk-control/')
 
 const defaultViolationGuard: ViolationGuardValues = {
   'violation_guard_setting.enabled': false,
@@ -158,14 +152,12 @@ function SettingsPanelBody<T extends OptionValues>(props: {
 }
 
 /**
- * The root-only risk control page: usage policy violations and the risk
- * audit, each with its records first and its settings folded below.
+ * The root-only risk control page on one screen: the risk audit's counters
+ * and intercept log, the violation records, then each control's settings
+ * folded below.
  */
 export function RiskControl() {
   const { t } = useTranslation()
-  const search = route.useSearch()
-  const navigate = route.useNavigate()
-  const tab: RiskControlTab = search.tab ?? 'violations'
 
   return (
     <SectionPageLayout>
@@ -178,41 +170,25 @@ export function RiskControl() {
         </span>
       </SectionPageLayout.Title>
       <SectionPageLayout.Content>
-        <div className='grid grid-cols-[minmax(0,1fr)] gap-4'>
-          <Tabs
-            value={tab}
-            onValueChange={(value) =>
-              navigate({ search: { tab: value as RiskControlTab } })
-            }
-          >
-            <TabsList>
-              <TabsTrigger value='violations'>
-                {t('Usage policy violations')}
-              </TabsTrigger>
-              <TabsTrigger value='audit'>{t('Risk audit')}</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          {tab === 'violations' ? (
-            <>
-              <ViolationRecords />
-              <SettingsPanel
-                title={t('Settings')}
-                defaults={defaultViolationGuard}
-                render={(values) => (
-                  <ViolationGuardForm defaultValues={values} />
-                )}
-              />
-            </>
-          ) : (
-            <>
-              <RiskGateDashboard />
-              <SettingsPanel
-                title={t('Settings')}
-                defaults={defaultRiskGate}
-                render={(values) => <RiskGateForm defaultValues={values} />}
-              />
-            </>
-          )}
+        <div className='grid grid-cols-[minmax(0,1fr)] gap-8'>
+          <section id='audit' className='scroll-mt-4'>
+            <RiskGateDashboard />
+          </section>
+          <section id='violations' className='scroll-mt-4'>
+            <ViolationRecords />
+          </section>
+          <div className='flex flex-col gap-3'>
+            <SettingsPanel
+              title={`${t('Usage policy violations')} · ${t('Settings')}`}
+              defaults={defaultViolationGuard}
+              render={(values) => <ViolationGuardForm defaultValues={values} />}
+            />
+            <SettingsPanel
+              title={`${t('Risk audit')} · ${t('Settings')}`}
+              defaults={defaultRiskGate}
+              render={(values) => <RiskGateForm defaultValues={values} />}
+            />
+          </div>
         </div>
       </SectionPageLayout.Content>
     </SectionPageLayout>
