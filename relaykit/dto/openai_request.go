@@ -254,6 +254,11 @@ func (r *GeneralOpenAIRequest) GetTokenCountMeta() *types.TokenCountMeta {
 				}
 			}
 		}
+		// Clients such as Kimi Code replay each assistant turn's reasoning, and
+		// upstream bills it as prompt input like any other content.
+		if reasoning := message.GetReasoningContent(); reasoning != "" {
+			texts = append(texts, reasoning)
+		}
 		// Assistant tool calls replayed in agent loops are part of the prompt.
 		for _, toolCall := range message.ParseToolCalls() {
 			if len(toolCall.Custom) > 0 {

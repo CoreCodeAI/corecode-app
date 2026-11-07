@@ -161,9 +161,9 @@ func CountRequestToken(c *gin.Context, meta *types.TokenCountMeta, info *relayco
 		case types.FileTypeVideo:
 			tkm += 4096 * 2
 		case types.FileTypeFile:
-			tkm += 4096
+			tkm += fileTokens(file)
 		default:
-			tkm += 4096 // Default case for unknown file types
+			tkm += flatFileTokens // Default case for unknown file types
 		}
 	}
 
