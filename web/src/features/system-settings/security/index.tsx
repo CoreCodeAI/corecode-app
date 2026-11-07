@@ -49,6 +49,7 @@ const defaultSecuritySettings: SecuritySettings = {
   'violation_guard_setting.ban_strikes': 2,
   'violation_guard_setting.strike_window_days': 30,
   'violation_guard_setting.lenient_categories': 'reasoning_extraction',
+  'violation_guard_setting.lenient_warnings': 2,
   'violation_guard_setting.client_check_limit': 5,
   'risk_gate_setting.enabled': false,
   'risk_gate_setting.mode': 'observe',

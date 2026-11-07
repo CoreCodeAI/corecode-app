@@ -292,12 +292,14 @@ func violationExempt(role int) bool {
 // user's last strike is recent enough to merge with: the suspension period,
 // at least minViolationMergeSeconds. Strikes count only within the mode they
 // were recorded in, so observe mode is a dry run and enforce mode starts from
-// zero. The first new strike of a lenient category in the window is a warning
-// instead: it restricts nothing and does not count. A lenient refusal only
-// holds its conversation, so the customer can continue it; a second refusal
-// of a held conversation merges into the first and blocks it. A refusal of
-// any other category blocks its conversation at once. Administrators are
-// recorded as exempt.
+// zero. A new strike of a lenient category is a warning instead, which
+// restricts nothing and does not count, while the user's incidents of that
+// category within LenientWarningWindowSeconds are fewer than LenientWarnings.
+// Each category has its own warnings. A lenient refusal only holds its
+// conversation, so the customer can continue it; a second refusal of a held
+// conversation merges into the first and blocks it. A refusal of any other
+// category blocks its conversation at once. Administrators are recorded as
+// exempt.
 func applyViolationStrike(setting operation_setting.ViolationGuardSetting, record model.ViolationRecord, now int64) error {
 	user, err := model.GetUserCache(record.UserId)
 	if err != nil {
@@ -342,18 +344,21 @@ func applyViolationStrike(setting operation_setting.ViolationGuardSetting, recor
 		}
 		record.Action = model.ViolationActionMerged
 		if newStrike {
-			warned := true
+			warn := false
 			if lenient {
-				if warned, err = model.HasViolationWarning(record.UserId, record.Mode, windowStart); err != nil {
+				since := max(now-operation_setting.LenientWarningWindowSeconds, windowStart)
+				incidents, err := model.CountViolationIncidents(record.UserId, record.Mode, record.Category, since)
+				if err != nil {
 					return err
 				}
+				warn = incidents < int64(setting.LenientWarnings)
 			}
 			strikes, err := model.CountViolationStrikes(record.UserId, record.Mode, windowStart)
 			if err != nil {
 				return err
 			}
 			switch {
-			case !warned:
+			case warn:
 				record.Action = model.ViolationActionWarn
 			case setting.BanStrikes > 0 && strikes+1 >= int64(setting.BanStrikes):
 				record.Action = model.ViolationActionBan

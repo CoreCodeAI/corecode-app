@@ -59,6 +59,7 @@ const violationGuardSchema = z.object({
   ban_strikes: z.number().int().min(0),
   strike_window_days: z.number().int().min(1),
   lenient_categories: z.string(),
+  lenient_warnings: z.number().int().min(0),
   client_check_limit: z.number().int().min(0),
 })
 
@@ -71,6 +72,7 @@ export type ViolationGuardValues = {
   'violation_guard_setting.ban_strikes': number
   'violation_guard_setting.strike_window_days': number
   'violation_guard_setting.lenient_categories': string
+  'violation_guard_setting.lenient_warnings': number
   'violation_guard_setting.client_check_limit': number
 }
 
@@ -87,6 +89,7 @@ const toFormValues = (
   ban_strikes: defaults['violation_guard_setting.ban_strikes'],
   strike_window_days: defaults['violation_guard_setting.strike_window_days'],
   lenient_categories: defaults['violation_guard_setting.lenient_categories'],
+  lenient_warnings: defaults['violation_guard_setting.lenient_warnings'],
   client_check_limit: defaults['violation_guard_setting.client_check_limit'],
 })
 
@@ -100,6 +103,7 @@ const toOptionValues = (
   'violation_guard_setting.strike_window_days': values.strike_window_days,
   'violation_guard_setting.lenient_categories':
     values.lenient_categories.trim(),
+  'violation_guard_setting.lenient_warnings': values.lenient_warnings,
   'violation_guard_setting.client_check_limit': values.client_check_limit,
 })
 
@@ -137,6 +141,7 @@ export function ViolationGuardForm(props: ViolationGuardFormProps) {
       | 'suspend_hours'
       | 'ban_strikes'
       | 'strike_window_days'
+      | 'lenient_warnings'
       | 'client_check_limit',
     label: string,
     description: string,
@@ -274,13 +279,21 @@ export function ViolationGuardForm(props: ViolationGuardFormProps) {
                 </FormControl>
                 <FormDescription>
                   {t(
-                    'Refusal categories, separated by commas, whose first refusal in the counting window is only a warning: the customer is not suspended and the warning does not count toward disabling. The customer can continue the refused conversation; it is blocked only when the upstream refuses it again.'
+                    'Refusal categories, separated by commas, whose refusals are first only warnings: the customer is not suspended and a warning does not count toward disabling. The customer can continue the refused conversation; it is blocked only when the upstream refuses it again.'
                   )}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
+          {numberField(
+            'lenient_warnings',
+            t('Warnings per category per day'),
+            t(
+              'How many refusals of one warn-first category within 24 hours are only warnings; the next one counts as a violation. Refusals within ten minutes of each other count once. 0 counts the first refusal.'
+            ),
+            0
+          )}
           {numberField(
             'client_check_limit',
             t('Client check limit'),

@@ -34,10 +34,14 @@ type ViolationGuardSetting struct {
 	BanStrikes       int `json:"ban_strikes"`
 	StrikeWindowDays int `json:"strike_window_days"`
 	// LenientCategories lists upstream refusal categories, separated by commas
-	// or whitespace, whose first refusal in the window is only a warning that
-	// restricts nothing. A refusal of these categories only holds its
-	// conversation; the conversation is blocked when it is refused again.
+	// or whitespace, whose refusals are first only warnings that restrict
+	// nothing; see LenientWarnings. A refusal of these categories only holds
+	// its conversation; the conversation is blocked when it is refused again.
 	LenientCategories string `json:"lenient_categories"`
+	// LenientWarnings is how many incidents of one lenient category a customer
+	// is only warned about within LenientWarningWindowSeconds; the next
+	// incident of that category is a strike. 0 strikes the first.
+	LenientWarnings int `json:"lenient_warnings"`
 	// ClientCheckLimit stops forwarding a customer's client checks once the
 	// upstream has refused this many of them within ClientCheckWindowSeconds;
 	// 0 always forwards them. See clientCheckRefusal in the service package.
@@ -48,8 +52,12 @@ type ViolationGuardSetting struct {
 // ClientCheckLimit.
 const ClientCheckWindowSeconds = 24 * 3600
 
+// LenientWarningWindowSeconds is how long a lenient incident counts toward
+// LenientWarnings.
+const LenientWarningWindowSeconds = 24 * 3600
+
 // LenientCategory reports whether a refusal of this category is warned about
-// once before it counts as a strike.
+// before it counts as a strike.
 func (s ViolationGuardSetting) LenientCategory(category string) bool {
 	if category == "" {
 		return false
@@ -69,8 +77,11 @@ var violationGuardSetting = ViolationGuardSetting{
 	BanStrikes:       2,
 	StrikeWindowDays: 30,
 	// Anthropic's classifier refuses many ordinary agent sessions with this
-	// category, so the first such refusal only warns.
+	// category, so its refusals warn before they count.
 	LenientCategories: "reasoning_extraction",
+	// Two incidents of a category in a day are warnings; a customer who keeps
+	// being refused is struck at the third.
+	LenientWarnings: 2,
 	// A client that keeps sending checks the upstream refuses costs the pool
 	// account a refusal each time, and the customer gains nothing from them.
 	ClientCheckLimit: 5,
@@ -92,7 +103,7 @@ func ValidateViolationGuardOption(field string, value string) error {
 		if value != ViolationGuardModeObserve && value != ViolationGuardModeEnforce {
 			return fmt.Errorf("Violation guard mode must be observe or enforce")
 		}
-	case "suspend_hours", "ban_strikes", "client_check_limit":
+	case "suspend_hours", "ban_strikes", "client_check_limit", "lenient_warnings":
 		if number, err := strconv.Atoi(value); err != nil || number < 0 {
 			return fmt.Errorf("Violation guard %s must be a non-negative whole number", field)
 		}

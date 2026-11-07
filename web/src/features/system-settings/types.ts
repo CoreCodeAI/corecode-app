@@ -437,6 +437,7 @@ export type SecuritySettings = {
   'violation_guard_setting.ban_strikes': number
   'violation_guard_setting.strike_window_days': number
   'violation_guard_setting.lenient_categories': string
+  'violation_guard_setting.lenient_warnings': number
   'violation_guard_setting.client_check_limit': number
   'risk_gate_setting.enabled': boolean
   'risk_gate_setting.mode': 'observe' | 'enforce'
