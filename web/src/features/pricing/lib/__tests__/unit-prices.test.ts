@@ -63,6 +63,21 @@ describe('getBaseUnitPrices', () => {
     expect(base?.prices.cacheRead).toBeCloseTo(0.01)
   })
 
+  test('reads a model whose expression prices the 12-hour cache write', () => {
+    // Production's gpt-6.1-terra on 2026-11-07.
+    const base = getBaseUnitPrices({
+      ...haiku,
+      model_name: 'gpt-6.1-terra',
+      billing_expr:
+        'len <= 272000 ? tier("0_272k", p * 1 + cr * 0.05 + cc * 1.25 + cc12h * 2.5 + c * 5) : tier("272k_plus", p * 2 + cr * 0.1 + cc * 2.5 + cc12h * 5 + c * 7.5)',
+    })
+    expect(base?.tiered).toBe(true)
+    expect(base?.prices.input).toBeCloseTo(1)
+    expect(base?.prices.output).toBeCloseTo(5)
+    expect(base?.prices.cacheWrite).toBeCloseTo(1.25)
+    expect(base?.prices.cacheRead).toBeCloseTo(0.05)
+  })
+
   test('has no token prices for a per-request model', () => {
     expect(getBaseUnitPrices({ ...opus, quota_type: 1 })).toBeNull()
   })

@@ -87,9 +87,10 @@ export function expressionTurnCost(
     cr: 0,
     cc: 0,
     cc1h: 0,
+    cc12h: 0,
     ...tokens,
   }
-  for (const variable of ['cr', 'cc', 'cc1h'] as const) {
+  for (const variable of ['cr', 'cc', 'cc1h', 'cc12h'] as const) {
     if (!compiled.variables.has(variable) && normalized[variable]) {
       normalized.p = (normalized.p ?? 0) + normalized[variable]
       normalized[variable] = 0
