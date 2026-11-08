@@ -15,6 +15,7 @@ var StripeSmallOrderEpayMax = 0.0
 
 // StripeHKDDiscount is a CoreCode setting: the fraction taken off the HKD
 // amount Checkout charges, so the customer's wallet, converting HKD back at
-// its own slightly lower rate, charges no more than the CNY price. 0.006
-// turned a ¥100 order that WeChat Pay charged as ¥100.30 into about ¥99.70.
-var StripeHKDDiscount = 0.006
+// its own slightly lower rate, charges no more than the CNY price. WeChat
+// Pay charged a ¥100 order as ¥100.30 with no discount; 0.004 makes it
+// about ¥99.90, leaving room for the two rates to drift.
+var StripeHKDDiscount = 0.004
