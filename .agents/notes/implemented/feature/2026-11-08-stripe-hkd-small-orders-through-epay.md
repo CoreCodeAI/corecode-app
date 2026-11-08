@@ -23,6 +23,14 @@ top-ups. Cards stay on Stripe at every amount, since epay has no card method.
   plan order's money still record the CNY price, which the top-up report,
   paid-total tiers and commission read. Plans with a recurring
   `stripe_price_id` keep the currency of their Stripe Price.
+- **HKD only, a little under the CNY price.** Checkout sets
+  `adaptive_pricing.enabled=false`; otherwise Stripe offered the customer a
+  CNY option (¥103.97 for a ¥100 order) at its own marked-up rate. The line
+  item's description gives the CNY price (`人民币价 ¥100.00`). The HKD amount
+  is reduced by `StripeHKDDiscount` (option row, default 0.006, capped at 5%) and
+  rounded down. In the first live test, HK$117.48 for a ¥100 order became
+  ¥100.30 in WeChat Pay, which converted at about 1.1713. The operators
+  preferred to charge slightly less, about ¥99.70, rather than slightly more.
 - **The rate is fetched, not configured** (`controller/stripe_fx.go`).
   Frankfurter (ECB reference rates) is asked first, and ExchangeRate-API's open
   feed is asked when it fails. Neither needs a key. A rate is used for an hour.
@@ -58,9 +66,10 @@ top-ups. Cards stay on Stripe at every amount, since epay has no card method.
 
 ## Consequences
 
-- Customers see the HK$ amount on Checkout. WeChat Pay, Alipay and the card
-  issuer convert it back to roughly the CNY price at their own rate. The
-  wallet still quotes ¥.
+- Customers see the HK$ amount on Checkout, with the CNY price under the
+  product name. WeChat Pay, Alipay and the card issuer convert it back at
+  their own rate, which with the discount comes to slightly under the CNY
+  price. The wallet still quotes ¥, and the credit is the full amount.
 - The threshold takes effect only after the console with this change is
   released and `StripeSmallOrderEpayMax` is set to 50. The server releases
   first, and the old console keeps sending every order to Stripe until then.
@@ -71,10 +80,13 @@ top-ups. Cards stay on Stripe at every amount, since epay has no card method.
 
 ## Verification
 
-- `TestStripeCheckoutChargesThePriceInHKD`: ¥100 at 1.1748 is 11748 HK cents;
-  the line item's currency is `hkd`.
+- `TestStripeCheckoutChargesThePriceInHKD`: ¥100 at 1.1748 is 11748 HK
+  cents with no discount, 11677 at 0.006, and 11160 at the 5% cap. A
+  negative discount charges no surcharge. The line item is in `hkd`, carries
+  `人民币价 ¥100.00`, and Adaptive Pricing is off.
 - `TestStripeCheckoutOffersTheChosenMethod`: a ¥29.9 plan by WeChat Pay
-  posts `unit_amount=3513`, `currency=hkd` to a stub Stripe API.
+  posts `unit_amount=3491`, `currency=hkd`, `adaptive_pricing[enabled]=false`
+  and the CNY description to a stub Stripe API.
 - `TestStripeHKDPerCNYFallsBackAndCaches`: the first source is used and then
   cached; a 502 falls to the second source; a nonsense quote and a provider
   error keep the last rate without refetching each request; past 24 hours,

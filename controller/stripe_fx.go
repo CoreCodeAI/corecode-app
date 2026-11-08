@@ -11,6 +11,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/setting"
 
 	"github.com/shopspring/decimal"
 )
@@ -161,7 +162,17 @@ func fetchHKDPerCNYFrom(ctx context.Context, source hkdPerCNYSource) (float64, e
 	return rate, nil
 }
 
-// stripeHKDCents is payMoney (CNY) in HK cents, the amount Checkout charges.
+// stripeHKDDiscountMax caps StripeHKDDiscount, so a mistyped setting cannot
+// give orders away.
+const stripeHKDDiscountMax = 0.05
+
+// stripeHKDCents is the amount Checkout charges for payMoney (CNY), in HK
+// cents: payMoney at the market rate, less StripeHKDDiscount, rounded down.
+// Wallets and card issuers convert HKD back at a rate a little below the
+// market's, so without the discount the customer pays slightly more than
+// the CNY price.
 func stripeHKDCents(payMoney float64, hkdPerCNY decimal.Decimal) int64 {
-	return decimal.NewFromFloat(payMoney).Mul(hkdPerCNY).Mul(decimal.NewFromInt(100)).Round(0).IntPart()
+	discount := decimal.NewFromFloat(min(max(setting.StripeHKDDiscount, 0), stripeHKDDiscountMax))
+	return decimal.NewFromFloat(payMoney).Mul(hkdPerCNY).Mul(decimal.NewFromInt(1).Sub(discount)).
+		Mul(decimal.NewFromInt(100)).Floor().IntPart()
 }

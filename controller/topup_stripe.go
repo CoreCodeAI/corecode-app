@@ -190,7 +190,7 @@ func (*StripeAdaptor) RequestPay(c *gin.Context, req *StripePayRequest) {
 	reference := fmt.Sprintf("new-api-ref-%d-%d-%s", user.Id, time.Now().UnixMilli(), randstr.String(4))
 	referenceId := "ref_" + common.Sha1([]byte(reference))
 
-	payLink, err := genStripeLink(stripeCheckoutParams(referenceId, user.StripeCustomer, user.Email, hkdCents,
+	payLink, err := genStripeLink(stripeCheckoutParams(referenceId, user.StripeCustomer, user.Email, payMoney, hkdCents,
 		"CoreCode 余额充值", stripeWalletMethods[req.PaymentMethod], req.SuccessURL, req.CancelURL))
 	if err != nil {
 		logger.LogError(c.Request.Context(), common.LogText("Stripe failed to create Checkout Session user_id=%d trade_no=%s amount=%d error=%q", id, referenceId, req.Amount, err.Error()))
@@ -435,12 +435,14 @@ func sessionExpired(ctx context.Context, event stripe.Event) {
 }
 
 // stripeCheckoutParams builds a one-time Checkout Session: one line item,
-// productName, charging hkdCents in HKD. methodTypes limits the Stripe
-// payment methods offered; empty offers every method the dashboard enables
-// for HKD and the amount. customerId is the customer's Stripe customer, or
+// productName, described with its CNY price payMoney, charging hkdCents in
+// HKD only: Adaptive Pricing is off, so Checkout offers no local currency
+// at Stripe's own, marked-up rate. methodTypes limits the Stripe payment
+// methods offered; empty offers every method the dashboard enables for HKD
+// and the amount. customerId is the customer's Stripe customer, or
 // empty for a first checkout, which then creates one under email. An empty
 // successURL or cancelURL returns to the wallet.
-func stripeCheckoutParams(referenceId string, customerId string, email string, hkdCents int64, productName string, methodTypes []string, successURL string, cancelURL string) *stripe.CheckoutSessionParams {
+func stripeCheckoutParams(referenceId string, customerId string, email string, payMoney float64, hkdCents int64, productName string, methodTypes []string, successURL string, cancelURL string) *stripe.CheckoutSessionParams {
 	if successURL == "" {
 		successURL = paymentReturnPath("/wallet")
 	}
@@ -458,7 +460,8 @@ func stripeCheckoutParams(referenceId string, customerId string, email string, h
 					Currency:   stripe.String(stripeCheckoutCurrency),
 					UnitAmount: stripe.Int64(hkdCents),
 					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
-						Name: stripe.String(productName),
+						Name:        stripe.String(productName),
+						Description: stripe.String(fmt.Sprintf("人民币价 ¥%.2f", payMoney)),
 					},
 				},
 				Quantity: stripe.Int64(1),
@@ -466,6 +469,7 @@ func stripeCheckoutParams(referenceId string, customerId string, email string, h
 		},
 		Mode:                stripe.String(string(stripe.CheckoutSessionModePayment)),
 		AllowPromotionCodes: stripe.Bool(setting.StripePromotionCodesEnabled),
+		AdaptivePricing:     &stripe.CheckoutSessionAdaptivePricingParams{Enabled: stripe.Bool(false)},
 	}
 	if len(methodTypes) > 0 {
 		params.PaymentMethodTypes = stripe.StringSlice(methodTypes)
