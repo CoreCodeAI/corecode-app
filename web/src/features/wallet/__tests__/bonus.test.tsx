@@ -94,9 +94,15 @@ describe('bonus on the recharge form', () => {
   })
 
   it('shows no bonus when only non-epay methods can be used', () => {
-    renderForm(topupInfo('stripe', { enable_stripe_topup: true }), 1000)
+    renderForm(topupInfo('creem', { enable_creem_topup: true }), 1000)
 
     expect(screen.queryByText(/bonus/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the bonus when Stripe, priced like epay, is the only method', () => {
+    renderForm(topupInfo('stripe', { enable_stripe_topup: true }), 1000)
+
+    expect(screen.getByText('Bonus $100 (+10% bonus)')).toBeVisible()
   })
 
   it('shows no bonus when no tiers are configured', () => {
@@ -123,16 +129,19 @@ function renderDialog(methodType: string, bonusRate: number) {
 }
 
 describe('bonus in the payment confirmation', () => {
-  it('lists the bonus and the total credited for an epay method', () => {
-    renderDialog('alipay', 0.1)
+  it.each(['alipay', 'stripe'])(
+    'lists the bonus and the total credited for %s',
+    (type) => {
+      renderDialog(type, 0.1)
 
-    expect(screen.getByText('Bonus')).toBeVisible()
-    expect(screen.getByText('Total credited')).toBeVisible()
-    expect(screen.getByText(/\+.*100/)).toBeVisible()
-    expect(screen.getByText(/1,100/)).toBeVisible()
-  })
+      expect(screen.getByText('Bonus')).toBeVisible()
+      expect(screen.getByText('Total credited')).toBeVisible()
+      expect(screen.getByText(/\+.*100/)).toBeVisible()
+      expect(screen.getByText(/1,100/)).toBeVisible()
+    }
+  )
 
-  it.each(['stripe', 'creem', 'waffo', 'waffo_pancake'])(
+  it.each(['creem', 'waffo', 'waffo_pancake'])(
     'says nothing about bonus for %s',
     (type) => {
       renderDialog(type, 0.1)

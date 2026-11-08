@@ -32,15 +32,14 @@ export interface BonusTier {
 }
 
 const NO_BONUS_PAYMENT_TYPES = new Set<string>([
-  PAYMENT_TYPES.STRIPE,
   PAYMENT_TYPES.CREEM,
   PAYMENT_TYPES.WAFFO,
   PAYMENT_TYPES.WAFFO_PANCAKE,
 ])
 
 /**
- * Online epay methods (alipay, wxpay and similar) and NOWPayments (USDT /
- * USDC), whose orders are priced like epay's, earn a bonus; Stripe, Creem and
+ * Online epay methods (alipay, wxpay and similar), NOWPayments (USDT / USDC)
+ * and Stripe, whose orders are priced like epay's, earn a bonus; Creem and
  * Waffo orders never do.
  */
 export function isBonusEligiblePayment(paymentType: string | undefined) {
