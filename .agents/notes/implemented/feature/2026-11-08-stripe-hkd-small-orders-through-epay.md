@@ -27,10 +27,13 @@ top-ups. Cards stay on Stripe at every amount, since epay has no card method.
   `adaptive_pricing.enabled=false`; otherwise Stripe offered the customer a
   CNY option (¥103.97 for a ¥100 order) at its own marked-up rate. The line
   item's description gives the CNY price (`人民币价 ¥100.00`). The HKD amount
-  is reduced by `StripeHKDDiscount` (option row, default 0.006, capped at 5%) and
+  is reduced by `StripeHKDDiscount` (option row, default 0.004, capped at 5%) and
   rounded down. In the first live test, HK$117.48 for a ¥100 order became
   ¥100.30 in WeChat Pay, which converted at about 1.1713. The operators
-  preferred to charge slightly less, about ¥99.70, rather than slightly more.
+  preferred to charge slightly less rather than slightly more. 0.003 would
+  match that one test exactly, at about ¥99.99, but the ECB rate lags on
+  weekends and the fallback source sat 0.3% lower, so 0.004 (about ¥99.90)
+  leaves room for the rates to drift.
 - **The rate is fetched, not configured** (`controller/stripe_fx.go`).
   Frankfurter (ECB reference rates) is asked first, and ExchangeRate-API's open
   feed is asked when it fails. Neither needs a key. A rate is used for an hour.
@@ -81,11 +84,11 @@ top-ups. Cards stay on Stripe at every amount, since epay has no card method.
 ## Verification
 
 - `TestStripeCheckoutChargesThePriceInHKD`: ¥100 at 1.1748 is 11748 HK
-  cents with no discount, 11677 at 0.006, and 11160 at the 5% cap. A
+  cents with no discount, 11701 at 0.004, and 11160 at the 5% cap. A
   negative discount charges no surcharge. The line item is in `hkd`, carries
   `人民币价 ¥100.00`, and Adaptive Pricing is off.
 - `TestStripeCheckoutOffersTheChosenMethod`: a ¥29.9 plan by WeChat Pay
-  posts `unit_amount=3491`, `currency=hkd`, `adaptive_pricing[enabled]=false`
+  posts `unit_amount=3498`, `currency=hkd`, `adaptive_pricing[enabled]=false`
   and the CNY description to a stub Stripe API.
 - `TestStripeHKDPerCNYFallsBackAndCaches`: the first source is used and then
   cached; a 502 falls to the second source; a nonsense quote and a provider
