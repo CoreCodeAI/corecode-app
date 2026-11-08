@@ -182,4 +182,55 @@ describe('subscription purchase dialog', () => {
     })
     expect(epayPay).not.toHaveBeenCalled()
   })
+
+  // A ¥9.9 plan by the WeChat button, whose threshold is ¥50, goes to epay
+  // under the Stripe method's name; above the threshold it stays on Stripe.
+  it('pays a plan at or below the threshold through epay', async () => {
+    const stripePay = vi.spyOn(subscriptionApi, 'paySubscriptionStripe')
+    const epayPay = vi
+      .spyOn(subscriptionApi, 'paySubscriptionEpay')
+      .mockResolvedValue({
+        success: true,
+        message: 'success',
+        data: { type: 'wxpay' },
+        url: 'https://pay.example.com/submit.php',
+      } as never)
+    vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {})
+    renderDialog(plan, undefined, [
+      { type: 'stripe_wechat_pay', name: '微信', epay_max_money: 50 },
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pay' }))
+
+    await waitFor(() =>
+      expect(epayPay).toHaveBeenCalledWith({
+        plan_id: 1,
+        payment_method: 'stripe_wechat_pay',
+      })
+    )
+    expect(stripePay).not.toHaveBeenCalled()
+  })
+
+  it('keeps a plan above the threshold on Stripe', async () => {
+    const stripePay = vi
+      .spyOn(subscriptionApi, 'paySubscriptionStripe')
+      .mockResolvedValue({
+        success: true,
+        message: 'success',
+        data: { pay_link: 'https://checkout.stripe.com/c/pay/cs_2' },
+      })
+    const epayPay = vi.spyOn(subscriptionApi, 'paySubscriptionEpay')
+    vi.spyOn(window, 'location', 'get').mockReturnValue({
+      ...window.location,
+      assign: vi.fn(),
+    })
+    renderDialog(plan, undefined, [
+      { type: 'stripe_wechat_pay', name: '微信', epay_max_money: 5 },
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pay' }))
+
+    await waitFor(() => expect(stripePay).toHaveBeenCalled())
+    expect(epayPay).not.toHaveBeenCalled()
+  })
 })

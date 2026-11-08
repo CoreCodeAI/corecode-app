@@ -16,10 +16,48 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { describe, expect, test } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
+import * as walletApi from '../api'
 import { PAYMENT_TYPES } from '../constants'
-import { requestPaymentAmount } from './use-payment'
+import { requestPaymentAmount, usePayment } from './use-payment'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+describe('small Stripe orders through epay', () => {
+  // The WeChat button is a Stripe method; a small order goes to the epay
+  // endpoint under the same name, and the server picks epay's wxpay.
+  test('posts the Stripe method to epay and opens the epay form', async () => {
+    const epay = vi.spyOn(walletApi, 'requestPayment').mockResolvedValue({
+      success: false,
+      message: 'success',
+      data: { type: 'wxpay', money: '30.00' },
+      url: 'https://pay.example.com/submit.php',
+    } as never)
+    const stripe = vi.spyOn(walletApi, 'requestStripePayment')
+    vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {})
+    const { result } = renderHook(() => usePayment())
+
+    let ok = false
+    await act(async () => {
+      ok = await result.current.processPayment(
+        30,
+        PAYMENT_TYPES.STRIPE_WECHAT_PAY,
+        true
+      )
+    })
+
+    expect(ok).toBe(true)
+    expect(epay).toHaveBeenCalledWith({
+      amount: 30,
+      payment_method: PAYMENT_TYPES.STRIPE_WECHAT_PAY,
+    })
+    expect(stripe).not.toHaveBeenCalled()
+  })
+})
 
 describe('payment amount routing', () => {
   test('uses the dedicated Waffo amount calculator', async () => {

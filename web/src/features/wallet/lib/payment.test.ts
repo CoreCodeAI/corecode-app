@@ -19,11 +19,13 @@ For commercial licensing, please contact support@quantumnous.com
 import { describe, expect, test } from 'vitest'
 
 import { PAYMENT_TYPES } from '../constants'
+import type { PaymentMethod } from '../types'
 import {
   dispatchSelectedPayment,
   isStripePayment,
   isWaffoPayment,
   isWaffoPancakePayment,
+  paysThroughEpay,
 } from './payment'
 
 describe('payment type classification', () => {
@@ -42,6 +44,30 @@ describe('payment type classification', () => {
     expect(isStripePayment(PAYMENT_TYPES.WECHAT)).toBe(false)
     expect(isStripePayment(PAYMENT_TYPES.ALIPAY)).toBe(false)
     expect(isStripePayment(undefined)).toBe(false)
+  })
+})
+
+describe('small Stripe orders through epay', () => {
+  const wechat = {
+    name: '微信',
+    type: PAYMENT_TYPES.STRIPE_WECHAT_PAY,
+    epay_max_money: 50,
+  }
+
+  test('sends an order at or below the method threshold to epay', () => {
+    expect(paysThroughEpay(wechat, 10)).toBe(true)
+    expect(paysThroughEpay(wechat, 50)).toBe(true)
+    expect(paysThroughEpay(wechat, 50.01)).toBe(false)
+  })
+
+  test('keeps Stripe when the price or the threshold is unknown', () => {
+    expect(paysThroughEpay(wechat, 0)).toBe(false)
+    const card: PaymentMethod = {
+      name: '银行卡',
+      type: PAYMENT_TYPES.STRIPE_CARD,
+    }
+    expect(paysThroughEpay(card, 10)).toBe(false)
+    expect(paysThroughEpay(undefined, 10)).toBe(false)
   })
 })
 

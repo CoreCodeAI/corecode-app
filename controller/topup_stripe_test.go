@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stripe/stripe-go/v81"
@@ -23,24 +24,26 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestStripeCheckoutChargesThePriceInCNY(t *testing.T) {
-	for payMoney, fen := range map[float64]int64{100: 10000, 9.9: 990, 1234.565: 123457} {
-		params := stripeCheckoutParams("ref_1", "", "a@example.com", payMoney, "CoreCode 余额充值", nil, "", "")
-		require.Len(t, params.LineItems, 1)
-		item := params.LineItems[0]
-		assert.Nil(t, item.Price, "no dashboard Price: the order sets the amount")
-		assert.Equal(t, "cny", *item.PriceData.Currency)
-		assert.Equal(t, fen, *item.PriceData.UnitAmount, "¥%v", payMoney)
-		assert.Equal(t, int64(1), *item.Quantity)
+func TestStripeCheckoutChargesThePriceInHKD(t *testing.T) {
+	rate := decimal.RequireFromString("1.1748")
+	for payMoney, cents := range map[float64]int64{100: 11748, 9.9: 1163, 1234.565: 145037, 50.01: 5875} {
+		assert.Equal(t, cents, stripeHKDCents(payMoney, rate), "¥%v", payMoney)
 	}
+	params := stripeCheckoutParams("ref_1", "", "a@example.com", 11748, "CoreCode 余额充值", nil, "", "")
+	require.Len(t, params.LineItems, 1)
+	item := params.LineItems[0]
+	assert.Nil(t, item.Price, "no dashboard Price: the order sets the amount")
+	assert.Equal(t, "hkd", *item.PriceData.Currency, "the settlement currency: no Stripe conversion fee")
+	assert.Equal(t, int64(11748), *item.PriceData.UnitAmount)
+	assert.Equal(t, int64(1), *item.Quantity)
 
-	first := stripeCheckoutParams("ref_1", "", "a@example.com", 100, "CoreCode 余额充值", nil, "", "")
+	first := stripeCheckoutParams("ref_1", "", "a@example.com", 11748, "CoreCode 余额充值", nil, "", "")
 	assert.Equal(t, paymentReturnPath("/wallet"), *first.SuccessURL, "a paid customer returns to the wallet")
 	assert.Equal(t, paymentReturnPath("/wallet"), *first.CancelURL)
 	assert.Nil(t, first.PaymentMethodTypes, "plain stripe offers every enabled method")
 	assert.Nil(t, first.Customer)
 	assert.Equal(t, "a@example.com", *first.CustomerEmail)
-	again := stripeCheckoutParams("ref_2", "cus_1", "a@example.com", 100, "CoreCode 余额充值", nil, "", "")
+	again := stripeCheckoutParams("ref_2", "cus_1", "a@example.com", 11748, "CoreCode 余额充值", nil, "", "")
 	assert.Equal(t, "cus_1", *again.Customer)
 	assert.Nil(t, again.CustomerEmail)
 }
@@ -69,6 +72,7 @@ func TestStripeCheckoutOffersTheChosenMethod(t *testing.T) {
 	setting.StripeApiSecret, setting.StripeWebhookSecret = "sk_test_123", "whsec_test"
 	paymentSetting.ComplianceConfirmed = true
 	paymentSetting.ComplianceTermsVersion = operation_setting.CurrentComplianceTermsVersion
+	setHKDPerCNYForTest(t, "1.1748")
 
 	var form url.Values
 	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -106,14 +110,15 @@ func TestStripeCheckoutOffersTheChosenMethod(t *testing.T) {
 	}
 
 	// WeChat Pay: Checkout offers only WeChat Pay, as a web client, charges
-	// the plan's CNY price once, and the order records the wallet method.
+	// the plan's CNY price once in HKD, and the order records the wallet
+	// method and the CNY price.
 	assert.Contains(t, post(SubscriptionRequestStripePay, `{"plan_id":7401,"payment_method":"stripe_wechat_pay"}`), "cs_test_1")
 	assert.Equal(t, "payment", form.Get("mode"))
 	assert.Equal(t, []string{"wechat_pay"}, form["payment_method_types[0]"])
 	assert.Empty(t, form.Get("payment_method_types[1]"))
 	assert.Equal(t, "web", form.Get("payment_method_options[wechat_pay][client]"))
-	assert.Equal(t, "2990", form.Get("line_items[0][price_data][unit_amount]"))
-	assert.Equal(t, "cny", form.Get("line_items[0][price_data][currency]"))
+	assert.Equal(t, "3513", form.Get("line_items[0][price_data][unit_amount]"), "¥29.9 × 1.1748 = HK$35.13")
+	assert.Equal(t, "hkd", form.Get("line_items[0][price_data][currency]"))
 	assert.Equal(t, "新人福利包", form.Get("line_items[0][price_data][product_data][name]"))
 	assert.Equal(t, paymentReturnPath("/wallet"), form.Get("success_url"))
 	var orders []model.SubscriptionOrder
@@ -241,7 +246,7 @@ func TestStripeWebhookCreditsAmountAndBonusOnce(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	deliver := func(eventType string, tradeNo string, status string, paymentStatus string, signWith string) int {
-		payload := fmt.Sprintf(`{"id":"evt_1","object":"event","api_version":"2026-10-28","type":%q,"data":{"object":{"object":"checkout.session","client_reference_id":%q,"customer":"cus_1","status":%q,"payment_status":%q,"amount_total":10000,"currency":"cny"}}}`,
+		payload := fmt.Sprintf(`{"id":"evt_1","object":"event","api_version":"2026-10-28","type":%q,"data":{"object":{"object":"checkout.session","client_reference_id":%q,"customer":"cus_1","status":%q,"payment_status":%q,"amount_total":11748,"currency":"hkd"}}}`,
 			eventType, tradeNo, status, paymentStatus)
 		signed := webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{Payload: []byte(payload), Secret: signWith, Timestamp: time.Now()})
 		recorder := httptest.NewRecorder()

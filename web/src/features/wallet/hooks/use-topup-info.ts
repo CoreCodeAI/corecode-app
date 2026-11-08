@@ -69,6 +69,7 @@ function parsePaymentMethods(
       const rawMinTopup = Number(item.min_topup)
       const normalizedMinTopup = Number.isFinite(rawMinTopup) ? rawMinTopup : 0
       const type = typeof item.type === 'string' ? item.type : ''
+      const epayMaxMoney = Number(item.epay_max_money)
 
       return {
         name: typeof item.name === 'string' ? item.name : '',
@@ -79,6 +80,10 @@ function parsePaymentMethods(
           isStripePayment(type) && normalizedMinTopup <= 0
             ? stripeMinTopup
             : normalizedMinTopup,
+        epay_max_money:
+          Number.isFinite(epayMaxMoney) && epayMaxMoney > 0
+            ? epayMaxMoney
+            : undefined,
       }
     })
     .filter((item) => item.name && item.type && item.type !== 'waffo')

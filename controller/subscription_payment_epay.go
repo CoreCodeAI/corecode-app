@@ -11,7 +11,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
@@ -45,7 +44,10 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		common.ApiErrorT(c, "Plan amount is too low")
 		return
 	}
-	if !operation_setting.ContainsPayMethod(req.PaymentMethod) {
+	// CoreCode: a plan priced at or below StripeSmallOrderEpayMax may come
+	// here under a Stripe method that has an epay twin (stripeEpayTwins).
+	epayType, ok := epayTypeFor(req.PaymentMethod, plan.PriceAmount)
+	if !ok {
 		common.ApiErrorT(c, "Payment method does not exist")
 		return
 	}
@@ -83,7 +85,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		PlanId:          plan.Id,
 		Money:           plan.PriceAmount,
 		TradeNo:         tradeNo,
-		PaymentMethod:   req.PaymentMethod,
+		PaymentMethod:   epayType,
 		PaymentProvider: model.PaymentProviderEpay,
 		CreateTime:      time.Now().Unix(),
 		Status:          common.TopUpStatusPending,
@@ -93,7 +95,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		return
 	}
 	uri, params, err := client.Purchase(&epay.PurchaseArgs{
-		Type:           req.PaymentMethod,
+		Type:           epayType,
 		ServiceTradeNo: tradeNo,
 		Name:           fmt.Sprintf("SUB:%s", plan.Title),
 		Money:          strconv.FormatFloat(plan.PriceAmount, 'f', 2, 64),

@@ -34,8 +34,11 @@ func GetTopUpInfo(c *gin.Context) {
 
 	// CoreCode: the Stripe methods an administrator lists (stripe,
 	// stripe_card, stripe_wechat_pay, stripe_alipay) show only while Stripe
-	// is configured; with none listed, one "Stripe" method is appended. The
-	// list is copied so the shared PayMethods option is never appended to.
+	// is configured; with none listed, one "Stripe" method is appended. A
+	// Stripe method whose small orders go through epay carries
+	// epay_max_money, the CNY price at or below which the console sends it
+	// to epay. The list and its entries are copied so the shared PayMethods
+	// option is never changed.
 	stripeEnabled := isStripeTopUpEnabled()
 	hasStripe := false
 	listed := payMethods
@@ -46,6 +49,10 @@ func GetTopUpInfo(c *gin.Context) {
 				continue
 			}
 			hasStripe = true
+			if epayMax := stripeSmallOrderEpayMax(method["type"]); epayMax > 0 {
+				method = maps.Clone(method)
+				method["epay_max_money"] = strconv.FormatFloat(epayMax, 'f', -1, 64)
+			}
 		}
 		payMethods = append(payMethods, method)
 	}
@@ -388,7 +395,10 @@ func RequestEpay(c *gin.Context) {
 		return
 	}
 
-	if !operation_setting.ContainsPayMethod(req.PaymentMethod) {
+	// CoreCode: a small order paid by a Stripe method that has an epay twin
+	// comes here under the Stripe method's name (stripeEpayTwins).
+	epayType, ok := epayTypeFor(req.PaymentMethod, payMoney)
+	if !ok {
 		paymentError(c, common.NewMessage("Payment method does not exist"))
 		return
 	}
@@ -404,7 +414,7 @@ func RequestEpay(c *gin.Context) {
 		return
 	}
 	uri, params, err := client.Purchase(&epay.PurchaseArgs{
-		Type:           req.PaymentMethod,
+		Type:           epayType,
 		ServiceTradeNo: tradeNo,
 		Name:           fmt.Sprintf("TUC%d", req.Amount),
 		Money:          strconv.FormatFloat(payMoney, 'f', 2, 64),
@@ -413,7 +423,7 @@ func RequestEpay(c *gin.Context) {
 		ReturnUrl:      returnUrl,
 	})
 	if err != nil {
-		logger.LogError(c.Request.Context(), common.LogText("Epay failed to start payment user_id=%d trade_no=%s payment_method=%s amount=%d error=%q", id, tradeNo, req.PaymentMethod, req.Amount, err.Error()))
+		logger.LogError(c.Request.Context(), common.LogText("Epay failed to start payment user_id=%d trade_no=%s payment_method=%s amount=%d error=%q", id, tradeNo, epayType, req.Amount, err.Error()))
 		paymentError(c, common.NewMessage("Failed to start payment"))
 		return
 	}
@@ -428,7 +438,7 @@ func RequestEpay(c *gin.Context) {
 		Amount:          amount,
 		Money:           payMoney,
 		TradeNo:         tradeNo,
-		PaymentMethod:   req.PaymentMethod,
+		PaymentMethod:   epayType,
 		PaymentProvider: model.PaymentProviderEpay,
 		BonusQuota:      int64(bonusQuota),
 		CreateTime:      time.Now().Unix(),
@@ -436,11 +446,11 @@ func RequestEpay(c *gin.Context) {
 	}
 	err = topUp.Insert()
 	if err != nil {
-		logger.LogError(c.Request.Context(), common.LogText("Epay failed to create top-up order user_id=%d trade_no=%s payment_method=%s amount=%d error=%q", id, tradeNo, req.PaymentMethod, req.Amount, err.Error()))
+		logger.LogError(c.Request.Context(), common.LogText("Epay failed to create top-up order user_id=%d trade_no=%s payment_method=%s amount=%d error=%q", id, tradeNo, epayType, req.Amount, err.Error()))
 		paymentError(c, common.NewMessage("Failed to create order"))
 		return
 	}
-	logger.LogInfo(c.Request.Context(), common.LogText("Epay top-up order created user_id=%d trade_no=%s payment_method=%s amount=%d money=%.2f uri=%q params=%q", id, tradeNo, req.PaymentMethod, req.Amount, payMoney, uri, common.GetJsonString(params)))
+	logger.LogInfo(c.Request.Context(), common.LogText("Epay top-up order created user_id=%d trade_no=%s payment_method=%s amount=%d money=%.2f uri=%q params=%q", id, tradeNo, epayType, req.Amount, payMoney, uri, common.GetJsonString(params)))
 	c.JSON(http.StatusOK, gin.H{"message": "success", "data": params, "url": uri})
 }
 

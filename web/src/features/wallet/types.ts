@@ -100,6 +100,11 @@ export interface PaymentMethod {
   min_topup?: number
   /** Optional react-icons component name or safe icon URL */
   icon?: string
+  /**
+   * CoreCode: on a Stripe method with an epay twin, the CNY price at or below
+   * which an order goes through epay instead
+   */
+  epay_max_money?: number
 }
 
 /**
