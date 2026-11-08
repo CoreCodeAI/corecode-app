@@ -32,26 +32,30 @@ func GetTopUpInfo(c *gin.Context) {
 		payMethods = []map[string]string{}
 	}
 
-	// 如果启用了 Stripe 支付，添加到支付方法列表
-	if isStripeTopUpEnabled() {
-		// 检查是否已经包含 Stripe
-		hasStripe := false
-		for _, method := range payMethods {
-			if method["type"] == "stripe" {
-				hasStripe = true
-				break
+	// CoreCode: the Stripe methods an administrator lists (stripe,
+	// stripe_card, stripe_wechat_pay, stripe_alipay) show only while Stripe
+	// is configured; with none listed, one "Stripe" method is appended. The
+	// list is copied so the shared PayMethods option is never appended to.
+	stripeEnabled := isStripeTopUpEnabled()
+	hasStripe := false
+	listed := payMethods
+	payMethods = make([]map[string]string, 0, len(listed)+1)
+	for _, method := range listed {
+		if isStripeWalletMethod(method["type"]) {
+			if !stripeEnabled {
+				continue
 			}
+			hasStripe = true
 		}
-
-		if !hasStripe {
-			stripeMethod := map[string]string{
-				"name":      "Stripe",
-				"type":      "stripe",
-				"color":     "#635BFF",
-				"min_topup": strconv.Itoa(setting.StripeMinTopUp),
-			}
-			payMethods = append(payMethods, stripeMethod)
-		}
+		payMethods = append(payMethods, method)
+	}
+	if stripeEnabled && !hasStripe {
+		payMethods = append(payMethods, map[string]string{
+			"name":      "Stripe",
+			"type":      "stripe",
+			"color":     "#635BFF",
+			"min_topup": strconv.Itoa(setting.StripeMinTopUp),
+		})
 	}
 
 	// Waffo Pancake is displayed above the standard Waffo gateway.

@@ -118,6 +118,29 @@ export function getPaymentIcon(
           style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.WECHAT] }}
         />
       )
+    case PAYMENT_TYPES.STRIPE_WECHAT_PAY:
+      return (
+        <IconWeChat
+          className={className}
+          style={{
+            color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.STRIPE_WECHAT_PAY],
+          }}
+        />
+      )
+    case PAYMENT_TYPES.STRIPE_ALIPAY:
+      return (
+        <IconAlipay
+          className={className}
+          style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.STRIPE_ALIPAY] }}
+        />
+      )
+    case PAYMENT_TYPES.STRIPE_CARD:
+      return (
+        <CreditCard
+          className={className}
+          style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.STRIPE_CARD] }}
+        />
+      )
     case PAYMENT_TYPES.STRIPE:
       return (
         <IconStripe

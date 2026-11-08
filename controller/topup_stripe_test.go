@@ -2,8 +2,10 @@ package controller
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -16,13 +18,14 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stripe/stripe-go/v81"
 	"github.com/stripe/stripe-go/v81/webhook"
 	"gorm.io/gorm"
 )
 
-func TestStripeTopUpCheckoutChargesTheOrderPriceInCNY(t *testing.T) {
+func TestStripeCheckoutChargesThePriceInCNY(t *testing.T) {
 	for payMoney, fen := range map[float64]int64{100: 10000, 9.9: 990, 1234.565: 123457} {
-		params := stripeTopUpCheckoutParams("ref_1", "", "a@example.com", payMoney, "", "")
+		params := stripeCheckoutParams("ref_1", "", "a@example.com", payMoney, "CoreCode 余额充值", nil, "", "")
 		require.Len(t, params.LineItems, 1)
 		item := params.LineItems[0]
 		assert.Nil(t, item.Price, "no dashboard Price: the order sets the amount")
@@ -31,12 +34,165 @@ func TestStripeTopUpCheckoutChargesTheOrderPriceInCNY(t *testing.T) {
 		assert.Equal(t, int64(1), *item.Quantity)
 	}
 
-	first := stripeTopUpCheckoutParams("ref_1", "", "a@example.com", 100, "", "")
+	first := stripeCheckoutParams("ref_1", "", "a@example.com", 100, "CoreCode 余额充值", nil, "", "")
+	assert.Equal(t, paymentReturnPath("/wallet"), *first.SuccessURL, "a paid customer returns to the wallet")
+	assert.Equal(t, paymentReturnPath("/wallet"), *first.CancelURL)
+	assert.Nil(t, first.PaymentMethodTypes, "plain stripe offers every enabled method")
 	assert.Nil(t, first.Customer)
 	assert.Equal(t, "a@example.com", *first.CustomerEmail)
-	again := stripeTopUpCheckoutParams("ref_2", "cus_1", "a@example.com", 100, "", "")
+	again := stripeCheckoutParams("ref_2", "cus_1", "a@example.com", 100, "CoreCode 余额充值", nil, "", "")
 	assert.Equal(t, "cus_1", *again.Customer)
 	assert.Nil(t, again.CustomerEmail)
+}
+
+// TestStripeCheckoutOffersTheChosenMethod drives the plan endpoint against a
+// stub Stripe API and reads the form it sends. Top-ups build the session
+// with the same stripeCheckoutParams.
+func TestStripeCheckoutOffersTheChosenMethod(t *testing.T) {
+	paymentSetting := operation_setting.GetPaymentSetting()
+	previous := struct {
+		apiSecret, webhookSecret, terms string
+		redis, confirmed                bool
+		quotaPerUnit                    float64
+		db, logDB                       *gorm.DB
+	}{setting.StripeApiSecret, setting.StripeWebhookSecret, paymentSetting.ComplianceTermsVersion, common.RedisEnabled,
+		paymentSetting.ComplianceConfirmed, common.QuotaPerUnit, model.DB, model.LOG_DB}
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.TopUp{}, &model.Log{}, &model.SubscriptionPlan{}, &model.SubscriptionOrder{}, &model.UserSubscription{}))
+	model.DB, model.LOG_DB = db, db
+	common.RedisEnabled = false
+	common.QuotaPerUnit = 500000
+	setting.StripeApiSecret, setting.StripeWebhookSecret = "sk_test_123", "whsec_test"
+	paymentSetting.ComplianceConfirmed = true
+	paymentSetting.ComplianceTermsVersion = operation_setting.CurrentComplianceTermsVersion
+
+	var form url.Values
+	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		form, _ = url.ParseQuery(string(body))
+		_, _ = w.Write([]byte(`{"id":"cs_test_1","object":"checkout.session","url":"https://checkout.stripe.com/c/pay/cs_test_1"}`))
+	}))
+	stripe.SetBackend(stripe.APIBackend, stripe.GetBackendWithConfig(stripe.APIBackend, &stripe.BackendConfig{URL: stripe.String(stub.URL)}))
+	t.Cleanup(func() {
+		stripe.SetBackend(stripe.APIBackend, nil)
+		stub.Close()
+		setting.StripeApiSecret, setting.StripeWebhookSecret = previous.apiSecret, previous.webhookSecret
+		paymentSetting.ComplianceConfirmed, paymentSetting.ComplianceTermsVersion = previous.confirmed, previous.terms
+		common.RedisEnabled, common.QuotaPerUnit = previous.redis, previous.quotaPerUnit
+		model.DB, model.LOG_DB = previous.db, previous.logDB
+		require.NoError(t, sqlDB.Close())
+	})
+
+	user := &model.User{Username: "stripe_buyer", Status: common.UserStatusEnabled}
+	require.NoError(t, db.Create(user).Error)
+	plan := &model.SubscriptionPlan{Id: 7401, Title: "新人福利包", PriceAmount: 29.9, TotalAmount: 50 * 500000,
+		DurationUnit: "day", DurationValue: 7, QuotaResetPeriod: "never", Enabled: true}
+	require.NoError(t, db.Create(plan).Error)
+
+	gin.SetMode(gin.TestMode)
+	post := func(handler gin.HandlerFunc, body string) string {
+		form = nil
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+		ctx.Request.Header.Set("Content-Type", "application/json")
+		ctx.Set("id", user.Id)
+		handler(ctx)
+		return recorder.Body.String()
+	}
+
+	// WeChat Pay: Checkout offers only WeChat Pay, as a web client, charges
+	// the plan's CNY price once, and the order records the wallet method.
+	assert.Contains(t, post(SubscriptionRequestStripePay, `{"plan_id":7401,"payment_method":"stripe_wechat_pay"}`), "cs_test_1")
+	assert.Equal(t, "payment", form.Get("mode"))
+	assert.Equal(t, []string{"wechat_pay"}, form["payment_method_types[0]"])
+	assert.Empty(t, form.Get("payment_method_types[1]"))
+	assert.Equal(t, "web", form.Get("payment_method_options[wechat_pay][client]"))
+	assert.Equal(t, "2990", form.Get("line_items[0][price_data][unit_amount]"))
+	assert.Equal(t, "cny", form.Get("line_items[0][price_data][currency]"))
+	assert.Equal(t, "新人福利包", form.Get("line_items[0][price_data][product_data][name]"))
+	assert.Equal(t, paymentReturnPath("/wallet"), form.Get("success_url"))
+	var orders []model.SubscriptionOrder
+	require.NoError(t, db.Where("plan_id = ?", plan.Id).Order("id").Find(&orders).Error)
+	require.Len(t, orders, 1)
+	assert.Equal(t, model.PaymentMethodStripeWeChatPay, orders[0].PaymentMethod)
+	assert.Equal(t, model.PaymentProviderStripe, orders[0].PaymentProvider)
+	assert.InDelta(t, 29.9, orders[0].Money, 1e-9)
+
+	// Card: cards only, no WeChat client.
+	assert.Contains(t, post(SubscriptionRequestStripePay, `{"plan_id":7401,"payment_method":"stripe_card"}`), "cs_test_1")
+	assert.Equal(t, []string{"card"}, form["payment_method_types[0]"])
+	assert.Empty(t, form.Get("payment_method_options[wechat_pay][client]"))
+	require.NoError(t, db.Where("plan_id = ?", plan.Id).Order("id").Find(&orders).Error)
+	require.Len(t, orders, 2)
+	assert.Equal(t, model.PaymentMethodStripeCard, orders[1].PaymentMethod)
+
+	// No method: every method the dashboard enables.
+	assert.Contains(t, post(SubscriptionRequestStripePay, `{"plan_id":7401}`), "cs_test_1")
+	assert.Empty(t, form.Get("payment_method_types[0]"))
+
+	// An unknown method opens no checkout.
+	post(RequestStripePay, `{"amount":100,"payment_method":"stripe_paypal"}`)
+	post(SubscriptionRequestStripePay, `{"plan_id":7401,"payment_method":"wxpay"}`)
+	assert.Nil(t, form)
+}
+
+func TestTopUpInfoListsStripeMethodsOnlyWhileConfigured(t *testing.T) {
+	confirmPaymentComplianceForTest(t)
+	previousMethods := operation_setting.PayMethods
+	previousAPISecret, previousWebhookSecret := setting.StripeApiSecret, setting.StripeWebhookSecret
+	previousDB, previousLogDB, previousRedis := model.DB, model.LOG_DB, common.RedisEnabled
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.TopUp{}, &model.SubscriptionOrder{}))
+	model.DB, model.LOG_DB, common.RedisEnabled = db, db, false
+	t.Cleanup(func() {
+		operation_setting.PayMethods = previousMethods
+		setting.StripeApiSecret, setting.StripeWebhookSecret = previousAPISecret, previousWebhookSecret
+		model.DB, model.LOG_DB, common.RedisEnabled = previousDB, previousLogDB, previousRedis
+		require.NoError(t, sqlDB.Close())
+	})
+	listed := []map[string]string{
+		{"name": "支付宝", "type": "alipay"},
+		{"name": "微信", "type": model.PaymentMethodStripeWeChatPay},
+		{"name": "银行卡", "type": model.PaymentMethodStripeCard},
+	}
+	operation_setting.PayMethods = listed[:3:3]
+
+	gin.SetMode(gin.TestMode)
+	methodTypes := func() []string {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "/api/user/topup/info", nil)
+		GetTopUpInfo(ctx)
+		var response struct {
+			Data struct {
+				PayMethods []map[string]string `json:"pay_methods"`
+			} `json:"data"`
+		}
+		require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+		types := []string{}
+		for _, method := range response.Data.PayMethods {
+			types = append(types, method["type"])
+		}
+		return types
+	}
+
+	setting.StripeApiSecret, setting.StripeWebhookSecret = "sk_test_123", "whsec_test"
+	assert.Equal(t, []string{"alipay", "stripe_wechat_pay", "stripe_card"}, methodTypes()[:3],
+		"listed Stripe methods, and no extra plain Stripe")
+	assert.NotContains(t, methodTypes(), "stripe")
+
+	setting.StripeWebhookSecret = ""
+	assert.NotContains(t, methodTypes(), "stripe_wechat_pay", "hidden while Stripe is not configured")
+	assert.Equal(t, listed, operation_setting.PayMethods, "the option is not changed")
 }
 
 func TestStripeWebhookCreditsAmountAndBonusOnce(t *testing.T) {

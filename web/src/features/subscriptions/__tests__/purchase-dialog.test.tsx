@@ -26,7 +26,10 @@ import {
 } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { NowPaymentsCurrency } from '@/features/wallet/types'
+import type {
+  NowPaymentsCurrency,
+  PaymentMethod,
+} from '@/features/wallet/types'
 
 import * as subscriptionApi from '../api'
 import { SubscriptionPurchaseDialog } from '../components/dialogs/subscription-purchase-dialog'
@@ -62,7 +65,8 @@ const networks: NowPaymentsCurrency[] = [
 
 function renderDialog(
   record: PlanRecord,
-  nowPaymentsCurrencies?: NowPaymentsCurrency[]
+  nowPaymentsCurrencies?: NowPaymentsCurrency[],
+  checkoutMethods: PaymentMethod[] = [{ type: 'alipay', name: 'Alipay' }]
 ) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
@@ -70,8 +74,7 @@ function renderDialog(
         open
         onOpenChange={vi.fn()}
         plan={record}
-        enableOnlineTopUp
-        epayMethods={[{ type: 'alipay', name: 'Alipay' }]}
+        checkoutMethods={checkoutMethods}
         nowPaymentsCurrencies={nowPaymentsCurrencies}
       />
     </QueryClientProvider>
@@ -143,5 +146,40 @@ describe('subscription purchase dialog', () => {
       )
     )
     expect(pay).toHaveBeenCalledWith({ plan_id: 1, pay_currency: 'usdtbsc' })
+  })
+
+  // A Stripe method in the picker opens Stripe Checkout for that method, in
+  // this tab; epay is not called.
+  it('pays a plan with the Stripe method picked first', async () => {
+    const stripePay = vi
+      .spyOn(subscriptionApi, 'paySubscriptionStripe')
+      .mockResolvedValue({
+        success: true,
+        message: 'success',
+        data: { pay_link: 'https://checkout.stripe.com/c/pay/cs_1' },
+      })
+    const epayPay = vi.spyOn(subscriptionApi, 'paySubscriptionEpay')
+    const assign = vi.fn()
+    vi.spyOn(window, 'location', 'get').mockReturnValue({
+      ...window.location,
+      assign,
+    })
+    renderDialog(plan, undefined, [
+      { type: 'stripe_wechat_pay', name: '微信' },
+      { type: 'alipay', name: '支付宝' },
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pay' }))
+
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledWith(
+        'https://checkout.stripe.com/c/pay/cs_1'
+      )
+    )
+    expect(stripePay).toHaveBeenCalledWith({
+      plan_id: 1,
+      payment_method: 'stripe_wechat_pay',
+    })
+    expect(epayPay).not.toHaveBeenCalled()
   })
 })

@@ -29,12 +29,17 @@ type TopUp struct {
 }
 
 const (
-	PaymentMethodStripe       = "stripe"
-	PaymentMethodCreem        = "creem"
-	PaymentMethodWaffo        = "waffo"
-	PaymentMethodWaffoPancake = "waffo_pancake"
-	PaymentMethodNowPayments  = "nowpayments"
-	PaymentMethodBalance      = "balance"
+	PaymentMethodStripe = "stripe"
+	// CoreCode: wallet methods that open Stripe Checkout limited to one
+	// Stripe payment method. Plain "stripe" offers every enabled one.
+	PaymentMethodStripeCard      = "stripe_card"
+	PaymentMethodStripeWeChatPay = "stripe_wechat_pay"
+	PaymentMethodStripeAlipay    = "stripe_alipay"
+	PaymentMethodCreem           = "creem"
+	PaymentMethodWaffo           = "waffo"
+	PaymentMethodWaffoPancake    = "waffo_pancake"
+	PaymentMethodNowPayments     = "nowpayments"
+	PaymentMethodBalance         = "balance"
 )
 
 const (

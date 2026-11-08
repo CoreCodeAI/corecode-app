@@ -34,6 +34,15 @@ describe('payment type classification', () => {
     expect(isWaffoPancakePayment(PAYMENT_TYPES.WAFFO)).toBe(false)
     expect(isStripePayment(PAYMENT_TYPES.STRIPE)).toBe(true)
   })
+
+  test('sends every Stripe method through Stripe Checkout', () => {
+    expect(isStripePayment(PAYMENT_TYPES.STRIPE_CARD)).toBe(true)
+    expect(isStripePayment(PAYMENT_TYPES.STRIPE_WECHAT_PAY)).toBe(true)
+    expect(isStripePayment(PAYMENT_TYPES.STRIPE_ALIPAY)).toBe(true)
+    expect(isStripePayment(PAYMENT_TYPES.WECHAT)).toBe(false)
+    expect(isStripePayment(PAYMENT_TYPES.ALIPAY)).toBe(false)
+    expect(isStripePayment(undefined)).toBe(false)
+  })
 })
 
 describe('payment dispatch', () => {
