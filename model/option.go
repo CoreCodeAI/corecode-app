@@ -103,6 +103,7 @@ func InitOptionMap() {
 	common.OptionMap["MinTopUp"] = strconv.Itoa(operation_setting.MinTopUp)
 	common.OptionMap["StripeMinTopUp"] = strconv.Itoa(setting.StripeMinTopUp)
 	common.OptionMap["StripeSmallOrderEpayMax"] = strconv.FormatFloat(setting.StripeSmallOrderEpayMax, 'f', -1, 64)
+	common.OptionMap["StripeHKDDiscount"] = strconv.FormatFloat(setting.StripeHKDDiscount, 'f', -1, 64)
 	common.OptionMap["StripeApiSecret"] = setting.StripeApiSecret
 	common.OptionMap["StripeWebhookSecret"] = setting.StripeWebhookSecret
 	common.OptionMap["StripePriceId"] = setting.StripePriceId
@@ -575,6 +576,8 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.StripeMinTopUp, _ = strconv.Atoi(value)
 	case "StripeSmallOrderEpayMax":
 		setting.StripeSmallOrderEpayMax, _ = strconv.ParseFloat(value, 64)
+	case "StripeHKDDiscount":
+		setting.StripeHKDDiscount, _ = strconv.ParseFloat(value, 64)
 	case "StripePromotionCodesEnabled":
 		setting.StripePromotionCodesEnabled = value == "true"
 	case "CreemApiKey":

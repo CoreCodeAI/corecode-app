@@ -12,3 +12,9 @@ var StripePromotionCodesEnabled = false
 // Alipay), goes through epay instead, because Stripe's fixed fee is a large
 // share of a small order. Zero sends every order to Stripe.
 var StripeSmallOrderEpayMax = 0.0
+
+// StripeHKDDiscount is a CoreCode setting: the fraction taken off the HKD
+// amount Checkout charges, so the customer's wallet, converting HKD back at
+// its own slightly lower rate, charges no more than the CNY price. 0.006
+// turned a ¥100 order that WeChat Pay charged as ¥100.30 into about ¥99.70.
+var StripeHKDDiscount = 0.006

@@ -95,7 +95,7 @@ func SubscriptionRequestStripePay(c *gin.Context) {
 			paymentError(c, common.NewMessage("Failed to start payment"))
 			return
 		}
-		payLink, err = genStripeLink(stripeCheckoutParams(referenceId, user.StripeCustomer, user.Email, stripeHKDCents(plan.PriceAmount, rate),
+		payLink, err = genStripeLink(stripeCheckoutParams(referenceId, user.StripeCustomer, user.Email, plan.PriceAmount, stripeHKDCents(plan.PriceAmount, rate),
 			plan.Title, stripeWalletMethods[method], "", ""))
 	}
 	if err != nil {

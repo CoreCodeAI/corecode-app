@@ -25,25 +25,39 @@ import (
 )
 
 func TestStripeCheckoutChargesThePriceInHKD(t *testing.T) {
+	previousDiscount := setting.StripeHKDDiscount
+	t.Cleanup(func() { setting.StripeHKDDiscount = previousDiscount })
 	rate := decimal.RequireFromString("1.1748")
-	for payMoney, cents := range map[float64]int64{100: 11748, 9.9: 1163, 1234.565: 145037, 50.01: 5875} {
-		assert.Equal(t, cents, stripeHKDCents(payMoney, rate), "¥%v", payMoney)
+	setting.StripeHKDDiscount = 0
+	for payMoney, cents := range map[float64]int64{100: 11748, 9.9: 1163, 1234.565: 145036, 50.01: 5875} {
+		assert.Equal(t, cents, stripeHKDCents(payMoney, rate), "¥%v at the market rate, rounded down", payMoney)
 	}
-	params := stripeCheckoutParams("ref_1", "", "a@example.com", 11748, "CoreCode 余额充值", nil, "", "")
+	// The discount keeps a wallet's conversion at or under the CNY price:
+	// ¥100 is HK$116.77, which WeChat Pay's 1.1713 on 2026-11-08 makes ¥99.70.
+	setting.StripeHKDDiscount = 0.006
+	assert.Equal(t, int64(11677), stripeHKDCents(100, rate))
+	setting.StripeHKDDiscount = 0.5
+	assert.Equal(t, int64(11160), stripeHKDCents(100, rate), "capped at 5%")
+	setting.StripeHKDDiscount = -1
+	assert.Equal(t, int64(11748), stripeHKDCents(100, rate), "never a surcharge")
+
+	params := stripeCheckoutParams("ref_1", "", "a@example.com", 100, 11677, "CoreCode 余额充值", nil, "", "")
 	require.Len(t, params.LineItems, 1)
 	item := params.LineItems[0]
 	assert.Nil(t, item.Price, "no dashboard Price: the order sets the amount")
 	assert.Equal(t, "hkd", *item.PriceData.Currency, "the settlement currency: no Stripe conversion fee")
-	assert.Equal(t, int64(11748), *item.PriceData.UnitAmount)
+	assert.Equal(t, int64(11677), *item.PriceData.UnitAmount)
+	assert.Equal(t, "人民币价 ¥100.00", *item.PriceData.ProductData.Description)
 	assert.Equal(t, int64(1), *item.Quantity)
+	assert.False(t, *params.AdaptivePricing.Enabled, "HKD only: no local currency at Stripe's rate")
 
-	first := stripeCheckoutParams("ref_1", "", "a@example.com", 11748, "CoreCode 余额充值", nil, "", "")
+	first := stripeCheckoutParams("ref_1", "", "a@example.com", 100, 11677, "CoreCode 余额充值", nil, "", "")
 	assert.Equal(t, paymentReturnPath("/wallet"), *first.SuccessURL, "a paid customer returns to the wallet")
 	assert.Equal(t, paymentReturnPath("/wallet"), *first.CancelURL)
 	assert.Nil(t, first.PaymentMethodTypes, "plain stripe offers every enabled method")
 	assert.Nil(t, first.Customer)
 	assert.Equal(t, "a@example.com", *first.CustomerEmail)
-	again := stripeCheckoutParams("ref_2", "cus_1", "a@example.com", 11748, "CoreCode 余额充值", nil, "", "")
+	again := stripeCheckoutParams("ref_2", "cus_1", "a@example.com", 100, 11677, "CoreCode 余额充值", nil, "", "")
 	assert.Equal(t, "cus_1", *again.Customer)
 	assert.Nil(t, again.CustomerEmail)
 }
@@ -73,6 +87,9 @@ func TestStripeCheckoutOffersTheChosenMethod(t *testing.T) {
 	paymentSetting.ComplianceConfirmed = true
 	paymentSetting.ComplianceTermsVersion = operation_setting.CurrentComplianceTermsVersion
 	setHKDPerCNYForTest(t, "1.1748")
+	previousDiscount := setting.StripeHKDDiscount
+	setting.StripeHKDDiscount = 0.006
+	t.Cleanup(func() { setting.StripeHKDDiscount = previousDiscount })
 
 	var form url.Values
 	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -117,8 +134,10 @@ func TestStripeCheckoutOffersTheChosenMethod(t *testing.T) {
 	assert.Equal(t, []string{"wechat_pay"}, form["payment_method_types[0]"])
 	assert.Empty(t, form.Get("payment_method_types[1]"))
 	assert.Equal(t, "web", form.Get("payment_method_options[wechat_pay][client]"))
-	assert.Equal(t, "3513", form.Get("line_items[0][price_data][unit_amount]"), "¥29.9 × 1.1748 = HK$35.13")
+	assert.Equal(t, "3491", form.Get("line_items[0][price_data][unit_amount]"), "¥29.9 × 1.1748 × 0.994 = HK$34.91")
 	assert.Equal(t, "hkd", form.Get("line_items[0][price_data][currency]"))
+	assert.Equal(t, "false", form.Get("adaptive_pricing[enabled]"))
+	assert.Equal(t, "人民币价 ¥29.90", form.Get("line_items[0][price_data][product_data][description]"))
 	assert.Equal(t, "新人福利包", form.Get("line_items[0][price_data][product_data][name]"))
 	assert.Equal(t, paymentReturnPath("/wallet"), form.Get("success_url"))
 	var orders []model.SubscriptionOrder
