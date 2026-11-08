@@ -192,19 +192,32 @@ func UpdatePendingTopUpStatus(tradeNo string, expectedPaymentProvider string, ta
 // alreadyDone=true 表示订单此前已完成，本次为幂等重复回调。
 // 进程内的 LockOrder 只是优化，正确性由本函数的数据库行锁保证。
 func RechargeEpay(tradeNo string, actualPaymentMethod string, callerIp string) (alreadyDone bool, err error) {
-	return completeOnlineTopUp(tradeNo, PaymentProviderEpay, actualPaymentMethod, callerIp)
+	return completeOnlineTopUp(tradeNo, PaymentProviderEpay, actualPaymentMethod, callerIp, nil)
 }
 
 // RechargeNowPayments completes a NOWPayments crypto order. Its order is priced
 // like an epay order (Amount, a CNY Money, and a bonus fixed at order time), so
 // it completes through the same locked transaction and credits once.
 func RechargeNowPayments(tradeNo string, callerIp string) (alreadyDone bool, err error) {
-	return completeOnlineTopUp(tradeNo, PaymentProviderNowPayments, "", callerIp)
+	return completeOnlineTopUp(tradeNo, PaymentProviderNowPayments, "", callerIp, nil)
+}
+
+// RechargeStripe completes a Stripe Checkout top-up. CoreCode prices it like an
+// epay order (Amount, a CNY Money, and a bonus fixed at order time), so it
+// completes through the same locked transaction, credits once, and keeps the
+// Stripe customer for the customer's next checkout.
+func RechargeStripe(tradeNo string, customerId string, callerIp string) (alreadyDone bool, err error) {
+	var userUpdates map[string]any
+	if customerId != "" {
+		userUpdates = map[string]any{"stripe_customer": customerId}
+	}
+	return completeOnlineTopUp(tradeNo, PaymentProviderStripe, "", callerIp, userUpdates)
 }
 
 // completeOnlineTopUp credits an order whose quota is its Amount plus its
 // BonusQuota, under a row lock, once. provider must match the order's.
-func completeOnlineTopUp(tradeNo string, provider string, actualPaymentMethod string, callerIp string) (alreadyDone bool, err error) {
+// userUpdates are further user columns written with the credit.
+func completeOnlineTopUp(tradeNo string, provider string, actualPaymentMethod string, callerIp string, userUpdates map[string]any) (alreadyDone bool, err error) {
 	if tradeNo == "" {
 		return false, errors.New("payment order number not provided")
 	}
@@ -245,7 +258,7 @@ func completeOnlineTopUp(tradeNo string, provider string, actualPaymentMethod st
 		if err := tx.Save(topUp).Error; err != nil {
 			return err
 		}
-		return creditTopUpQuota(tx, topUp.UserId, quotaToAdd, nil)
+		return creditTopUpQuota(tx, topUp.UserId, quotaToAdd, userUpdates)
 	})
 	if err != nil {
 		if !errors.Is(err, ErrTopUpNotFound) && !errors.Is(err, ErrPaymentMethodMismatch) && !errors.Is(err, ErrTopUpStatusInvalid) {
@@ -262,62 +275,6 @@ func completeOnlineTopUp(tradeNo string, provider string, actualPaymentMethod st
 	RecordTopupLog(topUp.UserId, topUpCreditMessage("Online top-up succeeded, amount added: {{quota}}, payment amount: {{amount}}",
 		"Online top-up succeeded, amount added: {{quota}} including a bonus of {{bonus}}, payment amount: {{amount}}", quotaToAdd, topUp), callerIp, topUp.PaymentMethod, provider)
 	return false, nil
-}
-
-func Recharge(referenceId string, customerId string, callerIp string) (err error) {
-	if referenceId == "" {
-		return errors.New("payment order number not provided")
-	}
-
-	var quota int
-	topUp := &TopUp{}
-
-	refCol := "`trade_no`"
-	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
-		refCol = `"trade_no"`
-	}
-
-	err = DB.Transaction(func(tx *gorm.DB) error {
-		err := lockForUpdate(tx).Where(refCol+" = ?", referenceId).First(topUp).Error
-		if err != nil {
-			return errors.New("top-up order not found")
-		}
-
-		if topUp.PaymentProvider != PaymentProviderStripe {
-			return ErrPaymentMethodMismatch
-		}
-
-		if topUp.Status != common.TopUpStatusPending {
-			return errors.New("invalid top-up order status")
-		}
-
-		topUp.CompleteTime = common.GetTimestamp()
-		topUp.Status = common.TopUpStatusSuccess
-		err = tx.Save(topUp).Error
-		if err != nil {
-			return err
-		}
-
-		quota, err = common.WalletQuotaFromDecimalStrict(
-			decimal.NewFromFloat(topUp.Money).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
-		)
-		if err != nil || quota <= 0 {
-			return ErrInvalidTopUpQuota
-		}
-		return creditTopUpQuota(tx, topUp.UserId, quota, map[string]any{
-			"stripe_customer": customerId,
-		})
-	})
-
-	if err != nil {
-		common.SysError(common.LogText("topup failed: %s", err.Error()))
-		return errors.New("top-up failed")
-	}
-	syncCreditUserQuotaCache(topUp.UserId, quota, common.LogText("stripe topup"))
-
-	RecordTopupLog(topUp.UserId, common.NewMessage("Online top-up succeeded, amount added: {{quota}}, payment amount: {{amount}}", map[string]any{"quota": logger.FormatQuota(quota), "amount": topUp.Amount}), callerIp, topUp.PaymentMethod, PaymentMethodStripe)
-
-	return nil
 }
 
 // topUpQueryWindowSeconds 限制充值记录查询的时间窗口（秒）。
@@ -510,19 +467,12 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 			return common.NewMessage("Order is not pending payment and cannot be completed")
 		}
 
-		// 计算应充值额度：
-		// - Stripe 订单：Money 代表经分组倍率换算后的美元数量，直接 * QuotaPerUnit
-		// - 其他订单（如易支付）：Amount 为美元数量，* QuotaPerUnit
+		// Every online order, Stripe included, credits its Amount plus the bonus
+		// fixed when it was created.
 		var quotaErr error
-		if topUp.PaymentProvider == PaymentProviderStripe {
-			quotaToAdd, quotaErr = common.WalletQuotaFromDecimalStrict(
-				decimal.NewFromFloat(topUp.Money).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
-			)
-		} else {
-			quotaToAdd, quotaErr = common.WalletQuotaFromDecimalStrict(
-				decimal.NewFromInt(topUp.Amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).Add(decimal.NewFromInt(topUp.BonusQuota)),
-			)
-		}
+		quotaToAdd, quotaErr = common.WalletQuotaFromDecimalStrict(
+			decimal.NewFromInt(topUp.Amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).Add(decimal.NewFromInt(topUp.BonusQuota)),
+		)
 		if quotaErr != nil || quotaToAdd <= 0 {
 			return ErrInvalidTopUpQuota
 		}

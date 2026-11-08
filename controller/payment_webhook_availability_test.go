@@ -43,13 +43,14 @@ func TestStripeWebhookEnabledRequiresTopUpAndWebhookConfig(t *testing.T) {
 
 	setting.StripeWebhookSecret = ""
 	setting.StripeApiSecret = "sk_test_123"
-	setting.StripePriceId = "price_123"
+	setting.StripePriceId = ""
 	require.False(t, isStripeWebhookEnabled())
 
+	// Top-ups are priced per order, so no Price ID is needed.
 	setting.StripeWebhookSecret = "whsec_test"
 	require.True(t, isStripeWebhookEnabled())
 
-	setting.StripePriceId = ""
+	setting.StripeApiSecret = ""
 	require.False(t, isStripeWebhookEnabled())
 }
 

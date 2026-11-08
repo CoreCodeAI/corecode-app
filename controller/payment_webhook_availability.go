@@ -15,9 +15,10 @@ func isStripeTopUpEnabled() bool {
 	if !isPaymentComplianceConfirmed() {
 		return false
 	}
+	// CoreCode: a top-up is priced per order (topup_stripe.go), so it needs
+	// no StripePriceId; a subscription plan carries its own.
 	return strings.TrimSpace(setting.StripeApiSecret) != "" &&
-		strings.TrimSpace(setting.StripeWebhookSecret) != "" &&
-		strings.TrimSpace(setting.StripePriceId) != ""
+		strings.TrimSpace(setting.StripeWebhookSecret) != ""
 }
 
 func isStripeWebhookConfigured() bool {

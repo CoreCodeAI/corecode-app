@@ -68,10 +68,10 @@ describe('bonus tier selection', () => {
 })
 
 describe('bonus payment eligibility', () => {
-  test('rewards epay methods only', () => {
+  test('rewards methods priced like epay', () => {
     expect(isBonusEligiblePayment('alipay')).toBe(true)
     expect(isBonusEligiblePayment('wxpay')).toBe(true)
-    expect(isBonusEligiblePayment(PAYMENT_TYPES.STRIPE)).toBe(false)
+    expect(isBonusEligiblePayment(PAYMENT_TYPES.STRIPE)).toBe(true)
     expect(isBonusEligiblePayment(PAYMENT_TYPES.CREEM)).toBe(false)
     expect(isBonusEligiblePayment(PAYMENT_TYPES.WAFFO)).toBe(false)
     expect(isBonusEligiblePayment(PAYMENT_TYPES.WAFFO_PANCAKE)).toBe(false)

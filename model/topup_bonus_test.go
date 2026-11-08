@@ -131,6 +131,30 @@ func TestEpayTopUpBonusDatabaseMatrix(t *testing.T) {
 			assert.Equal(t, PaymentMethodNowPayments, stored.PaymentMethod)
 			_, err = RechargeNowPayments(plain.TradeNo, "127.0.0.1")
 			require.ErrorIs(t, err, ErrPaymentMethodMismatch)
+
+			// A Stripe order is priced like epay's too: it credits its amount and
+			// bonus once, keeps the Stripe customer, and an administrator
+			// completing one credits the same, not its Money.
+			card := &TopUp{UserId: user.Id, Amount: 100, Money: 100, TradeNo: "BONUS-STRIPE", PaymentMethod: PaymentMethodStripe,
+				PaymentProvider: PaymentProviderStripe, BonusQuota: 11 * 500000, Status: common.TopUpStatusPending}
+			require.NoError(t, db.Create(card).Error)
+			_, err = RechargeEpay(card.TradeNo, "alipay", "127.0.0.1")
+			require.ErrorIs(t, err, ErrPaymentMethodMismatch)
+			alreadyDone, err = RechargeStripe(card.TradeNo, "cus_matrix", "127.0.0.1")
+			require.NoError(t, err)
+			assert.False(t, alreadyDone)
+			alreadyDone, err = RechargeStripe(card.TradeNo, "cus_matrix", "127.0.0.1")
+			require.NoError(t, err)
+			assert.True(t, alreadyDone)
+			assert.Equal(t, 7+1891*500000, quota())
+			var customer User
+			require.NoError(t, db.Select("stripe_customer").First(&customer, user.Id).Error)
+			assert.Equal(t, "cus_matrix", customer.StripeCustomer)
+			manualCard := &TopUp{UserId: user.Id, Amount: 50, Money: 45, TradeNo: "BONUS-STRIPE-MANUAL", PaymentMethod: PaymentMethodStripe,
+				PaymentProvider: PaymentProviderStripe, BonusQuota: 5 * 500000, Status: common.TopUpStatusPending}
+			require.NoError(t, db.Create(manualCard).Error)
+			require.NoError(t, ManualCompleteTopUp(manualCard.TradeNo, "127.0.0.1"))
+			assert.Equal(t, 7+1946*500000, quota())
 		})
 	}
 }
