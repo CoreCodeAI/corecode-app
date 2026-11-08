@@ -47,6 +47,7 @@ import {
   getDefaultPaymentType,
   getMinTopupAmount,
   dispatchSelectedPayment,
+  paysThroughEpay,
 } from './lib'
 import type {
   UserWalletData,
@@ -204,7 +205,12 @@ export function Wallet(props: WalletProps) {
       topupAmount,
       selectedWaffoMethodIndex,
       {
-        regular: processPayment,
+        regular: (amount, type) =>
+          processPayment(
+            amount,
+            type,
+            paysThroughEpay(selectedPaymentMethod, paymentAmount)
+          ),
         waffo: processWaffoPayment,
         waffoPancake: processWaffoPancakePayment,
         nowPayments: processNowPaymentsPayment,

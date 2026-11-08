@@ -102,6 +102,20 @@ export function isStripePayment(paymentType: string | undefined): boolean {
 }
 
 /**
+ * CoreCode: whether an order of payMoney (CNY) by this method goes through
+ * epay. A Stripe method with an epay twin (WeChat Pay, Alipay) carries
+ * epay_max_money from the server; at or below it, Stripe's fixed fee would be
+ * a large share of the order, and the server charges it through the twin.
+ */
+export function paysThroughEpay(
+  method: Pick<PaymentMethod, 'epay_max_money'> | undefined,
+  payMoney: number
+): boolean {
+  const max = method?.epay_max_money
+  return !!max && payMoney > 0 && payMoney <= max
+}
+
+/**
  * Check if payment method is Waffo
  */
 export function isWaffoPayment(paymentType: string): boolean {

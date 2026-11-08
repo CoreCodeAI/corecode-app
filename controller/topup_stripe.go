@@ -48,13 +48,10 @@ type StripeAdaptor struct {
 // CoreCode change: a Stripe top-up is priced like an epay order. The order
 // records Amount, the CNY price getPayMoney gives (Price, top-up group ratio,
 // amount_discount) as Money, and the bonus fixed at order time; Checkout
-// charges that CNY price as one line item. Upstream priced it from
-// StripePriceId and StripeUnitPrice and paid no bonus, which left Money in a
-// unit the top-up report, paid-total tiers and invite commission do not read.
-
-// stripeTopUpCurrency is the currency Checkout charges in: CoreCode's epay
-// price, which a top-up's Money and a plan's price record, is in CNY.
-const stripeTopUpCurrency = "cny"
+// charges that price in HKD as one line item (stripe_fx.go). Upstream priced
+// it from StripePriceId and StripeUnitPrice and paid no bonus, which left
+// Money in a unit the top-up report, paid-total tiers and invite commission
+// do not read.
 
 // stripeWalletMethods maps each wallet method that pays through Stripe to the
 // Stripe payment method types its Checkout offers. Plain "stripe" sets none,
@@ -75,6 +72,39 @@ func isStripeWalletMethod(method string) bool {
 // stripeMaxTopUp caps one Stripe order, as upstream does, to bound what a
 // stolen card can buy in one checkout.
 const stripeMaxTopUp = 10000
+
+// stripeEpayTwins maps a Stripe wallet method to the epay type that takes
+// its orders priced at or below StripeSmallOrderEpayMax. Cards have no twin.
+var stripeEpayTwins = map[string]string{
+	model.PaymentMethodStripeWeChatPay: "wxpay",
+	model.PaymentMethodStripeAlipay:    "alipay",
+}
+
+// stripeSmallOrderEpayMax is the CNY price at or below which a listed Stripe
+// method with an epay twin pays through epay, or zero when none does: the
+// setting is off, or epay is not configured.
+func stripeSmallOrderEpayMax(method string) float64 {
+	if _, ok := stripeEpayTwins[method]; !ok || !isEpayTopUpEnabled() {
+		return 0
+	}
+	return max(setting.StripeSmallOrderEpayMax, 0)
+}
+
+// epayTypeFor returns the epay type that charges an order of payMoney paid
+// by a listed wallet method: the method itself for an epay method, or the
+// epay twin of a Stripe method when the order is small enough.
+func epayTypeFor(method string, payMoney float64) (string, bool) {
+	if !operation_setting.ContainsPayMethod(method) {
+		return "", false
+	}
+	if !isStripeWalletMethod(method) {
+		return method, true
+	}
+	if payMoney > stripeSmallOrderEpayMax(method) {
+		return "", false
+	}
+	return stripeEpayTwins[method], true
+}
 
 // stripeQuote validates a top-up amount and returns its CNY price. It answers
 // the client itself and returns ok=false when the amount is refused.
@@ -101,16 +131,11 @@ func stripeQuote(c *gin.Context, amount int64) (payMoney float64, ok bool) {
 		return 0, false
 	}
 	payMoney = getPayMoney(amount, group)
-	if stripeUnitAmount(payMoney) < 1 {
+	if payMoney < 0.01 {
 		paymentError(c, common.NewMessage("Payment amount is too low"))
 		return 0, false
 	}
 	return payMoney, true
-}
-
-// stripeUnitAmount is payMoney in fen, the unit Stripe charges CNY in.
-func stripeUnitAmount(payMoney float64) int64 {
-	return decimal.NewFromFloat(payMoney).Mul(decimal.NewFromInt(100)).Round(0).IntPart()
 }
 
 func (*StripeAdaptor) RequestAmount(c *gin.Context, req *StripePayRequest) {
@@ -155,10 +180,17 @@ func (*StripeAdaptor) RequestPay(c *gin.Context, req *StripePayRequest) {
 		return
 	}
 
+	rate, err := stripeHKDPerCNY(c.Request.Context())
+	if err != nil {
+		paymentError(c, common.NewMessage("Failed to start payment"))
+		return
+	}
+	hkdCents := stripeHKDCents(payMoney, rate)
+
 	reference := fmt.Sprintf("new-api-ref-%d-%d-%s", user.Id, time.Now().UnixMilli(), randstr.String(4))
 	referenceId := "ref_" + common.Sha1([]byte(reference))
 
-	payLink, err := genStripeLink(stripeCheckoutParams(referenceId, user.StripeCustomer, user.Email, payMoney,
+	payLink, err := genStripeLink(stripeCheckoutParams(referenceId, user.StripeCustomer, user.Email, hkdCents,
 		"CoreCode 余额充值", stripeWalletMethods[req.PaymentMethod], req.SuccessURL, req.CancelURL))
 	if err != nil {
 		logger.LogError(c.Request.Context(), common.LogText("Stripe failed to create Checkout Session user_id=%d trade_no=%s amount=%d error=%q", id, referenceId, req.Amount, err.Error()))
@@ -187,7 +219,7 @@ func (*StripeAdaptor) RequestPay(c *gin.Context, req *StripePayRequest) {
 		paymentError(c, common.NewMessage("Failed to create order"))
 		return
 	}
-	logger.LogInfo(c.Request.Context(), common.LogText("Stripe top-up order created user_id=%d trade_no=%s amount=%d money=%.2f", id, referenceId, req.Amount, payMoney))
+	logger.LogInfo(c.Request.Context(), common.LogText("Stripe top-up order created user_id=%d trade_no=%s amount=%d money=%.2f hkd_cents=%d hkd_per_cny=%s", id, referenceId, req.Amount, payMoney, hkdCents, rate.String()))
 	c.JSON(http.StatusOK, gin.H{
 		"message": "success",
 		"data": gin.H{
@@ -403,12 +435,12 @@ func sessionExpired(ctx context.Context, event stripe.Event) {
 }
 
 // stripeCheckoutParams builds a one-time Checkout Session: one line item,
-// productName, charging payMoney in CNY. methodTypes limits the Stripe
+// productName, charging hkdCents in HKD. methodTypes limits the Stripe
 // payment methods offered; empty offers every method the dashboard enables
-// for CNY and the amount. customerId is the customer's Stripe customer, or
+// for HKD and the amount. customerId is the customer's Stripe customer, or
 // empty for a first checkout, which then creates one under email. An empty
 // successURL or cancelURL returns to the wallet.
-func stripeCheckoutParams(referenceId string, customerId string, email string, payMoney float64, productName string, methodTypes []string, successURL string, cancelURL string) *stripe.CheckoutSessionParams {
+func stripeCheckoutParams(referenceId string, customerId string, email string, hkdCents int64, productName string, methodTypes []string, successURL string, cancelURL string) *stripe.CheckoutSessionParams {
 	if successURL == "" {
 		successURL = paymentReturnPath("/wallet")
 	}
@@ -423,8 +455,8 @@ func stripeCheckoutParams(referenceId string, customerId string, email string, p
 		LineItems: []*stripe.CheckoutSessionLineItemParams{
 			{
 				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
-					Currency:   stripe.String(stripeTopUpCurrency),
-					UnitAmount: stripe.Int64(stripeUnitAmount(payMoney)),
+					Currency:   stripe.String(stripeCheckoutCurrency),
+					UnitAmount: stripe.Int64(hkdCents),
 					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
 						Name: stripe.String(productName),
 					},

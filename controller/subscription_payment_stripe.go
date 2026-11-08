@@ -52,8 +52,9 @@ func SubscriptionRequestStripePay(c *gin.Context) {
 		return
 	}
 	// CoreCode: a plan without a Stripe Price is sold once at its CNY price,
-	// like an epay plan order; upstream required a recurring Price.
-	if plan.StripePriceId == "" && stripeUnitAmount(plan.PriceAmount) < 1 {
+	// charged in HKD, like an epay plan order; upstream required a recurring
+	// Price.
+	if plan.StripePriceId == "" && plan.PriceAmount < 0.01 {
 		common.ApiErrorT(c, "Plan amount is too low")
 		return
 	}
@@ -89,7 +90,12 @@ func SubscriptionRequestStripePay(c *gin.Context) {
 	if plan.StripePriceId != "" {
 		payLink, err = genStripeSubscriptionLink(referenceId, user.StripeCustomer, user.Email, plan.StripePriceId)
 	} else {
-		payLink, err = genStripeLink(stripeCheckoutParams(referenceId, user.StripeCustomer, user.Email, plan.PriceAmount,
+		rate, rateErr := stripeHKDPerCNY(c.Request.Context())
+		if rateErr != nil {
+			paymentError(c, common.NewMessage("Failed to start payment"))
+			return
+		}
+		payLink, err = genStripeLink(stripeCheckoutParams(referenceId, user.StripeCustomer, user.Email, stripeHKDCents(plan.PriceAmount, rate),
 			plan.Title, stripeWalletMethods[method], "", ""))
 	}
 	if err != nil {

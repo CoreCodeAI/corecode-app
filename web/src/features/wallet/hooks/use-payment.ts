@@ -114,13 +114,14 @@ export function usePayment() {
     []
   )
 
-  // Process payment
+  // Process payment. throughEpay sends a Stripe method's small order to
+  // epay under the same method name (paysThroughEpay).
   const processPayment = useCallback(
-    async (topupAmount: number, paymentType: string) => {
+    async (topupAmount: number, paymentType: string, throughEpay = false) => {
       try {
         setProcessing(true)
 
-        const isStripe = isStripePayment(paymentType)
+        const isStripe = isStripePayment(paymentType) && !throughEpay
         const amount = Math.floor(topupAmount)
 
         const response = isStripe

@@ -27,7 +27,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Combobox } from '@/components/ui/combobox'
 import { Separator } from '@/components/ui/separator'
-import { formatPaymentMoney, isStripePayment } from '@/features/wallet/lib'
+import {
+  formatPaymentMoney,
+  isStripePayment,
+  paysThroughEpay,
+} from '@/features/wallet/lib'
 import type { NowPaymentsCurrency } from '@/features/wallet/types'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { formatQuota } from '@/lib/format'
@@ -48,6 +52,7 @@ import type { PlanRecord } from '../../types'
 interface PaymentMethod {
   type: string
   name?: string
+  epay_max_money?: number
 }
 
 interface Props {
@@ -220,7 +225,13 @@ export function SubscriptionPurchaseDialog(props: Props) {
       toast.error(t('Please select a payment method'))
       return
     }
-    if (isStripePayment(selectedMethod)) {
+    // A Stripe method's small plan goes through epay under the same method
+    // name; the server charges it through the method's epay twin.
+    const method = props.checkoutMethods?.find((m) => m.type === selectedMethod)
+    if (
+      isStripePayment(selectedMethod) &&
+      !paysThroughEpay(method, Number(plan.price_amount || 0))
+    ) {
       await handlePayStripeMethod(selectedMethod)
       return
     }

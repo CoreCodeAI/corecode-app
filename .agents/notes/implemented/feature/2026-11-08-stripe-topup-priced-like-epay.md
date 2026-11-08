@@ -1,6 +1,6 @@
 # Agent Note: Take top-ups through Stripe, priced like epay
 
-Status: implemented
+Status: implemented — the CNY currency is superseded by [2026-11-08-stripe-hkd-small-orders-through-epay](2026-11-08-stripe-hkd-small-orders-through-epay.md): Checkout charges HKD
 
 ## Problem
 
