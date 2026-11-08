@@ -390,7 +390,7 @@ func sessionExpired(ctx context.Context, event stripe.Event) {
 // checkout, which then creates one under email.
 func stripeTopUpCheckoutParams(referenceId string, customerId string, email string, payMoney float64, successURL string, cancelURL string) *stripe.CheckoutSessionParams {
 	if successURL == "" {
-		successURL = paymentReturnPath("/usage-logs")
+		successURL = paymentReturnPath("/wallet")
 	}
 	if cancelURL == "" {
 		cancelURL = paymentReturnPath("/wallet")

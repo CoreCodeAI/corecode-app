@@ -39,6 +39,13 @@ a Stripe order credited `money`, not `amount`.
 - **The minimum is at least epay's.** `getStripeMinTopup` is the larger of
   `StripeMinTopUp` and `MinTopUp`; Alipay and WeChat Pay need HKD 4 or more
   on this account.
+- **A paid customer returns to `/wallet`**, where the new balance shows, as
+  a cancelled one does; upstream sent them to `/usage-logs`.
+- **Checkout asks for an email only when the account has none.** Stripe
+  offers no way to skip it. An account email is sent as `customer_email`,
+  and the Stripe customer the first checkout creates prefills it after
+  that. On 2026-11-08, 707 of 2279 accounts had no email; a placeholder
+  address was rejected because receipts and fraud checks would get nothing.
 - **One order stays capped at 10000**, as upstream had it, to bound what a
   stolen card buys in one checkout. Epay has no such cap.
 - **The console counts Stripe as bonus-eligible.** It was in

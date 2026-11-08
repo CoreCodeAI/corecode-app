@@ -32,6 +32,8 @@ func TestStripeTopUpCheckoutChargesTheOrderPriceInCNY(t *testing.T) {
 	}
 
 	first := stripeTopUpCheckoutParams("ref_1", "", "a@example.com", 100, "", "")
+	assert.Equal(t, paymentReturnPath("/wallet"), *first.SuccessURL, "a paid customer returns to the wallet")
+	assert.Equal(t, paymentReturnPath("/wallet"), *first.CancelURL)
 	assert.Nil(t, first.Customer)
 	assert.Equal(t, "a@example.com", *first.CustomerEmail)
 	again := stripeTopUpCheckoutParams("ref_2", "cus_1", "a@example.com", 100, "", "")
