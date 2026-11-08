@@ -27,7 +27,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Combobox } from '@/components/ui/combobox'
 import { Separator } from '@/components/ui/separator'
-import { formatPaymentMoney } from '@/features/wallet/lib'
+import { formatPaymentMoney, isStripePayment } from '@/features/wallet/lib'
 import type { NowPaymentsCurrency } from '@/features/wallet/types'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { formatQuota } from '@/lib/format'
@@ -57,8 +57,8 @@ interface Props {
   enableStripe?: boolean
   enableCreem?: boolean
   enableWaffoPancake?: boolean
-  enableOnlineTopUp?: boolean
-  epayMethods?: PaymentMethod[]
+  /** The method picker: epay methods and Stripe methods that are on */
+  checkoutMethods?: PaymentMethod[]
   /** USDT and USDC networks offered through NOWPayments; empty when it is off */
   nowPaymentsCurrencies?: NowPaymentsCurrency[]
   purchaseLimit?: number
@@ -71,17 +71,17 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const { t } = useTranslation()
   const { currency } = useSystemConfig()
   const [paying, setPaying] = useState(false)
-  const [selectedEpayMethod, setSelectedEpayMethod] = useState('')
+  const [selectedMethod, setSelectedMethod] = useState('')
   const [selectedNowPaymentsCurrency, setSelectedNowPaymentsCurrency] =
     useState('')
 
   useEffect(() => {
-    if (props.open && props.epayMethods && props.epayMethods.length > 0) {
-      setSelectedEpayMethod(props.epayMethods[0].type)
+    if (props.open && props.checkoutMethods?.length) {
+      setSelectedMethod(props.checkoutMethods[0].type)
     } else if (!props.open) {
-      setSelectedEpayMethod('')
+      setSelectedMethod('')
     }
-  }, [props.open, props.epayMethods])
+  }, [props.open, props.checkoutMethods])
 
   useEffect(() => {
     if (props.open && props.nowPaymentsCurrencies?.length) {
@@ -98,12 +98,15 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const hasCreem = props.enableCreem && !!plan.creem_product_id
   const hasWaffoPancake =
     props.enableWaffoPancake && !!plan.waffo_pancake_product_id
-  const hasEpay =
-    props.enableOnlineTopUp && (props.epayMethods || []).length > 0
+  const hasCheckoutMethods = (props.checkoutMethods || []).length > 0
   const nowPaymentsCurrencies = props.nowPaymentsCurrencies || []
   const hasNowPayments = nowPaymentsCurrencies.length > 0
   const hasAnyPayment =
-    hasStripe || hasCreem || hasWaffoPancake || hasEpay || hasNowPayments
+    hasStripe ||
+    hasCreem ||
+    hasWaffoPancake ||
+    hasCheckoutMethods ||
+    hasNowPayments
   // NOWPayments invoices the CNY price in US dollars at the server's rate,
   // rounded to the cent; USDT and USDC are one dollar each.
   const usdExchangeRate = Number(currency?.usdExchangeRate || 0)
@@ -190,16 +193,42 @@ export function SubscriptionPurchaseDialog(props: Props) {
     typeof navigator !== 'undefined' &&
     /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
 
+  // A Stripe method opens Checkout in this tab, as NOWPayments does: the
+  // popup would be blocked after the await.
+  const handlePayStripeMethod = async (method: string) => {
+    setPaying(true)
+    try {
+      const res = await paySubscriptionStripe({
+        plan_id: plan.id,
+        payment_method: method,
+      })
+      if (res.message === 'success' && res.data?.pay_link) {
+        toast.success(t('Redirecting to payment page...'))
+        window.location.assign(res.data.pay_link)
+      } else {
+        handleServerError(res, t('Payment request failed'))
+      }
+    } catch (error) {
+      handleServerError(error, t('Payment request failed'))
+    } finally {
+      setPaying(false)
+    }
+  }
+
   const handlePayEpay = async () => {
-    if (!selectedEpayMethod) {
+    if (!selectedMethod) {
       toast.error(t('Please select a payment method'))
+      return
+    }
+    if (isStripePayment(selectedMethod)) {
+      await handlePayStripeMethod(selectedMethod)
       return
     }
     setPaying(true)
     try {
       const res = await paySubscriptionEpay({
         plan_id: plan.id,
-        payment_method: selectedEpayMethod,
+        payment_method: selectedMethod,
       })
       if (res.message === 'success' && res.url) {
         const form = document.createElement('form')
@@ -417,21 +446,21 @@ export function SubscriptionPurchaseDialog(props: Props) {
                 )}
               </div>
             )}
-            {hasEpay && (
+            {hasCheckoutMethods && (
               <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
                 <Combobox
-                  options={(props.epayMethods || []).map((m) => ({
+                  options={(props.checkoutMethods || []).map((m) => ({
                     value: m.type,
                     label: m.name || m.type,
                   }))}
-                  value={selectedEpayMethod}
-                  onValueChange={(v) => v !== null && setSelectedEpayMethod(v)}
+                  value={selectedMethod}
+                  onValueChange={(v) => v !== null && setSelectedMethod(v)}
                   disabled={limitReached}
                   className='flex-1'
                 />
                 <Button
                   onClick={handlePayEpay}
-                  disabled={paying || !selectedEpayMethod || limitReached}
+                  disabled={paying || !selectedMethod || limitReached}
                 >
                   {t('Pay')}
                 </Button>

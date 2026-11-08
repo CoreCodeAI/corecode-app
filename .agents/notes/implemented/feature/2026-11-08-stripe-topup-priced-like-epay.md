@@ -39,6 +39,22 @@ a Stripe order credited `money`, not `amount`.
 - **The minimum is at least epay's.** `getStripeMinTopup` is the larger of
   `StripeMinTopUp` and `MinTopUp`; Alipay and WeChat Pay need HKD 4 or more
   on this account.
+- **One wallet button per Stripe method.** `PayMethods` may list
+  `stripe_card`, `stripe_wechat_pay` and `stripe_alipay` beside epay's; each
+  opens Checkout with `payment_method_types` set to that one method
+  (`wechat_pay` with `client=web`, which Stripe requires). Plain `stripe`
+  still offers every enabled method. The order records the wallet method.
+  Listed Stripe methods show only while Stripe is configured, and no extra
+  plain "Stripe" is appended beside them. On 2026-11-08 the operators put
+  Stripe WeChat Pay in place of epay's 微信 and added Stripe 银行卡; Stripe
+  Alipay waits for Stripe's approval.
+- **Plans are sold through the same buttons.** The plan dialog's method
+  picker lists the epay methods while epay is on and the Stripe methods while
+  Stripe is on. A plan without a `stripe_price_id` is charged once at its CNY
+  price, like an epay plan order, so it needs no Stripe product; a plan with
+  one keeps upstream's recurring checkout. Without this, removing epay 微信
+  would have left plans without WeChat (71 plan purchases by WeChat in the 30
+  days to 2026-11-08).
 - **A paid customer returns to `/wallet`**, where the new balance shows, as
   a cancelled one does; upstream sent them to `/usage-logs`.
 - **Checkout asks for an email only when the account has none.** Stripe
@@ -53,14 +69,16 @@ a Stripe order credited `money`, not `amount`.
 
 ## Alternatives considered
 
+- **Keep epay 微信 for plans only.** Plans and top-ups would offer different
+  WeChat paths, and the method list would need a second setting.
+
 - **Keep upstream's gateway with a ¥1 Price.** No code change, and with
   `Price` = 1 `money` would happen to be CNY, but Stripe top-ups would earn no
   bonus while the wallet advertises one, and a discount or group ratio would
   charge a different amount from the one quoted.
-- **One wallet button per method**, each forcing `payment_method_types`.
-  A forced type has to be approved before its button works, and three more
-  buttons named like epay's Alipay and WeChat crowd the grid.
-  The operators chose one button.
+- **One combined Stripe button.** Shipped first; the operators then asked
+  for a button per method so Stripe 微信 could replace epay's. A forced type
+  works only once Stripe approves it, so Stripe 支付宝 is not listed yet.
 - **Charge in HKD, the account's settlement currency.** Customers would see a
   foreign price; CNY matches the price the wallet quotes. Stripe converts on
   payout.
@@ -88,6 +106,14 @@ a Stripe order credited `money`, not `amount`.
   `-race`.
 - `go test ./model ./controller ./router ./service`; console wallet suite (53
   tests), `bun run typecheck`, `bun run lint:check`, oxfmt on the changed files.
-- Not verified before merge: a live Checkout Session. The restricted key
-  (Checkout Sessions, Customers, Products, Prices: write) listed sessions with
-  200 and was refused `/v1/balance` with 403.
+- After the first release, a live ¥10 session showed "CoreCode 余额充值
+  ¥10.00" with cards, WeChat Pay, Apple Pay and Link, and a real ¥10 card
+  payment credited 10 plus the 11% bonus. The restricted key (Checkout
+  Sessions, Customers, Products, Prices: write) was refused `/v1/balance`.
+- `TestStripeCheckoutOffersTheChosenMethod` posts plan purchases to a stub
+  Stripe API: `stripe_wechat_pay` sends `payment_method_types[0]=wechat_pay`
+  and `payment_method_options[wechat_pay][client]=web`, `stripe_card` sends
+  `card` only, no method sends none, one payment of 2990 fen, success URL
+  `/wallet`. `TestTopUpInfoListsStripeMethodsOnlyWhileConfigured` fails if
+  listed Stripe methods show while Stripe is off. The plan dialog test fails
+  if a Stripe pick goes to epay.

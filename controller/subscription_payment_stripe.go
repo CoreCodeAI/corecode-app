@@ -18,6 +18,9 @@ import (
 
 type SubscriptionStripePayRequest struct {
 	PlanId int `json:"plan_id"`
+	// PaymentMethod is the wallet method, as for a top-up; empty means
+	// "stripe".
+	PaymentMethod string `json:"payment_method"`
 }
 
 func SubscriptionRequestStripePay(c *gin.Context) {
@@ -40,8 +43,18 @@ func SubscriptionRequestStripePay(c *gin.Context) {
 		common.ApiErrorT(c, "Subscription plan is not enabled")
 		return
 	}
-	if plan.StripePriceId == "" {
-		common.ApiErrorT(c, "StripePriceId is not configured for this plan")
+	method := req.PaymentMethod
+	if method == "" {
+		method = model.PaymentMethodStripe
+	}
+	if !isStripeWalletMethod(method) {
+		common.ApiErrorT(c, "Payment method does not exist")
+		return
+	}
+	// CoreCode: a plan without a Stripe Price is sold once at its CNY price,
+	// like an epay plan order; upstream required a recurring Price.
+	if plan.StripePriceId == "" && stripeUnitAmount(plan.PriceAmount) < 1 {
+		common.ApiErrorT(c, "Plan amount is too low")
 		return
 	}
 	if !strings.HasPrefix(setting.StripeApiSecret, "sk_") && !strings.HasPrefix(setting.StripeApiSecret, "rk_") {
@@ -72,7 +85,13 @@ func SubscriptionRequestStripePay(c *gin.Context) {
 	reference := fmt.Sprintf("sub-stripe-ref-%d-%d-%s", user.Id, time.Now().UnixMilli(), randstr.String(4))
 	referenceId := "sub_ref_" + common.Sha1([]byte(reference))
 
-	payLink, err := genStripeSubscriptionLink(referenceId, user.StripeCustomer, user.Email, plan.StripePriceId)
+	var payLink string
+	if plan.StripePriceId != "" {
+		payLink, err = genStripeSubscriptionLink(referenceId, user.StripeCustomer, user.Email, plan.StripePriceId)
+	} else {
+		payLink, err = genStripeLink(stripeCheckoutParams(referenceId, user.StripeCustomer, user.Email, plan.PriceAmount,
+			plan.Title, stripeWalletMethods[method], "", ""))
+	}
 	if err != nil {
 		logger.LogError(c.Request.Context(), common.LogText("Stripe failed to create subscription payment link trade_no=%s plan_id=%d error=%q", referenceId, plan.Id, err.Error()))
 		paymentError(c, common.NewMessage("Failed to start payment"))
@@ -85,7 +104,7 @@ func SubscriptionRequestStripePay(c *gin.Context) {
 		PlanId:          plan.Id,
 		Money:           plan.PriceAmount,
 		TradeNo:         referenceId,
-		PaymentMethod:   model.PaymentMethodStripe,
+		PaymentMethod:   method,
 		PaymentProvider: model.PaymentProviderStripe,
 		CreateTime:      time.Now().Unix(),
 		Status:          common.TopUpStatusPending,

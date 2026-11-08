@@ -62,7 +62,7 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
 import { PAYMENT_TYPES } from '../constants'
-import { formatPaymentMoney } from '../lib'
+import { formatPaymentMoney, isStripePayment } from '../lib'
 import type { PaymentMethod, TopupInfo } from '../types'
 
 interface SubscriptionPlansCardProps {
@@ -72,16 +72,22 @@ interface SubscriptionPlansCardProps {
   onPurchaseSuccess?: () => void | Promise<void>
 }
 
-// The methods epay serves. pay_methods also lists the gateways with their own
-// purchase path (Stripe, Creem, NOWPayments), which epay would refuse.
-function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
-  return payMethods.filter(
-    (m) =>
-      m?.type &&
-      m.type !== 'stripe' &&
-      m.type !== 'creem' &&
-      m.type !== PAYMENT_TYPES.NOWPAYMENTS
-  )
+// The methods a plan is bought with from the method picker: the epay methods
+// while epay is on, and the Stripe methods while Stripe is on. pay_methods
+// also lists gateways with their own purchase path (Creem, NOWPayments).
+function getPlanCheckoutMethods(
+  payMethods: PaymentMethod[] = [],
+  enableEpay: boolean,
+  enableStripe: boolean
+): PaymentMethod[] {
+  return payMethods.filter((m) => {
+    if (!m?.type) return false
+    if (isStripePayment(m.type)) return enableStripe
+    if (m.type === 'creem' || m.type === PAYMENT_TYPES.NOWPAYMENTS) {
+      return false
+    }
+    return enableEpay
+  })
 }
 
 function getBillingPreferenceLabel(
@@ -129,9 +135,14 @@ export function SubscriptionPlansCard({
   const enableCreem = !!topupInfo?.enable_creem_topup
   const enableWaffoPancake = !!topupInfo?.enable_waffo_pancake_topup
   const enableOnlineTopUp = !!topupInfo?.enable_online_topup
-  const epayMethods = useMemo(
-    () => getEpayMethods(topupInfo?.pay_methods),
-    [topupInfo?.pay_methods]
+  const checkoutMethods = useMemo(
+    () =>
+      getPlanCheckoutMethods(
+        topupInfo?.pay_methods,
+        enableOnlineTopUp,
+        enableStripe
+      ),
+    [topupInfo?.pay_methods, enableOnlineTopUp, enableStripe]
   )
 
   const fetchPlans = useCallback(async () => {
@@ -672,8 +683,7 @@ export function SubscriptionPlansCard({
         enableStripe={enableStripe}
         enableCreem={enableCreem}
         enableWaffoPancake={enableWaffoPancake}
-        enableOnlineTopUp={enableOnlineTopUp}
-        epayMethods={epayMethods}
+        checkoutMethods={checkoutMethods}
         nowPaymentsCurrencies={topupInfo?.nowpayments_currencies}
         userQuota={userQuota}
         onPurchaseSuccess={onPurchaseSuccess}

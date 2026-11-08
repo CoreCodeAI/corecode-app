@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -30,7 +31,8 @@ var stripeAdaptor = &StripeAdaptor{}
 type StripePayRequest struct {
 	// Amount is the quantity of units to purchase.
 	Amount int64 `json:"amount"`
-	// PaymentMethod specifies the payment method (e.g., "stripe").
+	// PaymentMethod is the wallet method: "stripe", or one limited to a single
+	// Stripe payment method (see stripeWalletMethods).
 	PaymentMethod string `json:"payment_method"`
 	// SuccessURL is the optional custom URL to redirect after successful payment.
 	// If empty, defaults to the server's console log page.
@@ -51,8 +53,24 @@ type StripeAdaptor struct {
 // unit the top-up report, paid-total tiers and invite commission do not read.
 
 // stripeTopUpCurrency is the currency Checkout charges in: CoreCode's epay
-// price, which Money records, is in CNY.
+// price, which a top-up's Money and a plan's price record, is in CNY.
 const stripeTopUpCurrency = "cny"
+
+// stripeWalletMethods maps each wallet method that pays through Stripe to the
+// Stripe payment method types its Checkout offers. Plain "stripe" sets none,
+// so Checkout offers every method the Stripe dashboard enables for the
+// currency and amount.
+var stripeWalletMethods = map[string][]string{
+	model.PaymentMethodStripe:          nil,
+	model.PaymentMethodStripeCard:      {"card"},
+	model.PaymentMethodStripeWeChatPay: {"wechat_pay"},
+	model.PaymentMethodStripeAlipay:    {"alipay"},
+}
+
+func isStripeWalletMethod(method string) bool {
+	_, ok := stripeWalletMethods[method]
+	return ok
+}
 
 // stripeMaxTopUp caps one Stripe order, as upstream does, to bound what a
 // stolen card can buy in one checkout.
@@ -104,7 +122,7 @@ func (*StripeAdaptor) RequestAmount(c *gin.Context, req *StripePayRequest) {
 }
 
 func (*StripeAdaptor) RequestPay(c *gin.Context, req *StripePayRequest) {
-	if req.PaymentMethod != model.PaymentMethodStripe {
+	if !isStripeWalletMethod(req.PaymentMethod) {
 		paymentError(c, common.NewMessage("Unsupported payment channel"))
 		return
 	}
@@ -140,7 +158,8 @@ func (*StripeAdaptor) RequestPay(c *gin.Context, req *StripePayRequest) {
 	reference := fmt.Sprintf("new-api-ref-%d-%d-%s", user.Id, time.Now().UnixMilli(), randstr.String(4))
 	referenceId := "ref_" + common.Sha1([]byte(reference))
 
-	payLink, err := genStripeLink(stripeTopUpCheckoutParams(referenceId, user.StripeCustomer, user.Email, payMoney, req.SuccessURL, req.CancelURL))
+	payLink, err := genStripeLink(stripeCheckoutParams(referenceId, user.StripeCustomer, user.Email, payMoney,
+		"CoreCode 余额充值", stripeWalletMethods[req.PaymentMethod], req.SuccessURL, req.CancelURL))
 	if err != nil {
 		logger.LogError(c.Request.Context(), common.LogText("Stripe failed to create Checkout Session user_id=%d trade_no=%s amount=%d error=%q", id, referenceId, req.Amount, err.Error()))
 		paymentError(c, common.NewMessage("Failed to start payment"))
@@ -156,7 +175,7 @@ func (*StripeAdaptor) RequestPay(c *gin.Context, req *StripePayRequest) {
 		Amount:          amount,
 		Money:           payMoney,
 		TradeNo:         referenceId,
-		PaymentMethod:   model.PaymentMethodStripe,
+		PaymentMethod:   req.PaymentMethod,
 		PaymentProvider: model.PaymentProviderStripe,
 		BonusQuota:      int64(bonusQuota),
 		CreateTime:      time.Now().Unix(),
@@ -383,12 +402,13 @@ func sessionExpired(ctx context.Context, event stripe.Event) {
 	logger.LogInfo(ctx, common.LogText("Stripe top-up order expired trade_no=%s", referenceId))
 }
 
-// stripeTopUpCheckoutParams builds the Checkout Session for a top-up order:
-// one line item charging payMoney in CNY. Checkout offers the payment methods
-// the Stripe dashboard enables (cards, Alipay, WeChat Pay) that support CNY.
-// customerId is the customer's Stripe customer, or empty for a first
-// checkout, which then creates one under email.
-func stripeTopUpCheckoutParams(referenceId string, customerId string, email string, payMoney float64, successURL string, cancelURL string) *stripe.CheckoutSessionParams {
+// stripeCheckoutParams builds a one-time Checkout Session: one line item,
+// productName, charging payMoney in CNY. methodTypes limits the Stripe
+// payment methods offered; empty offers every method the dashboard enables
+// for CNY and the amount. customerId is the customer's Stripe customer, or
+// empty for a first checkout, which then creates one under email. An empty
+// successURL or cancelURL returns to the wallet.
+func stripeCheckoutParams(referenceId string, customerId string, email string, payMoney float64, productName string, methodTypes []string, successURL string, cancelURL string) *stripe.CheckoutSessionParams {
 	if successURL == "" {
 		successURL = paymentReturnPath("/wallet")
 	}
@@ -406,7 +426,7 @@ func stripeTopUpCheckoutParams(referenceId string, customerId string, email stri
 					Currency:   stripe.String(stripeTopUpCurrency),
 					UnitAmount: stripe.Int64(stripeUnitAmount(payMoney)),
 					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
-						Name: stripe.String("CoreCode 余额充值"),
+						Name: stripe.String(productName),
 					},
 				},
 				Quantity: stripe.Int64(1),
@@ -414,6 +434,16 @@ func stripeTopUpCheckoutParams(referenceId string, customerId string, email stri
 		},
 		Mode:                stripe.String(string(stripe.CheckoutSessionModePayment)),
 		AllowPromotionCodes: stripe.Bool(setting.StripePromotionCodesEnabled),
+	}
+	if len(methodTypes) > 0 {
+		params.PaymentMethodTypes = stripe.StringSlice(methodTypes)
+	}
+	if slices.Contains(methodTypes, "wechat_pay") {
+		// Stripe requires the client when wechat_pay is listed; Checkout is
+		// a web page.
+		params.PaymentMethodOptions = &stripe.CheckoutSessionPaymentMethodOptionsParams{
+			WeChatPay: &stripe.CheckoutSessionPaymentMethodOptionsWeChatPayParams{Client: stripe.String("web")},
+		}
 	}
 
 	if customerId == "" {

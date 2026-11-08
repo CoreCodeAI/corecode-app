@@ -86,11 +86,19 @@ export function submitPaymentForm(
   document.body.removeChild(form)
 }
 
+const STRIPE_PAYMENT_TYPES = new Set<string>([
+  PAYMENT_TYPES.STRIPE,
+  PAYMENT_TYPES.STRIPE_CARD,
+  PAYMENT_TYPES.STRIPE_WECHAT_PAY,
+  PAYMENT_TYPES.STRIPE_ALIPAY,
+])
+
 /**
- * Check if payment method is Stripe
+ * Whether a method pays through Stripe Checkout: plain Stripe, or one limited
+ * to a single Stripe payment method (card, WeChat Pay, Alipay)
  */
-export function isStripePayment(paymentType: string): boolean {
-  return paymentType === PAYMENT_TYPES.STRIPE
+export function isStripePayment(paymentType: string | undefined): boolean {
+  return !!paymentType && STRIPE_PAYMENT_TYPES.has(paymentType)
 }
 
 /**

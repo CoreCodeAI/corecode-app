@@ -25,6 +25,7 @@ import {
   generatePresetAmounts,
   mergePresetAmounts,
   getMinTopupAmount,
+  isStripePayment,
 } from '../lib'
 import type {
   TopupInfo,
@@ -75,7 +76,7 @@ function parsePaymentMethods(
         color: typeof item.color === 'string' ? item.color : undefined,
         icon: typeof item.icon === 'string' ? item.icon : undefined,
         min_topup:
-          type === 'stripe' && normalizedMinTopup <= 0
+          isStripePayment(type) && normalizedMinTopup <= 0
             ? stripeMinTopup
             : normalizedMinTopup,
       }
