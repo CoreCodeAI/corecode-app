@@ -92,7 +92,6 @@ it.each([
             discount: {},
           }}
           presetAmounts={[{ value: 100, discount: 0.8 }, { value: 20 }]}
-          selectedPreset={null}
           topupAmount={1}
           paymentAmount={priceRatio}
           priceRatio={priceRatio}

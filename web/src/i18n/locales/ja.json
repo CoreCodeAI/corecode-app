@@ -7984,6 +7984,14 @@
     "{{name}} fails most often: {{rate}} of its attempts.": "最も失敗が多いのは {{name}}：試行の {{rate}} が失敗。",
     "{{revenue}} of revenue has no known cost": "売上のうち {{revenue}} はコスト不明",
     "Invalid upstream fee": "上流の費用が無効です",
-    "Failed to save upstream fees": "上流の費用を保存できませんでした"
+    "Failed to save upstream fees": "上流の費用を保存できませんでした",
+    "Payment received! Added: {{quota}}": "お支払いを確認しました。追加額：{{quota}}",
+    "Waiting for your payment": "お支払いを待っています",
+    "Still waiting for your payment?": "まだお支払い待ちですか？",
+    "Finish paying in the other tab. Your balance updates here as soon as the payment arrives.": "別のタブでお支払いを完了してください。入金されるとこの残高が自動的に更新されます。",
+    "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "入金まで数分かかる場合があります。注文履歴で状況を確認できます。入金後は残高が自動的に更新されます。",
+    "Open Order History": "注文履歴を開く",
+    "Dismiss": "閉じる",
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "お支払い金額を計算できませんでした。お支払い方法を選んで再試行してください。"
   }
 }

@@ -7984,6 +7984,14 @@
     "{{name}} fails most often: {{rate}} of its attempts.": "{{name}} 失敗最多：嘗試中有 {{rate}} 失敗。",
     "{{revenue}} of revenue has no known cost": "{{revenue}} 的收入沒有已知成本",
     "Invalid upstream fee": "上游費用無效",
-    "Failed to save upstream fees": "儲存上游費用失敗"
+    "Failed to save upstream fees": "儲存上游費用失敗",
+    "Payment received! Added: {{quota}}": "支付成功！已到帳：{{quota}}",
+    "Waiting for your payment": "正在等待您的支付",
+    "Still waiting for your payment?": "仍在等待支付？",
+    "Finish paying in the other tab. Your balance updates here as soon as the payment arrives.": "請在另一個分頁完成支付，款項到帳後此處餘額會自動更新。",
+    "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "部分支付需要幾分鐘才會到帳。可在「訂單記錄」中查看狀態，入帳後餘額會自動更新。",
+    "Open Order History": "開啟訂單記錄",
+    "Dismiss": "關閉",
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "無法計算應付金額，請重新選擇支付方式重試。"
   }
 }
