@@ -40,6 +40,7 @@ distributor.no_available_channel_task_plugin: "No available channel for model {{
 distributor.invalid_request_parse_model: "unable to parse model"
 quota.user_insufficient: "Insufficient user quota, remaining quota: {{.Remaining}}"
 quota.pre_consume_insufficient: "Not enough quota to pre-consume for this request: {{.Remaining}} remaining, {{.Required}} required"
+quota.shortfall_above_cap: "Not enough quota for this request: it needs an estimated {{.Required}} reserved, and your subscription and wallet together hold {{.Available}}. Top up, or retry with a shorter context (start a new session or compact it)"
 quota.subscription_insufficient: "Subscription quota is insufficient or no subscription is configured: {{.Error}}"
 quota.subscription_and_wallet_insufficient: "Not enough quota for this request: it needs {{.Required}} reserved and is charged its actual usage when it ends; the subscription has {{.Subscription}} left and the wallet holds {{.Wallet}}"
 relay.model_price_not_configured: "Model {{.Model}} has not been priced by the administrator yet. Please contact the site administrator to enable this model."

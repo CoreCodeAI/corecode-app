@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
@@ -515,14 +516,17 @@ func TestPreConsumeShortfallCap(t *testing.T) {
 				wallet     int
 				subLeft    int // < 0: no subscription
 				overflow   bool
-				wantHeld   int // 0: refused
+				wantHeld   int  // 0: refused
+				available  int  // refused: what both sources held together, named in the message
+				eachSource bool // refused before the cap: the message names each source instead
 			}{
 				{name: "shortfall at the cap is admitted", preference: "wallet_only", wallet: 1000, subLeft: -1, wantHeld: 1000},
-				{name: "shortfall above the cap is refused", preference: "wallet_only", wallet: 900, subLeft: -1},
+				{name: "shortfall above the cap is refused", preference: "wallet_only", wallet: 900, subLeft: -1, available: 900},
 				{name: "a second source can close the shortfall", preference: "wallet_first", wallet: 900, subLeft: 800, wantHeld: 1500},
 				{name: "wallet and subscription below the estimate by less than the cap", preference: "subscription_first", wallet: 200, subLeft: 1000, overflow: true, wantHeld: 1200},
-				{name: "a nearly spent subscription and wallet are refused", preference: "subscription_first", wallet: 100, subLeft: 800, overflow: true},
-				{name: "a nearly spent subscription with an empty wallet is refused", preference: "subscription_first", wallet: 0, subLeft: 900, overflow: true},
+				{name: "a nearly spent subscription and wallet are refused", preference: "subscription_first", wallet: 100, subLeft: 800, overflow: true, available: 900},
+				{name: "a nearly spent subscription with an empty wallet is refused", preference: "subscription_first", wallet: 0, subLeft: 900, overflow: true, eachSource: true},
+				{name: "a nearly empty wallet and subscription are refused wallet first", preference: "wallet_first", wallet: 100, subLeft: 800, available: 900},
 			}
 			for i, tc := range cases {
 				t.Run(tc.name, func(t *testing.T) {
@@ -549,6 +553,17 @@ func TestPreConsumeShortfallCap(t *testing.T) {
 					if tc.wantHeld == 0 {
 						require.NotNil(t, apiErr)
 						assert.Equal(t, types.ErrorCodeInsufficientUserQuota, apiErr.GetErrorCode())
+						// The refusal names the combined hold, not the balance a
+						// fallback to one source reads afterwards.
+						want := i18n.T(ctx, i18n.MsgQuotaShortfallAboveCap, map[string]any{
+							"Available": logger.FormatQuota(tc.available), "Required": logger.FormatQuota(1500),
+						})
+						if tc.eachSource {
+							want = i18n.T(ctx, i18n.MsgQuotaSubscriptionAndWalletInsufficient, map[string]any{
+								"Required": logger.FormatQuota(1500), "Subscription": logger.FormatQuota(tc.subLeft), "Wallet": logger.FormatQuota(tc.wallet),
+							})
+						}
+						assert.Equal(t, want, apiErr.Error())
 						assert.Eventually(t, func() bool {
 							if db.First(&user, user.Id).Error != nil || user.Quota != tc.wallet {
 								return false

@@ -41,6 +41,7 @@ distributor.no_available_channel_task_plugin: "分组 {{.Group}} 下模型 {{.Mo
 distributor.invalid_request_parse_model: "无法解析模型"
 quota.user_insufficient: "用户额度不足, 剩余额度: {{.Remaining}}"
 quota.pre_consume_insufficient: "预扣费额度失败, 用户剩余额度: {{.Remaining}}, 需要预扣费额度: {{.Required}}"
+quota.shortfall_above_cap: "额度不足：本次请求预估需预扣 {{.Required}}，订阅和钱包合计可用 {{.Available}}。请充值，或缩短上下文（新开会话或压缩）后重试"
 quota.subscription_insufficient: "订阅额度不足或未配置订阅: {{.Error}}"
 quota.subscription_and_wallet_insufficient: "额度不足：本次请求需预扣 {{.Required}}，结束后按实际用量结算；订阅剩余 {{.Subscription}}，钱包余额 {{.Wallet}}"
 relay.model_price_not_configured: "模型 {{.Model}} 的价格尚未由管理员配置，暂时无法使用，请联系站点管理员开启该模型；Model {{.Model}} has not been priced by the administrator yet. Please contact the site administrator to enable this model."
