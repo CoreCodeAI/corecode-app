@@ -7985,6 +7985,14 @@
     "{{name}} fails most often: {{rate}} of its attempts.": "Чаще всего сбоит {{name}}: {{rate}} попыток.",
     "{{revenue}} of revenue has no known cost": "{{revenue}} выручки без известной стоимости",
     "Invalid upstream fee": "Недопустимая плата вышестоящего сервиса",
-    "Failed to save upstream fees": "Не удалось сохранить плату вышестоящих сервисов"
+    "Failed to save upstream fees": "Не удалось сохранить плату вышестоящих сервисов",
+    "Payment received! Added: {{quota}}": "Платёж получен! Зачислено: {{quota}}",
+    "Waiting for your payment": "Ожидаем ваш платёж",
+    "Still waiting for your payment?": "Всё ещё ждёте платёж?",
+    "Finish paying in the other tab. Your balance updates here as soon as the payment arrives.": "Завершите оплату в другой вкладке. Баланс здесь обновится, как только платёж поступит.",
+    "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "Некоторые платежи поступают несколько минут. Проверьте статус в истории заказов; баланс обновится сам после зачисления.",
+    "Open Order History": "Открыть историю заказов",
+    "Dismiss": "Закрыть",
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "Не удалось рассчитать сумму к оплате. Выберите способ оплаты, чтобы повторить."
   }
 }

@@ -114,12 +114,12 @@ export function WalletStatsCard(props: WalletStatsCardProps) {
         {facts.map((fact) => (
           <div
             key={fact.label}
-            className='bg-card flex min-w-0 flex-col justify-center gap-1 px-4 py-4 sm:px-5'
+            className='bg-card flex min-w-0 flex-col justify-center gap-1 px-3 py-4 sm:px-5'
           >
-            <dt className='text-muted-foreground truncate text-xs'>
+            <dt className='text-muted-foreground text-xs text-balance'>
               {fact.label}
             </dt>
-            <dd className='truncate text-lg font-semibold tabular-nums sm:text-xl'>
+            <dd className='text-base font-semibold break-words tabular-nums sm:text-xl'>
               {props.loading || fact.loading ? (
                 <Skeleton className='h-6 w-16' />
               ) : (

@@ -7985,6 +7985,14 @@
     "{{name}} fails most often: {{rate}} of its attempts.": "{{name}} échoue le plus souvent : {{rate}} de ses tentatives.",
     "{{revenue}} of revenue has no known cost": "{{revenue}} de revenu sans coût connu",
     "Invalid upstream fee": "Frais amont invalides",
-    "Failed to save upstream fees": "Échec de l’enregistrement des frais amont"
+    "Failed to save upstream fees": "Échec de l’enregistrement des frais amont",
+    "Payment received! Added: {{quota}}": "Paiement reçu ! Ajouté : {{quota}}",
+    "Waiting for your payment": "En attente de votre paiement",
+    "Still waiting for your payment?": "Toujours en attente de votre paiement ?",
+    "Finish paying in the other tab. Your balance updates here as soon as the payment arrives.": "Terminez le paiement dans l’autre onglet. Votre solde se met à jour ici dès que le paiement arrive.",
+    "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "Certains paiements mettent quelques minutes à arriver. Consultez l’historique des commandes ; votre solde se met à jour tout seul une fois crédité.",
+    "Open Order History": "Ouvrir l’historique des commandes",
+    "Dismiss": "Fermer",
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "Impossible de calculer le montant à payer. Choisissez un moyen de paiement pour réessayer."
   }
 }

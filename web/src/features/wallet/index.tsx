@@ -20,15 +20,16 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
+import { useRefreshSelf, useSelf } from '@/hooks/use-self'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
-import { getSelf } from '@/lib/api'
 
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
 import { ConcurrencyTierCard } from './components/concurrency-tier-card'
 import { BillingHistoryDialog } from './components/dialogs/billing-history-dialog'
 import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
+import { PaymentPendingBanner } from './components/payment-pending-banner'
 import { RecentCreditsCard } from './components/recent-credits-card'
 import { RechargeFormCard } from './components/recharge-form-card'
 import { SubscriptionPlansCard } from './components/subscription-plans-card'
@@ -41,6 +42,7 @@ import {
   useCreemPayment,
   useWaffoPayment,
   useWaffoPancakePayment,
+  usePaymentConfirmation,
 } from './hooks'
 import {
   findBonusTier,
@@ -63,10 +65,7 @@ interface WalletProps {
 
 export function Wallet(props: WalletProps) {
   const { t } = useTranslation()
-  const [user, setUser] = useState<UserWalletData | null>(null)
-  const [userLoading, setUserLoading] = useState(true)
   const [topupAmount, setTopupAmount] = useState(0)
-  const [selectedPreset, setSelectedPreset] = useState<number | null>(null)
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
     useState<PaymentMethod>()
   const [selectedWaffoMethodIndex, setSelectedWaffoMethodIndex] = useState<
@@ -97,8 +96,10 @@ export function Wallet(props: WalletProps) {
   const {
     amount: paymentAmount,
     calculating,
+    calculationFailed,
     processing,
     calculatePaymentAmount,
+    resetCalculation,
     processPayment,
     processNowPaymentsPayment,
   } = usePayment()
@@ -108,25 +109,23 @@ export function Wallet(props: WalletProps) {
   const { processing: pancakeProcessing, processWaffoPancakePayment } =
     useWaffoPancakePayment()
 
-  // Fetch and refresh user data
-  const fetchUser = useCallback(async () => {
-    try {
-      setUserLoading(true)
-      const response = await getSelf()
-      if (response.success && response.data) {
-        setUser(response.data as UserWalletData)
-      }
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to fetch user data:', error)
-    } finally {
-      setUserLoading(false)
-    }
-  }, [])
+  // The live account; the sidebar and overview read the same data.
+  const selfQuery = useSelf()
+  const user = (selfQuery.data as UserWalletData | undefined) ?? null
+  const userLoading = selfQuery.isPending
+  const refreshSelf = useRefreshSelf()
+  const paymentWait = usePaymentConfirmation()
 
-  useEffect(() => {
-    fetchUser()
-  }, [fetchUser])
+  const refreshBalance = useCallback(async () => {
+    await refreshSelf()
+  }, [refreshSelf])
+
+  // The payment was opened in another tab; watch for it to land. The balance
+  // is read fresh first so credit that arrived earlier is not mistaken for it.
+  const awaitPayment = useCallback(async () => {
+    const fresh = await refreshSelf()
+    paymentWait.start(Number(fresh?.quota ?? user?.quota ?? 0))
+  }, [refreshSelf, paymentWait, user?.quota])
 
   useEffect(() => {
     if (props.initialShowHistory) {
@@ -154,18 +153,25 @@ export function Wallet(props: WalletProps) {
     return selectedPaymentMethod?.type || getDefaultPaymentType(topupInfo)
   }, [selectedPaymentMethod, topupInfo])
 
+  // An amount under the minimum is not priced: the form says why instead.
+  const priceAmount = (amount: number) => {
+    if (amount < getMinTopupAmount(topupInfo)) {
+      resetCalculation()
+      return
+    }
+    calculatePaymentAmount(amount, getCurrentPaymentType())
+  }
+
   // Handle preset selection
   const handleSelectPreset = (preset: PresetAmount) => {
     setTopupAmount(preset.value)
-    setSelectedPreset(preset.value)
-    calculatePaymentAmount(preset.value, getCurrentPaymentType())
+    priceAmount(preset.value)
   }
 
   // Handle topup amount change
   const handleTopupAmountChange = (amount: number) => {
     setTopupAmount(amount)
-    setSelectedPreset(null)
-    calculatePaymentAmount(amount, getCurrentPaymentType())
+    priceAmount(amount)
   }
 
   // Handle payment method selection
@@ -179,17 +185,14 @@ export function Wallet(props: WalletProps) {
         ? current
         : (currencies[0]?.code ?? null)
     )
+    // The buttons are disabled below the minimum; this guards a stale click.
+    if (topupAmount < getMinTopupAmount(topupInfo)) return
     setPaymentLoading(method.type)
 
     try {
-      // Validate minimum topup
-      const minTopup = getMinTopupAmount(topupInfo)
-      if (topupAmount < minTopup) {
-        return
-      }
-
-      // Calculate payment amount and show confirmation dialog
-      await calculatePaymentAmount(topupAmount, method.type)
+      // Price it, and only confirm an amount that could be priced
+      const priced = await calculatePaymentAmount(topupAmount, method.type)
+      if (priced === null) return
       setConfirmDialogOpen(true)
     } finally {
       setPaymentLoading(null)
@@ -220,18 +223,15 @@ export function Wallet(props: WalletProps) {
 
     if (success) {
       setConfirmDialogOpen(false)
-      await fetchUser()
+      await awaitPayment()
     }
   }
 
   // Handle redemption
   const handleRedeem = async () => {
-    if (!redemptionCode) return
-
     const success = await redeemCode(redemptionCode)
     if (success) {
       setRedemptionCode('')
-      await fetchUser()
     }
   }
 
@@ -249,7 +249,7 @@ export function Wallet(props: WalletProps) {
     if (success) {
       setCreemDialogOpen(false)
       setSelectedCreemProduct(null)
-      await fetchUser()
+      await awaitPayment()
     }
   }
 
@@ -267,7 +267,11 @@ export function Wallet(props: WalletProps) {
     setPaymentLoading(loadingKey)
 
     try {
-      await calculatePaymentAmount(topupAmount, PAYMENT_TYPES.WAFFO)
+      const priced = await calculatePaymentAmount(
+        topupAmount,
+        PAYMENT_TYPES.WAFFO
+      )
+      if (priced === null) return
       setConfirmDialogOpen(true)
     } finally {
       setPaymentLoading(null)
@@ -299,6 +303,11 @@ export function Wallet(props: WalletProps) {
         <SectionPageLayout.Content>
           <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>
             <WalletStatsCard user={user} loading={userLoading} />
+            <PaymentPendingBanner
+              status={paymentWait.status}
+              onOpenBilling={() => setBillingDialogOpen(true)}
+              onDismiss={paymentWait.dismiss}
+            />
             <ConcurrencyTierCard info={topupInfo?.concurrency} />
 
             <div
@@ -312,13 +321,13 @@ export function Wallet(props: WalletProps) {
                 <RechargeFormCard
                   topupInfo={topupInfo}
                   presetAmounts={presetAmounts}
-                  selectedPreset={selectedPreset}
                   onSelectPreset={handleSelectPreset}
                   topupAmount={topupAmount}
                   onTopupAmountChange={handleTopupAmountChange}
                   paymentAmount={paymentAmount}
                   paymentAmountType={getCurrentPaymentType()}
                   calculating={calculating}
+                  calculationFailed={calculationFailed}
                   onPaymentMethodSelect={handlePaymentMethodSelect}
                   paymentLoading={paymentLoading}
                   redemptionCode={redemptionCode}
@@ -347,7 +356,7 @@ export function Wallet(props: WalletProps) {
                 topupInfo={topupInfo}
                 onAvailabilityChange={handleSubscriptionAvailabilityChange}
                 userQuota={user?.quota}
-                onPurchaseSuccess={fetchUser}
+                onPurchaseSuccess={refreshBalance}
               />
             </div>
 
@@ -358,7 +367,7 @@ export function Wallet(props: WalletProps) {
               complianceConfirmed={
                 topupInfo?.payment_compliance_confirmed !== false
               }
-              onBalanceChange={fetchUser}
+              onBalanceChange={refreshBalance}
             />
           </div>
         </SectionPageLayout.Content>
