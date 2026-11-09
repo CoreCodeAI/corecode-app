@@ -41,7 +41,9 @@ export function OverviewAlerts(props: {
   firstRun?: boolean
 }) {
   const { t } = useTranslation()
-  const lowBalance = props.balanceHealth !== 'healthy' && !props.firstRun
+  const lowBalance =
+    (props.balanceHealth === 'low' || props.balanceHealth === 'empty') &&
+    !props.firstRun
   const misses = props.recent.costlyMisses
   // Mostly non-streaming misses point at auto mode's classifier rather than
   // the session-level causes listed by default.

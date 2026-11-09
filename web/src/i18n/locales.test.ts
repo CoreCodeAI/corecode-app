@@ -51,3 +51,26 @@ it('gives no locale a key en lacks', () => {
     expect(extra, name).toEqual([])
   }
 })
+
+// JSON.parse keeps the last of two equal keys, so a duplicate silently picks
+// one translation. Git merges two branches that each add the same key at
+// different lines without a conflict, which is how one reaches main.
+it('repeats no key within a locale file', async () => {
+  const { readFile, readdir } = await import('node:fs/promises')
+  const { join } = await import('node:path')
+  // Vitest runs from web/, and import.meta.url is not a file URL under jsdom.
+  const dir = join(process.cwd(), 'src/i18n/locales')
+  for (const file of await readdir(dir)) {
+    if (!file.endsWith('.json')) continue
+    const text = await readFile(join(dir, file), 'utf8')
+    const seen = new Set<string>()
+    const repeated: string[] = []
+    for (const match of text.matchAll(/^ {4}("(?:[^"\\]|\\.)*"):/gm)) {
+      const key = JSON.parse(match[1]) as string
+      if (seen.has(key)) repeated.push(key)
+      seen.add(key)
+    }
+    expect(seen.size, file).toBeGreaterThan(100)
+    expect(repeated, file).toEqual([])
+  }
+})

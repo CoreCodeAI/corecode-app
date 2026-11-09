@@ -19,14 +19,16 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
   DataTablePage,
   DataTableRow,
   useDataTable,
+  type DataTablePinnedColumn,
 } from '@/components/data-table'
+import { getResolvedColumnClassName } from '@/components/data-table/core/column-pinning'
 import {
   getAdminPlans,
   getSelfSubscriptionFull,
@@ -84,11 +86,26 @@ interface UsageLogsTableProps {
   logCategory: LogCategory
 }
 
+/**
+ * The admin view of common logs is wider than a 1440 px window, and Cost sits
+ * before Timing and Details, so it scrolled out of view. Pinned to the right
+ * edge it stays readable; a table that fits is unaffected.
+ */
+const COMMON_LOG_PINNED_COLUMNS: DataTablePinnedColumn[] = [
+  { columnId: 'quota', side: 'right' },
+]
+
 export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   const { t } = useTranslation()
-  const getColumnClassName = useCallback(
+  const pinnedColumns =
+    logCategory === 'common' ? COMMON_LOG_PINNED_COLUMNS : undefined
+  const getPaddingClassName = useCallback(
     () => (logCategory === 'common' ? 'py-2' : 'py-3.5'),
     [logCategory]
+  )
+  const getColumnClassName = useMemo(
+    () => getResolvedColumnClassName(getPaddingClassName, pinnedColumns),
+    [getPaddingClassName, pinnedColumns]
   )
   const {
     isAdminView: isAdmin,
@@ -240,6 +257,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
       )}
       skeletonKeyPrefix='usage-log-skeleton'
       applyHeaderSize
+      pinnedColumns={pinnedColumns}
       tableClassName={cn(
         '[&_[data-slot=table]]:text-[13px] [&_[data-slot=table]_td]:text-[13px] [&_[data-slot=table]_td_*]:text-[13px] [&_[data-slot=table]_th]:text-[13px] [&_[data-slot=table]_th_*]:text-[13px]'
       )}
