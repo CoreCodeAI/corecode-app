@@ -25,6 +25,7 @@ import { toast } from 'sonner'
 import { useActiveChatKey } from '@/features/chat/hooks/use-active-chat-key'
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
 import { resolveChatUrl } from '@/features/chat/lib/chat-links'
+import { useDocumentTitle } from '@/hooks/use-document-title'
 import { handleServerError } from '@/lib/handle-server-error'
 
 export const Route = createFileRoute('/_authenticated/chat2link')({
@@ -33,6 +34,7 @@ export const Route = createFileRoute('/_authenticated/chat2link')({
 
 function Chat2LinkPage() {
   const { t } = useTranslation()
+  useDocumentTitle(t('Chat'))
   const navigate = useNavigate()
   const { chatPresets, serverAddress } = useChatPresets()
 

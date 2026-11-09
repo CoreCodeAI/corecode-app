@@ -16,7 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
+import { useDocumentTitle } from '@/hooks/use-document-title'
 
 import { PlaygroundChat } from './components/chat/playground-chat'
 import { PlaygroundInput } from './components/input/playground-input'
@@ -26,8 +30,12 @@ import {
   usePlaygroundOptions,
   usePlaygroundState,
 } from './hooks'
+import { getModelPriceSummary } from './lib'
 
-export function Playground() {
+export function Playground(props: {
+  /** A model to start on, from the `?model=` link of a pricing page. */
+  initialModel?: string
+}) {
   const {
     config,
     parameterEnabled,
@@ -43,7 +51,16 @@ export function Playground() {
     clearMessages,
   } = usePlaygroundState()
 
-  const { models: pricedModels } = usePricingData()
+  const { t } = useTranslation()
+  useDocumentTitle(t('Playground'))
+  const { models: pricedModels, groupRatio, priceRate } = usePricingData()
+  const modelPrice = getModelPriceSummary(
+    pricedModels,
+    config.model,
+    config.group,
+    groupRatio,
+    priceRate
+  )
   const isImageModel = pricedModels.some(
     (model) =>
       model.model_name === config.model &&
@@ -75,6 +92,10 @@ export function Playground() {
     handleEditOpenChange(false)
     clearMessages()
   }
+
+  useEffect(() => {
+    if (props.initialModel) updateConfig('model', props.initialModel)
+  }, [props.initialModel, updateConfig])
 
   const { isLoadingModels } = usePlaygroundOptions({
     currentGroup: config.group,
@@ -124,6 +145,7 @@ export function Playground() {
           onSubmit={handleSendMessage}
           parameterEnabled={parameterEnabled}
           hasMessages={messages.length > 0}
+          modelPrice={modelPrice}
         />
       </div>
     </div>

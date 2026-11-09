@@ -29,6 +29,7 @@ import {
   chatLinkRequiresApiKey,
   resolveChatUrl,
 } from '@/features/chat/lib/chat-links'
+import { useDocumentTitle } from '@/hooks/use-document-title'
 
 export const Route = createFileRoute('/_authenticated/chat/$chatId')({
   loader: async ({ params }) => {
@@ -48,6 +49,8 @@ function ChatRouteComponent() {
     if (!Number.isInteger(index)) return undefined
     return chatPresets[index]
   }, [chatId, chatPresets])
+
+  useDocumentTitle(preset?.name || t('Chat'))
 
   const isWebLink = preset?.type === 'web'
 

@@ -26,6 +26,7 @@ import {
 } from '@/components/ai-elements/conversation'
 import { Loader } from '@/components/ai-elements/loader'
 import { Message } from '@/components/ai-elements/message'
+import { Button } from '@/components/ui/button'
 
 import {
   getChatMessageRenderState,
@@ -33,6 +34,7 @@ import {
   getMessageAlignment,
   getPreviousUserMessage,
   isErrorMessage,
+  isInsufficientBalanceError,
 } from '../../lib'
 import type {
   Message as MessageType,
@@ -83,10 +85,11 @@ export function PlaygroundChat({
   const [sourceMessageKeys, setSourceMessageKeys] = useState<
     ReadonlySet<string>
   >(() => new Set())
-  const visibleMessageOffset = Math.max(
-    0,
-    messages.length - MAX_RENDERED_HISTORY_MESSAGES
-  )
+  const [showAllHistory, setShowAllHistory] = useState(false)
+  const hiddenMessageCount = showAllHistory
+    ? 0
+    : Math.max(0, messages.length - MAX_RENDERED_HISTORY_MESSAGES)
+  const visibleMessageOffset = hiddenMessageCount
   const visibleMessages = messages.slice(visibleMessageOffset)
 
   function handleToggleMessageSource(message: MessageType): void {
@@ -168,7 +171,8 @@ export function PlaygroundChat({
                   <MessageErrorActions
                     disabled={isGenerating}
                     onRetry={
-                      onRegenerateMessage
+                      onRegenerateMessage &&
+                      !isInsufficientBalanceError(message)
                         ? () => onRegenerateMessage(message)
                         : undefined
                     }
@@ -192,6 +196,21 @@ export function PlaygroundChat({
       </Message>
     )
   })
+
+  if (hiddenMessageCount > 0) {
+    chatContent = [
+      <div className='flex justify-center pb-2' key='earlier-messages'>
+        <Button
+          size='sm'
+          variant='outline'
+          onClick={() => setShowAllHistory(true)}
+        >
+          {t('Show {{count}} earlier messages', { count: hiddenMessageCount })}
+        </Button>
+      </div>,
+      ...chatContent,
+    ]
+  }
 
   if (visibleMessages.length === 0 && onSelectPrompt) {
     chatContent = [

@@ -591,6 +591,7 @@ function ModelBackendDetailsSection(props: { model: PricingModel }) {
 
 function ModelHeader(props: {
   model: PricingModel
+  shareUrl?: string
   priceRate: number
   usdExchangeRate: number
 }) {
@@ -615,6 +616,20 @@ function ModelHeader(props: {
           successTooltip={t('Copied!')}
           aria-label={t('Copy model name')}
         />
+        {props.shareUrl && (
+          <CopyButton
+            value={props.shareUrl}
+            variant='outline'
+            size='sm'
+            className='ml-auto h-7 gap-1 px-2 text-xs'
+            iconClassName='size-3'
+            tooltip={t('Copy link to this model')}
+            successTooltip={t('Copied!')}
+            aria-label={t('Copy link to this model')}
+          >
+            {t('Copy link')}
+          </CopyButton>
+        )}
       </div>
       <div className='mt-1 flex flex-wrap items-center gap-1.5 text-xs'>
         {model.vendor_name && (
@@ -1472,6 +1487,8 @@ export interface ModelDetailsContentProps {
   usdExchangeRate: number
   tokenUnit: TokenUnit
   showRechargePrice?: boolean
+  /** Absolute link to this model's details; shows a "Copy link" button. */
+  shareUrl?: string
 }
 
 export function ModelDetailsContent(props: ModelDetailsContentProps) {
@@ -1496,6 +1513,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
     <div className='@container/details space-y-4'>
       <ModelHeader
         model={props.model}
+        shareUrl={props.shareUrl}
         priceRate={props.priceRate}
         usdExchangeRate={props.usdExchangeRate}
       />
@@ -1709,6 +1727,7 @@ export function ModelDetails() {
           usdExchangeRate={usdExchangeRate ?? 1}
           tokenUnit={tokenUnit}
           showRechargePrice={search.rechargePrice ?? false}
+          shareUrl={`${window.location.origin}/pricing/${encodeURIComponent(model.model_name)}`}
           endpointMap={
             (endpointMap as Record<
               string,

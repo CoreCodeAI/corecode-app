@@ -45,6 +45,15 @@ const opus: PricingModel = {
 
 afterEach(cleanup)
 
+function boardControls() {
+  return {
+    search: '',
+    onSearchChange: vi.fn(),
+    sort: 'input' as const,
+    onSortChange: vi.fn(),
+  }
+}
+
 function renderBoard(price: number, rate: number, onModelClick = vi.fn()) {
   render(
     <PriceBoard
@@ -53,6 +62,7 @@ function renderBoard(price: number, rate: number, onModelClick = vi.fn()) {
       usableGroup={{ [GROUP]: '仅限 Claude Code CLI 使用' }}
       priceRate={price}
       usdExchangeRate={rate}
+      {...boardControls()}
       onModelClick={onModelClick}
     />
   )
@@ -92,6 +102,7 @@ it('lets the customer pick between several groups', async () => {
       usableGroup={{ [GROUP]: '', [cheap]: '' }}
       priceRate={1}
       usdExchangeRate={6.8}
+      {...boardControls()}
       onModelClick={vi.fn()}
     />
   )
@@ -133,6 +144,7 @@ it('lists models from cheapest to most expensive', () => {
       usableGroup={{ [GROUP]: '' }}
       priceRate={1}
       usdExchangeRate={6.8}
+      {...boardControls()}
       onModelClick={vi.fn()}
     />
   )
@@ -162,6 +174,7 @@ it('puts Claude first and selects it even when another pool is cheaper', () => {
       usableGroup={{ [GROUP]: '仅限 Claude Code CLI 使用', GPT: '' }}
       priceRate={1}
       usdExchangeRate={6.8}
+      {...boardControls()}
       onModelClick={vi.fn()}
     />
   )
@@ -190,6 +203,7 @@ it('shows a marked-up model at its official price and explains its saving', asyn
       usableGroup={{ [GROUP]: '' }}
       priceRate={1}
       usdExchangeRate={6.8}
+      {...boardControls()}
       onModelClick={vi.fn()}
     />
   )
@@ -245,6 +259,7 @@ it('lists a per-request model apart, at its price per request in the group', () 
       usableGroup={{ GPT: '' }}
       priceRate={1}
       usdExchangeRate={6.8}
+      {...boardControls()}
       onModelClick={vi.fn()}
     />
   )
@@ -277,6 +292,7 @@ it('shows only the per-request table for a group of per-request models', () => {
       usableGroup={{ Grok: '' }}
       priceRate={1}
       usdExchangeRate={6.8}
+      {...boardControls()}
       onModelClick={vi.fn()}
     />
   )

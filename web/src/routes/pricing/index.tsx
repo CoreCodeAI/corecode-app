@@ -25,6 +25,8 @@ import { useAuthStore } from '@/stores/auth-store'
 
 const pricingSearchSchema = z.object({
   search: z.string().optional(),
+  // The model whose details drawer is open; see usePricingUrlState.
+  model: z.string().optional(),
   sort: z.string().optional(),
   vendor: z.string().optional(),
   group: z.string().optional(),

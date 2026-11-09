@@ -16,16 +16,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Check, CircleHelp, ReceiptText } from 'lucide-react'
+import { Check, CircleHelp, ReceiptText, Search } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
+import { Input } from '@/components/ui/input'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
@@ -36,6 +45,13 @@ import {
   getOfficialPriceMarkup,
   hasMarkup,
 } from '../lib/billing-discount'
+import {
+  BOARD_SORTS,
+  matchesModelSearch,
+  sortBoardRows,
+  type BoardRow,
+  type BoardSort,
+} from '../lib/board-rows'
 import { isDynamicPricingModel } from '../lib/dynamic-price'
 import {
   CLAUDE_VENDOR,
@@ -49,7 +65,6 @@ import {
   formatYuan,
   getBaseUnitPrices,
   UNIT_PRICE_KEYS,
-  type BaseUnitPrices,
   type UnitPriceKey,
 } from '../lib/unit-prices'
 import type { PricingModel } from '../types'
@@ -60,6 +75,20 @@ const COLUMN_LABEL: Record<UnitPriceKey, string> = {
   output: 'Output price',
   cacheWrite: 'Cache Creation',
   cacheRead: 'Cache Read',
+}
+
+const SORT_LABEL: Record<BoardSort, string> = {
+  input: 'Input price: low to high',
+  output: 'Output price: low to high',
+  savings: 'Biggest savings first',
+}
+
+// What a cache column means, for the customer who sees the four prices side by side.
+const COLUMN_HELP: Partial<Record<UnitPriceKey, string>> = {
+  cacheWrite:
+    'Cache write: the one-off price of storing a prompt prefix so later requests can reuse it. Claude Code pays it when a conversation grows.',
+  cacheRead:
+    'Cache read: the price of reusing a prefix that is already cached. It is far below the input price, and Claude Code pays it on most turns.',
 }
 
 // Opens quickly on hover, and stays long enough to move the pointer onto it.
@@ -101,6 +130,39 @@ function VendorIcon(props: { icon?: string; size: number }) {
   )
 }
 
+/** A column heading that explains itself in a popover when the column has help text. */
+function ColumnHeading(props: { column: UnitPriceKey }) {
+  const { t } = useTranslation()
+  const label = t(COLUMN_LABEL[props.column])
+  const help = COLUMN_HELP[props.column]
+  if (!help) return <span>{label}</span>
+  return (
+    <Popover>
+      <PopoverTrigger
+        openOnHover
+        delay={MARKUP_HELP_DELAY}
+        closeDelay={MARKUP_HELP_DELAY}
+        render={
+          <button
+            type='button'
+            aria-label={`${label}: ${t(help)}`}
+            className='focus-visible:ring-ring/50 inline-flex cursor-help items-center gap-1 rounded outline-none focus-visible:ring-2'
+          />
+        }
+      >
+        {label}
+        <CircleHelp className='size-3.5' aria-hidden />
+      </PopoverTrigger>
+      <PopoverContent
+        side='top'
+        className='text-muted-foreground w-auto max-w-64 p-3 text-xs leading-relaxed'
+      >
+        {t(help)}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 function groupDescription(value: unknown): string {
   if (typeof value === 'string') return value
   if (value && typeof value === 'object' && 'desc' in value) {
@@ -125,6 +187,11 @@ export function PriceBoard(props: {
   usableGroup: Record<string, unknown>
   priceRate: number
   usdExchangeRate: number
+  /** The search text; the board keeps its own copy while typing and reports each change. */
+  search: string
+  onSearchChange: (value: string) => void
+  sort: BoardSort
+  onSortChange: (value: BoardSort) => void
   onModelClick: (modelName: string) => void
 }) {
   const { t } = useTranslation()
@@ -137,6 +204,7 @@ export function PriceBoard(props: {
   const claudeGroups = groups.filter(isClaude)
   const otherGroups = groups.filter((name) => !isClaude(name))
   const [selected, setSelected] = useState<string | null>(null)
+  const [query, setQuery] = useState(props.search)
   const group = selected && groups.includes(selected) ? selected : groups[0]
   const ratio = group ? getConfiguredGroupRatio(props.groupRatio, group) : 1
 
@@ -157,20 +225,20 @@ export function PriceBoard(props: {
   const groupModels = props.models.filter(
     (model) => !group || (model.enable_groups ?? []).includes(group)
   )
-  const rows = groupModels
-    .map((model) => ({
-      model,
-      base: getBaseUnitPrices(model),
-      markup: getOfficialPriceMarkup(model),
-    }))
-    .filter(
-      (
-        row
-      ): row is { model: PricingModel; base: BaseUnitPrices; markup: number } =>
-        Boolean(row.base)
-    )
-    .sort((a, b) => a.base.prices.input - b.base.prices.input)
-  const requestRows = groupModels
+  const matchedModels = groupModels.filter((model) =>
+    matchesModelSearch(model, query)
+  )
+  const rows = sortBoardRows(
+    matchedModels
+      .map((model) => ({
+        model,
+        base: getBaseUnitPrices(model),
+        markup: getOfficialPriceMarkup(model),
+      }))
+      .filter((row): row is BoardRow => Boolean(row.base)),
+    props.sort
+  )
+  const requestRows = matchedModels
     .filter(
       (model) =>
         model.quota_type === QUOTA_TYPE_VALUES.REQUEST &&
@@ -196,7 +264,7 @@ export function PriceBoard(props: {
           <span className='text-primary'>{formatYuan(groupYuan(usd))}</span>
           <span className='text-muted-foreground text-xs font-normal'>
             {' '}
-            / 1M tokens
+            {t('/ 1M tokens')}
           </span>
         </span>
         <span className='text-muted-foreground block font-mono text-xs tabular-nums line-through'>
@@ -334,7 +402,7 @@ export function PriceBoard(props: {
 
   return (
     <div className='flex flex-col gap-4'>
-      <section className='bg-card flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border px-4 py-3 text-sm'>
+      <section className='bg-card order-last flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border px-4 py-3 text-sm md:order-none'>
         <span className='flex items-center gap-1.5 font-medium'>
           <ReceiptText className='text-primary size-4' aria-hidden />
           {t('Pricing rules')}
@@ -377,10 +445,46 @@ export function PriceBoard(props: {
           )}
 
           {groups.length > 1 && (
+            <div className='md:hidden'>
+              <Select
+                items={groups.map((name) => ({ value: name, label: name }))}
+                value={group}
+                onValueChange={(value) => setSelected(value)}
+              >
+                <SelectTrigger className='w-full' aria-label={t('Group')}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  <SelectGroup>
+                    {groups.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                        {getDiscountKind(
+                          discountAt(
+                            getConfiguredGroupRatio(props.groupRatio, name)
+                          )
+                        ) === 'discount' && (
+                          <span className='text-primary ml-2 font-mono text-xs'>
+                            {discountLabel(
+                              discountAt(
+                                getConfiguredGroupRatio(props.groupRatio, name)
+                              )
+                            )}
+                          </span>
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {groups.length > 1 && (
             <div
               role='radiogroup'
               aria-label={t('Group')}
-              className='flex flex-col gap-4'
+              className='hidden flex-col gap-4 md:flex'
             >
               {claudeGroups.length > 0 && (
                 <div className='flex flex-col gap-2'>
@@ -410,12 +514,61 @@ export function PriceBoard(props: {
             </div>
           )}
 
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+            <div className='relative min-w-0 flex-1'>
+              <Search
+                className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2'
+                aria-hidden
+              />
+              <Input
+                type='search'
+                value={query}
+                placeholder={t('Search models')}
+                aria-label={t('Search models')}
+                className='pl-9'
+                onChange={(event) => {
+                  setQuery(event.target.value)
+                  props.onSearchChange(event.target.value)
+                }}
+              />
+            </div>
+            <Select
+              items={BOARD_SORTS.map((value) => ({
+                value,
+                label: t(SORT_LABEL[value]),
+              }))}
+              value={props.sort}
+              onValueChange={(value) => {
+                if (value) props.onSortChange(value as BoardSort)
+              }}
+            >
+              <SelectTrigger className='w-full sm:w-56' aria-label={t('Sort')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectGroup>
+                  {BOARD_SORTS.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {t(SORT_LABEL[value])}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+
           {description && (
             <p className='border-primary/20 bg-primary/5 rounded-lg border px-3 py-2 text-sm'>
               <span className='text-primary font-medium'>
                 {t('Usage note')}：
               </span>
               {description}
+            </p>
+          )}
+
+          {rows.length === 0 && requestRows.length === 0 && (
+            <p className='text-muted-foreground py-6 text-center text-sm'>
+              {t('No models match your search.')}
             </p>
           )}
 
@@ -434,7 +587,7 @@ export function PriceBoard(props: {
                     {UNIT_PRICE_KEYS.map((key) => (
                       <div key={key} className='min-w-0'>
                         <dt className='text-muted-foreground text-xs'>
-                          {t(COLUMN_LABEL[key])}
+                          <ColumnHeading column={key} />
                         </dt>
                         <dd className='text-sm'>
                           {renderPrice(base.prices[key], markup)}
@@ -464,7 +617,7 @@ export function PriceBoard(props: {
                         scope='col'
                         className='px-3 py-2.5 text-left font-medium'
                       >
-                        {t(COLUMN_LABEL[key])}
+                        <ColumnHeading column={key} />
                       </th>
                     ))}
                     <th

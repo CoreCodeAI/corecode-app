@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { ArrowRight } from 'lucide-react'
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { PublicLayout } from '@/components/layout'
@@ -33,6 +33,7 @@ import {
 } from './components'
 import { VIEW_MODES } from './constants'
 import { usePricingData } from './hooks/use-pricing-data'
+import { usePricingUrlState } from './hooks/use-pricing-url-state'
 
 // The drawer opens on a model click; its code stays out of the page's first load.
 const ModelDetailsDrawer = lazy(() =>
@@ -44,9 +45,8 @@ const ModelDetailsDrawer = lazy(() =>
 export function Pricing() {
   const { t } = useTranslation()
   useDocumentTitle(t('Model Pricing'))
-  const [selectedModelName, setSelectedModelName] = useState<string | null>(
-    null
-  )
+  const url = usePricingUrlState()
+  const selectedModelName = url.model
 
   const {
     models,
@@ -125,9 +125,10 @@ export function Pricing() {
             </a>
           </header>
 
-          <main className='min-w-0 space-y-4'>
-            {/* CoreCode fork: the fingerprint check sits above the prices it vouches for. */}
-            <ModelCheckBanner />
+          <main className='flex min-w-0 flex-col gap-4'>
+            {/* CoreCode fork: the fingerprint check sits above the prices it vouches for on a
+                wide screen, and below them on a phone, where prices come first. */}
+            <ModelCheckBanner className='order-last md:order-none' />
 
             <PriceBoard
               models={models || []}
@@ -135,7 +136,11 @@ export function Pricing() {
               usableGroup={usableGroup || {}}
               priceRate={priceRate}
               usdExchangeRate={usdExchangeRate}
-              onModelClick={setSelectedModelName}
+              search={url.search}
+              onSearchChange={url.setSearch}
+              sort={url.sort}
+              onSortChange={url.setSort}
+              onModelClick={url.openModel}
             />
 
             <ClaudeCodeEstimator models={models || []} priceRate={priceRate} />
@@ -146,8 +151,9 @@ export function Pricing() {
               <ModelDetailsDrawer
                 open={Boolean(selectedModel)}
                 onOpenChange={(open) => {
-                  if (!open) setSelectedModelName(null)
+                  if (!open) url.closeModel()
                 }}
+                shareUrl={`${window.location.origin}/pricing?model=${encodeURIComponent(selectedModel.model_name)}`}
                 model={selectedModel}
                 groupRatio={groupRatio || {}}
                 usableGroup={usableGroup || {}}
