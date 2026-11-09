@@ -88,11 +88,11 @@ export function useAuthRedirect() {
         return true
       }
       if (!isLoginChallenge(result)) {
-        throw new AuthOperationError('Login failed')
+        throw new AuthOperationError(i18n.t('Login failed'))
       }
       if (result.expires_at * 1000 <= Date.now()) {
         throw new AuthOperationError(
-          'Login flow expired. Please sign in again.'
+          i18n.t('Login flow expired. Please sign in again.')
         )
       }
       useAuthStore.getState().auth.setPendingLoginVerification({

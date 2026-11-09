@@ -25,7 +25,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { signInWithMagicLink } from '@/features/auth/api'
 import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
-import { AuthOperationError } from '@/lib/secure-verification'
+import { authErrorMessage } from '@/lib/secure-verification'
 
 import { AuthLayout } from '../auth-layout'
 
@@ -68,10 +68,10 @@ export function EmailLoginConfirm({ token, redirect }: EmailLoginConfirmProps) {
         setError(t('This sign-in link is invalid or has expired.'))
       } catch (error: unknown) {
         setError(
-          AuthOperationError.from(
+          authErrorMessage(
             error,
             t('This sign-in link is invalid or has expired.')
-          ).message
+          )
         )
       }
     }

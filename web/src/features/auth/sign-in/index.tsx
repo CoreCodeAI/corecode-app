@@ -76,6 +76,7 @@ export function SignIn() {
               {t("Don't have an account?")}{' '}
               <Link
                 to='/sign-up'
+                search={{ redirect }}
                 className='text-primary font-medium underline-offset-4 hover:underline'
               >
                 {t('Sign up')}

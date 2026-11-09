@@ -326,6 +326,11 @@ export function UserAuthForm({
               {t('Passkey is not supported on this device.')}
             </p>
           )}
+          {passkeySupported && requiresLegalConsent && !agreedToLegal && (
+            <p role='status' className='text-muted-foreground text-xs'>
+              {t('Agree to the terms below to continue.')}
+            </p>
+          )}
         </div>
       )}
 
@@ -334,6 +339,7 @@ export function UserAuthForm({
         status={status}
         redirectTo={redirectTo}
         disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+        consentMissing={requiresLegalConsent && !agreedToLegal}
         onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
         isWeChatLoading={isWeChatSubmitting}
         separatorLabel={
@@ -437,7 +443,8 @@ export function UserAuthForm({
           onOpenChange={handleWeChatDialogChange}
           title={t('WeChat sign in')}
           description={t(
-            'Scan the QR code to follow the official account and reply with “验证码” to receive your verification code.'
+            'Scan the QR code to follow the official account and reply with “{{keyword}}” to receive your verification code.',
+            { keyword: '验证码' }
           )}
           contentClassName='max-w-sm'
           headerClassName='text-left'

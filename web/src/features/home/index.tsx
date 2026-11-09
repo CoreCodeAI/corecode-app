@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -23,6 +24,7 @@ import { PublicLayout } from '@/components/layout'
 import { Footer } from '@/components/layout/components/footer'
 import { RichContent } from '@/components/rich-content'
 import { useTheme } from '@/context/theme-provider'
+import { captureAffiliateCodeFromUrl } from '@/features/auth/lib/storage'
 import { isLikelyHtml } from '@/lib/content-format'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -36,6 +38,22 @@ export function Home() {
   const { auth } = useAuthStore()
   const isAuthenticated = !!auth.user
   const { content, isLoaded, isUrl } = useHomePageContent()
+  const navigate = useNavigate()
+  // An invitation link lands here with ?ref= or ?aff=. Without custom home
+  // content the stock hero is not what that visitor came for: send them to
+  // sign-up, where the code (already saved by the root route) is applied.
+  const params = new URLSearchParams(window.location.search)
+  const hasInviteCode = Boolean(
+    params.get('ref')?.trim() || params.get('aff')?.trim()
+  )
+  const redirectToSignUp =
+    isLoaded && !content && !isAuthenticated && hasInviteCode
+
+  useEffect(() => {
+    if (!redirectToSignUp) return
+    captureAffiliateCodeFromUrl(window.location.search)
+    void navigate({ to: '/sign-up', replace: true })
+  }, [navigate, redirectToSignUp])
 
   const syncIframePreferences = useCallback(() => {
     try {
@@ -58,7 +76,8 @@ export function Home() {
     }
   }, [isUrl, syncIframePreferences])
 
-  if (!isLoaded) {
+  // Cached content shows at once; only a cold, unknown page waits.
+  if (!isLoaded && !content) {
     return (
       <PublicLayout showMainContainer={false}>
         <main className='flex min-h-screen items-center justify-center'>
@@ -67,6 +86,8 @@ export function Home() {
       </PublicLayout>
     )
   }
+
+  if (redirectToSignUp) return null
 
   if (content) {
     if (isUrl) {
