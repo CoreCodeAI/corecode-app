@@ -8005,6 +8005,15 @@
     "Show the command": "Hiện lệnh",
     "Get started in four steps": "Bắt đầu trong bốn bước",
     "{{done}} of {{total}} done": "Hoàn thành {{done}}/{{total}}",
-    "Not done yet": "Chưa xong"
+    "Not done yet": "Chưa xong",
+    "Usage analytics": "Phân tích sử dụng",
+    "Payment received! Added: {{quota}}": "Đã nhận thanh toán! Đã cộng: {{quota}}",
+    "Waiting for your payment": "Đang chờ thanh toán của bạn",
+    "Still waiting for your payment?": "Vẫn đang chờ thanh toán?",
+    "Finish paying in the other tab. Your balance updates here as soon as the payment arrives.": "Hãy hoàn tất thanh toán ở tab khác. Số dư ở đây sẽ tự cập nhật ngay khi thanh toán được ghi nhận.",
+    "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "Một số thanh toán mất vài phút để được ghi nhận. Hãy xem trạng thái trong Lịch sử đơn hàng; số dư sẽ tự cập nhật sau khi được cộng.",
+    "Open Order History": "Mở lịch sử đơn hàng",
+    "Dismiss": "Đóng",
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "Không thể tính số tiền cần thanh toán. Hãy chọn phương thức thanh toán để thử lại."
   }
 }

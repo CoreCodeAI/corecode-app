@@ -8005,6 +8005,15 @@
     "Show the command": "Show the command",
     "Get started in four steps": "Get started in four steps",
     "{{done}} of {{total}} done": "{{done}} of {{total}} done",
-    "Not done yet": "Not done yet"
+    "Not done yet": "Not done yet",
+    "Usage analytics": "Usage analytics",
+    "Payment received! Added: {{quota}}": "Payment received! Added: {{quota}}",
+    "Waiting for your payment": "Waiting for your payment",
+    "Still waiting for your payment?": "Still waiting for your payment?",
+    "Finish paying in the other tab. Your balance updates here as soon as the payment arrives.": "Finish paying in the other tab. Your balance updates here as soon as the payment arrives.",
+    "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.",
+    "Open Order History": "Open Order History",
+    "Dismiss": "Dismiss",
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "Could not calculate the amount to pay. Pick a payment method to try again."
   }
 }

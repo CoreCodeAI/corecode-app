@@ -30,6 +30,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useSelf } from '@/hooks/use-self'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber, formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -52,6 +53,7 @@ export function BalanceCard(props: { daily: DailySpend[]; loading: boolean }) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const user = useAuthStore((state) => state.auth.user)
+  useSelf()
   const balance = Number(user?.quota ?? 0)
   const used = Number(user?.used_quota ?? 0)
   const requests = Number(user?.request_count ?? 0)

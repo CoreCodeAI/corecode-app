@@ -8005,6 +8005,15 @@
     "Show the command": "显示命令",
     "Get started in four steps": "四步上手",
     "{{done}} of {{total}} done": "已完成 {{done}} / {{total}}",
-    "Not done yet": "未完成"
+    "Not done yet": "未完成",
+    "Usage analytics": "用量分析",
+    "Payment received! Added: {{quota}}": "支付成功！已到账：{{quota}}",
+    "Waiting for your payment": "正在等待您的支付",
+    "Still waiting for your payment?": "仍在等待支付？",
+    "Finish paying in the other tab. Your balance updates here as soon as the payment arrives.": "请在另一个标签页完成支付，款项到账后此处余额会自动更新。",
+    "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "部分支付需要几分钟才能到账。可在“订单记录”中查看状态，入账后余额会自动更新。",
+    "Open Order History": "打开订单记录",
+    "Dismiss": "关闭",
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "无法计算应付金额，请重新选择支付方式重试。"
   }
 }

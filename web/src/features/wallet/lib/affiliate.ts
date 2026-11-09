@@ -25,9 +25,10 @@ export const AFF_CODE_PATTERN = /^[A-Za-z0-9_-]{3,32}$/
 
 /**
  * Generate the invitation link. Sign-in is the registration page: the emailed
- * link creates the account and reads the code from the address.
+ * link creates the account and reads the code from the address. The parameter
+ * is `ref`, not `aff`: linux.do marks any address containing `aff=` as dangerous.
  */
 export function generateAffiliateLink(affCode: string): string {
   if (typeof window === 'undefined') return ''
-  return `${window.location.origin}/sign-in?aff=${encodeURIComponent(affCode)}`
+  return `${window.location.origin}/sign-in?ref=${encodeURIComponent(affCode)}`
 }

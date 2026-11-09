@@ -19,6 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
 import { AuthenticatedLayout } from '@/components/layout'
+import {
+  ShellGeneralError,
+  ShellNotFoundError,
+} from '@/features/errors/shell-errors'
 import { resolveAuthentication } from '@/lib/auth-session'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -40,4 +44,7 @@ export const Route = createFileRoute('/_authenticated')({
     }
   },
   component: AuthenticatedLayout,
+  // Below the layout route, so a crash in a page keeps the sidebar and header.
+  errorComponent: ShellGeneralError,
+  notFoundComponent: ShellNotFoundError,
 })

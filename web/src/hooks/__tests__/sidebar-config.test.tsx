@@ -66,7 +66,12 @@ afterEach(() => {
   useAuthStore.getState().auth.reset()
 })
 
-function sidebarFor(admin?: object, user?: object, canConfigure = true) {
+function sidebarFor(
+  admin?: object,
+  user?: object,
+  canConfigure = true,
+  role: number = ROLE.USER
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -76,7 +81,7 @@ function sidebarFor(admin?: object, user?: object, canConfigure = true) {
   useAuthStore.getState().auth.setUser({
     id: 1,
     username: 'alice',
-    role: 1,
+    role,
     permissions: { sidebar_settings: canConfigure },
     sidebar_modules: user ? JSON.stringify(user) : '',
   })
@@ -207,6 +212,52 @@ describe('audit log sidebar entry', () => {
       .map((item) => item.title)
     expect(titles).not.toContain('Usage Logs')
     expect(titles).toContain('Audit Logs')
+  })
+})
+
+describe('customer sidebar defaults', () => {
+  const titlesOf = (result: { current: { items: { title: string }[] }[] }) =>
+    result.current.flatMap((group) => group.items).map((item) => item.title)
+
+  it('hides Task Logs for a customer with no saved sidebar preferences', () => {
+    const { result } = sidebarFor()
+    expect(titlesOf(result)).not.toContain('Task Logs')
+  })
+
+  it('keeps Audit Logs, Usage Logs and API Keys visible for a customer', () => {
+    const { result } = sidebarFor()
+    expect(titlesOf(result)).toEqual(
+      expect.arrayContaining(['Audit Logs', 'Usage Logs', 'API Keys'])
+    )
+  })
+
+  it('names the model dashboard Usage analytics for a customer', () => {
+    const { result } = sidebarFor()
+    expect(titlesOf(result)).toContain('Usage analytics')
+    expect(titlesOf(result)).not.toContain('Dashboard')
+  })
+
+  it('shows Task Logs to a customer who turned the module on in their own settings', () => {
+    const { result } = sidebarFor(undefined, {
+      console: { enabled: true, task: true },
+    })
+    expect(titlesOf(result)).toContain('Task Logs')
+  })
+
+  it('still lets the administrator switch Task Logs off for everyone', () => {
+    const { result } = sidebarFor(
+      { console: { enabled: true, task: false, midjourney: false } },
+      { console: { enabled: true, task: true } }
+    )
+    expect(titlesOf(result)).not.toContain('Task Logs')
+  })
+
+  it('leaves an administrator the full view with Task Logs and Dashboard', () => {
+    const { result } = sidebarFor(undefined, undefined, true, ROLE.ADMIN)
+    expect(titlesOf(result)).toEqual(
+      expect.arrayContaining(['Task Logs', 'Dashboard'])
+    )
+    expect(titlesOf(result)).not.toContain('Usage analytics')
   })
 })
 

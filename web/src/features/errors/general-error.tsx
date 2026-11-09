@@ -16,18 +16,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useNavigate, useRouter } from '@tanstack/react-router'
+import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth-store'
 
-const FEEDBACK_URL = 'https://github.com/QuantumNous/new-api/issues'
+// Signed-out visitors have no feedback inbox; the docs are the public support page.
+const SUPPORT_DOCS_URL = '/docs'
 
 type GeneralErrorProps = React.HTMLAttributes<HTMLDivElement> & {
   minimal?: boolean
   error?: unknown
+  /** Render inside the console shell: fill the content area, not the viewport. */
+  embedded?: boolean
 }
 
 function getHttpStatus(error: unknown): number | undefined {
@@ -42,10 +46,12 @@ export function GeneralError({
   className,
   minimal = false,
   error,
+  embedded = false,
 }: GeneralErrorProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { history } = useRouter()
+  const signedIn = useAuthStore((state) => !!state.auth.user)
   useEffect(() => {
     if (
       !(error instanceof Error) ||
@@ -78,7 +84,13 @@ export function GeneralError({
     : t('Please try again later.')
 
   return (
-    <div className={cn('h-svh w-full', className)}>
+    <div
+      className={cn(
+        'w-full',
+        embedded ? 'h-full min-h-80' : 'h-svh',
+        className
+      )}
+    >
       <div className='m-auto flex h-full w-full flex-col items-center justify-center gap-2'>
         {!minimal && status !== undefined && (
           <h1 className='text-[7rem] leading-tight font-bold'>{status}</h1>
@@ -88,11 +100,6 @@ export function GeneralError({
           {t('We apologize for the inconvenience.')} <br /> {description}
         </p>
         {!minimal && (
-          <p className='text-muted-foreground text-center text-sm'>
-            {t('If this keeps happening, please report it on GitHub Issues.')}
-          </p>
-        )}
-        {!minimal && (
           <div className='mt-6 flex flex-wrap justify-center gap-4'>
             <Button variant='outline' onClick={() => history.go(-1)}>
               {t('Go Back')}
@@ -100,16 +107,18 @@ export function GeneralError({
             <Button
               variant='outline'
               render={
-                <a
-                  href={FEEDBACK_URL}
-                  target='_blank'
-                  rel='noopener noreferrer'
-                />
+                signedIn ? (
+                  <Link to='/feedback' />
+                ) : (
+                  <a href={SUPPORT_DOCS_URL} />
+                )
               }
             >
               {t('Report an issue')}
             </Button>
-            <Button onClick={() => navigate({ to: '/' })}>
+            <Button
+              onClick={() => navigate({ to: signedIn ? '/dashboard' : '/' })}
+            >
               {t('Back to Home')}
             </Button>
           </div>

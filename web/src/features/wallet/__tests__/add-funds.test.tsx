@@ -43,7 +43,6 @@ function renderCard(topupInfo: Partial<TopupInfo>, topupLink?: string) {
     <RechargeFormCard
       topupInfo={topupInfo as TopupInfo}
       presetAmounts={[]}
-      selectedPreset={null}
       topupAmount={1}
       paymentAmount={1}
       calculating={false}

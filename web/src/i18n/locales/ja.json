@@ -8005,6 +8005,15 @@
     "Show the command": "コマンドを表示",
     "Get started in four steps": "4ステップで開始",
     "{{done}} of {{total}} done": "{{done}} / {{total}} 完了",
-    "Not done yet": "未完了"
+    "Not done yet": "未完了",
+    "Usage analytics": "使用量分析",
+    "Payment received! Added: {{quota}}": "お支払いを確認しました。追加額：{{quota}}",
+    "Waiting for your payment": "お支払いを待っています",
+    "Still waiting for your payment?": "まだお支払い待ちですか？",
+    "Finish paying in the other tab. Your balance updates here as soon as the payment arrives.": "別のタブでお支払いを完了してください。入金されるとこの残高が自動的に更新されます。",
+    "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "入金まで数分かかる場合があります。注文履歴で状況を確認できます。入金後は残高が自動的に更新されます。",
+    "Open Order History": "注文履歴を開く",
+    "Dismiss": "閉じる",
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "お支払い金額を計算できませんでした。お支払い方法を選んで再試行してください。"
   }
 }

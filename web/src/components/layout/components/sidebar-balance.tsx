@@ -32,12 +32,15 @@ import {
 } from '@/components/ui/sidebar'
 import { useBalanceStatus } from '@/features/dashboard/hooks/use-balance-status'
 import { useDailySpend } from '@/features/dashboard/hooks/use-customer-overview'
+import { useSelf } from '@/hooks/use-self'
 import { formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 export function SidebarBalance() {
   const user = useAuthStore((state) => state.auth.user)
+  // Keeps the balance following the server on every page.
+  useSelf()
   if (!user) return null
   return <SidebarBalanceButton balance={Number(user.quota ?? 0)} />
 }

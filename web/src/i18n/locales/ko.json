@@ -8005,6 +8005,15 @@
     "Show the command": "명령 표시",
     "Get started in four steps": "네 단계로 시작",
     "{{done}} of {{total}} done": "{{done}} / {{total}} 완료",
-    "Not done yet": "미완료"
+    "Not done yet": "미완료",
+    "Usage analytics": "사용량 분석",
+    "Payment received! Added: {{quota}}": "결제가 확인되었습니다! 추가됨: {{quota}}",
+    "Waiting for your payment": "결제를 기다리는 중",
+    "Still waiting for your payment?": "아직 결제를 기다리고 있나요?",
+    "Finish paying in the other tab. Your balance updates here as soon as the payment arrives.": "다른 탭에서 결제를 완료해 주세요. 결제가 도착하면 잔액이 자동으로 업데이트됩니다.",
+    "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "일부 결제는 도착까지 몇 분이 걸립니다. 주문 내역에서 상태를 확인하세요. 입금되면 잔액이 자동으로 업데이트됩니다.",
+    "Open Order History": "주문 내역 열기",
+    "Dismiss": "닫기",
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "결제 금액을 계산하지 못했습니다. 결제 수단을 선택해 다시 시도하세요."
   }
 }
