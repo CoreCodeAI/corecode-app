@@ -5250,7 +5250,7 @@
     "Saving...": "保存中...",
     "Savings": "節約率",
     "Scan QR Code": "QRコードをスキャン",
-    "Scan the QR code to follow the official account and reply with “验证码” to receive your verification code.": "公式アカウントのQRコードを読み取り、「验证码」と返信して認証コードを受け取ってください。",
+    "Scan the QR code to follow the official account and reply with “{{keyword}}” to receive your verification code.": "公式アカウントのQRコードを読み取り、「{{keyword}}」と返信して認証コードを受け取ってください。",
     "Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, etc.)": "このQRコードを認証アプリ（Google Authenticator、Microsoft Authenticatorなど）でスキャンしてください。",
     "Scheduled channel tests": "スケジュールされたチャネルテスト",
     "Scheduled or bulk health checks can disable a channel when this duration is exceeded, if both global and channel auto-disable are enabled.": "全体とチャネルの両方で自動無効化が有効な場合、定期または一括ヘルスチェックがこの時間を超えると無効化されることがあります。",
@@ -7984,6 +7984,9 @@
     "{{name}} fails most often: {{rate}} of its attempts.": "最も失敗が多いのは {{name}}：試行の {{rate}} が失敗。",
     "{{revenue}} of revenue has no known cost": "売上のうち {{revenue}} はコスト不明",
     "Invalid upstream fee": "上流の費用が無効です",
-    "Failed to save upstream fees": "上流の費用を保存できませんでした"
+    "Failed to save upstream fees": "上流の費用を保存できませんでした",
+    "Verifying…": "確認中…",
+    "Agree to the terms below to continue.": "続行するには、下の規約に同意してください。",
+    "Too many attempts. Please wait a minute and try again.": "試行回数が多すぎます。1分ほど待ってからもう一度お試しください。"
   }
 }

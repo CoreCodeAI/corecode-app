@@ -17,12 +17,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import axios from 'axios'
+import i18next from 'i18next'
 
 import {
   getServerErrorMessageKey,
   getServerMessage,
   safeServerErrorMessage,
 } from './server-error-message'
+
+// English source keys: callers translate them with `authErrorMessage`.
+const SERVICE_BUSY_MESSAGE = 'Please try again later.'
+const TOO_MANY_ATTEMPTS_MESSAGE =
+  'Too many attempts. Please wait a minute and try again.'
 
 export class AuthOperationError extends Error {
   readonly [safeServerErrorMessage] = true
@@ -41,15 +47,25 @@ export class AuthOperationError extends Error {
   ): AuthOperationError {
     if (error instanceof AuthOperationError) return error
     if (axios.isAxiosError<{ message?: string; code?: string }>(error)) {
+      const status = error.response?.status
+      const data = error.response?.data
+      // A localized server reason (`message_key`) is safe to show as is.
+      const hasMessageKey =
+        typeof (data as { message_key?: unknown } | undefined)?.message_key ===
+        'string'
       return new AuthOperationError(
         getServerErrorMessageKey(error) ||
-          (error.response && error.response.status >= 500
-            ? 'Please try again later.'
+          (hasMessageKey ? getServerMessage(data) : undefined) ||
+          (status !== undefined && status >= 500
+            ? SERVICE_BUSY_MESSAGE
             : undefined) ||
-          getServerMessage(error.response?.data) ||
-          error.message ||
+          (status === 429 ? TOO_MANY_ATTEMPTS_MESSAGE : undefined) ||
+          getServerMessage(data) ||
+          // No response at all: offline, timed out or blocked. Axios' own text
+          // ("Network Error", "timeout of 0ms exceeded") is not for customers.
+          (error.response ? undefined : SERVICE_BUSY_MESSAGE) ||
           fallback,
-        error.response?.data?.code,
+        data?.code,
         { cause: error }
       )
     }
@@ -59,6 +75,15 @@ export class AuthOperationError extends Error {
       { cause: error }
     )
   }
+}
+
+/**
+ * The customer-facing text of an auth failure. `AuthOperationError` messages
+ * are English source keys or already-localized server reasons; translating
+ * again is a no-op for the latter.
+ */
+export function authErrorMessage(error: unknown, fallback?: string): string {
+  return i18next.t(AuthOperationError.from(error, fallback).message)
 }
 
 export const authRequestOptions = {

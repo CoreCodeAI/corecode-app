@@ -58,6 +58,16 @@ export function AuthBrandMark(props: AuthBrandMarkProps) {
   )
 }
 
+// Phones never see the brand panel, so this one line carries its promise.
+export function AuthMobileTagline({ className }: { className?: string }) {
+  const { t } = useTranslation()
+  return (
+    <p className={cn('text-muted-foreground text-sm', className)}>
+      <span>{t('Pure Claude,')}</span> <span>{t('nothing mixed in.')}</span>
+    </p>
+  )
+}
+
 // The same promises as the home page, so a customer arriving from it reads the
 // product they just chose rather than an empty form.
 export function AuthBrandPanel() {

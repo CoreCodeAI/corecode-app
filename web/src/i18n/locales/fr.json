@@ -5250,7 +5250,7 @@
     "Saving...": "Enregistrement en cours...",
     "Savings": "Économie",
     "Scan QR Code": "Scanner le code QR",
-    "Scan the QR code to follow the official account and reply with “验证码” to receive your verification code.": "Scannez le code QR pour suivre le compte officiel et répondez par « 验证码 » pour recevoir votre code de vérification.",
+    "Scan the QR code to follow the official account and reply with “{{keyword}}” to receive your verification code.": "Scannez le code QR pour suivre le compte officiel et répondez par «{{keyword}}» pour recevoir votre code de vérification.",
     "Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, etc.)": "Scannez ce code QR avec votre application d'authentification (Google Authenticator, Microsoft Authenticator, etc.)",
     "Scheduled channel tests": "Tests de canaux planifiés",
     "Scheduled or bulk health checks can disable a channel when this duration is exceeded, if both global and channel auto-disable are enabled.": "Si la désactivation automatique est active globalement et pour le canal, un contrôle périodique ou groupé dépassant cette durée peut le désactiver.",
@@ -7984,6 +7984,9 @@
     "{{name}} fails most often: {{rate}} of its attempts.": "{{name}} échoue le plus souvent : {{rate}} de ses tentatives.",
     "{{revenue}} of revenue has no known cost": "{{revenue}} de revenu sans coût connu",
     "Invalid upstream fee": "Frais amont invalides",
-    "Failed to save upstream fees": "Échec de l’enregistrement des frais amont"
+    "Failed to save upstream fees": "Échec de l’enregistrement des frais amont",
+    "Verifying…": "Vérification…",
+    "Agree to the terms below to continue.": "Acceptez les conditions ci-dessous pour continuer.",
+    "Too many attempts. Please wait a minute and try again.": "Trop de tentatives. Patientez une minute puis réessayez."
   }
 }

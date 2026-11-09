@@ -56,10 +56,15 @@ import { AuthOperationError } from '@/lib/secure-verification'
 import { createServerError } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
+type SignUpFormProps = React.HTMLAttributes<HTMLFormElement> & {
+  redirectTo?: string
+}
+
 export function SignUpForm({
   className,
+  redirectTo,
   ...props
-}: React.HTMLAttributes<HTMLFormElement>) {
+}: SignUpFormProps) {
   const { t } = useTranslation()
   const [isLoading, setIsLoading] = useState(false)
   const [verificationCode, setVerificationCode] = useState('')
@@ -216,7 +221,7 @@ export function SignUpForm({
       const res = await wechatLoginByCode(wechatCode)
       if (res?.success) {
         handleWeChatDialogChange(false)
-        if (await handleLoginResult(res.data)) {
+        if (await handleLoginResult(res.data, redirectTo)) {
           toast.success(t('Signed in via WeChat'))
         }
       } else {
@@ -251,6 +256,7 @@ export function SignUpForm({
           <OAuthProviders
             status={status}
             disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+            consentMissing={requiresLegalConsent && !agreedToLegal}
             onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
             isWeChatLoading={isWeChatSubmitting}
             separatorLabel={t('Or sign up with a password')}
@@ -396,7 +402,8 @@ export function SignUpForm({
           onOpenChange={handleWeChatDialogChange}
           title={t('WeChat sign in')}
           description={t(
-            'Scan the QR code to follow the official account and reply with “验证码” to receive your verification code.'
+            'Scan the QR code to follow the official account and reply with “{{keyword}}” to receive your verification code.',
+            { keyword: '验证码' }
           )}
           contentClassName='max-w-sm'
           headerClassName='text-left'

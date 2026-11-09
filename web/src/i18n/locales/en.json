@@ -5250,7 +5250,7 @@
     "Saving...": "Saving...",
     "Savings": "Savings",
     "Scan QR Code": "Scan QR Code",
-    "Scan the QR code to follow the official account and reply with “验证码” to receive your verification code.": "Scan the QR code to follow the official account and send the message “验证码” to receive your verification code.",
+    "Scan the QR code to follow the official account and reply with “{{keyword}}” to receive your verification code.": "Scan the QR code to follow the official account and send the message “{{keyword}}” to receive your verification code.",
     "Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, etc.)": "Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, etc.)",
     "Scheduled channel tests": "Scheduled channel tests",
     "Scheduled or bulk health checks can disable a channel when this duration is exceeded, if both global and channel auto-disable are enabled.": "Scheduled or bulk health checks can disable a channel when this duration is exceeded, if both global and channel auto-disable are enabled.",
@@ -7984,6 +7984,9 @@
     "{{name}} fails most often: {{rate}} of its attempts.": "{{name}} fails most often: {{rate}} of its attempts.",
     "{{revenue}} of revenue has no known cost": "{{revenue}} of revenue has no known cost",
     "Invalid upstream fee": "Invalid upstream fee",
-    "Failed to save upstream fees": "Failed to save upstream fees"
+    "Failed to save upstream fees": "Failed to save upstream fees",
+    "Verifying…": "Verifying…",
+    "Agree to the terms below to continue.": "Agree to the terms below to continue.",
+    "Too many attempts. Please wait a minute and try again.": "Too many attempts. Please wait a minute and try again."
   }
 }

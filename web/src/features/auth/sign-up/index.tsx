@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Link } from '@tanstack/react-router'
+import { Link, useSearch } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { useStatus } from '@/hooks/use-status'
@@ -29,6 +29,7 @@ import { SignUpForm } from './components/sign-up-form'
 
 export function SignUp() {
   const { t } = useTranslation()
+  const { redirect } = useSearch({ strict: false })
   const { status } = useStatus()
 
   // Registration is part of sign-in: an emailed link creates the account for an
@@ -55,6 +56,7 @@ export function SignUp() {
             {t('Already have an account?')}{' '}
             <Link
               to='/sign-in'
+              search={{ redirect }}
               className='text-primary font-medium underline-offset-4 hover:underline'
             >
               {t('Sign in')}
@@ -64,9 +66,12 @@ export function SignUp() {
 
         <TermsGate status={status}>
           {magicLinkEnabled && magicLinkRegisterEnabled ? (
-            <MagicLinkForm showOAuthProviders={oauthRegisterEnabled} />
+            <MagicLinkForm
+              redirectTo={redirect}
+              showOAuthProviders={oauthRegisterEnabled}
+            />
           ) : (
-            <SignUpForm />
+            <SignUpForm redirectTo={redirect} />
           )}
         </TermsGate>
 

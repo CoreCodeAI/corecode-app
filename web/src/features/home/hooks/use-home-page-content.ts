@@ -29,6 +29,14 @@ import type { HomePageContentResult } from '../types'
 
 const STORAGE_KEY = 'home_page_content'
 
+function readCachedContent(): string {
+  try {
+    return localStorage.getItem(STORAGE_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
 /**
  * Hook to load and manage custom home page content
  * Supports both Markdown/HTML content and iframe URLs, either as one value or
@@ -36,19 +44,14 @@ const STORAGE_KEY = 'home_page_content'
  */
 export function useHomePageContent(): HomePageContentResult {
   const { i18n } = useTranslation()
-  const [rawContent, setContent] = useState<string>('')
+  // The last fetched content paints at once; the request below refreshes it.
+  const [rawContent, setContent] = useState<string>(readCachedContent)
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
     let mounted = true
 
     const loadContent = async () => {
-      // Load from localStorage first for immediate display
-      const cached = localStorage.getItem(STORAGE_KEY)
-      if (cached && mounted) {
-        setContent(cached)
-      }
-
       try {
         const response = await getHomePageContent()
         const { success, data } = response

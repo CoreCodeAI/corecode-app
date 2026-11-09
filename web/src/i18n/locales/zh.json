@@ -5250,7 +5250,7 @@
     "Saving...": "正在保存...",
     "Savings": "节省幅度",
     "Scan QR Code": "扫描二维码",
-    "Scan the QR code to follow the official account and reply with “验证码” to receive your verification code.": "扫描二维码关注官方账号，回复“验证码”以接收您的验证码。",
+    "Scan the QR code to follow the official account and reply with “{{keyword}}” to receive your verification code.": "扫描二维码关注官方账号，回复“{{keyword}}”以接收您的验证码。",
     "Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, etc.)": "使用您的身份验证器应用（Google Authenticator、Microsoft Authenticator 等）扫描此二维码",
     "Scheduled channel tests": "定期渠道测试",
     "Scheduled or bulk health checks can disable a channel when this duration is exceeded, if both global and channel auto-disable are enabled.": "全局和渠道自动停用均开启时，定时或批量健康检查耗时超过此阈值可触发停用。",
@@ -7984,6 +7984,9 @@
     "{{name}} fails most often: {{rate}} of its attempts.": "{{name}} 失败最多：尝试中有 {{rate}} 失败。",
     "{{revenue}} of revenue has no known cost": "{{revenue}} 的收入没有已知成本",
     "Invalid upstream fee": "上游费用无效",
-    "Failed to save upstream fees": "保存上游费用失败"
+    "Failed to save upstream fees": "保存上游费用失败",
+    "Verifying…": "验证中…",
+    "Agree to the terms below to continue.": "请先勾选下方的条款后再继续。",
+    "Too many attempts. Please wait a minute and try again.": "尝试次数过多，请等待一分钟后再试。"
   }
 }

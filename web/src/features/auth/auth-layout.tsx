@@ -19,7 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { ThemeSwitch } from '@/components/theme-switch'
 
-import { AuthBrandMark, AuthBrandPanel } from './components/auth-brand-panel'
+import {
+  AuthBrandMark,
+  AuthBrandPanel,
+  AuthMobileTagline,
+} from './components/auth-brand-panel'
 
 type AuthLayoutProps = {
   children: React.ReactNode
@@ -37,6 +41,7 @@ export function AuthLayout(props: AuthLayoutProps) {
             <ThemeSwitch />
           </div>
         </div>
+        <AuthMobileTagline className='mt-2 lg:hidden' />
         <div className='flex flex-1 items-center justify-center py-10'>
           <div className='w-full max-w-sm'>{props.children}</div>
         </div>
