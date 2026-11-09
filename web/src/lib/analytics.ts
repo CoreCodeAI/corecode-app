@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useEffect } from 'react'
 
 import { api } from '@/lib/api'
+import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 // Conversion events for Google Analytics 4. new-api injects gtag.js into
@@ -31,11 +32,21 @@ import { useAuthStore } from '@/stores/auth-store'
 
 declare global {
   interface Window {
-    gtag?: (command: 'event', name: string, params: object) => void
+    gtag?: {
+      (command: 'event', name: string, params: object): void
+      (command: 'set', params: object): void
+      (command: 'set', target: 'user_properties', params: object): void
+    }
   }
 }
 
 const REPORTED_STORAGE_KEY = 'corecode:analytics:reported'
+// "1" while an administrator is signed in on this browser. The tag new-api
+// injects and the docs pages' snippet both read it before their first hit, so
+// operators' page views carry traffic_type=internal from the first load, and
+// the property's Internal Traffic filter drops them. Kept until a customer
+// signs in on the same browser.
+export const INTERNAL_TRAFFIC_STORAGE_KEY = 'corecode:analytics:internal'
 const REPORTED_LIMIT = 200
 // A login this soon after the account was created is its registration.
 export const SIGN_UP_WINDOW_SECONDS = 10 * 60
@@ -75,15 +86,75 @@ function claimReport(key: string): boolean {
   return true
 }
 
-export function trackSignUp(
+// Reports a login, or the registration when the account was created moments
+// ago. Logins are not deduplicated: each is a real return to the console.
+export function trackLogin(
   user: { id: number; created_at?: number },
   method: string,
   now = nowSeconds()
 ): void {
-  if (!window.gtag || !user.created_at) return
-  if (now - user.created_at > SIGN_UP_WINDOW_SECONDS) return
+  if (!window.gtag) return
+  const isNew =
+    !!user.created_at && now - user.created_at <= SIGN_UP_WINDOW_SECONDS
+  if (!isNew) {
+    window.gtag('event', 'login', { method })
+    return
+  }
   if (!claimReport(`sign_up:${user.id}`)) return
   window.gtag('event', 'sign_up', { method })
+}
+
+// Ties this browser's hits to the account, so GA counts one user across
+// devices, and marks administrators' hits as internal. Only the numeric id
+// and the group name leave the browser; never an email or a username.
+export function identifyUser(user: {
+  id: number
+  role: number
+  group?: string
+}): void {
+  const internal = user.role >= ROLE.ADMIN
+  try {
+    if (internal) {
+      window.localStorage.setItem(INTERNAL_TRAFFIC_STORAGE_KEY, '1')
+    } else {
+      window.localStorage.removeItem(INTERNAL_TRAFFIC_STORAGE_KEY)
+    }
+  } catch {
+    // Without storage the flag lasts only for this page.
+  }
+  if (!window.gtag) return
+  window.gtag('set', {
+    user_id: String(user.id),
+    traffic_type: internal ? 'internal' : undefined,
+  })
+  window.gtag('set', 'user_properties', { user_group: user.group || 'default' })
+}
+
+export function useIdentifyUser(): void {
+  const user = useAuthStore((state) => state.auth.user)
+  const id = user?.id
+  const role = user?.role
+  const group = user?.group
+  useEffect(() => {
+    if (id === undefined || role === undefined) return
+    identifyUser({ id, role, group })
+  }, [id, role, group])
+}
+
+export function trackCreateApiKey(count: number): void {
+  if (!window.gtag || count <= 0) return
+  window.gtag('event', 'create_api_key', { count })
+}
+
+// A customer confirmed a top-up and is being sent to the payment page. value
+// is the amount the payment page will charge, in CNY like purchase.
+export function trackBeginCheckout(value: number, paymentType: string): void {
+  if (!window.gtag || !(value > 0)) return
+  window.gtag('event', 'begin_checkout', {
+    value,
+    currency: PAYMENT_CURRENCY,
+    payment_type: paymentType,
+  })
 }
 
 // Balance-paid orders spend money already counted at its top-up.

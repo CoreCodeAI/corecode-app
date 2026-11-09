@@ -23,7 +23,7 @@ import { SkipToMain } from '@/components/skip-to-main'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { LayoutProvider } from '@/context/layout-provider'
 import { useFeedbackReplyToast } from '@/features/feedback/hooks/use-feedback-unread'
-import { useReportPurchases } from '@/lib/analytics'
+import { useIdentifyUser, useReportPurchases } from '@/lib/analytics'
 import { getCookie } from '@/lib/cookies'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
@@ -46,6 +46,7 @@ type AuthenticatedLayoutProps = {
 // A child, not hooks in AuthenticatedLayout, so the feedback poll unmounts on
 // sign-out with the pages instead of running ahead of the early return.
 function SignedInEffects() {
+  useIdentifyUser()
   useReportPurchases()
   useFeedbackReplyToast()
   return null
