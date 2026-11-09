@@ -37,9 +37,11 @@ export function OverviewAlerts(props: {
   balanceHealth: BalanceHealth
   runwayDays: number | null
   recent: RecentUsageSummary
+  /** A first-run account has the checklist instead of a balance alert. */
+  firstRun?: boolean
 }) {
   const { t } = useTranslation()
-  const lowBalance = props.balanceHealth !== 'healthy'
+  const lowBalance = props.balanceHealth !== 'healthy' && !props.firstRun
   const misses = props.recent.costlyMisses
   // Mostly non-streaming misses point at auto mode's classifier rather than
   // the session-level causes listed by default.

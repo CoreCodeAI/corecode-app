@@ -63,6 +63,7 @@ import {
   getAnthropicBaseUrl,
   getSetupTitle,
 } from '../lib/client-setup'
+import { openDeepLink } from '../lib/open-deep-link'
 import { useSetupClients } from '../lib/use-setup-clients'
 import { apiKeySchema } from '../types'
 import { useApiKeys } from './api-keys-provider'
@@ -156,7 +157,7 @@ export function DataTableRowActions<TData>({
       apiKey: realKey,
       providerName: status?.system_name?.trim() || 'CoreCode',
     })
-    window.open(url, '_blank', 'noopener')
+    openDeepLink(url)
   }
 
   const handleToggleStatus = async (

@@ -74,11 +74,13 @@ import { useStatus } from '@/hooks/use-status'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import { handleServerError } from '@/lib/handle-server-error'
+import { ROLE } from '@/lib/roles'
 import {
   requireServerSuccess,
   translateServerText,
 } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth-store'
 
 import {
   createApiKey,
@@ -127,6 +129,10 @@ export function ApiKeysMutateDrawer({
   const { triggerRefresh, setCurrentRow, setOpen } = useApiKeys()
   const { status, loading: statusLoading } = useStatus()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // Creating several keys at once is an operator tool; customers make one.
+  const canBatchCreate = useAuthStore(
+    (state) => (state.auth.user?.role ?? ROLE.GUEST) >= ROLE.ADMIN
+  )
 
   useEffect(() => {
     const idle =
@@ -320,7 +326,7 @@ export function ApiKeysMutateDrawer({
         }
       } else {
         // Create mode - handle batch creation
-        const count = data.tokenCount || 1
+        const count = canBatchCreate ? data.tokenCount || 1 : 1
         let successCount = 0
         let createdId: number | undefined
 
@@ -342,11 +348,20 @@ export function ApiKeysMutateDrawer({
         }
 
         if (successCount > 0) {
-          toast.success(
-            t('Successfully created {{count}} API Key(s)', {
-              count: successCount,
-            })
-          )
+          if (successCount < count) {
+            toast.warning(
+              t('Created {{done}} of {{total}} API keys. The rest failed.', {
+                done: successCount,
+                total: count,
+              })
+            )
+          } else {
+            toast.success(
+              t('Successfully created {{count}} API Key(s)', {
+                count: successCount,
+              })
+            )
+          }
           triggerRefresh()
           // CoreCode fork: one new key goes straight to its setup guide, so
           // the next step after creating it is copying the config.
@@ -393,6 +408,8 @@ export function ApiKeysMutateDrawer({
     ? t('Enter quota in tokens')
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
   const unlimitedQuota = form.watch('unlimited_quota')
+  let submitLabel = isUpdate ? t('Save changes') : t('Create key')
+  if (isSubmitting) submitLabel = t('Saving...')
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -595,7 +612,7 @@ export function ApiKeysMutateDrawer({
                 )}
               />
 
-              {!isUpdate && (
+              {!isUpdate && canBatchCreate && (
                 <FormField
                   control={form.control}
                   name='tokenCount'
@@ -813,7 +830,7 @@ export function ApiKeysMutateDrawer({
             disabled={!isFormInitialized || isSubmitting}
             className='w-full sm:w-auto'
           >
-            {isSubmitting ? t('Saving...') : t('Save changes')}
+            {submitLabel}
           </Button>
         </SheetFooter>
       </SheetContent>
