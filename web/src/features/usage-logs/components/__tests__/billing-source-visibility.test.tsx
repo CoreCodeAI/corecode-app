@@ -194,3 +194,19 @@ test('uses personal subscriptions when an admin switches to only-self view', asy
   await user.click(screen.getByRole('button', { name: 'Switch scope' }))
   expect(await screen.findByRole('img', { name: 'Wallet' })).toBeVisible()
 })
+
+test('pins the admin view cost column to the right edge so a wide table keeps it in view', async () => {
+  await renderLogs({
+    role: ROLE.ADMIN,
+    enabledPlans: [],
+    activeSubscription: false,
+  })
+
+  expect(screen.getByRole('columnheader', { name: 'Cost' })).toHaveClass(
+    'sticky',
+    'right-0'
+  )
+  for (const amount of screen.getAllByText('$0.01')) {
+    expect(amount.closest('td')).toHaveClass('sticky', 'right-0')
+  }
+})

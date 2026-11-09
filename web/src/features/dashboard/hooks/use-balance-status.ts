@@ -24,14 +24,20 @@ import type { UserSubscriptionRecord } from '@/features/subscriptions/types'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber } from '@/lib/format'
 import { requireServerSuccess } from '@/lib/server-error-message'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { estimateRunwayDays, type DailySpend } from '../lib/customer-overview'
+import { isFirstRun } from '../lib/first-run'
 
 /** Days of spend the runway estimate averages over. */
 const RUNWAY_WINDOW_DAYS = 7
 const LOW_RUNWAY_DAYS = 3
 
-export type BalanceHealth = 'healthy' | 'low' | 'empty'
+/**
+ * `unfunded` is an empty balance on an account that has never spent: a new
+ * customer who has not topped up yet, not one who ran out.
+ */
+export type BalanceHealth = 'healthy' | 'low' | 'empty' | 'unfunded'
 
 const HEALTH: Record<
   BalanceHealth,
@@ -40,6 +46,10 @@ const HEALTH: Record<
   healthy: { dotClassName: 'bg-success', labelKey: 'Healthy' },
   low: { dotClassName: 'bg-warning', labelKey: 'Low balance' },
   empty: { dotClassName: 'bg-destructive', labelKey: 'Balance depleted' },
+  unfunded: {
+    dotClassName: 'bg-muted-foreground/50',
+    labelKey: 'Not topped up yet',
+  },
 }
 
 /**
@@ -72,6 +82,9 @@ export function summarizeSubscriptionQuota(
 export function useBalanceStatus(balance: number, daily: DailySpend[]) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const neverSpent = useAuthStore((state) =>
+    state.auth.user ? isFirstRun(state.auth.user) : false
+  )
   const subscriptionsQuery = useQuery({
     queryKey: ['subscription', 'self'],
     queryFn: async () =>
@@ -88,8 +101,9 @@ export function useBalanceStatus(balance: number, daily: DailySpend[]) {
     : estimateRunwayDays(available, daily.slice(-RUNWAY_WINDOW_DAYS))
 
   let health: BalanceHealth = 'healthy'
-  if (available <= 0 && !subscription.unlimited) health = 'empty'
-  else if (runway !== null && runway < LOW_RUNWAY_DAYS) health = 'low'
+  if (available <= 0 && !subscription.unlimited) {
+    health = neverSpent ? 'unfunded' : 'empty'
+  } else if (runway !== null && runway < LOW_RUNWAY_DAYS) health = 'low'
 
   let runwayText = t('Runway appears after your first requests')
   if (runway !== null) {

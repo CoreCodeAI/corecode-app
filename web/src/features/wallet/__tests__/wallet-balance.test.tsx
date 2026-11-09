@@ -21,6 +21,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { WalletStatsCard } from '../components/wallet-stats-card'
 import type { UserWalletData } from '../types'
@@ -33,6 +34,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  useAuthStore.getState().auth.setUser(null)
   cleanup()
   client.clear()
   vi.restoreAllMocks()
@@ -67,13 +69,28 @@ it('shows the balance with its runway and last week of spend', async () => {
   expect(screen.getByText('Healthy')).toBeVisible()
 })
 
-it('marks an empty balance as depleted', async () => {
+function signIn(usage: { used_quota: number; request_count: number }) {
+  useAuthStore
+    .getState()
+    .auth.setUser({ id: 7, username: 'ada', role: 1, quota: 0, ...usage })
+}
+
+it('marks an empty balance on an account that has spent as depleted', async () => {
+  signIn({ used_quota: 5 * QUOTA_PER_DOLLAR, request_count: 12 })
   renderBalance({ quota: 0, used_quota: 0, request_count: 0 }, [])
 
   expect(
     await screen.findByText('Runway appears after your first requests')
   ).toBeVisible()
   expect(screen.getByText('Balance depleted')).toBeVisible()
+})
+
+it('labels an empty balance on a never-used account as not topped up', async () => {
+  signIn({ used_quota: 0, request_count: 0 })
+  renderBalance({ quota: 0, used_quota: 0, request_count: 0 }, [])
+
+  expect(await screen.findByText('Not topped up yet')).toBeVisible()
+  expect(screen.queryByText('Balance depleted')).not.toBeInTheDocument()
 })
 
 it('counts an active subscription toward the balance', async () => {
