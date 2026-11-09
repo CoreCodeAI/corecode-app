@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import i18next from 'i18next'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 
 import { handleServerError } from '@/lib/handle-server-error'
@@ -82,37 +82,59 @@ export async function requestPaymentAmount(
 
   const response = await calculator({ amount: topupAmount })
   if (!isApiSuccess(response) || !response.data) {
-    return 0
+    throw new Error(response.message || 'Failed to calculate payment amount')
   }
 
-  return Number.parseFloat(response.data)
+  const amount = Number.parseFloat(response.data)
+  if (!Number.isFinite(amount)) {
+    throw new Error('Failed to calculate payment amount')
+  }
+  return amount
 }
 
 export function usePayment() {
   const [amount, setAmount] = useState<number>(0)
   const [calculating, setCalculating] = useState(false)
+  const [calculationFailed, setCalculationFailed] = useState(false)
   const [processing, setProcessing] = useState(false)
 
-  // Calculate payment amount
+  // A slower earlier answer must not overwrite the latest one.
+  const latestRequestRef = useRef(0)
+
+  // Calculate payment amount. Resolves to null when it could not be priced;
+  // calculationFailed then says so, so the amount never reads as a free 0.
   const calculatePaymentAmount = useCallback(
     async (topupAmount: number, paymentType: string) => {
+      const requestId = ++latestRequestRef.current
       try {
         setCalculating(true)
         const calculatedAmount = await requestPaymentAmount(
           topupAmount,
           paymentType
         )
+        if (requestId !== latestRequestRef.current) return null
         setAmount(calculatedAmount)
+        setCalculationFailed(false)
         return calculatedAmount
       } catch {
+        if (requestId !== latestRequestRef.current) return null
         setAmount(0)
-        return 0
+        setCalculationFailed(true)
+        return null
       } finally {
-        setCalculating(false)
+        if (requestId === latestRequestRef.current) setCalculating(false)
       }
     },
     []
   )
+
+  // Drop the shown price, for an amount that is not worth pricing.
+  const resetCalculation = useCallback(() => {
+    latestRequestRef.current += 1
+    setAmount(0)
+    setCalculating(false)
+    setCalculationFailed(false)
+  }, [])
 
   // Process payment. throughEpay sends a Stripe method's small order to
   // epay under the same method name (paysThroughEpay).
@@ -198,7 +220,9 @@ export function usePayment() {
     amount,
     calculating,
     processing,
+    calculationFailed,
     calculatePaymentAmount,
+    resetCalculation,
     processPayment,
     processNowPaymentsPayment,
     setAmount,

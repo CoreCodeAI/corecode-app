@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Gift, ExternalLink, Loader2, Receipt, WalletCards } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -64,7 +64,6 @@ import { CreemProductsSection } from './creem-products-section'
 interface RechargeFormCardProps {
   topupInfo: TopupInfo | null
   presetAmounts: PresetAmount[]
-  selectedPreset: number | null
   onSelectPreset: (preset: PresetAmount) => void
   topupAmount: number
   onTopupAmountChange: (amount: number) => void
@@ -72,6 +71,8 @@ interface RechargeFormCardProps {
   /** The payment type paymentAmount was priced for */
   paymentAmountType?: string
   calculating: boolean
+  /** The amount to pay could not be calculated for the current amount */
+  calculationFailed?: boolean
   onPaymentMethodSelect: (method: PaymentMethod) => void
   paymentLoading: string | null
   redemptionCode: string
@@ -96,13 +97,13 @@ interface RechargeFormCardProps {
 export function RechargeFormCard({
   topupInfo,
   presetAmounts,
-  selectedPreset,
   onSelectPreset,
   topupAmount,
   onTopupAmountChange,
   paymentAmount,
   paymentAmountType,
   calculating,
+  calculationFailed,
   onPaymentMethodSelect,
   paymentLoading,
   redemptionCode,
@@ -134,12 +135,20 @@ export function RechargeFormCard({
     )
   }, [topupAmount])
 
+  // Whole amounts only: the server charges an integer, so a fraction is
+  // dropped as it is typed instead of being rounded at payment time.
   const handleAmountChange = (value: string) => {
-    setLocalAmount(value)
-    const numValue = Number.parseInt(value) || 0
-    if (numValue >= 0) {
-      onTopupAmountChange(numValue)
-    }
+    const digits = value
+      .split('.')[0]
+      .replaceAll(/\D/g, '')
+      .replace(/^0+(?=\d)/, '')
+    setLocalAmount(digits)
+    onTopupAmountChange(Number.parseInt(digits, 10) || 0)
+  }
+
+  const handleRedeemSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!redeeming) onRedeem()
   }
 
   const hasConfigurableTopup =
@@ -176,6 +185,15 @@ export function RechargeFormCard({
   const topBonusTier = bonusCampaign
     ? findBonusTier(bonusTiers, Number.POSITIVE_INFINITY)
     : null
+  const amountBelowMin = topupAmount < minTopup
+  let amountError: string | null = null
+  if (amountBelowMin) {
+    amountError = t('Minimum topup amount: {{amount}}', { amount: minTopup })
+  } else if (calculationFailed && !calculating) {
+    amountError = t(
+      'Could not calculate the amount to pay. Pick a payment method to try again.'
+    )
+  }
   const redemptionEnabled = topupInfo?.enable_redemption !== false
 
   // CoreCode fork: say what this card can do today instead of describing a
@@ -266,13 +284,16 @@ export function RechargeFormCard({
           {hasConfigurableTopup && (
             <>
               {bonusCampaign && (
-                <Alert className='border-red-500/30 bg-red-500/5 text-red-700 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-300'>
+                <Alert
+                  variant='destructive'
+                  className='border-destructive/30 bg-destructive/5'
+                >
                   <Gift />
                   <AlertTitle className='font-semibold'>
                     {bonusCampaign}
                   </AlertTitle>
                   {topBonusTier && (
-                    <AlertDescription className='text-red-700/90 dark:text-red-300/90'>
+                    <AlertDescription>
                       {t(
                         'Up to {{percent}}% bonus, credited with the payment.',
                         { percent: bonusRateToPercent(topBonusTier.rate) }
@@ -312,10 +333,11 @@ export function RechargeFormCard({
                           variant='outline'
                           className={cn(
                             'flex h-auto min-h-16 flex-col items-start rounded-lg px-3 py-2.5 text-left whitespace-normal sm:min-h-[72px] sm:p-4',
-                            selectedPreset === preset.value
+                            topupAmount === preset.value
                               ? 'border-foreground bg-foreground/5 dark:border-foreground dark:bg-foreground/10'
                               : 'border-muted'
                           )}
+                          aria-pressed={topupAmount === preset.value}
                           onClick={() => onSelectPreset(preset)}
                         >
                           <div className='flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-1'>
@@ -323,7 +345,7 @@ export function RechargeFormCard({
                               {formatCurrencyFromUSD(preset.value)}
                             </div>
                             {(hasDiscount || bonusTier) && (
-                              <div className='flex flex-col items-end text-xs font-medium text-green-600'>
+                              <div className='text-success flex flex-col items-end text-xs font-medium'>
                                 {hasDiscount && (
                                   <span>{getDiscountLabel(discount, t)}</span>
                                 )}
@@ -331,7 +353,7 @@ export function RechargeFormCard({
                                   <span
                                     className={cn(
                                       bonusCampaign &&
-                                        'rounded bg-red-500/10 px-1.5 py-0.5 whitespace-nowrap text-red-600 dark:bg-red-400/15 dark:text-red-300'
+                                        'bg-destructive/10 text-destructive rounded px-1.5 py-0.5 whitespace-nowrap'
                                     )}
                                   >
                                     {getBonusLabel(bonusTier.rate, t)}
@@ -353,7 +375,7 @@ export function RechargeFormCard({
                                   saved: formatChargeMoney(savedAmount, locale),
                                 }}
                                 components={{
-                                  savings: <span className='text-green-600' />,
+                                  savings: <span className='text-success' />,
                                 }}
                               />
                             ) : (
@@ -363,7 +385,7 @@ export function RechargeFormCard({
                             )}
                           </div>
                           {bonusTier && (
-                            <div className='mt-0.5 w-full text-xs text-green-600'>
+                            <div className='text-success mt-0.5 w-full text-xs'>
                               {t('Bonus {{amount}}', {
                                 amount: formatCurrencyFromUSD(
                                   preset.value * bonusTier.rate
@@ -395,10 +417,16 @@ export function RechargeFormCard({
                 <div className='grid grid-cols-[minmax(0,1fr)_minmax(110px,0.55fr)] gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
                   <Input
                     id='topup-amount'
-                    type='number'
+                    type='text'
+                    inputMode='numeric'
+                    pattern='[0-9]*'
+                    autoComplete='off'
                     value={localAmount}
                     onChange={(e) => handleAmountChange(e.target.value)}
-                    min={minTopup}
+                    aria-invalid={amountError ? true : undefined}
+                    aria-describedby={
+                      amountError ? 'topup-amount-error' : undefined
+                    }
                     placeholder={t('Minimum {{amount}}', { amount: minTopup })}
                     className='h-9 text-base sm:h-10 sm:text-lg'
                   />
@@ -419,8 +447,17 @@ export function RechargeFormCard({
                     )}
                   </div>
                 </div>
+                {amountError && (
+                  <p
+                    id='topup-amount-error'
+                    role='alert'
+                    className='text-destructive text-xs font-medium'
+                  >
+                    {amountError}
+                  </p>
+                )}
                 {customBonusTier && (
-                  <p className='text-xs font-medium text-green-600'>
+                  <p className='text-success text-xs font-medium'>
                     {t('Bonus {{amount}}', {
                       amount: formatCurrencyFromUSD(
                         topupAmount * customBonusTier.rate
@@ -539,7 +576,7 @@ export function RechargeFormCard({
                       {waffoPayMethods?.map((method, index) => {
                         const loadingKey = `waffo-${index}`
                         const methodKey = `${method.payMethodType ?? 'unknown'}-${method.payMethodName ?? method.name}`
-                        const waffoMin = waffoMinTopup || 0
+                        const waffoMin = Math.max(waffoMinTopup || 0, minTopup)
                         const belowMin = waffoMin > topupAmount
                         const disabledReason = belowMin
                           ? t('Minimum topup amount: {{amount}}', {
@@ -647,7 +684,10 @@ export function RechargeFormCard({
               {t('Have a Code?')}
             </Label>
           </div>
-          <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
+          <form
+            onSubmit={handleRedeemSubmit}
+            className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'
+          >
             <Input
               id='redemption-code'
               value={redemptionCode}
@@ -656,7 +696,7 @@ export function RechargeFormCard({
               className='h-9 min-w-0'
             />
             <Button
-              onClick={onRedeem}
+              type='submit'
               disabled={redeeming}
               variant='outline'
               className='h-9 px-4'
@@ -664,7 +704,7 @@ export function RechargeFormCard({
               {redeeming && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
               {t('Redeem')}
             </Button>
-          </div>
+          </form>
           {topupLink && (
             <p className='text-muted-foreground text-xs'>
               {t('Need a redemption code?')}{' '}

@@ -20,6 +20,7 @@ import { useMemo } from 'react'
 
 import type { NavGroup, NavItem } from '@/components/layout/types'
 import { useStatus } from '@/hooks/use-status'
+import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 type SidebarSectionConfig = {
@@ -96,6 +97,32 @@ const mergeWithDefaultSidebarModules = (
   )
 
   return merged
+}
+
+/**
+ * Console modules a customer does not see until they turn them on. CoreCode
+ * relays Claude Code traffic, so Midjourney and task logs are empty noise for
+ * most accounts. Admins keep the full view.
+ */
+const CUSTOMER_HIDDEN_BY_DEFAULT = ['midjourney', 'task'] as const
+
+/**
+ * Overlay the customer defaults onto the user layer. An explicit `true` in the
+ * user's own configuration wins; the admin layer still gates everything.
+ */
+function applyCustomerDefaults(
+  userConfig: SidebarModulesUserConfig,
+  role: number | undefined
+): SidebarModulesUserConfig {
+  if ((role ?? ROLE.GUEST) >= ROLE.ADMIN) return userConfig
+  const consoleSection: SidebarSectionConfig = {
+    enabled: true,
+    ...userConfig?.console,
+  }
+  for (const module of CUSTOMER_HIDDEN_BY_DEFAULT) {
+    if (consoleSection[module] !== true) consoleSection[module] = false
+  }
+  return { ...userConfig, console: consoleSection }
 }
 
 /**
@@ -292,6 +319,7 @@ function filterNavItems(
 export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
   const { status } = useStatus()
   const { auth } = useAuthStore()
+  const role = auth?.user?.role
 
   const adminConfig = useMemo(
     () =>
@@ -307,11 +335,16 @@ export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
     // historical sidebar_modules value from a previous role would otherwise
     // hide admin entries for someone who has no in-product UI to restore
     // them.
-    if (auth?.user?.permissions?.sidebar_settings === false) {
-      return null
-    }
-    return parseUserSidebarConfig(auth?.user?.sidebar_modules)
-  }, [auth?.user?.permissions?.sidebar_settings, auth?.user?.sidebar_modules])
+    const saved =
+      auth?.user?.permissions?.sidebar_settings === false
+        ? null
+        : parseUserSidebarConfig(auth?.user?.sidebar_modules)
+    return applyCustomerDefaults(saved, role)
+  }, [
+    auth?.user?.permissions?.sidebar_settings,
+    auth?.user?.sidebar_modules,
+    role,
+  ])
 
   const filteredNavGroups = useMemo(
     () =>
@@ -339,10 +372,11 @@ export function useIsSidebarModuleVisible(url: string): boolean {
   const adminConfig = parseSidebarConfig(
     status?.SidebarModulesAdmin as string | null | undefined
   )
-  const userConfig =
+  const savedUserConfig =
     auth?.user?.permissions?.sidebar_settings === false
       ? null
       : parseUserSidebarConfig(auth?.user?.sidebar_modules)
+  const userConfig = applyCustomerDefaults(savedUserConfig, auth?.user?.role)
 
   return isModuleEnabled(url, adminConfig, userConfig)
 }

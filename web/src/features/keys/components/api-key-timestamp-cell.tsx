@@ -18,23 +18,64 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import { ActivityTimeCell } from '@/components/activity-time-cell'
+import {
+  ActivityTimeCell,
+  TimestampCell,
+} from '@/components/activity-time-cell'
+import { StatusBadge } from '@/components/status-badge'
 import dayjs from '@/lib/dayjs'
 
+import { useNow } from '../lib/use-now'
 import type { ApiKey } from '../types'
 
 export { TimestampCell as ApiKeyTimestampCell } from '@/components/activity-time-cell'
 
+/** The expiry column: "Never", or a relative time that follows the clock. */
+export function ApiKeyExpiryCell(props: {
+  expiredTime: number
+  locale?: string
+  justNowLabel: string
+  now?: number
+}) {
+  const { t } = useTranslation()
+  const now = useNow(props.now)
+  if (props.expiredTime === -1) {
+    return (
+      <StatusBadge
+        label={t('Never')}
+        variant='neutral'
+        copyable={false}
+        className='-ml-1.5'
+      />
+    )
+  }
+  return (
+    <TimestampCell
+      timestamp={props.expiredTime}
+      now={now}
+      locale={props.locale}
+      justNowLabel={props.justNowLabel}
+      className={
+        props.expiredTime * 1000 <= now
+          ? 'text-destructive'
+          : 'text-muted-foreground'
+      }
+    />
+  )
+}
+
 export function ApiKeyActivityCell(props: {
   apiKey: ApiKey
-  now: number
+  /** Fixed clock for tests; the cell follows the shared clock without it. */
+  now?: number
   layout?: 'rows' | 'columns'
 }) {
   const { t } = useTranslation()
+  const now = useNow(props.now)
   const accessedTime = props.apiKey.accessed_time
   const isStale =
     accessedTime > 0 &&
-    accessedTime * 1000 < dayjs(props.now).subtract(3, 'month').valueOf()
+    accessedTime * 1000 < dayjs(now).subtract(3, 'month').valueOf()
 
   return (
     <ActivityTimeCell
@@ -42,7 +83,7 @@ export function ApiKeyActivityCell(props: {
       lastAt={accessedTime}
       lastLabel={t('Last Used')}
       lastClassName={isStale ? 'text-warning' : 'text-muted-foreground'}
-      now={props.now}
+      now={now}
       layout={props.layout}
     />
   )

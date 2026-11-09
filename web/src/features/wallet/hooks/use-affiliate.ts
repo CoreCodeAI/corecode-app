@@ -21,7 +21,7 @@ import i18next from 'i18next'
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
-import { getSelf } from '@/lib/api'
+import { useRefreshSelf } from '@/hooks/use-self'
 import { handleServerError } from '@/lib/handle-server-error'
 import { getServerMessage } from '@/lib/server-error-message'
 
@@ -41,6 +41,7 @@ export const AFFILIATE_SELF_KEY = ['affiliate', 'self'] as const
 
 export function useAffiliate() {
   const queryClient = useQueryClient()
+  const refreshSelf = useRefreshSelf()
   const [legacyTransferring, setLegacyTransferring] = useState(false)
 
   const query = useQuery({
@@ -56,8 +57,12 @@ export function useAffiliate() {
   )
 
   const refresh = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ['affiliate'] })
-  }, [queryClient])
+    // A transfer moves commission into the balance, so the user is stale too.
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['affiliate'] }),
+      refreshSelf(),
+    ])
+  }, [queryClient, refreshSelf])
 
   const transfer = useMutation({
     mutationFn: transferAffiliateCommission,
@@ -87,7 +92,7 @@ export function useAffiliate() {
           toast.success(
             getServerMessage(response) || i18next.t('Transfer successful')
           )
-          await getSelf()
+          await refreshSelf()
           return true
         }
         handleServerError(response, i18next.t('Transfer failed'))
@@ -99,7 +104,7 @@ export function useAffiliate() {
         setLegacyTransferring(false)
       }
     },
-    []
+    [refreshSelf]
   )
 
   return {

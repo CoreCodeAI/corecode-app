@@ -20,7 +20,7 @@ import i18next from 'i18next'
 import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
 
-import { getSelf } from '@/lib/api'
+import { useRefreshSelf } from '@/hooks/use-self'
 import { formatQuota } from '@/lib/format'
 import { handleServerError } from '@/lib/handle-server-error'
 
@@ -32,37 +32,42 @@ import { redeemTopupCode } from '../api'
 
 export function useRedemption() {
   const [redeeming, setRedeeming] = useState(false)
+  const refreshSelf = useRefreshSelf()
 
-  const redeemCode = useCallback(async (code: string): Promise<boolean> => {
-    if (!code || code.trim() === '') {
-      toast.error(i18next.t('Please enter a redemption code'))
-      return false
-    }
-
-    try {
-      setRedeeming(true)
-      const response = await redeemTopupCode({ key: code })
-
-      if (response.success && response.data) {
-        const quotaAdded = response.data
-        toast.success(
-          i18next.t('Redemption successful! Added: {{quota}}', {
-            quota: formatQuota(quotaAdded),
-          })
-        )
-        await getSelf()
-        return true
+  const redeemCode = useCallback(
+    async (rawCode: string): Promise<boolean> => {
+      const code = rawCode.trim()
+      if (code === '') {
+        toast.error(i18next.t('Please enter a redemption code'))
+        return false
       }
 
-      handleServerError(response, i18next.t('Redemption failed'))
-      return false
-    } catch (_error) {
-      handleServerError(_error, i18next.t('Redemption failed'))
-      return false
-    } finally {
-      setRedeeming(false)
-    }
-  }, [])
+      try {
+        setRedeeming(true)
+        const response = await redeemTopupCode({ key: code })
+
+        if (response.success && response.data) {
+          const quotaAdded = response.data
+          toast.success(
+            i18next.t('Redemption successful! Added: {{quota}}', {
+              quota: formatQuota(quotaAdded),
+            })
+          )
+          await refreshSelf()
+          return true
+        }
+
+        handleServerError(response, i18next.t('Redemption failed'))
+        return false
+      } catch (_error) {
+        handleServerError(_error, i18next.t('Redemption failed'))
+        return false
+      } finally {
+        setRedeeming(false)
+      }
+    },
+    [refreshSelf]
+  )
 
   return {
     redeeming,

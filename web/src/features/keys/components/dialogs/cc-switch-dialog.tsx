@@ -31,6 +31,7 @@ import { getUserModels } from '@/lib/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { buildCCSwitchURL } from '../../lib/client-setup'
+import { openDeepLink } from '../../lib/open-deep-link'
 
 const APP_CONFIGS = {
   claude: {
@@ -129,7 +130,7 @@ export function CCSwitchDialog(props: Props) {
       apiKey: key,
       models,
     })
-    window.open(url, '_blank')
+    openDeepLink(url)
     props.onOpenChange(false)
   }
 
