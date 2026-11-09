@@ -372,9 +372,11 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIErro
 	if s.allowShortfall && effectiveQuota-held > operation_setting.MaxShortfallQuota() {
 		s.releaseFunding()
 		logger.LogInfo(c, common.LogText("user %d refused: reserved %s of %s, shortfall above the cap (funding=%s)", s.relayInfo.UserId, logger.FormatQuota(held), logger.FormatQuota(effectiveQuota), s.funding.Source()))
-		return types.NewErrorWithStatusCode(
-			errors.New(i18n.T(c, i18n.MsgQuotaPreConsumeInsufficient, map[string]any{"Remaining": logger.FormatQuota(held), "Required": logger.FormatQuota(effectiveQuota)})),
-			types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+		message := &quotaMessage{
+			text:  i18n.T(c, i18n.MsgQuotaShortfallAboveCap, map[string]any{"Available": logger.FormatQuota(held), "Required": logger.FormatQuota(effectiveQuota)}),
+			cause: errShortfallAboveCap,
+		}
+		return types.NewErrorWithStatusCode(message, types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
 			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 	}
 
@@ -449,6 +451,16 @@ type quotaMessage struct {
 
 func (e *quotaMessage) Error() string { return e.text }
 func (e *quotaMessage) Unwrap() error { return e.cause }
+
+// errShortfallAboveCap marks a refusal whose reservation already drew on every
+// source that could take part. Falling back to the other source alone holds
+// less, and its balance may still read as the refused reservation left it,
+// because a wallet refund reaches the cache asynchronously.
+var errShortfallAboveCap = errors.New("shortfall above the cap")
+
+func isShortfallAboveCap(apiErr *types.NewAPIError) bool {
+	return apiErr != nil && errors.Is(apiErr, errShortfallAboveCap)
+}
 
 func (s *BillingSession) fundingError(c *gin.Context, err error) *types.NewAPIError {
 	// TODO: model 层应定义哨兵错误（如 ErrNoActiveSubscription），用 errors.Is 替代字符串匹配
@@ -746,7 +758,7 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		if walletErr == nil {
 			return session, nil
 		}
-		if walletErr.GetErrorCode() != types.ErrorCodeInsufficientUserQuota {
+		if walletErr.GetErrorCode() != types.ErrorCodeInsufficientUserQuota || isShortfallAboveCap(walletErr) {
 			return nil, walletErr
 		}
 		session, subErr := trySubscription(false)
@@ -776,7 +788,7 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		if subErr == nil {
 			return session, nil
 		}
-		if subErr.GetErrorCode() != types.ErrorCodeInsufficientUserQuota || !allowOverflow {
+		if subErr.GetErrorCode() != types.ErrorCodeInsufficientUserQuota || !allowOverflow || isShortfallAboveCap(subErr) {
 			return nil, subErr
 		}
 		session, walletErr := tryWallet(false)
