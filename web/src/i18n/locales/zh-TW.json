@@ -7984,6 +7984,27 @@
     "{{name}} fails most often: {{rate}} of its attempts.": "{{name}} 失敗最多：嘗試中有 {{rate}} 失敗。",
     "{{revenue}} of revenue has no known cost": "{{revenue}} 的收入沒有已知成本",
     "Invalid upstream fee": "上游費用無效",
-    "Failed to save upstream fees": "儲存上游費用失敗"
+    "Failed to save upstream fees": "儲存上游費用失敗",
+    "API key created. It is filled into the config below.": "金鑰已建立，已填入下方設定。",
+    "The key is masked here. The Copy button copies the full key.": "此處金鑰已遮蔽，「複製」按鈕會複製完整金鑰。",
+    "Nothing happened? Install CC Switch first, or copy the config instead.": "沒反應？請先安裝 CC Switch，或直接複製設定。",
+    "Nothing happened? Install Magpie first, or copy the config instead.": "沒反應？請先安裝 Magpie，或直接複製設定。",
+    "Create an API key and it fills in here automatically. Name, group and limits can be changed later.": "建立一個 API 金鑰，它會自動填入這裡。名稱、分組和限制之後都可以修改。",
+    "Create with custom settings": "自訂設定建立",
+    "Create key": "建立金鑰",
+    "Created {{done}} of {{total}} API keys. The rest failed.": "已建立 {{done}} / {{total}} 個 API 金鑰，其餘建立失敗。",
+    "Add credits or redeem a code": "儲值或兌換額度",
+    "Requests are charged to your balance.": "請求會從你的餘額中扣費。",
+    "Create an API key": "建立 API 金鑰",
+    "One click in the setup panel below creates one for you.": "在下方設定面板點一下，就會為你建立。",
+    "Paste the config into Claude Code": "把設定貼到 Claude Code",
+    "Copy it from the setup panel below, with your key filled in.": "從下方設定面板複製，已自動填入你的金鑰。",
+    "Go to setup": "前往設定",
+    "Run the check command": "執行驗證指令",
+    "Run it in a new terminal. This list goes away after your first request.": "在新終端機執行。送出第一個請求後，這份清單會消失。",
+    "Show the command": "顯示指令",
+    "Get started in four steps": "四步上手",
+    "{{done}} of {{total}} done": "已完成 {{done}} / {{total}}",
+    "Not done yet": "未完成"
   }
 }

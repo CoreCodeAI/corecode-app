@@ -126,17 +126,120 @@ describe('ClientSetupGuide', () => {
     expect(writeText).not.toHaveBeenCalled()
   })
 
-  it('offers to create a key and uses a placeholder when no key is enabled', async () => {
+  it('offers to create a key instead of copying the placeholder when no key is enabled', async () => {
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText')
     await renderGuide([key({ status: 2 })])
 
-    const createKey = await screen.findByText('Create API Key')
-    expect(createKey.closest('a')).toHaveAttribute('href', '/keys')
+    expect(await screen.findByText('Create with custom settings')).toBeVisible()
+    expect(
+      screen.getByText('Create with custom settings').closest('a')
+    ).toHaveAttribute('href', '/keys')
     expect(screen.getByLabelText('Configuration snippet')).toHaveTextContent(
       'sk-your-key'
     )
     expect(
+      screen.queryByRole('button', { name: 'Copy' })
+    ).not.toBeInTheDocument()
+    expect(
       screen.queryByRole('button', { name: 'Import to CC Switch' })
     ).not.toBeInTheDocument()
+    expect(writeText).not.toHaveBeenCalled()
+  })
+
+  it('creates a key inline, fills it into the snippet, and copies the real key', async () => {
+    const user = userEvent.setup()
+    const created = key({
+      id: 99,
+      name: 'claude-code',
+      key: 'newk**********wxyz',
+    })
+    vi.spyOn(api, 'get').mockImplementation(async (url: string) => {
+      if (url === '/api/user/self/groups') {
+        return {
+          data: {
+            success: true,
+            data: { default: { desc: 'Default', ratio: 1 } },
+          },
+        }
+      }
+      if (url === '/api/token/auto-groups') {
+        return { data: { success: true, data: { groups: [], max_count: 3 } } }
+      }
+      if (url === '/api/token/99') {
+        return { data: { success: true, data: created } }
+      }
+      return { data: { success: true, data: ['claude-opus-5-5'] } }
+    })
+    const post = vi.spyOn(api, 'post').mockImplementation(async (url) => {
+      if (url === '/api/token/') {
+        return {
+          data: { success: true, data: { id: 99, name: 'claude-code' } },
+        }
+      }
+      return { data: { success: true, data: { key: 'real-new-secret' } } }
+    })
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText')
+    await renderGuide([])
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Create API Key' })
+    )
+
+    const snippet = await screen.findByLabelText('Configuration snippet')
+    await waitFor(() => expect(snippet).toHaveTextContent('sk-newk…wxyz'))
+    expect(post).toHaveBeenCalledWith(
+      '/api/token/',
+      expect.objectContaining({
+        name: 'claude-code',
+        unlimited_quota: true,
+        expired_time: -1,
+        group: '',
+      })
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Copy' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+    expect(writeText.mock.calls[0][0]).toContain('sk-real-new-secret')
+    expect(writeText.mock.calls[0][0]).not.toContain('sk-your-key')
+  })
+
+  it('says the snippet shows a masked key and Copy copies the full one', async () => {
+    await renderGuide([key({})])
+
+    expect(
+      await screen.findByText(
+        'The key is masked here. The Copy button copies the full key.'
+      )
+    ).toBeVisible()
+  })
+
+  it('opens CC Switch through an anchor, not a new tab, and hints at installing it', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(api, 'post').mockResolvedValue({
+      data: { success: true, data: { key: 'full-secret-value' } },
+    })
+    const open = vi.spyOn(window, 'open')
+    const clicked: string[] = []
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement
+    ) {
+      clicked.push(this.href)
+    })
+    await renderGuide([key({})])
+
+    await user.click(screen.getByRole('tab', { name: 'CC Switch' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Import to CC Switch' })
+    )
+
+    await waitFor(() => expect(clicked).toHaveLength(1))
+    expect(clicked[0]).toMatch(/^ccswitch:\/\//)
+    expect(open).not.toHaveBeenCalled()
+    expect(
+      screen.getByText(
+        'Nothing happened? Install CC Switch first, or copy the config instead.'
+      )
+    ).toBeVisible()
   })
 
   it('lets the customer pick among several enabled keys', async () => {

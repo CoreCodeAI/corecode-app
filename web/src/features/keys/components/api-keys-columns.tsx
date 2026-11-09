@@ -34,10 +34,7 @@ import { API_KEY_STATUSES } from '../constants'
 import type { ApiKey } from '../types'
 import { ApiKeyGroupCell } from './api-key-group-cell'
 import { ApiKeyQuotaCell } from './api-key-quota-cell'
-import {
-  ApiKeyActivityCell,
-  ApiKeyTimestampCell,
-} from './api-key-timestamp-cell'
+import { ApiKeyActivityCell, ApiKeyExpiryCell } from './api-key-timestamp-cell'
 import {
   ApiKeyCell,
   IpRestrictionsCell,
@@ -51,7 +48,7 @@ function useGroupRatios(): Record<string, number | string> {
   const { data } = useQuery({
     queryKey: ['user-groups'],
     queryFn: async () => requireServerSuccess(await getUserGroups()),
-    staleTime: 0,
+    staleTime: 60 * 1000,
     select: (res) => {
       if (!res.success || !res.data) return {}
       const ratios: Record<string, number | string> = {}
@@ -67,7 +64,7 @@ function useGroupRatios(): Record<string, number | string> {
   return data ?? EMPTY_GROUP_RATIOS
 }
 
-export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
+export function useApiKeysColumns(now?: number): ColumnDef<ApiKey>[] {
   const { t, i18n } = useTranslation()
   useSystemConfigStore((state) => state.config.currency)
   const { meta: currency } = getCurrencyDisplay()
@@ -197,32 +194,14 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
       {
         accessorKey: 'expired_time',
         header: t('Expires'),
-        cell: ({ row }) => {
-          const expiredTime = row.getValue('expired_time') as number
-          if (expiredTime === -1) {
-            return (
-              <StatusBadge
-                label={t('Never')}
-                variant='neutral'
-                copyable={false}
-                className='-ml-1.5'
-              />
-            )
-          }
-          return (
-            <ApiKeyTimestampCell
-              timestamp={expiredTime}
-              now={now}
-              locale={locale}
-              justNowLabel={justNowLabel}
-              className={
-                expiredTime * 1000 <= now
-                  ? 'text-destructive'
-                  : 'text-muted-foreground'
-              }
-            />
-          )
-        },
+        cell: ({ row }) => (
+          <ApiKeyExpiryCell
+            expiredTime={row.getValue('expired_time') as number}
+            now={now}
+            locale={locale}
+            justNowLabel={justNowLabel}
+          />
+        ),
         size: 180,
         meta: { mobileHidden: true },
       },

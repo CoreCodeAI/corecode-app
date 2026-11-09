@@ -26,16 +26,19 @@ import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { API_KEY_STATUS } from '../constants'
+import { useNow } from '../lib/use-now'
 import type { ApiKey } from '../types'
 
 type ApiKeyQuotaCellProps = {
   apiKey: ApiKey
-  now: number
+  /** Fixed clock for tests; the cell follows the shared clock without it. */
+  now?: number
   variant?: 'table' | 'card'
 }
 
 export function ApiKeyQuotaCell(props: ApiKeyQuotaCellProps) {
   const { t, i18n } = useTranslation()
+  const now = useNow(props.now)
   useSystemConfigStore((state) => state.config.currency)
   const { meta: currency } = getCurrencyDisplay()
   const quotaUnit = currency.kind === 'tokens' ? t('Tokens') : currency.symbol
@@ -59,7 +62,7 @@ export function ApiKeyQuotaCell(props: ApiKeyQuotaCellProps) {
     props.apiKey.status !== API_KEY_STATUS.ENABLED ||
     remaining <= 0 ||
     (props.apiKey.expired_time !== -1 &&
-      props.apiKey.expired_time * 1000 <= props.now)
+      props.apiKey.expired_time * 1000 <= now)
   let progressColor = 'text-emerald-500'
   if (isInactive) progressColor = 'text-muted-foreground/60'
   else if (percentage <= 10) progressColor = 'text-rose-500'

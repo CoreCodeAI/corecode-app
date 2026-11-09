@@ -54,7 +54,7 @@ import { prefetchApiKeys } from '../../api-keys-query'
 import { apiKeySchema, type ApiKey } from '../../types'
 import { ApiKeyQuotaCell } from '../api-key-quota-cell'
 import { useApiKeysColumns } from '../api-keys-columns'
-import { ApiKeysProvider } from '../api-keys-provider'
+import { ApiKeysProvider, useApiKeys } from '../api-keys-provider'
 import { ApiKeysTable } from '../api-keys-table'
 
 const now = 1_700_000_000_000
@@ -558,4 +558,80 @@ it('reads the list again on the next visit after a change', async () => {
   vi.mocked(api.get).mockClear()
   await renderKeysPage(2, {}, { client })
   await waitFor(() => expect(listRequests()).toHaveLength(1))
+})
+
+async function renderEmptyKeysPage() {
+  vi.mocked(api.get).mockImplementation(async (url) => {
+    if (url.startsWith('/api/token/')) {
+      return { data: { success: true, data: { items: [], total: 0 } } }
+    }
+    return { data: { success: true, data: { default: { ratio: 1 } } } }
+  })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  client.setQueryData(['status'], {})
+  clients.push(client)
+  const root = createRootRoute()
+  const auth = createRoute({ getParentRoute: () => root, id: '_authenticated' })
+  const keysRoute = createRoute({
+    getParentRoute: () => auth,
+    path: 'keys/',
+    component: function EmptyKeysPage() {
+      return (
+        <ApiKeysProvider>
+          <ApiKeysTable />
+          <ProbeOpen />
+        </ApiKeysProvider>
+      )
+    },
+  })
+  const router = createRouter({
+    routeTree: root.addChildren([auth.addChildren([keysRoute])]),
+    history: createMemoryHistory({ initialEntries: ['/keys/'] }),
+  })
+  await router.load()
+  render(
+    <I18nextProvider i18n={i18n}>
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </I18nextProvider>
+  )
+}
+
+function ProbeOpen() {
+  const keys = useApiKeys()
+  return <output data-testid='open-probe'>{keys.open ?? 'none'}</output>
+}
+
+it.each([
+  ['desktop', false],
+  ['mobile', true],
+])(
+  'offers to create the first key from the %s empty state',
+  async (_name, mobile) => {
+    if (mobile) {
+      const matchMedia = window.matchMedia
+      vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+        ...matchMedia(query),
+        matches: query.includes('max-width'),
+      }))
+    }
+    await renderEmptyKeysPage()
+    await screen.findByText('No API Keys Found')
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Create API Key' })
+    )
+    expect(screen.getByTestId('open-probe')).toHaveTextContent('create')
+  }
+)
+
+it('names the icon-only copy and row action buttons for assistive technology', async () => {
+  await renderKeysPage()
+  expect(
+    screen.getByRole('button', { name: 'Copy API key' })
+  ).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Disable' })).toBeInTheDocument()
 })
