@@ -106,6 +106,7 @@ export function OverviewTab(props: {
     finance: t('Funds'),
     growth: t('Growth'),
     channels: t('Promotion channels'),
+    upstream: t('Upstreams'),
     activity: t('Activity & retention'),
     risk: t('Risk'),
   }

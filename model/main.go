@@ -395,6 +395,8 @@ func migrateDB() error {
 		&InsightHour{},
 		&InsightUserHour{},
 		&InsightModelHour{},
+		&InsightChannelHour{},
+		&UpstreamCost{},
 	)
 	if err != nil {
 		return err

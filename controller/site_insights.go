@@ -335,6 +335,28 @@ func SetChannelCosts(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
+// GetUpstreamInsights compares the channels requests went to.
+func GetUpstreamInsights(c *gin.Context) {
+	serveInsights(c, model.InsightsMaxLogDays, model.GetUpstreamInsights)
+}
+
+// SetUpstreamFees replaces the monthly fees of channels whose upstream bill
+// cannot be read, such as subscription accounts.
+func SetUpstreamFees(c *gin.Context) {
+	var request struct {
+		Fees map[int]float64 `json:"fees"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.SaveUpstreamFees(request.Fees); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
 func GetBusinessInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxLogDays, model.GetBusinessInsights)
 }

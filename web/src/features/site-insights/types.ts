@@ -647,3 +647,64 @@ export type UserSpend = {
   unattributed_engine_usd: number
   users: UserSpendRow[]
 }
+
+/** Where a channel's cost comes from: the upstream's bill, a monthly fee, or nowhere. */
+export type UpstreamCostSource = 'upstream' | 'fee' | 'none'
+
+export type UpstreamChannel = {
+  id: number
+  name: string
+  status: number
+  priority: number
+  host: string
+  requests: number
+  errors: number
+  failure_rate: number
+  rescued: number
+  revenue_usd: number
+  cost_usd: number
+  cost_source: UpstreamCostSource
+  monthly_fee_usd: number
+  latest_cost_at: number
+  upstream_group: string
+  upstream_group_ratio: number
+  ttft_p50_ms: number
+  ttft_p95_ms: number
+  latency_p50_s: number
+  prompt_tokens: number
+  cache_read_tokens: number
+  completion_tokens: number
+  reasons: NamedCount[]
+}
+
+export type UpstreamModel = {
+  model: string
+  channel_id: number
+  requests: number
+  errors: number
+  failure_rate: number
+  rescued: number
+  ttft_p50_ms: number
+  latency_p50_s: number
+  revenue_usd: number
+  cost_usd: number
+}
+
+export type UpstreamDay = {
+  day: number
+  channel_id: number
+  requests: number
+  errors: number
+  revenue_usd: number
+  cost_usd: number
+}
+
+export type UpstreamRescue = { from: number; to: number; count: number }
+
+export type UpstreamInsights = {
+  channels: UpstreamChannel[]
+  models: UpstreamModel[]
+  daily: UpstreamDay[]
+  rescues: UpstreamRescue[]
+  truncated: boolean
+}
