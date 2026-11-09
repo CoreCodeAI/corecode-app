@@ -48,9 +48,14 @@ import {
 import { pluginUsageSchema } from '@/features/pricing/lib/plugin-pricing'
 import { taskUsageUnitLabel } from '@/features/pricing/lib/task-price-display'
 import type { BillingUsageSchema } from '@/features/pricing/types'
+import { toIntlLocale } from '@/i18n/languages'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
-import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
+import {
+  formatLogQuota,
+  formatNumber,
+  formatTimestampToDate,
+} from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
@@ -87,6 +92,7 @@ import { LogCostDisplay } from '../log-cost-display'
 import { ModelBadge } from '../model-badge'
 import { TimingMetricsCell, StreamTpsCell } from '../timing-metrics-cell'
 import { useUsageLogsContext } from '../usage-logs-provider'
+import { HeaderHint } from './header-hint'
 
 const CACHE_GRADE_CLASS_NAMES: Record<CacheGrade, string> = {
   good: 'bg-success/12 text-success',
@@ -369,7 +375,8 @@ export function useCommonLogsColumns(
   isRoot: boolean,
   showBillingSource = false
 ): ColumnDef<UsageLog>[] {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const currency = useSystemConfigStore((state) => state.config.currency)
   return useMemo(() => {
     const columns: ColumnDef<UsageLog>[] = [
@@ -716,7 +723,14 @@ export function useCommonLogsColumns(
       },
       {
         accessorKey: 'is_stream',
-        header: t('Stream'),
+        header: () => (
+          <HeaderHint
+            label={t('Stream')}
+            hint={t(
+              'Whether the reply was streamed to the client as it was generated. Claude Code streams every reply.'
+            )}
+          />
+        ),
         cell: ({ row }) => {
           const log = row.original
           if (!isTimingLogType(log.type)) return null
@@ -742,7 +756,12 @@ export function useCommonLogsColumns(
       },
       {
         accessorKey: 'prompt_tokens',
-        header: t('Tokens', { context: 'usage' }),
+        header: () => (
+          <HeaderHint
+            label={t('Tokens', { context: 'usage' })}
+            hint={t('Input / output · cache read · cache write')}
+          />
+        ),
         cell: ({ row }) => {
           const log = row.original
           if (!isDisplayableLogType(log.type)) return null
@@ -770,8 +789,8 @@ export function useCommonLogsColumns(
           return (
             <div className='flex flex-col gap-0.5'>
               <span className='flex items-center gap-1.5 font-mono text-xs font-medium tabular-nums'>
-                {promptTokens.toLocaleString()} /{' '}
-                {completionTokens.toLocaleString()}
+                {formatNumber(promptTokens, locale)} /{' '}
+                {formatNumber(completionTokens, locale)}
                 {costlyMiss && (
                   <CacheMissTooltip
                     isStream={log.is_stream}
@@ -798,15 +817,16 @@ export function useCommonLogsColumns(
                 )}
               </span>
               {(cacheReadTokens > 0 || cacheWriteTokens > 0) && (
-                <div className='flex items-center gap-1 text-[11px]'>
+                <div className='text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs'>
                   {cacheReadTokens > 0 && (
-                    <span className='text-muted-foreground/60'>
-                      {t('Cache')}↓ {cacheReadTokens.toLocaleString()}
+                    <span>
+                      {t('Cache read')} {formatNumber(cacheReadTokens, locale)}
                     </span>
                   )}
                   {cacheWriteTokens > 0 && (
-                    <span className='text-muted-foreground/60'>
-                      ↑ {cacheWriteTokens.toLocaleString()}
+                    <span>
+                      {t('Cache write')}{' '}
+                      {formatNumber(cacheWriteTokens, locale)}
                     </span>
                   )}
                 </div>
@@ -814,6 +834,7 @@ export function useCommonLogsColumns(
             </div>
           )
         },
+        meta: { label: t('Tokens', { context: 'usage' }) },
       },
       {
         accessorKey: 'quota',
@@ -947,5 +968,5 @@ export function useCommonLogsColumns(
     return columns
     // Log formatters read currency settings from the store.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, isAdmin, isRoot, showBillingSource, currency])
+  }, [t, locale, isAdmin, isRoot, showBillingSource, currency])
 }

@@ -21,6 +21,7 @@ import { ArrowRight, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { toIntlLocale } from '@/i18n/languages'
+import { cn } from '@/lib/utils'
 
 // CoreCode fork: corecode-infra's model-trace.py fingerprints every Claude model
 // every 3 days and writes this summary of the newest run beside the static docs.
@@ -64,7 +65,7 @@ async function getLatestCheck(): Promise<LatestCheck | null> {
  * the full report. Without a readable summary it keeps only the description
  * and the link.
  */
-export function ModelCheckBanner() {
+export function ModelCheckBanner(props: { className?: string }) {
   const { t, i18n } = useTranslation()
   const language = i18n.resolvedLanguage || i18n.language
   const locale = toIntlLocale(language)
@@ -85,7 +86,10 @@ export function ModelCheckBanner() {
   return (
     <section
       aria-label={t('Model check')}
-      className='bg-card flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border px-4 py-3 text-sm'
+      className={cn(
+        'bg-card flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border px-4 py-3 text-sm',
+        props.className
+      )}
     >
       <span className='flex items-center gap-1.5 font-medium'>
         <ShieldCheck

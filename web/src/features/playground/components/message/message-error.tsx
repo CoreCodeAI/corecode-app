@@ -16,7 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { AlertCircle, AlertTriangle, Settings } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { AlertCircle, AlertTriangle, Settings, Wallet } from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -95,6 +96,27 @@ export function MessageError({
               {t('Go to Settings')}
             </Button>
           )}
+          {actions}
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  if (errorState.kind === 'insufficient-balance') {
+    // The server's text quotes raw quota units, so show a plain message instead.
+    return (
+      <Alert variant='default' className={className}>
+        <Wallet className='text-orange-500' />
+        <AlertTitle>{t('Insufficient balance')}</AlertTitle>
+        <AlertDescription className='space-y-2'>
+          <p>
+            {t(
+              'Your balance is too low for this request. Top up to keep chatting.'
+            )}
+          </p>
+          <Button size='sm' render={<Link to='/wallet' />}>
+            {t('Go to top up')}
+          </Button>
           {actions}
         </AlertDescription>
       </Alert>

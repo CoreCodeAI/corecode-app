@@ -41,6 +41,11 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStatus } from '@/hooks/use-status'
 
 import {
+  API_KEY_ENV,
+  buildClaudeCodeSample,
+  isClaudeModelName,
+} from '../lib/code-samples'
+import {
   buildRateLimits,
   buildSupportedParameters,
   formatRateLimit,
@@ -48,6 +53,7 @@ import {
 } from '../lib/mock-stats'
 import { replaceModelInPath } from '../lib/model-helpers'
 import type { PricingModel } from '../types'
+import { ModelCta } from './model-cta'
 
 // ---------------------------------------------------------------------------
 // Code-sample registry
@@ -58,9 +64,10 @@ import type { PricingModel } from '../types'
 // types the model actually supports. This keeps copy-pasted code accurate and
 // provider-shaped (OpenAI vs Anthropic vs Gemini, etc.).
 
-type Lang = 'curl' | 'python' | 'typescript' | 'javascript'
+type Lang = 'claude-code' | 'curl' | 'python' | 'typescript' | 'javascript'
 
 const LANG_LABELS: Record<Lang, string> = {
+  'claude-code': 'Claude Code',
   curl: 'cURL',
   python: 'Python',
   typescript: 'TypeScript',
@@ -68,6 +75,7 @@ const LANG_LABELS: Record<Lang, string> = {
 }
 
 const LANG_HIGHLIGHT: Record<Lang, BundledLanguage> = {
+  'claude-code': 'bash',
   curl: 'bash',
   python: 'python',
   typescript: 'typescript',
@@ -115,11 +123,12 @@ function buildChatSample(lang: Lang, ctx: SampleContext): string {
 
   if (lang === 'python') {
     return [
+      'import os',
       'from openai import OpenAI',
       '',
       'client = OpenAI(',
       `    base_url="${ctx.baseUrl}/v1",`,
-      `    api_key="<YOUR_API_KEY>",`,
+      `    api_key=os.environ["${ctx.apiKeyEnv}"],`,
       ')',
       '',
       isResponses
@@ -182,11 +191,12 @@ function buildAnthropicSample(lang: Lang, ctx: SampleContext): string {
   }
   if (lang === 'python') {
     return [
+      'import os',
       'import anthropic',
       '',
       'client = anthropic.Anthropic(',
       `    base_url="${ctx.baseUrl}",`,
-      `    api_key="<YOUR_API_KEY>",`,
+      `    api_key=os.environ["${ctx.apiKeyEnv}"],`,
       ')',
       '',
       `message = client.messages.create(`,
@@ -254,9 +264,10 @@ function buildGeminiSample(lang: Lang, ctx: SampleContext): string {
   }
   if (lang === 'python') {
     return [
+      'import os',
       'import google.generativeai as genai',
       '',
-      `genai.configure(api_key="<YOUR_API_KEY>")`,
+      `genai.configure(api_key=os.environ["${ctx.apiKeyEnv}"])`,
       '',
       `model = genai.GenerativeModel("${ctx.modelName}")`,
       `response = model.generate_content("${userMessage}")`,
@@ -304,9 +315,10 @@ function buildEmbeddingSample(lang: Lang, ctx: SampleContext): string {
   }
   if (lang === 'python') {
     return [
+      'import os',
       'from openai import OpenAI',
       '',
-      `client = OpenAI(base_url="${ctx.baseUrl}/v1", api_key="<YOUR_API_KEY>")`,
+      `client = OpenAI(base_url="${ctx.baseUrl}/v1", api_key=os.environ["${ctx.apiKeyEnv}"])`,
       '',
       'response = client.embeddings.create(',
       `    model="${ctx.modelName}",`,
@@ -370,9 +382,10 @@ function buildImageSample(lang: Lang, ctx: SampleContext): string {
   }
   if (lang === 'python') {
     return [
+      'import os',
       'from openai import OpenAI',
       '',
-      `client = OpenAI(base_url="${ctx.baseUrl}/v1", api_key="<YOUR_API_KEY>")`,
+      `client = OpenAI(base_url="${ctx.baseUrl}/v1", api_key=os.environ["${ctx.apiKeyEnv}"])`,
       '',
       'response = client.images.generate(',
       `    model="${ctx.modelName}",`,
@@ -477,30 +490,40 @@ function CodeSamplesSection(props: {
   const [endpointType, setEndpointType] = useState<string>(
     endpoints[0]?.type ?? ''
   )
-  const [lang, setLang] = useState<Lang>('curl')
+  const isClaude = isClaudeModelName(props.model.model_name || '')
+  const [lang, setLang] = useState<Lang>(isClaude ? 'claude-code' : 'curl')
+  const langs = (Object.keys(LANG_LABELS) as Lang[]).filter((l) => {
+    if (l === 'claude-code') return isClaude
+    return endpoints.length > 0
+  })
 
   const activeEndpoint = useMemo(() => {
     return endpoints.find((e) => e.type === endpointType) ?? endpoints[0]
   }, [endpointType, endpoints])
 
-  if (endpoints.length === 0 || !activeEndpoint) {
+  const modelName = props.model.model_name || ''
+  if (!isClaude && (endpoints.length === 0 || !activeEndpoint)) {
     return null
   }
 
-  const code = buildSample(lang, activeEndpoint.type, {
-    baseUrl,
-    apiKeyEnv: 'NEW_API_KEY',
-    modelName: props.model.model_name || '',
-    endpointType: activeEndpoint.type,
-    endpointPath: activeEndpoint.path,
-  })
+  const showClaudeCode = lang === 'claude-code' && isClaude
+  const code =
+    showClaudeCode || !activeEndpoint
+      ? buildClaudeCodeSample(baseUrl, modelName)
+      : buildSample(lang, activeEndpoint.type, {
+          baseUrl,
+          apiKeyEnv: API_KEY_ENV,
+          modelName,
+          endpointType: activeEndpoint.type,
+          endpointPath: activeEndpoint.path,
+        })
 
   return (
     <section>
       <SectionTitle icon={ScrollText}>{t('Code samples')}</SectionTitle>
 
       <div className='flex flex-wrap items-center gap-2'>
-        {endpoints.length > 1 && (
+        {endpoints.length > 1 && !showClaudeCode && (
           <Tabs value={endpointType} onValueChange={setEndpointType}>
             <TabsList className='bg-muted/40 h-8 p-0.5'>
               {endpoints.map((ep) => (
@@ -522,7 +545,7 @@ function CodeSamplesSection(props: {
           className='ml-auto'
         >
           <TabsList className='bg-muted/40 h-8 p-0.5'>
-            {(Object.keys(LANG_LABELS) as Lang[]).map((l) => (
+            {langs.map((l) => (
               <TabsTrigger key={l} value={l} className='h-7 px-2.5 text-xs'>
                 {LANG_LABELS[l]}
               </TabsTrigger>
@@ -532,18 +555,25 @@ function CodeSamplesSection(props: {
       </div>
 
       <div className='mt-3'>
-        <CodeBlock code={code} language={LANG_HIGHLIGHT[lang]}>
+        <CodeBlock
+          code={code}
+          language={LANG_HIGHLIGHT[showClaudeCode ? 'claude-code' : lang]}
+        >
           <CodeBlockCopyButton />
         </CodeBlock>
       </div>
 
       <p className='text-muted-foreground mt-2 text-xs'>
-        {t('Replace')}{' '}
-        <code className='bg-muted rounded px-1 py-0.5 font-mono text-[11px]'>
-          {'<YOUR_API_KEY>'}
-        </code>{' '}
-        {t('with the API key from your token settings.')}
+        {showClaudeCode
+          ? t('Replace {{name}} with a key from your API keys page.', {
+              name: `<${API_KEY_ENV}>`,
+            })
+          : t(
+              'Set the {{name}} environment variable to a key from your API keys page.',
+              { name: API_KEY_ENV }
+            )}
       </p>
+      <ModelCta modelName={modelName} />
     </section>
   )
 }

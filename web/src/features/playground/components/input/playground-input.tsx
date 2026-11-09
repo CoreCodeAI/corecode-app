@@ -25,8 +25,9 @@ import {
   PromptInputTextarea,
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
+import { formatYuan } from '@/features/pricing/lib/unit-prices'
 
-import { getSubmittableInputText } from '../../lib'
+import { getSubmittableInputText, type ModelPriceSummary } from '../../lib'
 import type {
   ModelOption,
   GroupOption,
@@ -61,6 +62,8 @@ interface PlaygroundInputProps {
     value: boolean
   ) => void
   parameterEnabled: ParameterEnabled
+  /** The selected model's price per million tokens; hidden when null. */
+  modelPrice?: ModelPriceSummary | null
 }
 
 export function PlaygroundInput({
@@ -82,6 +85,7 @@ export function PlaygroundInput({
   onClearMessages,
   onParameterEnabledChange,
   parameterEnabled,
+  modelPrice = null,
 }: PlaygroundInputProps) {
   const { t } = useTranslation()
   const [text, setText] = useState('')
@@ -144,6 +148,15 @@ export function PlaygroundInput({
           />
         </PromptInputFooter>
       </PromptInput>
+      {modelPrice && (
+        <p className='text-muted-foreground -mt-2 px-2 text-center text-xs'>
+          {t('{{model}}: input {{input}} · output {{output}} per 1M tokens', {
+            model: modelValue,
+            input: formatYuan(modelPrice.input),
+            output: formatYuan(modelPrice.output),
+          })}
+        </p>
+      )}
     </div>
   )
 }

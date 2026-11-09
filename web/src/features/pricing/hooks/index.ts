@@ -16,5 +16,5 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export { useFilters } from './use-filters'
 export { usePricingData } from './use-pricing-data'
+export { usePricingUrlState } from './use-pricing-url-state'
