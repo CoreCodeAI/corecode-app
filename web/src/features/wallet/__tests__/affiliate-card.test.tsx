@@ -108,7 +108,7 @@ it('shows the sign-in invite link, rate and stats for an affiliate', async () =>
   const link = (await screen.findByLabelText(
     'Referral link'
   )) as HTMLInputElement
-  expect(link.value).toMatch(/\/sign-in\?aff=AB12$/)
+  expect(link.value).toMatch(/\/sign-in\?ref=AB12$/)
   expect(screen.getByText('Rate 12%')).toBeVisible()
   expect(screen.queryByText('Promotion channel')).toBeNull()
   expect(screen.queryByRole('button', { name: 'Withdraw' })).toBeNull()

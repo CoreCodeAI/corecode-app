@@ -50,6 +50,7 @@ import { useTranslation } from 'react-i18next'
 import type { SidebarBadges, SidebarData } from '@/components/layout/types'
 import { useFeedbackUnreadCount } from '@/features/feedback/hooks/use-feedback-unread'
 import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 /**
  * Root navigation groups for the application sidebar.
@@ -60,6 +61,9 @@ import { ROLE } from '@/lib/roles'
 export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
   const { t } = useTranslation()
   const unreadFeedback = useFeedbackUnreadCount()
+  const role = useAuthStore((s) => s.auth.user?.role)
+  // Customers get a plainer name; "Dashboard" sits beside "Overview" for them.
+  const isCustomer = (role ?? ROLE.GUEST) < ROLE.ADMIN
 
   return {
     navGroups: [
@@ -73,7 +77,7 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             icon: Activity,
           },
           {
-            title: t('Dashboard'),
+            title: isCustomer ? t('Usage analytics') : t('Dashboard'),
             url: '/dashboard/models',
             icon: LayoutDashboard,
           },

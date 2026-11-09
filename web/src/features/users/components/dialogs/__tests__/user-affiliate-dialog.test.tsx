@@ -229,7 +229,7 @@ it('replaces the invite code and shows the new link', async () => {
 
   const code = await screen.findByLabelText('Invite code')
   expect(screen.getByLabelText('Referral link')).toHaveValue(
-    `${window.location.origin}/sign-in?aff=XY`
+    `${window.location.origin}/sign-in?ref=XY`
   )
   const save = screen.getByRole('button', { name: 'Save invite code' })
   await user.clear(code)
@@ -247,7 +247,7 @@ it('replaces the invite code and shows the new link', async () => {
   )
   await waitFor(() =>
     expect(screen.getByLabelText('Referral link')).toHaveValue(
-      `${window.location.origin}/sign-in?aff=partner-01`
+      `${window.location.origin}/sign-in?ref=partner-01`
     )
   )
 })

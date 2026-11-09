@@ -28,6 +28,8 @@ const searchSchema = z.object({
   redirect: z.string().optional(),
   // Invitation code; the magic-link form stores it, the router just keeps it in the address.
   aff: z.string().optional(),
+  // Same code under the name the generated invite link uses.
+  ref: z.string().optional(),
 })
 
 export const Route = createFileRoute('/(auth)/sign-in')({

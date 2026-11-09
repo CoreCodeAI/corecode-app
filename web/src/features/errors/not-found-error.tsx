@@ -22,15 +22,23 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { useDocumentTitle } from '@/hooks/use-document-title'
 import { useNoIndex } from '@/hooks/use-no-index'
+import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth-store'
 
-export function NotFoundError() {
+type NotFoundErrorProps = {
+  /** Render inside the console shell: fill the content area, not the viewport. */
+  embedded?: boolean
+}
+
+export function NotFoundError(props: NotFoundErrorProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { history } = useRouter()
+  const signedIn = useAuthStore((state) => !!state.auth.user)
   useNoIndex()
   useDocumentTitle('404')
   return (
-    <div className='h-svh'>
+    <div className={cn(props.embedded ? 'h-full min-h-80' : 'h-svh')}>
       <div className='m-auto flex h-full w-full flex-col items-center justify-center gap-2'>
         <h1 className='text-[7rem] leading-tight font-bold'>404</h1>
         <span className='font-medium'>{t('Oops! Page Not Found!')}</span>
@@ -42,7 +50,9 @@ export function NotFoundError() {
           <Button variant='outline' onClick={() => history.go(-1)}>
             {t('Go Back')}
           </Button>
-          <Button onClick={() => navigate({ to: '/' })}>
+          <Button
+            onClick={() => navigate({ to: signedIn ? '/dashboard' : '/' })}
+          >
             {t('Back to Home')}
           </Button>
         </div>

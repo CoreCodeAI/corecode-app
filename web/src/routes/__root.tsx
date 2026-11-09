@@ -151,6 +151,6 @@ export const Route = createRootRouteWithContext<{
     }
   },
   component: RootComponent,
-  notFoundComponent: NotFoundError,
+  notFoundComponent: () => <NotFoundError />,
   errorComponent: GeneralError,
 })

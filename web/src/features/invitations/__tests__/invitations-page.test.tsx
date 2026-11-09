@@ -171,7 +171,7 @@ it('lists each invitee with their spend and commission, and totals over all invi
   const link = (await screen.findByLabelText(
     'Referral link'
   )) as HTMLInputElement
-  expect(link.value).toMatch(/aff=AB12$/)
+  expect(link.value).toMatch(/ref=AB12$/)
   expect(screen.getByText('Rate 10%')).toBeVisible()
   expect(screen.queryByText('Promotion channel')).toBeNull()
   expect(within(stats).getByText('Commission from invitees')).toBeVisible()
@@ -407,5 +407,5 @@ it('lets an inviter replace the code in their link', async () => {
   const link = (await screen.findByLabelText(
     'Referral link'
   )) as HTMLInputElement
-  await vi.waitFor(() => expect(link.value).toMatch(/aff=alice-ai$/))
+  await vi.waitFor(() => expect(link.value).toMatch(/ref=alice-ai$/))
 })
