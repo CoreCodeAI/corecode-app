@@ -23,7 +23,13 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
-import { cleanup, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import {
   afterAll,
   afterEach,
@@ -217,6 +223,90 @@ describe('customer overview', () => {
     const title = await screen.findByText('Your balance has run out')
     expect(title).toBeVisible()
     expect(screen.queryByText(/long requests missed the cache/)).toBeNull()
+  })
+
+  describe('first run', () => {
+    const newcomer = (fields: Record<string, number>) =>
+      useAuthStore.getState().auth.setUser({
+        id: 1,
+        username: 'customer',
+        role: 1,
+        quota: 0,
+        used_quota: 0,
+        request_count: 0,
+        ...fields,
+      })
+
+    it('shows the checklist, not the red balance alert, to an account that never spent anything', async () => {
+      newcomer({})
+      await renderOverview()
+
+      const list = await screen.findByRole('region', {
+        name: 'Get started in four steps',
+      })
+      expect(within(list).getAllByRole('listitem')).toHaveLength(4)
+      expect(screen.queryByText('Your balance has run out')).toBeNull()
+      expect(list).toHaveTextContent('0 of 4 done')
+      expect(
+        list.querySelector('[data-step="balance"]')?.getAttribute('data-done')
+      ).toBe('false')
+    })
+
+    it('marks credits done once there is a balance', async () => {
+      newcomer({ quota: 5_000_000 })
+      await renderOverview()
+
+      const list = await screen.findByRole('region', {
+        name: 'Get started in four steps',
+      })
+      expect(
+        list.querySelector('[data-step="balance"]')?.getAttribute('data-done')
+      ).toBe('true')
+      expect(list).toHaveTextContent('1 of 4 done')
+    })
+
+    it('marks the key done when the account has one', async () => {
+      newcomer({})
+      vi.mocked(api.get).mockImplementation(async (url: string) => {
+        if (url.startsWith('/api/token/')) {
+          return {
+            data: {
+              success: true,
+              data: {
+                items: [
+                  { id: 1, name: 'laptop', key: 'abcd****wxyz', status: 1 },
+                ],
+              },
+            },
+          }
+        }
+        if (url === '/api/status') return { data: { data: status } }
+        if (url === '/api/user/models') {
+          return { data: { success: true, data: ['claude-opus-5-5'] } }
+        }
+        return { data: { success: true, data: [] } }
+      })
+      await renderOverview()
+
+      const list = await screen.findByRole('region', {
+        name: 'Get started in four steps',
+      })
+      await waitFor(() =>
+        expect(
+          list.querySelector('[data-step="key"]')?.getAttribute('data-done')
+        ).toBe('true')
+      )
+    })
+
+    it('keeps the red alert for an account that has spent before', async () => {
+      newcomer({ used_quota: 1_000, request_count: 2 })
+      await renderOverview()
+
+      expect(await screen.findByText('Your balance has run out')).toBeVisible()
+      expect(
+        screen.queryByRole('region', { name: 'Get started in four steps' })
+      ).toBeNull()
+    })
   })
 
   it('reads the requests the dashboard route started instead of repeating them', async () => {

@@ -17,7 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { Toaster } from 'sonner'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import type { ApiKey } from '../../types'
 
@@ -26,6 +27,7 @@ const { I18nextProvider, initReactI18next } = await import('react-i18next')
 const { QueryClient, QueryClientProvider } =
   await import('@tanstack/react-query')
 const { api } = await import('@/lib/api')
+const { useAuthStore } = await import('@/stores/auth-store')
 const { ApiKeysProvider, useApiKeys } = await import('../api-keys-provider')
 const { ApiKeysMutateDrawer } = await import('../api-keys-mutate-drawer')
 
@@ -137,13 +139,14 @@ async function renderCreateDrawer(
         <ApiKeysProvider>
           <ApiKeysMutateDrawer open onOpenChange={() => undefined} />
           <DialogProbe />
+          <Toaster />
         </ApiKeysProvider>
       </I18nextProvider>
     </QueryClientProvider>
   )
   await waitFor(
     () => {
-      const saveButton = findButton('Save changes', false)
+      const saveButton = findButton(/Create key|Save changes/, false)
       expect(saveButton).toBeEnabled()
     },
     { timeout: 1500 }
@@ -159,12 +162,22 @@ function DialogProbe() {
   )
 }
 
-function findButton(text: string, required: true): HTMLButtonElement
-function findButton(text: string, required: false): HTMLButtonElement | null
-function findButton(text: string, required = true): HTMLButtonElement | null {
+function findButton(text: string | RegExp, required: true): HTMLButtonElement
+function findButton(
+  text: string | RegExp,
+  required: false
+): HTMLButtonElement | null
+function findButton(
+  text: string | RegExp,
+  required = true
+): HTMLButtonElement | null {
   const button = screen
     .queryAllByRole<HTMLButtonElement>('button')
-    .find((candidate) => candidate.textContent?.includes(text))
+    .find((candidate) =>
+      typeof text === 'string'
+        ? candidate.textContent?.includes(text)
+        : text.test(candidate.textContent ?? '')
+    )
   if (required && !button) {
     throw new Error(`Expected button containing "${text}"`)
   }
@@ -199,7 +212,12 @@ function changeInput(input: HTMLInputElement, value: string): void {
   fireEvent.input(input, { target: { value } })
 }
 
+beforeEach(() => {
+  useAuthStore.getState().auth.setUser({ id: 1, username: 'customer', role: 1 })
+})
+
 afterEach(() => {
+  useAuthStore.getState().auth.setUser(null)
   apiClient.get = originalGet
   apiClient.post = originalPost
   localStorage.clear()
@@ -225,9 +243,11 @@ describe('API keys mutate drawer Auto group integration', () => {
     ).toEqual(['vip', 'default'])
     expect(order?.querySelector('button')).toBe(null)
 
+    useAuthStore.getState().auth.setUser({ id: 1, username: 'root', role: 10 })
+    await waitFor(() => expect(getControlByLabel('Quantity')).toBeTruthy())
     changeInput(getControlByLabel('Name'), 'batch')
     changeInput(getControlByLabel('Quantity'), '2')
-    fireEvent.click(findButton('Save changes', true))
+    fireEvent.click(findButton('Create key', true))
     await waitFor(() => expect(createdPayloads).toHaveLength(2))
 
     expect(createdPayloads.length).toBe(2)
@@ -248,9 +268,43 @@ describe('API keys mutate drawer Auto group integration', () => {
     })
 
     changeInput(getControlByLabel('Name'), 'laptop')
-    fireEvent.click(findButton('Save changes', true))
+    fireEvent.click(findButton('Create key', true))
     await waitFor(() => expect(createdPayloads).toHaveLength(1))
     expect(createdPayloads[0]?.group).toBe('vip')
+  })
+})
+
+describe('API key create drawer for customers and admins', () => {
+  test('hides the batch quantity from a customer and labels the button Create key', async () => {
+    installApiFixtures([])
+    await renderCreateDrawer()
+
+    expect(screen.queryByText('Quantity')).not.toBeInTheDocument()
+    expect(findButton('Create key', true)).toBeEnabled()
+    expect(findButton('Save changes', false)).toBeNull()
+  })
+
+  test('reports how many keys a batch created when a later one fails', async () => {
+    const createdPayloads: Array<Record<string, unknown>> = []
+    installApiFixtures(createdPayloads)
+    apiClient.post = async (_url, data) => {
+      createdPayloads.push(data as Record<string, unknown>)
+      if (createdPayloads.length === 2) {
+        return { data: { success: false, message: 'quota' } }
+      }
+      return { data: { success: true, data: { id: 41, name: 'x' } } }
+    }
+    await renderCreateDrawer()
+    useAuthStore.getState().auth.setUser({ id: 1, username: 'root', role: 10 })
+    await waitFor(() => expect(getControlByLabel('Quantity')).toBeTruthy())
+    changeInput(getControlByLabel('Name'), 'batch')
+    changeInput(getControlByLabel('Quantity'), '3')
+    fireEvent.click(findButton('Create key', true))
+
+    expect(
+      await screen.findByText('Created 1 of 3 API keys. The rest failed.')
+    ).toBeInTheDocument()
+    expect(createdPayloads).toHaveLength(2)
   })
 })
 
@@ -370,7 +424,7 @@ describe('API key expiry across editing sessions', () => {
         screen.getByRole('button', { name: 'Never expires' })
       ).toBeVisible()
       expect(screen.getByLabelText('Time')).toBeDisabled()
-      fireEvent.click(findButton('Save changes', true))
+      fireEvent.click(findButton('Create key', true))
       await waitFor(() => expect(payloads).toHaveLength(1))
       expect(payloads[0]?.expired_time).toBe(-1)
     }
@@ -392,7 +446,7 @@ describe('API keys mutate drawer user quota query switch', () => {
     expect(quotaQuerySwitch).not.toBeChecked()
 
     changeInput(getControlByLabel('Name'), 'no-user-quota')
-    fireEvent.click(findButton('Save changes', true))
+    fireEvent.click(findButton('Create key', true))
     await waitFor(() => expect(createdPayloads).toHaveLength(1))
     expect(createdPayloads[0]?.allow_user_quota_query).toBe(false)
   })
@@ -402,7 +456,7 @@ describe('API keys mutate drawer user quota query switch', () => {
     await renderCreateDrawer()
 
     changeInput(getControlByLabel('Name'), 'laptop')
-    fireEvent.click(findButton('Save changes', true))
+    fireEvent.click(findButton('Create key', true))
 
     await waitFor(() =>
       expect(screen.getByTestId('dialog-probe')).toHaveTextContent(

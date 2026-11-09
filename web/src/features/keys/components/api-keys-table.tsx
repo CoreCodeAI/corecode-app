@@ -19,8 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import { flexRender, type Table as TanstackTable } from '@tanstack/react-table'
-import { Database } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Plus } from 'lucide-react'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -30,14 +30,9 @@ import {
   useDebouncedColumnFilter,
   useDataTable,
 } from '@/components/data-table'
+import { EmptyState } from '@/components/empty-state'
 import { StatusBadge } from '@/components/status-badge'
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
@@ -70,6 +65,17 @@ const API_KEYS_MOBILE_SKELETON_IDS = Array.from(
   (_, index) => `api-key-mobile-skeleton-${index + 1}`
 )
 
+function CreateKeyButton() {
+  const { t } = useTranslation()
+  const { setOpen } = useApiKeys()
+  return (
+    <Button size='sm' onClick={() => setOpen('create')}>
+      <Plus data-icon='inline-start' />
+      {t('Create API Key')}
+    </Button>
+  )
+}
+
 function isDisabledApiKeyRow(apiKey: ApiKey) {
   return apiKey.status !== API_KEY_STATUS.ENABLED
 }
@@ -100,11 +106,9 @@ function ApiKeysMobileSkeleton() {
 function ApiKeysMobileList({
   table,
   isLoading,
-  now,
 }: {
   table: TanstackTable<ApiKey>
   isLoading: boolean
-  now: number
 }) {
   const { t } = useTranslation()
   const rows = table.getRowModel().rows
@@ -113,21 +117,15 @@ function ApiKeysMobileList({
 
   if (!rows.length) {
     return (
-      <div className='rounded-lg border p-8'>
-        <Empty className='border-none p-0'>
-          <EmptyHeader>
-            <EmptyMedia variant='icon'>
-              <Database className='size-6' />
-            </EmptyMedia>
-            <EmptyTitle>{t('No API Keys Found')}</EmptyTitle>
-            <EmptyDescription>
-              {t(
-                'No API keys available. Create your first API key to get started.'
-              )}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </div>
+      <EmptyState
+        bordered
+        className='min-h-0 p-8'
+        title={t('No API Keys Found')}
+        description={t(
+          'No API keys available. Create your first API key to get started.'
+        )}
+        action={<CreateKeyButton />}
+      />
     )
   }
 
@@ -182,7 +180,7 @@ function ApiKeysMobileList({
                     groupCell.getContext()
                   )}
               </div>
-              <ApiKeyQuotaCell apiKey={apiKey} now={now} variant='card' />
+              <ApiKeyQuotaCell apiKey={apiKey} variant='card' />
             </div>
 
             <div className='flex flex-wrap items-center gap-x-5 gap-y-1'>
@@ -192,11 +190,7 @@ function ApiKeysMobileList({
 
             <div className='grid grid-cols-3 items-start gap-3 border-t pt-2'>
               <div className='col-span-2 min-w-0'>
-                <ApiKeyActivityCell
-                  apiKey={apiKey}
-                  now={now}
-                  layout='columns'
-                />
+                <ApiKeyActivityCell apiKey={apiKey} layout='columns' />
               </div>
               <div className='min-w-0 space-y-1 [&_[data-slot=status-badge]]:text-xs [&_[data-slot=status-badge]]:font-normal'>
                 <div className='text-muted-foreground'>{t('Expires')}</div>
@@ -217,16 +211,7 @@ function ApiKeysMobileList({
 export function ApiKeysTable() {
   const { t } = useTranslation()
   const { refreshTrigger } = useApiKeys()
-  const [now, setNow] = useState(() => Date.now())
-  const columns = useApiKeysColumns(now)
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setNow(Date.now())
-    }, 30_000)
-
-    return () => window.clearInterval(intervalId)
-  }, [])
+  const columns = useApiKeysColumns()
 
   const {
     globalFilter,
@@ -313,6 +298,7 @@ export function ApiKeysTable() {
       emptyDescription={t(
         'No API keys available. Create your first API key to get started.'
       )}
+      emptyAction={<CreateKeyButton />}
       skeletonKeyPrefix='api-keys-skeleton'
       applyHeaderSize
       toolbarProps={{
@@ -336,9 +322,7 @@ export function ApiKeysTable() {
           },
         ],
       }}
-      mobile={
-        <ApiKeysMobileList table={table} isLoading={isLoading} now={now} />
-      }
+      mobile={<ApiKeysMobileList table={table} isLoading={isLoading} />}
       getRowClassName={(row) =>
         isDisabledApiKeyRow(row.original) ? DISABLED_ROW_DESKTOP : undefined
       }

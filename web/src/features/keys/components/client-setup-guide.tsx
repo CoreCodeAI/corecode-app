@@ -34,6 +34,7 @@ import {
   Copy,
   KeyRound,
   Loader2,
+  Plus,
   TriangleAlert,
 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
@@ -70,6 +71,8 @@ import {
   type ClientSetupTarget,
   type SetupClient,
 } from '../lib/client-setup'
+import { openDeepLink } from '../lib/open-deep-link'
+import { createStarterKey } from '../lib/quick-create-key'
 import { useSetupClients } from '../lib/use-setup-clients'
 import type { ApiKey } from '../types'
 
@@ -190,11 +193,21 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
   const [target, setTarget] = useState<ClientSetupTarget>('settings')
   const [pickedKeyId, setPickedKeyId] = useState<number | null>(null)
   const [busy, setBusy] = useState<
-    'copy' | 'verify' | 'cc-switch' | 'magpie' | null
+    'copy' | 'verify' | 'cc-switch' | 'magpie' | 'create' | null
+  >(null)
+  // The key made here, until the keys list the parent passes includes it.
+  const [createdKey, setCreatedKey] = useState<ApiKey | null>(null)
+  // The deep link that was just opened; its app may not be installed.
+  const [deepLinkOpened, setDeepLinkOpened] = useState<
+    'cc-switch' | 'magpie' | null
   >(null)
   const [copied, setCopied] = useState<'copy' | 'verify' | null>(null)
 
-  const usableKeys = props.keys.filter((key) => key.status === 1)
+  const listedKeys = props.keys.filter((key) => key.status === 1)
+  const usableKeys =
+    createdKey && !listedKeys.some((key) => key.id === createdKey.id)
+      ? [...listedKeys, createdKey]
+      : listedKeys
   const selectedKey =
     usableKeys.find((key) => key.id === pickedKeyId) ?? usableKeys[0] ?? null
   const { clients, models } = useSetupClients(selectedKey)
@@ -210,6 +223,7 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
     window.location.origin
   )
   const placeholderKey = t('sk-your-key')
+  const showCreate = !selectedKey && !props.keysLoading
   const snippet = buildClientSetupSnippet(activeTarget, {
     baseUrl,
     apiKey: selectedKey ? maskApiKey(selectedKey.key) : placeholderKey,
@@ -239,6 +253,27 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
     return null
   }
 
+  const handleCreateKey = async () => {
+    setBusy('create')
+    try {
+      const created = await createStarterKey(
+        queryClient,
+        status?.default_use_auto_group === true
+      )
+      setCreatedKey(created)
+      setPickedKeyId(created.id)
+      toast.success(t('API key created. It is filled into the config below.'))
+      void queryClient.invalidateQueries({
+        queryKey: ['dashboard', 'overview'],
+      })
+      void queryClient.invalidateQueries({ queryKey: ['keys'] })
+    } catch (error) {
+      handleServerError(error, t('Failed to create API key'))
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const flashCopied = (which: 'copy' | 'verify') => {
     setCopied(which)
     window.setTimeout(() => setCopied(null), 1800)
@@ -247,7 +282,7 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
   const handleCopySnippet = async () => {
     setBusy('copy')
     try {
-      const apiKey = selectedKey ? await resolveKey() : placeholderKey
+      const apiKey = await resolveKey()
       if (!apiKey) return
       const text = buildClientSetupSnippet(activeTarget, {
         baseUrl,
@@ -257,11 +292,7 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
       })
       if (await copyToClipboard(text)) {
         flashCopied('copy')
-        toast.success(
-          selectedKey && text.includes(apiKey)
-            ? t('Copied with your full API key')
-            : t('Copied to clipboard')
-        )
+        toast.success(t('Copied with your full API key'))
       } else {
         toast.error(t('Failed to copy to clipboard'))
       }
@@ -279,7 +310,7 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
     try {
       const apiKey = await resolveKey()
       if (!apiKey) return
-      window.open(
+      openDeepLink(
         buildCCSwitchURL({
           app,
           name: providerName,
@@ -291,9 +322,9 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
                 ? pickCodexModel(models)
                 : pickClaudeModels(models)[0],
           },
-        }),
-        '_blank'
+        })
       )
+      setDeepLinkOpened('cc-switch')
     } finally {
       setBusy(null)
     }
@@ -304,11 +335,8 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
     try {
       const apiKey = await resolveKey()
       if (!apiKey) return
-      window.open(
-        buildMagpieImportURL({ baseUrl, apiKey, providerName }),
-        '_blank',
-        'noopener'
-      )
+      openDeepLink(buildMagpieImportURL({ baseUrl, apiKey, providerName }))
+      setDeepLinkOpened('magpie')
     } finally {
       setBusy(null)
     }
@@ -387,23 +415,38 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
           <span className='text-muted-foreground truncate font-mono text-xs'>
             {TARGET_SOURCES[activeTarget]}
           </span>
-          <Button
-            variant='ghost'
-            size='sm'
-            onClick={handleCopySnippet}
-            disabled={busy === 'copy' || props.keysLoading}
-          >
-            {busy === 'copy' && (
-              <Loader2 className='animate-spin' data-icon='inline-start' />
-            )}
-            {busy !== 'copy' && copied === 'copy' && (
-              <Check className='text-success' data-icon='inline-start' />
-            )}
-            {busy !== 'copy' && copied !== 'copy' && (
-              <Copy data-icon='inline-start' />
-            )}
-            {t('Copy')}
-          </Button>
+          {showCreate ? (
+            <Button
+              size='sm'
+              onClick={handleCreateKey}
+              disabled={busy === 'create'}
+            >
+              {busy === 'create' ? (
+                <Loader2 className='animate-spin' data-icon='inline-start' />
+              ) : (
+                <Plus data-icon='inline-start' />
+              )}
+              {t('Create API Key')}
+            </Button>
+          ) : (
+            <Button
+              variant='ghost'
+              size='sm'
+              onClick={handleCopySnippet}
+              disabled={busy === 'copy' || props.keysLoading}
+            >
+              {busy === 'copy' && (
+                <Loader2 className='animate-spin' data-icon='inline-start' />
+              )}
+              {busy !== 'copy' && copied === 'copy' && (
+                <Check className='text-success' data-icon='inline-start' />
+              )}
+              {busy !== 'copy' && copied !== 'copy' && (
+                <Copy data-icon='inline-start' />
+              )}
+              {t('Copy')}
+            </Button>
+          )}
         </div>
         <pre
           className='overflow-x-auto px-4 py-3.5 font-mono text-[12.5px] leading-relaxed'
@@ -411,6 +454,11 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
         >
           <code>{snippet}</code>
         </pre>
+        {selectedKey && (
+          <p className='text-muted-foreground border-t px-4 py-1.5 text-xs'>
+            {t('The key is masked here. The Copy button copies the full key.')}
+          </p>
+        )}
       </div>
 
       {(activeTarget === 'cc-switch' || activeTarget === 'codex-cc-switch') &&
@@ -433,6 +481,15 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
             {t('Import to CC Switch')}
           </Button>
         )}
+      {deepLinkOpened === 'cc-switch' &&
+        (activeTarget === 'cc-switch' ||
+          activeTarget === 'codex-cc-switch') && (
+          <p className='text-muted-foreground text-xs'>
+            {t(
+              'Nothing happened? Install CC Switch first, or copy the config instead.'
+            )}
+          </p>
+        )}
 
       {(activeTarget === 'magpie' || activeTarget === 'codex-magpie') &&
         selectedKey && (
@@ -450,15 +507,25 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
             {t('Add to Magpie')}
           </Button>
         )}
+      {deepLinkOpened === 'magpie' &&
+        (activeTarget === 'magpie' || activeTarget === 'codex-magpie') && (
+          <p className='text-muted-foreground text-xs'>
+            {t(
+              'Nothing happened? Install Magpie first, or copy the config instead.'
+            )}
+          </p>
+        )}
 
-      {!selectedKey && !props.keysLoading && (
+      {showCreate && (
         <div className='bg-primary/5 border-primary/20 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3.5 py-3'>
           <p className='text-sm'>
-            {t('Create an API key and it fills in here automatically.')}
+            {t(
+              'Create an API key and it fills in here automatically. Name, group and limits can be changed later.'
+            )}
           </p>
-          <Button size='sm' render={<Link to='/keys' />}>
+          <Button variant='outline' size='sm' render={<Link to='/keys' />}>
             <KeyRound data-icon='inline-start' />
-            {t('Create API Key')}
+            {t('Create with custom settings')}
           </Button>
         </div>
       )}

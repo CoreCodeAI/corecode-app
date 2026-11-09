@@ -47,7 +47,6 @@ function renderForm(info: TopupInfo, topupAmount: number) {
     <RechargeFormCard
       topupInfo={info}
       presetAmounts={[{ value: 300 }, { value: 1000 }, { value: 100 }]}
-      selectedPreset={null}
       topupAmount={topupAmount}
       paymentAmount={topupAmount}
       calculating={false}

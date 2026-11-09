@@ -45,6 +45,9 @@ type OAuthProvidersProps = {
   // Providers sit above the form they replace; this labels the rule between
   // them and that form.
   separatorLabel?: string
+  // The buttons are off until the legal terms are accepted; say so beside them
+  // instead of leaving them silently dead.
+  consentMissing?: boolean
 }
 
 type ProviderButton = {
@@ -63,6 +66,7 @@ export function OAuthProviders({
   isWeChatLoading = false,
   redirectTo,
   separatorLabel,
+  consentMissing = false,
 }: OAuthProvidersProps) {
   const { t } = useTranslation()
   const {
@@ -173,6 +177,12 @@ export function OAuthProviders({
           )
         )}
       </div>
+
+      {consentMissing && (
+        <p role='status' className='text-muted-foreground text-xs'>
+          {t('Agree to the terms below to continue.')}
+        </p>
+      )}
 
       {separatorLabel && (
         <FieldSeparator className='my-0 text-xs'>

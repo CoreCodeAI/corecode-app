@@ -19,7 +19,14 @@ For commercial licensing, please contact support@quantumnous.com
 import { zodResolver } from '@hookform/resolvers/zod'
 import { REGEXP_ONLY_DIGITS } from 'input-otp'
 import { ArrowLeft, ArrowRight, Loader2, Mail, MailCheck } from 'lucide-react'
-import { type ReactNode, useCallback, useId, useState } from 'react'
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -62,9 +69,15 @@ import {
 import { useCountdown } from '@/hooks/use-countdown'
 import { useStatus } from '@/hooks/use-status'
 import { handleServerError } from '@/lib/handle-server-error'
-import { AuthOperationError } from '@/lib/secure-verification'
+import { AuthOperationError, authErrorMessage } from '@/lib/secure-verification'
 import { createServerError } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
+
+// The cooldown belongs to the mailbox the code went to; a different address
+// can send at once (the server still rate-limits it).
+function sameMailbox(a: string, b: string) {
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
 
 type MagicLinkFormProps = {
   className?: string
@@ -88,6 +101,8 @@ export function MagicLinkForm({
   const { t } = useTranslation()
   const [isLoading, setIsLoading] = useState(false)
   const [sentTo, setSentTo] = useState('')
+  // The address the running cooldown was started for.
+  const [cooldownEmail, setCooldownEmail] = useState('')
   // Consent starts checked; the customer can still uncheck it.
   const [agreedToLegal, setAgreedToLegal] = useState(true)
   // An invitation link (?aff=CODE or ?ref=CODE) lands here; keep its code for the send below.
@@ -134,6 +149,9 @@ export function MagicLinkForm({
     resolver: zodResolver(forgotPasswordFormSchema),
     defaultValues: { email: '' },
   })
+  const typedEmail = form.watch('email')
+  const cooldownBlocksSend =
+    countdown.isActive && sameMailbox(typedEmail ?? '', cooldownEmail)
 
   async function sendMail(email: string) {
     // A link that can open an account is a registration entry, so the same
@@ -162,6 +180,7 @@ export function MagicLinkForm({
       )
       if (res?.success) {
         setSentTo(email)
+        setCooldownEmail(email)
         countdown.start(res.resend_after)
         toast.success(t('Sign-in code sent, please check your inbox'))
       } else {
@@ -187,6 +206,7 @@ export function MagicLinkForm({
         isResending={isLoading}
         resendSecondsLeft={countdown.isActive ? countdown.secondsLeft : 0}
         humanCheck={turnstileWidget}
+        humanCheckPending={isTurnstileEnabled && !turnstileToken}
         onResend={() => sendMail(sentTo)}
         onChangeEmail={() => setSentTo('')}
       />
@@ -204,6 +224,7 @@ export function MagicLinkForm({
             status={status}
             redirectTo={redirectTo}
             disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+            consentMissing={requiresLegalConsent && !agreedToLegal}
             separatorLabel={t('Or continue with email')}
           />
         )}
@@ -284,10 +305,10 @@ export function MagicLinkForm({
           type='submit'
           size='lg'
           className='h-11'
-          disabled={isLoading || countdown.isActive}
+          disabled={isLoading || cooldownBlocksSend}
         >
           {isLoading && <Loader2 className='animate-spin' />}
-          {countdown.isActive
+          {cooldownBlocksSend
             ? t('Resend code ({{seconds}}s)', {
                 seconds: countdown.secondsLeft,
               })
@@ -305,8 +326,10 @@ type MagicLinkCodeStepProps = {
   redirectTo?: string
   isResending: boolean
   resendSecondsLeft: number
-  // The Turnstile widget a resend needs, shown once the resend is available.
+  // The Turnstile widget a resend needs. It mounts with the step, so its token
+  // is ready by the time the cooldown ends.
   humanCheck?: ReactNode
+  humanCheckPending?: boolean
   onResend: () => void
   onChangeEmail: () => void
 }
@@ -320,6 +343,7 @@ function MagicLinkCodeStep({
   isResending,
   resendSecondsLeft,
   humanCheck,
+  humanCheckPending = false,
   onResend,
   onChangeEmail,
 }: MagicLinkCodeStepProps) {
@@ -328,6 +352,13 @@ function MagicLinkCodeStep({
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
+  const otpRef = useRef<HTMLInputElement>(null)
+  // The field is disabled while a code is checked, which drops focus; a failed
+  // check asks for it back once the field is enabled again.
+  const [refocusCount, setRefocusCount] = useState(0)
+  useEffect(() => {
+    if (refocusCount > 0) otpRef.current?.focus()
+  }, [refocusCount])
   const codeId = useId()
   const errorId = useId()
 
@@ -343,15 +374,23 @@ function MagicLinkCodeStep({
       }
       setError(t('Code is incorrect or has expired'))
       setCode('')
+      setRefocusCount((count) => count + 1)
     } catch (err: unknown) {
-      setError(
-        AuthOperationError.from(err, t('Code is incorrect or has expired'))
-          .message
-      )
+      setError(authErrorMessage(err, t('Code is incorrect or has expired')))
       setCode('')
+      setRefocusCount((count) => count + 1)
     } finally {
       setIsVerifying(false)
     }
+  }
+
+  let resendLabel = t('Resend code')
+  if (resendSecondsLeft > 0) {
+    resendLabel = t('Resend code ({{seconds}}s)', {
+      seconds: resendSecondsLeft,
+    })
+  } else if (humanCheckPending) {
+    resendLabel = t('Verifying…')
   }
 
   return (
@@ -379,6 +418,7 @@ function MagicLinkCodeStep({
           {t('Sign-in code')}
         </label>
         <InputOTP
+          ref={otpRef}
           id={codeId}
           autoFocus
           maxLength={MAGIC_LINK_CODE_LENGTH}
@@ -435,7 +475,7 @@ function MagicLinkCodeStep({
         <p>{t('No email? Check your spam or junk folder.')}</p>
       </div>
 
-      {resendSecondsLeft === 0 && humanCheck}
+      {humanCheck && <div className='min-h-[65px]'>{humanCheck}</div>}
 
       <div className='flex items-center justify-between gap-2 text-sm'>
         <Button
@@ -453,13 +493,11 @@ function MagicLinkCodeStep({
           variant='ghost'
           size='sm'
           className='text-muted-foreground hover:text-foreground -mr-2'
-          disabled={isResending || resendSecondsLeft > 0}
+          disabled={isResending || resendSecondsLeft > 0 || humanCheckPending}
           onClick={onResend}
         >
           {isResending && <Loader2 className='animate-spin' />}
-          {resendSecondsLeft > 0
-            ? t('Resend code ({{seconds}}s)', { seconds: resendSecondsLeft })
-            : t('Resend code')}
+          {resendLabel}
         </Button>
       </div>
     </form>

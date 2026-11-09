@@ -45,9 +45,15 @@ import {
   useDashboardContentVisibility,
   useFAQ,
 } from '../../hooks/use-status-data'
+import {
+  getFirstRunSteps,
+  isFirstRun,
+  SETUP_SECTION_ID,
+} from '../../lib/first-run'
 import { AnnouncementsPanel } from './announcements-panel'
 import { BalanceCard } from './balance-card'
 import { FAQPanel } from './faq-panel'
+import { FirstRunChecklist } from './first-run-checklist'
 import { OverviewAlerts } from './overview-alerts'
 import { PerformanceHealthPanel } from './performance-health-panel'
 import { RecentRequestsPanel } from './recent-requests-panel'
@@ -59,6 +65,7 @@ export function OverviewDashboard() {
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.auth.user)
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
+  const firstRun = user ? isFirstRun(user) : false
   const { status } = useStatus()
   const overview = useCustomerOverview()
   const balanceStatus = useBalanceStatus(
@@ -100,7 +107,18 @@ export function OverviewDashboard() {
             balanceHealth={balanceStatus.health}
             runwayDays={balanceStatus.runwayDays}
             recent={overview.recent}
+            firstRun={firstRun}
           />
+          {firstRun && (
+            <FirstRunChecklist
+              loading={overview.keysLoading}
+              steps={getFirstRunSteps({
+                available: balanceStatus.available,
+                keyCount: overview.keys.length,
+                requestCount: Number(user?.request_count ?? 0),
+              })}
+            />
+          )}
           <div className='grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,21rem)_minmax(0,1fr)]'>
             <CardStaggerItem>
               <BalanceCard
@@ -110,8 +128,9 @@ export function OverviewDashboard() {
             </CardStaggerItem>
             <CardStaggerItem>
               <section
+                id={SETUP_SECTION_ID}
                 aria-labelledby='overview-setup-title'
-                className='bg-card h-full min-w-0 rounded-2xl border p-4 shadow-xs sm:p-5'
+                className='bg-card h-full min-w-0 scroll-mt-4 rounded-2xl border p-4 shadow-xs sm:p-5'
               >
                 <ClientSetupGuide
                   keys={overview.keys}
