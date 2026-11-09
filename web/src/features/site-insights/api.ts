@@ -34,6 +34,7 @@ import type {
   PoolUsage,
   QualityInsights,
   RiskInsights,
+  UpstreamInsights,
   UserSpend,
   UserSpendHours,
 } from './types'
@@ -48,6 +49,7 @@ export type InsightsView =
   | 'business'
   | 'pool'
   | 'channels'
+  | 'upstream'
 
 export type InsightsByView = {
   capacity: CapacityInsights
@@ -59,6 +61,7 @@ export type InsightsByView = {
   business: BusinessInsights
   pool: EnginePool
   channels: ChannelInsights
+  upstream: UpstreamInsights
 }
 
 /** The longest range, in days, each view's endpoint accepts. */
@@ -73,6 +76,7 @@ export const VIEW_MAX_DAYS: Record<InsightsView, number> = {
   // The pool is live; it takes no range.
   pool: 1,
   channels: 366,
+  upstream: 92,
 }
 
 export async function getInsights<V extends InsightsView>(
@@ -193,5 +197,19 @@ export async function saveSubscriptionRenewal(params: {
   )
   if (!res.data.success) {
     throw createServerError(res.data, 'Failed to save the renewal date')
+  }
+}
+
+/**
+ * Replaces the monthly fees of channels whose upstream bill is not read, by
+ * channel id, in US dollars; a zero fee clears one.
+ */
+export async function saveUpstreamFees(fees: Record<number, number>) {
+  const res = await api.put<ApiResponse<null>>(
+    '/api/site-insights/upstream-fees',
+    { fees }
+  )
+  if (!res.data.success) {
+    throw createServerError(res.data, 'Failed to save upstream fees')
   }
 }

@@ -50,6 +50,7 @@ import { OverviewTab } from './components/overview-tab'
 import { PoolTab } from './components/pool-tab'
 import { QualityTab } from './components/quality-tab'
 import { RiskTab } from './components/risk-tab'
+import { UpstreamTab } from './components/upstream-tab'
 import {
   INSIGHTS_PRESETS,
   INSIGHTS_TAB_GROUPS,
@@ -200,6 +201,7 @@ export function SiteInsights() {
     finance: t('Funds'),
     growth: t('Growth'),
     channels: t('Promotion channels'),
+    upstream: t('Upstreams'),
     activity: t('Activity & retention'),
     risk: t('Risk'),
   }
@@ -480,5 +482,7 @@ function InsightsView(props: {
       return <PoolTab data={props.data as never} {...props.pool} />
     case 'channels':
       return <ChannelsTab data={props.data as never} />
+    case 'upstream':
+      return <UpstreamTab data={props.data as never} previous={previous} />
   }
 }

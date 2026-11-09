@@ -38,6 +38,7 @@ const siteInsightsSearchSchema = z.object({
       'business',
       'pool',
       'channels',
+      'upstream',
     ])
     .transform((tab) => (tab === 'business' ? 'finance' : tab))
     .optional()

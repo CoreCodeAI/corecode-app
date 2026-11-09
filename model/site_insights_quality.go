@@ -87,6 +87,9 @@ type logOtherFields struct {
 	} `json:"stream_status"`
 	AdminInfo struct {
 		Client string `json:"client"`
+		// UseChannel lists the channels a request tried, in order; the last
+		// one served it.
+		UseChannel []string `json:"use_channel"`
 	} `json:"admin_info"`
 }
 

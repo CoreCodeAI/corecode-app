@@ -142,6 +142,7 @@ func main() {
 	middleware.StartUserConcurrencyRejectionFlush()
 	service.StartRiskGateTasks()
 	service.StartSiteInsightsRollupTask()
+	service.StartUpstreamCostTask()
 
 	// Report this process as a system instance so the System Info page can show
 	// all currently alive nodes in multi-instance deployments.

@@ -123,6 +123,7 @@ type insightLog struct {
 	IsStream         bool
 	Ip               string
 	Other            string
+	ChannelId        int
 }
 
 // insightQuota is one hourly quota_data row.

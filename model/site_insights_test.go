@@ -14,7 +14,7 @@ import (
 func useInsightsTestDB(t *testing.T, dialect string) {
 	t.Helper()
 	useAffiliateTestDB(t, dialect)
-	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &UserConcurrencyRejection{}}
+	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &UpstreamCost{}, &UserConcurrencyRejection{}}
 	require.NoError(t, DB.AutoMigrate(extra...))
 	t.Cleanup(func() { require.NoError(t, DB.Migrator().DropTable(extra...)) })
 }

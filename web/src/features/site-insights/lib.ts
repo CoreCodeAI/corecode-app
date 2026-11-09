@@ -39,7 +39,7 @@ export type InsightsTab = 'overview' | Exclude<InsightsView, 'business'>
 /** Tabs in the order shown, grouped by what they answer. */
 export const INSIGHTS_TAB_GROUPS: { key: string; tabs: InsightsTab[] }[] = [
   { key: 'overview', tabs: ['overview'] },
-  { key: 'operations', tabs: ['capacity', 'pool', 'quality'] },
+  { key: 'operations', tabs: ['capacity', 'pool', 'quality', 'upstream'] },
   { key: 'business', tabs: ['finance', 'growth', 'channels', 'activity'] },
   { key: 'risk', tabs: ['risk'] },
 ]

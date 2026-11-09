@@ -27,7 +27,7 @@ import (
 // can still be unlogged: a log is read up to insightHourLookahead after the
 // hour ends, so a request that runs longer than that is left out.
 const (
-	insightHourVersion    = 3
+	insightHourVersion    = 4
 	insightHourLookahead  = 2 * 3600
 	insightHourSettle     = 10 * 60
 	insightHourMaxLogRows = 200_000
@@ -146,10 +146,11 @@ func peakInHour(events []concurrencyEvent, start, end int64) (int, int64) {
 
 // insightHour is one hour in memory: its summary, users and models.
 type insightHour struct {
-	start   int64
-	summary insightSummary
-	users   map[int]*InsightUserHour
-	models  map[string]*insightModel
+	start    int64
+	summary  insightSummary
+	users    map[int]*InsightUserHour
+	models   map[string]*insightModel
+	channels map[insightChannelKey]*insightChannel
 }
 
 type insightModel struct {
@@ -273,7 +274,7 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 	end := start + 3600
 	var logs []insightLog
 	err := LOG_DB.Model(&Log{}).
-		Select("user_id, username, created_at, type, content, model_name, quota, prompt_tokens, completion_tokens, use_time, is_stream, ip, other").
+		Select("user_id, username, created_at, type, content, model_name, quota, prompt_tokens, completion_tokens, use_time, is_stream, ip, other, channel_id").
 		Where("created_at >= ? AND created_at < ? AND created_at - use_time < ? AND type IN ?",
 			start, end+insightHourLookahead, end, []int{LogTypeConsume, LogTypeError}).
 		Order("id desc").Limit(insightHourMaxLogRows + 1).Find(&logs).Error
@@ -281,10 +282,11 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 		return nil, err
 	}
 	hour := &insightHour{
-		start:   start,
-		summary: insightSummary{Truncated: len(logs) > insightHourMaxLogRows},
-		users:   make(map[int]*InsightUserHour),
-		models:  make(map[string]*insightModel),
+		start:    start,
+		summary:  insightSummary{Truncated: len(logs) > insightHourMaxLogRows},
+		users:    make(map[int]*InsightUserHour),
+		models:   make(map[string]*insightModel),
+		channels: make(map[insightChannelKey]*insightChannel),
 	}
 	if hour.summary.Truncated {
 		logs = logs[:insightHourMaxLogRows]
@@ -340,8 +342,10 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 			hour.models[log.ModelName] = model
 		}
 		model.row.Requests++
+		channel := hour.channelOf(log.ChannelId, log.ModelName)
 		if log.Type == LogTypeError {
 			model.row.Errors++
+			channel.addError(log.Content)
 			summary.StatusCodes[statusCodeName(logStatusCode(log.Content))]++
 			summary.ErrorReasons[errorReason(log.Content)]++
 			if customer {
@@ -363,6 +367,7 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 			continue
 		}
 		other := parseLogOther(log.Other)
+		channel.addConsumption(log, other, customer)
 		if customer {
 			hour.users[log.UserId].addConsumption(log.Quota, other, scope.gifts)
 		} else {
@@ -503,8 +508,12 @@ func (h *insightHour) save() error {
 		row.TTFT, row.Latency = model.ttft.encode(), model.latency.encode()
 		models = append(models, row)
 	}
+	channels := make([]InsightChannelHour, 0, len(h.channels))
+	for _, channel := range h.channels {
+		channels = append(channels, channel.encode())
+	}
 	return DB.Transaction(func(tx *gorm.DB) error {
-		for _, table := range []any{&InsightHour{}, &InsightUserHour{}, &InsightModelHour{}} {
+		for _, table := range []any{&InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}} {
 			if err := tx.Where("hour_start = ?", h.start).Delete(table).Error; err != nil {
 				return err
 			}
@@ -519,6 +528,11 @@ func (h *insightHour) save() error {
 		}
 		if len(models) > 0 {
 			if err := tx.CreateInBatches(models, 500).Error; err != nil {
+				return err
+			}
+		}
+		if len(channels) > 0 {
+			if err := tx.CreateInBatches(channels, 500).Error; err != nil {
 				return err
 			}
 		}
@@ -632,7 +646,7 @@ func loadInsightHours(r InsightsRange) ([]*insightHour, error) {
 		if row.Version != insightHourVersion {
 			continue
 		}
-		hour := &insightHour{start: row.HourStart, users: map[int]*InsightUserHour{}, models: map[string]*insightModel{}}
+		hour := &insightHour{start: row.HourStart, users: map[int]*InsightUserHour{}, models: map[string]*insightModel{}, channels: map[insightChannelKey]*insightChannel{}}
 		if err := common.UnmarshalJsonStr(row.Data, &hour.summary); err != nil {
 			continue
 		}
@@ -654,6 +668,15 @@ func loadInsightHours(r InsightsRange) ([]*insightHour, error) {
 	for _, row := range models {
 		if hour := hours[row.HourStart]; hour != nil {
 			hour.models[row.ModelName] = &insightModel{row: row, ttft: decodeHistogram(row.TTFT), latency: decodeHistogram(row.Latency)}
+		}
+	}
+	var channelRows []InsightChannelHour
+	if err := DB.Where("hour_start >= ? AND hour_start < ?", first, r.End).Find(&channelRows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range channelRows {
+		if hour := hours[row.HourStart]; hour != nil {
+			hour.channels[insightChannelKey{row.ChannelId, row.ModelName}] = decodeInsightChannel(row)
 		}
 	}
 
