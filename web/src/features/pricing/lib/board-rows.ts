@@ -22,6 +22,10 @@ For commercial licensing, please contact support@quantumnous.com
  * list is a shareable link.
  */
 import type { PricingModel } from '../types'
+import type { ParsedTaskTier } from './billing-expr'
+import { compileBillingExpression } from './billing-expression/parser'
+import { evaluateBillingExpression } from './billing-expression/runtime'
+import { getDynamicPricingTiers, hasDynamicRequestRules } from './dynamic-price'
 import type { BaseUnitPrices } from './unit-prices'
 
 export const BOARD_SORTS = ['input', 'output', 'savings'] as const
@@ -71,4 +75,68 @@ export function sortBoardRows<Row extends BoardRow>(
     return byInput(a, b)
   }
   return [...rows].sort(compare)
+}
+
+/** The image sizes the board prices; each is a size the server's rules recognise. */
+export const IMAGE_SIZE_TIERS = ['1K', '2K', '4K'] as const
+
+/** A request expression's fixed price is in millionths of a dollar. */
+const REQUEST_COST_SCALE = 1_000_000
+
+export type ExpressionPrice =
+  | { kind: 'second'; usd: number }
+  | { kind: 'image'; tiers: { size: string; usd: number }[] }
+
+/** True when the only thing a request rule reads is the `size` parameter. */
+function readsOnlySize(cond: string): boolean {
+  return !/\w+\(/.test(cond.replaceAll('param("size")', ''))
+}
+
+/**
+ * What a model priced by a billing expression costs, in USD before any group
+ * ratio, or null when the expression is not one the board can summarise.
+ * A per-second task model reports its price per second. An image expression
+ * that varies only with `size` is evaluated at 1K, 2K and 4K, so every figure
+ * is what the server charges; its stale `model_price` is never read.
+ */
+export function getExpressionPrice(
+  model: PricingModel
+): ExpressionPrice | null {
+  if (model.billing_mode !== 'tiered_expr' || !model.billing_expr) return null
+  if (model.billing_plugin_variants?.length) return null
+
+  if (model.billing_usage_schema) {
+    if (hasDynamicRequestRules(model)) return null
+    const tiers = getDynamicPricingTiers(model)
+    if (tiers.length !== 1) return null
+    if (!Object.hasOwn(tiers[0], 'unitPrices')) return null
+    const tier = tiers[0] as ParsedTaskTier
+    if (tier.conditions.length > 0) return null
+    if (tier.conditionText || tier.constant !== 0) return null
+    const fields = Object.keys(tier.unitPrices)
+    if (fields.length !== 1) return null
+    if (model.billing_usage_schema[fields[0]]?.unit !== 'second') return null
+    const usd = tier.unitPrices[fields[0]]
+    return Number.isFinite(usd) ? { kind: 'second', usd } : null
+  }
+
+  const compiled = compileBillingExpression(model.billing_expr)
+  if (compiled.status !== 'ready' || !compiled.variables.has('image_count')) {
+    return null
+  }
+  if (!compiled.requestRules.every((rule) => readsOnlySize(rule.cond))) {
+    return null
+  }
+  const tiers: { size: string; usd: number }[] = []
+  for (const size of IMAGE_SIZE_TIERS) {
+    const result = evaluateBillingExpression(compiled, {
+      imageCount: 1,
+      request: { body: { size } },
+    })
+    if (result.status !== 'success' || result.billingUnit !== 'request') {
+      return null
+    }
+    tiers.push({ size, usd: result.cost / REQUEST_COST_SCALE })
+  }
+  return { kind: 'image', tiers }
 }

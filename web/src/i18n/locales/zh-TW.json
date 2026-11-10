@@ -1,11 +1,11 @@
 {
   "translation": {
-    "Allow purchase from a shared network": "允許同網路購買",
-    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "允許此帳號在其他買家用過的網路（如共用的 VPN 節點）下購買限購方案，每人限購次數仍然有效。",
-    "/ 1M tokens": "/ 百萬 Token",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
+    "Allow purchase from a shared network": "允許同網路購買",
+    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "允許此帳號在其他買家用過的網路（如共用的 VPN 節點）下購買限購方案，每人限購次數仍然有效。",
+    "/ 1M tokens": "/ 百萬 Token",
     "_copy": "_複製",
     "Biggest savings first": "省最多優先",
     "Cache read: the price of reusing a prefix that is already cached. It is far below the input price, and Claude Code pays it on most turns.": "快取讀取：重複使用已快取前綴的價格，遠低於輸入價格，Claude Code 大多數輪次都按它計費。",
@@ -8039,6 +8039,11 @@
     "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "部分支付需要幾分鐘才會到帳。可在「訂單記錄」中查看狀態，入帳後餘額會自動更新。",
     "Open Order History": "開啟訂單記錄",
     "Dismiss": "關閉",
-    "Could not calculate the amount to pay. Pick a payment method to try again.": "無法計算應付金額，請重新選擇支付方式重試。"
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "無法計算應付金額，請重新選擇支付方式重試。",
+    "See pricing details": "查看價格詳情",
+    "Priced by usage": "按用量計價",
+    "{{price}} / second": "{{price}} / 秒",
+    "Billed per second of generated video.": "按生成影片的秒數計費。",
+    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "按張計費，價格隨輸出尺寸而定。1024x1024 等小尺寸為 1K，3840x2160 等大尺寸為 4K；其他尺寸以及未指定尺寸的請求按 2K 計費。"
   }
 }

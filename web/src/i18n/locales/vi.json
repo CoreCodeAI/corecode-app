@@ -1,11 +1,11 @@
 {
   "translation": {
-    "Allow purchase from a shared network": "Cho phép mua từ mạng dùng chung",
-    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "Cho phép tài khoản này mua gói giới hạn mỗi người từ mạng mà người mua khác đã dùng, ví dụ nút VPN dùng chung. Giới hạn mỗi người vẫn được áp dụng.",
-    "/ 1M tokens": "/ 1 triệu token",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
+    "Allow purchase from a shared network": "Cho phép mua từ mạng dùng chung",
+    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "Cho phép tài khoản này mua gói giới hạn mỗi người từ mạng mà người mua khác đã dùng, ví dụ nút VPN dùng chung. Giới hạn mỗi người vẫn được áp dụng.",
+    "/ 1M tokens": "/ 1 triệu token",
     "_copy": "_bản sao",
     "Biggest savings first": "Tiết kiệm nhiều nhất trước",
     "Cache read: the price of reusing a prefix that is already cached. It is far below the input price, and Claude Code pays it on most turns.": "Đọc bộ nhớ đệm: giá dùng lại phần đầu đã được lưu đệm. Thấp hơn nhiều so với giá đầu vào, và Claude Code trả mức này ở hầu hết các lượt.",
@@ -8039,6 +8039,11 @@
     "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "Một số thanh toán mất vài phút để được ghi nhận. Hãy xem trạng thái trong Lịch sử đơn hàng; số dư sẽ tự cập nhật sau khi được cộng.",
     "Open Order History": "Mở lịch sử đơn hàng",
     "Dismiss": "Đóng",
-    "Could not calculate the amount to pay. Pick a payment method to try again.": "Không thể tính số tiền cần thanh toán. Hãy chọn phương thức thanh toán để thử lại."
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "Không thể tính số tiền cần thanh toán. Hãy chọn phương thức thanh toán để thử lại.",
+    "See pricing details": "Xem chi tiết giá",
+    "Priced by usage": "Giá theo mức dùng",
+    "{{price}} / second": "{{price}} / giây",
+    "Billed per second of generated video.": "Tính phí theo từng giây video được tạo.",
+    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "Tính theo từng ảnh, tùy kích thước đầu ra. Kích thước nhỏ như 1024x1024 là 1K, kích thước lớn như 3840x2160 là 4K; mọi kích thước khác và yêu cầu không nêu kích thước đều tính ở mức 2K."
   }
 }

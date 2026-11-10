@@ -1,11 +1,11 @@
 {
   "translation": {
-    "Allow purchase from a shared network": "同じネットワークからの購入を許可",
-    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "他の購入者が使ったネットワーク（共有の VPN ノードなど）からでも、このアカウントが購入回数制限付きプランを買えるようにします。1 人あたりの購入回数制限は引き続き適用されます。",
-    "/ 1M tokens": "/ 100万トークン",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
+    "Allow purchase from a shared network": "同じネットワークからの購入を許可",
+    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "他の購入者が使ったネットワーク（共有の VPN ノードなど）からでも、このアカウントが購入回数制限付きプランを買えるようにします。1 人あたりの購入回数制限は引き続き適用されます。",
+    "/ 1M tokens": "/ 100万トークン",
     "_copy": "_copy",
     "Biggest savings first": "割引率の高い順",
     "Cache read: the price of reusing a prefix that is already cached. It is far below the input price, and Claude Code pays it on most turns.": "キャッシュ読み取り：キャッシュ済みの先頭部分を再利用する料金です。入力価格よりはるかに安く、Claude Code ではほとんどのターンでこの料金が適用されます。",
@@ -8039,6 +8039,11 @@
     "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "入金まで数分かかる場合があります。注文履歴で状況を確認できます。入金後は残高が自動的に更新されます。",
     "Open Order History": "注文履歴を開く",
     "Dismiss": "閉じる",
-    "Could not calculate the amount to pay. Pick a payment method to try again.": "お支払い金額を計算できませんでした。お支払い方法を選んで再試行してください。"
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "お支払い金額を計算できませんでした。お支払い方法を選んで再試行してください。",
+    "See pricing details": "料金の詳細を見る",
+    "Priced by usage": "使用量に応じた料金",
+    "{{price}} / second": "{{price}} / 秒",
+    "Billed per second of generated video.": "生成した動画の秒数に応じて課金されます。",
+    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "1 枚ごとの課金で、出力サイズによって価格が変わります。1024x1024 などの小さいサイズは 1K、3840x2160 などの大きいサイズは 4K です。それ以外のサイズ、およびサイズ未指定のリクエストは 2K で課金されます。"
   }
 }
