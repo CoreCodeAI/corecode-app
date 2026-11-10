@@ -1,7 +1,10 @@
 package model
 
 import (
+	"slices"
+
 	"github.com/QuantumNous/new-api/common"
+	"gorm.io/gorm"
 )
 
 // One person with many accounts shows up as accounts that share an address:
@@ -19,17 +22,56 @@ const (
 	// evidence that two of them are one person.
 	sharedExitUsers         = 20
 	sharedExitWindowSeconds = 7 * 24 * 60 * 60
+	// A proxy node also carries the console sign-ins of customers who never
+	// send a request from it. An address that sharedExitBystanders or more
+	// other accounts used in sharedAddressWindowSeconds without buying a plan
+	// limited per user is a shared exit too. The accounts one person farms
+	// from a home address all buy the plan, which is why they were made.
+	sharedExitBystanders = 5
 )
 
 var ErrSubscriptionAddressTaken error = common.NewMessage("This plan has already been bought from your network. Contact support if you need it")
 
-// sharedExit reports whether an address carried requests for so many accounts
-// that it is a proxy or NAT exit rather than one person's.
-func sharedExit(ip string, now int64) (bool, error) {
-	var users int64
-	err := LOG_DB.Model(&Log{}).Where("ip = ? AND created_at > ?", ip, now-sharedExitWindowSeconds).
-		Distinct("user_id").Count(&users).Error
-	return users >= sharedExitUsers, err
+// sharedExit reports whether an address is a proxy or NAT exit rather than one
+// person's: it carried requests for many accounts in a week, or many accounts
+// other than parties used it without buying a plan limited per user.
+func sharedExit(ip string, now int64, parties ...int) (bool, error) {
+	var requesters int64
+	if err := LOG_DB.Model(&Log{}).Where("ip = ? AND created_at > ?", ip, now-sharedExitWindowSeconds).
+		Distinct("user_id").Count(&requesters).Error; err != nil || requesters >= sharedExitUsers {
+		return requesters >= sharedExitUsers, err
+	}
+	since := now - sharedAddressWindowSeconds
+	users, err := addressUsers(ip, since, nil)
+	if err != nil {
+		return false, err
+	}
+	others := make([]int, 0, len(users))
+	for _, id := range users {
+		if !slices.Contains(parties, id) {
+			others = append(others, id)
+		}
+	}
+	if len(others) < sharedExitBystanders {
+		return false, nil
+	}
+	buyers, err := limitedPlanBuyers(others, since)
+	return len(others)-len(buyers) >= sharedExitBystanders, err
+}
+
+// limitedPlanBuyers returns the users among userIds that bought a plan limited
+// per user since since.
+func limitedPlanBuyers(userIds []int, since int64) ([]int, error) {
+	var plans []int
+	if err := DB.Model(&SubscriptionPlan{}).Where("max_purchase_per_user > 0").Pluck("id", &plans).Error; err != nil || len(plans) == 0 {
+		return nil, err
+	}
+	var buyers []int
+	err := DB.Model(&UserSubscription{}).
+		Where("plan_id IN ? AND user_id IN ? AND created_at > ? AND source IN ?", plans, userIds, since,
+			[]string{"order", PaymentMethodBalance}).
+		Distinct().Pluck("user_id", &buyers).Error
+	return buyers, err
 }
 
 // usedAddress returns the users among userIds that used ip since since: a
@@ -38,9 +80,21 @@ func usedAddress(ip string, userIds []int, since int64) ([]int, error) {
 	if ip == "" || len(userIds) == 0 {
 		return nil, nil
 	}
+	return addressUsers(ip, since, userIds)
+}
+
+// addressUsers returns the users that used ip since since, only those among
+// userIds unless userIds is nil.
+func addressUsers(ip string, since int64, userIds []int) ([]int, error) {
+	among := func(query *gorm.DB) *gorm.DB {
+		if userIds == nil {
+			return query
+		}
+		return query.Where("user_id IN ?", userIds)
+	}
 	found := map[int]bool{}
 	var ids []int
-	if err := DB.Model(&UserSession{}).Where("ip = ? AND user_id IN ? AND created_at > ?", ip, userIds, since).
+	if err := among(DB.Model(&UserSession{}).Where("ip = ? AND created_at > ?", ip, since)).
 		Distinct().Pluck("user_id", &ids).Error; err != nil {
 		return nil, err
 	}
@@ -48,7 +102,7 @@ func usedAddress(ip string, userIds []int, since int64) ([]int, error) {
 		found[id] = true
 	}
 	ids = nil
-	if err := DB.Model(&SubscriptionOrder{}).Where("ip = ? AND user_id IN ? AND create_time > ?", ip, userIds, since).
+	if err := among(DB.Model(&SubscriptionOrder{}).Where("ip = ? AND create_time > ?", ip, since)).
 		Distinct().Pluck("user_id", &ids).Error; err != nil {
 		return nil, err
 	}
@@ -56,8 +110,8 @@ func usedAddress(ip string, userIds []int, since int64) ([]int, error) {
 		found[id] = true
 	}
 	ids = nil
-	if err := LOG_DB.Model(&Log{}).Where("ip = ? AND user_id IN ? AND created_at > ? AND type IN ?", ip, userIds, since,
-		[]int{LogTypeConsume, LogTypeError}).Distinct().Pluck("user_id", &ids).Error; err != nil {
+	if err := among(LOG_DB.Model(&Log{}).Where("ip = ? AND created_at > ? AND type IN ?", ip, since,
+		[]int{LogTypeConsume, LogTypeError})).Distinct().Pluck("user_id", &ids).Error; err != nil {
 		return nil, err
 	}
 	for _, id := range ids {
@@ -117,7 +171,7 @@ func SharesAddress(a int, b int, now int64) (bool, error) {
 		if !first[ip] {
 			continue
 		}
-		exit, err := sharedExit(ip, now)
+		exit, err := sharedExit(ip, now, a, b)
 		if err != nil {
 			return false, err
 		}
@@ -153,7 +207,7 @@ func CheckSubscriptionPurchaseFrom(userId int, plan *SubscriptionPlan, ip string
 	if err != nil || len(users) == 0 {
 		return err
 	}
-	exit, err := sharedExit(ip, common.GetTimestamp())
+	exit, err := sharedExit(ip, common.GetTimestamp(), userId)
 	if err != nil || exit {
 		return err
 	}
