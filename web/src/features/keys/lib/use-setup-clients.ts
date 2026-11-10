@@ -51,11 +51,10 @@ export function useSetupClients(key: Pick<ApiKey, 'group'> | null): {
   })
 
   const groups = groupsQuery.data?.data
-  const claudeCodeOnly =
-    !!group &&
-    !!groups &&
-    !Array.isArray(groups) &&
-    groups[group]?.claude_code_only === true
+  const groupInfo =
+    group && groups && !Array.isArray(groups) ? groups[group] : undefined
+  const claudeCodeOnly = groupInfo?.claude_code_only === true
+  const codexOnly = groupInfo?.codex_only === true
   const models = Array.isArray(modelsQuery.data)
     ? modelsQuery.data
     : EMPTY_MODELS
@@ -63,6 +62,7 @@ export function useSetupClients(key: Pick<ApiKey, 'group'> | null): {
   // so the guide stays on Claude Code rather than flashing other clients.
   const clients = getSetupClients({
     claudeCodeOnly,
+    codexOnly,
     models: groupsQuery.isSuccess ? models : EMPTY_MODELS,
   })
   return { clients, models }

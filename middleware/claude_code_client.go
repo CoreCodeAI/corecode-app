@@ -83,44 +83,84 @@ type claudeCodeSystemBlock struct {
 	Text string `json:"text"`
 }
 
-// enforceClaudeCodeOnlyGroup rejects a relay request whose group accepts Claude
-// Code only and that does not look like Claude Code. userGroup is the user's own
-// group, used to resolve the candidates of an "auto" token: such a request drops
-// the Claude Code only candidates instead, and is rejected only when none remain.
-// It returns false after aborting the request.
-func enforceClaudeCodeOnlyGroup(c *gin.Context, userGroup string) bool {
+// clientGate admits a request into a group that accepts one client only. With
+// reject set a failed check aborts the request; otherwise it only returns false.
+type clientGate func(c *gin.Context, group string, reject bool) bool
+
+// clientGateFor returns the gate of a group restricted to one client, or nil.
+func clientGateFor(group string) (string, clientGate) {
+	switch {
+	case operation_setting.IsClaudeCodeOnlyGroup(group):
+		return "claude-code", admitClaudeCode
+	case operation_setting.IsCodexOnlyGroup(group):
+		return "codex", admitCodex
+	}
+	return "", nil
+}
+
+// enforceClientOnlyGroups rejects a relay request whose group accepts one
+// client only (Claude Code or Codex) and that does not look like that client.
+// userGroup is the user's own group, used to resolve the candidates of an
+// "auto" token: such a request drops the candidates whose client it is not
+// instead, and is rejected only when none remain. It returns false after
+// aborting the request.
+func enforceClientOnlyGroups(c *gin.Context, userGroup string) bool {
 	if isModelListRequest(c) {
 		return true
 	}
 	usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
 	if usingGroup != "auto" {
-		if !operation_setting.IsClaudeCodeOnlyGroup(usingGroup) {
-			return true
+		if _, gate := clientGateFor(usingGroup); gate != nil {
+			return gate(c, usingGroup, true)
 		}
-		return admitClaudeCode(c, usingGroup, true)
+		return true
 	}
 
 	candidates := service.GetRequestAutoGroups(c, userGroup)
-	open := make([]string, 0, len(candidates))
-	restricted := ""
+	restricted := false
 	for _, group := range candidates {
-		if !operation_setting.IsClaudeCodeOnlyGroup(group) {
-			open = append(open, group)
-		} else if restricted == "" {
-			restricted = group
+		if _, gate := clientGateFor(group); gate != nil {
+			restricted = true
+			break
 		}
 	}
-	if restricted == "" {
+	if !restricted {
 		return true
 	}
-	if admitClaudeCode(c, restricted, len(open) == 0) {
-		return true
+	// Judge each client once, without rejecting, and keep the candidates the
+	// request may use.
+	admitted := map[string]bool{}
+	kept := make([]string, 0, len(candidates))
+	firstRefused := ""
+	for _, group := range candidates {
+		name, gate := clientGateFor(group)
+		if gate == nil {
+			kept = append(kept, group)
+			continue
+		}
+		ok, judged := admitted[name]
+		if !judged {
+			ok = gate(c, group, false)
+			if c.IsAborted() {
+				return false
+			}
+			admitted[name] = ok
+		}
+		if ok {
+			kept = append(kept, group)
+		} else if firstRefused == "" {
+			firstRefused = group
+		}
 	}
-	if c.IsAborted() {
-		return false
+	if len(kept) == 0 {
+		// Nothing is left: refuse with the first refusing group's own answer.
+		_, gate := clientGateFor(firstRefused)
+		return gate(c, firstRefused, true)
 	}
-	// The group is chosen during channel selection, which reads this key.
-	common.SetContextKey(c, constant.ContextKeyTokenAutoGroups, open)
+	if len(kept) < len(candidates) {
+		// The group is chosen during channel selection, which reads this key.
+		common.SetContextKey(c, constant.ContextKeyTokenAutoGroups, kept)
+	}
 	return true
 }
 

@@ -45,13 +45,18 @@ var claudeCodeVersionPattern = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 
 // ValidateClaudeCodeClientGroups checks the JSON value of claude_code_client_setting.groups.
 func ValidateClaudeCodeClientGroups(value string) error {
+	return validateClientGroups("Claude Code", value)
+}
+
+// validateClientGroups checks a JSON array of group names restricted to client.
+func validateClientGroups(client, value string) error {
 	var groups []string
 	if err := common.UnmarshalJsonStr(value, &groups); err != nil {
-		return fmt.Errorf("Claude Code groups must be a JSON array of group names: %w", err)
+		return fmt.Errorf("%s groups must be a JSON array of group names: %w", client, err)
 	}
 	for _, group := range groups {
 		if strings.TrimSpace(group) == "" || group != strings.TrimSpace(group) {
-			return fmt.Errorf("Claude Code group names must be non-empty and have no surrounding spaces")
+			return fmt.Errorf("%s group names must be non-empty and have no surrounding spaces", client)
 		}
 	}
 	return nil

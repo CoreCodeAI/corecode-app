@@ -344,6 +344,15 @@ describe('getSetupClients', () => {
     expect(getSetupClients({ claudeCodeOnly, models })).toEqual(expected)
   })
 
+  test('offers only Codex for a Codex only group', () => {
+    expect(
+      getSetupClients({ claudeCodeOnly: false, codexOnly: true, models: gpt })
+    ).toEqual(['codex'])
+    expect(
+      getSetupClients({ claudeCodeOnly: false, codexOnly: true, models: [] })
+    ).toEqual(['codex'])
+  })
+
   test('names the action after the only client it offers', () => {
     expect(getSetupTitle(['claude-code'])).toBe('Connect Claude Code')
     expect(getSetupTitle(['codex', 'openai'])).toBe('Connect Codex')

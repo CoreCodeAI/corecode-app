@@ -79,7 +79,7 @@ func runClaudeCodeGateWithBody(t *testing.T, group string, autoGroups []string, 
 	if autoGroups != nil {
 		common.SetContextKey(c, constant.ContextKeyTokenAutoGroups, autoGroups)
 	}
-	return recorder, enforceClaudeCodeOnlyGroup(c, "default")
+	return recorder, enforceClientOnlyGroups(c, "default")
 }
 
 func withHeader(name, value string) map[string]string {
@@ -213,7 +213,7 @@ func TestClaudeCodeOnlyGroupAutoCandidates(t *testing.T) {
 		}
 		common.SetContextKey(c, constant.ContextKeyUsingGroup, "auto")
 		common.SetContextKey(c, constant.ContextKeyTokenAutoGroups, []string{"cc", "default", "gpt"})
-		require.True(t, enforceClaudeCodeOnlyGroup(c, "default"))
+		require.True(t, enforceClientOnlyGroups(c, "default"))
 		return service.GetRequestAutoGroups(c, "default")
 	}
 

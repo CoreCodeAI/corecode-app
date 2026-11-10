@@ -73,8 +73,10 @@ export const DEFAULT_CODEX_MODEL = 'gpt-6.1-sol'
  */
 export function getSetupClients(args: {
   claudeCodeOnly: boolean
+  codexOnly?: boolean
   models: readonly string[]
 }): SetupClient[] {
+  if (args.codexOnly) return ['codex']
   if (args.claudeCodeOnly || args.models.length === 0) return ['claude-code']
   const clients: SetupClient[] = []
   if (args.models.some((model) => model.startsWith('claude-'))) {
