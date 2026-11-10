@@ -74,6 +74,30 @@ func TestNewcomerPlanOnePerAddressDatabaseMatrix(t *testing.T) {
 			assert.NoError(t, CheckSubscriptionPurchaseFrom(second.Id, newcomer, "203.0.113.9"))
 			assert.ErrorIs(t, CheckSubscriptionPurchaseFrom(second.Id, newcomer, "198.51.100.7"), ErrSubscriptionAddressTaken)
 
+			// A proxy node carries the sign-ins of customers who never buy the
+			// plan: five of them, not counting the purchaser, make it a shared
+			// exit. Accounts that bought a limited plan there are one person's.
+			proxy := "198.51.100.60"
+			addressTestRequest(t, first.Id, proxy, now-7*86400)
+			addressTestSession(t, second.Id, proxy, now-60)
+			for i := range sharedExitBystanders - 1 {
+				farmed := registerAffiliateTestUser(t, fmt.Sprintf("addr_farm_%d", i), "")
+				buy(farmed, newcomer, now-600)
+				addressTestSession(t, farmed.Id, proxy, now-600)
+				addressTestSession(t, 300000+i, proxy, now-600)
+			}
+			assert.ErrorIs(t, CheckSubscriptionPurchaseFrom(second.Id, newcomer, proxy), ErrSubscriptionAddressTaken,
+				"four bystanders, and buyers and the purchaser do not count")
+			addressTestSession(t, 300000+sharedExitBystanders, proxy, now-600)
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(second.Id, newcomer, proxy), "five bystanders")
+
+			// A limited plan nobody bought is refused nowhere.
+			trial := &SubscriptionPlan{Title: "trial", PriceAmount: 9.9, DurationUnit: SubscriptionDurationDay, DurationValue: 7, Enabled: true, MaxPurchasePerUser: 1}
+			require.NoError(t, DB.Create(trial).Error)
+			InvalidateSubscriptionPlanCache(trial.Id)
+			t.Cleanup(func() { InvalidateSubscriptionPlanCache(trial.Id) })
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(second.Id, trial, "198.51.100.7"))
+
 			// A purchase from more than 30 days ago no longer counts.
 			old := registerAffiliateTestUser(t, "addr_old", "")
 			buy(old, newcomer, now-sharedAddressWindowSeconds-60)
