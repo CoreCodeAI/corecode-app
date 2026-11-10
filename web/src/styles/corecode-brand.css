@@ -208,6 +208,16 @@ h1 {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* The signature mark (components/signature-mark.tsx): the logo's C drawn in
+ * real thinking-signature characters, coloured by the theme through a mask.
+ * The component sets --signature-field: a url() written here would be
+ * resolved at build time, and the drawing is served by the host, not built. */
+.signature-mark {
+  aspect-ratio: 547 / 554;
+  background: var(--primary);
+  mask: var(--signature-field) center / contain no-repeat;
+}
+
 ::selection {
   background-color: color-mix(in oklab, var(--primary) 24%, transparent);
 }
