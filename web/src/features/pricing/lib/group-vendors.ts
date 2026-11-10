@@ -32,6 +32,8 @@ const PREFIX_VENDORS: [RegExp, GroupVendor][] = [
   [/^(gpt-|codex-|o\d)/i, { name: 'OpenAI', icon: 'OpenAI' }],
   [/^grok-/i, { name: 'xAI', icon: 'XAI' }],
   [/^gemini-/i, { name: 'Google', icon: 'Gemini.Color' }],
+  [/^seedance-/i, { name: 'ByteDance', icon: 'ByteDance.Color' }],
+  [/^wan-/i, { name: 'Wan', icon: 'Wan' }],
 ]
 
 export function modelVendor(model: PricingModel): GroupVendor | null {

@@ -1,11 +1,11 @@
 {
   "translation": {
-    "Allow purchase from a shared network": "Разрешить покупку из общей сети",
-    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "Позволяет этому аккаунту купить тариф с лимитом на пользователя из сети, которой пользовался другой покупатель, например через общий VPN-узел. Лимит на пользователя по-прежнему действует.",
-    "/ 1M tokens": "/ 1 млн токенов",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
+    "Allow purchase from a shared network": "Разрешить покупку из общей сети",
+    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "Позволяет этому аккаунту купить тариф с лимитом на пользователя из сети, которой пользовался другой покупатель, например через общий VPN-узел. Лимит на пользователя по-прежнему действует.",
+    "/ 1M tokens": "/ 1 млн токенов",
     "_copy": "_копировать",
     "Biggest savings first": "Сначала самая большая экономия",
     "Cache read: the price of reusing a prefix that is already cached. It is far below the input price, and Claude Code pays it on most turns.": "Чтение кэша: цена повторного использования уже закэшированного префикса. Она намного ниже цены ввода, и Claude Code платит её на большинстве шагов.",
@@ -8039,6 +8039,11 @@
     "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "Некоторые платежи поступают несколько минут. Проверьте статус в истории заказов; баланс обновится сам после зачисления.",
     "Open Order History": "Открыть историю заказов",
     "Dismiss": "Закрыть",
-    "Could not calculate the amount to pay. Pick a payment method to try again.": "Не удалось рассчитать сумму к оплате. Выберите способ оплаты, чтобы повторить."
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "Не удалось рассчитать сумму к оплате. Выберите способ оплаты, чтобы повторить.",
+    "See pricing details": "Подробности цены",
+    "Priced by usage": "Цена по использованию",
+    "{{price}} / second": "{{price}} / сек.",
+    "Billed per second of generated video.": "Оплата за каждую секунду сгенерированного видео.",
+    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "Оплата за изображение, цена зависит от размера. Малые размеры вроде 1024x1024 — это 1K, большие вроде 3840x2160 — 4K; все остальные размеры и запросы без размера оплачиваются как 2K."
   }
 }

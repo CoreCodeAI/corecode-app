@@ -1,11 +1,11 @@
 {
   "translation": {
-    "Allow purchase from a shared network": "Allow purchase from a shared network",
-    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.",
-    "/ 1M tokens": "/ 1M tokens",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
+    "Allow purchase from a shared network": "Allow purchase from a shared network",
+    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.",
+    "/ 1M tokens": "/ 1M tokens",
     "_copy": "_copy",
     "Biggest savings first": "Biggest savings first",
     "Cache read: the price of reusing a prefix that is already cached. It is far below the input price, and Claude Code pays it on most turns.": "Cache read: the price of reusing a prefix that is already cached. It is far below the input price, and Claude Code pays it on most turns.",
@@ -8039,6 +8039,11 @@
     "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.",
     "Open Order History": "Open Order History",
     "Dismiss": "Dismiss",
-    "Could not calculate the amount to pay. Pick a payment method to try again.": "Could not calculate the amount to pay. Pick a payment method to try again."
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "Could not calculate the amount to pay. Pick a payment method to try again.",
+    "See pricing details": "See pricing details",
+    "Priced by usage": "Priced by usage",
+    "{{price}} / second": "{{price}} / second",
+    "Billed per second of generated video.": "Billed per second of generated video.",
+    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K."
   }
 }

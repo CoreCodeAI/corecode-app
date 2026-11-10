@@ -1,11 +1,11 @@
 {
   "translation": {
-    "Allow purchase from a shared network": "같은 네트워크에서 구매 허용",
-    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "다른 구매자가 사용한 네트워크(공유 VPN 노드 등)에서도 이 계정이 1인 한정 요금제를 구매할 수 있게 합니다. 1인당 구매 한도는 그대로 적용됩니다.",
-    "/ 1M tokens": "/ 100만 토큰",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
+    "Allow purchase from a shared network": "같은 네트워크에서 구매 허용",
+    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "다른 구매자가 사용한 네트워크(공유 VPN 노드 등)에서도 이 계정이 1인 한정 요금제를 구매할 수 있게 합니다. 1인당 구매 한도는 그대로 적용됩니다.",
+    "/ 1M tokens": "/ 100만 토큰",
     "_copy": "_복사",
     "Biggest savings first": "절약 큰 순",
     "Cache read: the price of reusing a prefix that is already cached. It is far below the input price, and Claude Code pays it on most turns.": "캐시 읽기: 이미 캐시된 앞부분을 재사용하는 가격입니다. 입력 가격보다 훨씬 낮으며 Claude Code는 대부분의 턴에서 이 가격을 냅니다.",
@@ -8039,6 +8039,11 @@
     "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "일부 결제는 도착까지 몇 분이 걸립니다. 주문 내역에서 상태를 확인하세요. 입금되면 잔액이 자동으로 업데이트됩니다.",
     "Open Order History": "주문 내역 열기",
     "Dismiss": "닫기",
-    "Could not calculate the amount to pay. Pick a payment method to try again.": "결제 금액을 계산하지 못했습니다. 결제 수단을 선택해 다시 시도하세요."
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "결제 금액을 계산하지 못했습니다. 결제 수단을 선택해 다시 시도하세요.",
+    "See pricing details": "가격 상세 보기",
+    "Priced by usage": "사용량 기준 가격",
+    "{{price}} / second": "{{price}} / 초",
+    "Billed per second of generated video.": "생성된 영상의 초 단위로 청구됩니다.",
+    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "이미지 1장당 출력 크기에 따라 청구됩니다. 1024x1024 같은 작은 크기는 1K, 3840x2160 같은 큰 크기는 4K이며, 그 밖의 크기와 크기를 지정하지 않은 요청은 2K로 청구됩니다."
   }
 }

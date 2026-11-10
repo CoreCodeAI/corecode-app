@@ -1,11 +1,11 @@
 {
   "translation": {
-    "Allow purchase from a shared network": "Autoriser l’achat depuis un réseau partagé",
-    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "Permet à ce compte d’acheter un forfait limité par utilisateur depuis un réseau utilisé par un autre acheteur, comme un nœud VPN partagé. La limite par utilisateur reste appliquée.",
-    "/ 1M tokens": "/ 1M de tokens",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
+    "Allow purchase from a shared network": "Autoriser l’achat depuis un réseau partagé",
+    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "Permet à ce compte d’acheter un forfait limité par utilisateur depuis un réseau utilisé par un autre acheteur, comme un nœud VPN partagé. La limite par utilisateur reste appliquée.",
+    "/ 1M tokens": "/ 1M de tokens",
     "_copy": "_copie",
     "Biggest savings first": "Plus grosses économies d'abord",
     "Cache read: the price of reusing a prefix that is already cached. It is far below the input price, and Claude Code pays it on most turns.": "Lecture du cache : le prix de réutilisation d'un préfixe déjà en cache. Bien inférieur au prix d'entrée, Claude Code le paie à la plupart des tours.",
@@ -8039,6 +8039,11 @@
     "Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.": "Certains paiements mettent quelques minutes à arriver. Consultez l’historique des commandes ; votre solde se met à jour tout seul une fois crédité.",
     "Open Order History": "Ouvrir l’historique des commandes",
     "Dismiss": "Fermer",
-    "Could not calculate the amount to pay. Pick a payment method to try again.": "Impossible de calculer le montant à payer. Choisissez un moyen de paiement pour réessayer."
+    "Could not calculate the amount to pay. Pick a payment method to try again.": "Impossible de calculer le montant à payer. Choisissez un moyen de paiement pour réessayer.",
+    "See pricing details": "Voir le détail du prix",
+    "Priced by usage": "Tarif à l'usage",
+    "{{price}} / second": "{{price}} / seconde",
+    "Billed per second of generated video.": "Facturé à la seconde de vidéo générée.",
+    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "Par image, selon la taille de sortie. Les petites tailles comme 1024x1024 sont en 1K, les grandes comme 3840x2160 en 4K ; toute autre taille, et une requête sans taille, est facturée en 2K."
   }
 }

@@ -1,0 +1,46 @@
+{
+  "image": {
+    "model_name": "gpt-image-2",
+    "quota_type": 1,
+    "model_ratio": 0,
+    "model_price": 0.075,
+    "owner_by": "",
+    "completion_ratio": 0,
+    "enable_groups": ["GPT生图1-4K"],
+    "supported_endpoint_types": ["image-generation", "openai"],
+    "billing_mode": "tiered_expr",
+    "billing_expr": "tier(\"image\", fixed(0.08)) * image_count * ((param(\"size\") == \"1024x1024\" || param(\"size\") == \"1024x768\" || param(\"size\") == \"768x1024\" || param(\"size\") == \"1024x576\" || param(\"size\") == \"576x1024\" || param(\"size\") == \"1024x640\" || param(\"size\") == \"640x1024\" || param(\"size\") == \"512x512\" || param(\"size\") == \"256x256\" || param(\"size\") == \"1k\" || param(\"size\") == \"1K\") ? 0.5 : 1) * ((param(\"size\") == \"3840x2160\" || param(\"size\") == \"2160x3840\" || param(\"size\") == \"3840x3840\" || param(\"size\") == \"4096x4096\" || param(\"size\") == \"4096x2304\" || param(\"size\") == \"2304x4096\" || param(\"size\") == \"2560x1440\" || param(\"size\") == \"1440x2560\" || param(\"size\") == \"2560x2560\" || param(\"size\") == \"4k\" || param(\"size\") == \"4K\") ? 1.5 : 1)",
+    "id": 0
+  },
+  "second": {
+    "model_name": "seedance-2.5-480p",
+    "quota_type": 0,
+    "model_ratio": 37.5,
+    "model_price": 0,
+    "owner_by": "",
+    "completion_ratio": 1,
+    "enable_groups": ["Seedance视频"],
+    "supported_endpoint_types": ["openai"],
+    "billing_mode": "tiered_expr",
+    "billing_expr": "tier(\"base\", u(\"seconds\") * 0.48)",
+    "billing_usage_schema": {
+      "seconds": {
+        "type": "number",
+        "unit": "second",
+        "description": {
+          "en": "Video generation unit price",
+          "zh": "视频生成单价"
+        }
+      }
+    },
+    "billing_usage_examples": [
+      {
+        "label": "5s",
+        "facts": {
+          "seconds": 5
+        }
+      }
+    ],
+    "id": 0
+  }
+}

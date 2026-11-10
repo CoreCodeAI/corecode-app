@@ -47,6 +47,7 @@ import {
 } from '../lib/billing-discount'
 import {
   BOARD_SORTS,
+  getExpressionPrice,
   matchesModelSearch,
   sortBoardRows,
   type BoardRow,
@@ -248,6 +249,26 @@ export function PriceBoard(props: {
     )
     .map((model) => ({ model, usd: model.model_price ?? 0 }))
     .sort((a, b) => a.usd - b.usd)
+
+  // Priced by an expression the rows above do not cover: a video billed per
+  // second, an image billed by size. A model the board cannot summarise is
+  // still listed, with its details one click away, never hidden.
+  const rowNames = new Set(rows.map((row) => row.model.model_name))
+  const requestNames = new Set(requestRows.map((row) => row.model.model_name))
+  const expressionRows = matchedModels
+    .filter(
+      (model) =>
+        isDynamicPricingModel(model) &&
+        !rowNames.has(model.model_name) &&
+        !requestNames.has(model.model_name)
+    )
+    .map((model) => ({ model, price: getExpressionPrice(model) }))
+  const hasImagePrices = expressionRows.some(
+    (row) => row.price?.kind === 'image'
+  )
+  const hasVideoPrices = expressionRows.some(
+    (row) => row.price?.kind === 'second'
+  )
 
   const groupYuan = (usd: number) => usd * ratio * props.priceRate
   const officialYuan = (usd: number, markup: number) =>
@@ -566,11 +587,13 @@ export function PriceBoard(props: {
             </p>
           )}
 
-          {rows.length === 0 && requestRows.length === 0 && (
-            <p className='text-muted-foreground py-6 text-center text-sm'>
-              {t('No models match your search.')}
-            </p>
-          )}
+          {rows.length === 0 &&
+            requestRows.length === 0 &&
+            expressionRows.length === 0 && (
+              <p className='text-muted-foreground py-6 text-center text-sm'>
+                {t('No models match your search.')}
+              </p>
+            )}
 
           {rows.length > 0 && (
             <ul className='flex flex-col gap-3 md:hidden'>
@@ -653,6 +676,92 @@ export function PriceBoard(props: {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {expressionRows.length > 0 && (
+            <div className='flex flex-col gap-2'>
+              <div className='overflow-x-auto rounded-lg border'>
+                <table
+                  aria-label={t('Priced by usage')}
+                  className='w-full text-sm'
+                >
+                  <thead className='bg-muted/40 text-muted-foreground text-xs'>
+                    <tr>
+                      <th
+                        scope='col'
+                        className='px-4 py-2.5 text-left font-medium'
+                      >
+                        {t('Model')}
+                      </th>
+                      <th
+                        scope='col'
+                        className='px-4 py-2.5 text-right font-medium'
+                      >
+                        {t('Price')}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className='divide-y'>
+                    {expressionRows.map(({ model, price }) => (
+                      <tr key={model.model_name} className='hover:bg-muted/30'>
+                        <th
+                          scope='row'
+                          className='px-4 py-3 text-left font-normal'
+                        >
+                          {modelName(model)}
+                        </th>
+                        <td className='px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums'>
+                          {price?.kind === 'second' && (
+                            <span className='text-primary font-semibold'>
+                              {t('{{price}} / second', {
+                                price: formatYuan(groupYuan(price.usd)),
+                              })}
+                            </span>
+                          )}
+                          {price?.kind === 'image' && (
+                            <span className='flex flex-wrap justify-end gap-x-4 gap-y-1'>
+                              {price.tiers.map((tier) => (
+                                <span key={tier.size}>
+                                  <span className='text-muted-foreground text-xs'>
+                                    {tier.size}{' '}
+                                  </span>
+                                  <span className='text-primary font-semibold'>
+                                    {formatYuan(groupYuan(tier.usd))}
+                                  </span>
+                                </span>
+                              ))}
+                            </span>
+                          )}
+                          {!price && (
+                            <button
+                              type='button'
+                              onClick={() =>
+                                props.onModelClick(model.model_name)
+                              }
+                              className='text-primary font-sans underline-offset-4 hover:underline'
+                            >
+                              {t('See pricing details')}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {hasImagePrices && (
+                <p className='text-muted-foreground text-xs'>
+                  {t(
+                    'Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.'
+                  )}
+                </p>
+              )}
+              {hasVideoPrices && (
+                <p className='text-muted-foreground text-xs'>
+                  {t('Billed per second of generated video.')}
+                </p>
+              )}
             </div>
           )}
 
