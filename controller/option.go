@@ -373,6 +373,12 @@ func UpdateOption(c *gin.Context) {
 			common.ApiError(c, err)
 			return
 		}
+	case "codex_client_setting.groups":
+		err = operation_setting.ValidateCodexClientGroups(option.Value.(string))
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	case "token_setting.concurrency_limits":
 		err = operation_setting.ValidateConcurrencyLimits(option.Value.(string))
 		if err != nil {

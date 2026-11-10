@@ -38,6 +38,7 @@ func GetUserGroups(c *gin.Context) {
 				"desc":  desc,
 				// CoreCode fork: the console offers only Claude Code setup for these.
 				"claude_code_only": operation_setting.IsClaudeCodeOnlyGroup(groupName),
+				"codex_only":       operation_setting.IsCodexOnlyGroup(groupName),
 			}
 		}
 	}
@@ -46,6 +47,7 @@ func GetUserGroups(c *gin.Context) {
 			"ratio":            "auto",
 			"desc":             setting.GetUsableGroupDescription("auto"),
 			"claude_code_only": false,
+			"codex_only":       false,
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
