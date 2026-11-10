@@ -42,6 +42,10 @@ type GlobalSettings struct {
 	// family whitelist but whose names already end in an effort word.
 	EffortTailModelIDs               []string                         `json:"effort_tail_model_ids"`
 	ChatCompletionsToResponsesPolicy ChatCompletionsToResponsesPolicy `json:"chat_completions_to_responses_policy"`
+	// DerivedPromptCacheKeyChannelIDs lists the channels whose Responses
+	// requests get a per-conversation prompt_cache_key when the client sent
+	// none. Empty by default: nothing is added.
+	DerivedPromptCacheKeyChannelIDs []int `json:"derived_prompt_cache_key_channel_ids"`
 }
 
 // 默认配置
