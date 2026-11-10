@@ -79,6 +79,26 @@ export async function getUserSubscriptions(
   return res.data
 }
 
+export async function getUserAddressExemption(
+  userId: number
+): Promise<ApiResponse<{ exempt: boolean }>> {
+  const res = await api.get(
+    `/api/subscription/admin/users/${userId}/address-exemption`
+  )
+  return res.data
+}
+
+export async function setUserAddressExemption(
+  userId: number,
+  exempt: boolean
+): Promise<ApiResponse<{ exempt: boolean }>> {
+  const res = await api.put(
+    `/api/subscription/admin/users/${userId}/address-exemption`,
+    { exempt }
+  )
+  return res.data
+}
+
 export async function createUserSubscription(
   userId: number,
   data: CreateUserSubscriptionRequest
