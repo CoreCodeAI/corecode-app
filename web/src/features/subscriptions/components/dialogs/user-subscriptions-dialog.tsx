@@ -60,6 +60,8 @@ import {
   invalidateUserSubscription,
   deleteUserSubscription,
   resetUserSubscriptionsByPlan,
+  getUserAddressExemption,
+  setUserAddressExemption,
 } from '../../api'
 import { formatTimestamp } from '../../lib'
 import type { PlanRecord, UserSubscriptionRecord } from '../../types'
@@ -115,6 +117,8 @@ export function UserSubscriptionsDialog(props: Props) {
   const [selectedPlanId, setSelectedPlanId] = useState<string>('')
   const [resetting, setResetting] = useState(false)
   const [advanceResetTime, setAdvanceResetTime] = useState(true)
+  const [addressExempt, setAddressExempt] = useState(false)
+  const [savingExemption, setSavingExemption] = useState(false)
   const [resetAction, setResetAction] = useState<{
     planId: number
     planTitle: string
@@ -136,10 +140,16 @@ export function UserSubscriptionsDialog(props: Props) {
     if (!props.user?.id) return
     setLoading(true)
     try {
-      const [plansRes, subsRes] = await Promise.all([
+      const [plansRes, subsRes, exemptionRes] = await Promise.all([
         getAdminPlans(),
         getUserSubscriptions(props.user.id),
+        getUserAddressExemption(props.user.id),
       ])
+      if (exemptionRes.success) {
+        setAddressExempt(!!exemptionRes.data?.exempt)
+      } else {
+        handleServerError(exemptionRes)
+      }
       if (plansRes.success) {
         setPlans(plansRes.data || [])
       } else {
@@ -186,6 +196,24 @@ export function UserSubscriptionsDialog(props: Props) {
       handleServerError(error, t('Request failed'))
     } finally {
       setCreating(false)
+    }
+  }
+
+  const handleAddressExemption = async (exempt: boolean) => {
+    if (!props.user?.id) return
+    setSavingExemption(true)
+    try {
+      const res = await setUserAddressExemption(props.user.id, exempt)
+      if (res.success) {
+        setAddressExempt(exempt)
+        toast.success(t('Saved successfully'))
+      } else {
+        handleServerError(res)
+      }
+    } catch (error) {
+      handleServerError(error, t('Operation failed'))
+    } finally {
+      setSavingExemption(false)
     }
   }
 
@@ -275,6 +303,29 @@ export function UserSubscriptionsDialog(props: Props) {
                 <Plus className='mr-1 h-4 w-4' />
                 {t('Add subscription')}
               </Button>
+            </div>
+
+            <div className='flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm'>
+              <span>
+                <span className='block font-medium'>
+                  {t('Allow purchase from a shared network')}
+                </span>
+                <span
+                  id='address-exemption-description'
+                  className='text-muted-foreground block'
+                >
+                  {t(
+                    'Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.'
+                  )}
+                </span>
+              </span>
+              <Switch
+                checked={addressExempt}
+                disabled={loading || savingExemption}
+                onCheckedChange={(checked) => handleAddressExemption(!!checked)}
+                aria-label={t('Allow purchase from a shared network')}
+                aria-describedby='address-exemption-description'
+              />
             </div>
 
             <StaticDataTable

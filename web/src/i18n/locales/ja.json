@@ -1,5 +1,7 @@
 {
   "translation": {
+    "Allow purchase from a shared network": "同じネットワークからの購入を許可",
+    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "他の購入者が使ったネットワーク（共有の VPN ノードなど）からでも、このアカウントが購入回数制限付きプランを買えるようにします。1 人あたりの購入回数制限は引き続き適用されます。",
     "/ 1M tokens": "/ 100万トークン",
     "360": "360",
     "1000": "1000",

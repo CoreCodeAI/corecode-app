@@ -1,5 +1,7 @@
 {
   "translation": {
+    "Allow purchase from a shared network": "Cho phép mua từ mạng dùng chung",
+    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "Cho phép tài khoản này mua gói giới hạn mỗi người từ mạng mà người mua khác đã dùng, ví dụ nút VPN dùng chung. Giới hạn mỗi người vẫn được áp dụng.",
     "/ 1M tokens": "/ 1 triệu token",
     "360": "360",
     "1000": "1000",

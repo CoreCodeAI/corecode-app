@@ -157,5 +157,47 @@ func CheckSubscriptionPurchaseFrom(userId int, plan *SubscriptionPlan, ip string
 	if err != nil || exit {
 		return err
 	}
+	exempt, err := subscriptionAddressExempt(userId)
+	if err != nil || exempt {
+		return err
+	}
 	return ErrSubscriptionAddressTaken
+}
+
+// SubscriptionAddressExemption lets one account buy a plan from an address
+// another buyer of it used. Customers behind one VPN node or office exit are
+// told to contact support; an administrator lifts the check for the account
+// here, and the per-user limit still applies.
+type SubscriptionAddressExemption struct {
+	UserId    int   `json:"user_id" gorm:"primaryKey;autoIncrement:false"`
+	CreatedBy int   `json:"created_by"`
+	CreatedAt int64 `json:"created_at"`
+}
+
+func subscriptionAddressExempt(userId int) (bool, error) {
+	var count int64
+	err := DB.Model(&SubscriptionAddressExemption{}).Where("user_id = ?", userId).Count(&count).Error
+	return count > 0, err
+}
+
+// GetSubscriptionAddressExemption returns the exemption of a user, or nil.
+func GetSubscriptionAddressExemption(userId int) (*SubscriptionAddressExemption, error) {
+	var exemption SubscriptionAddressExemption
+	result := DB.Where("user_id = ?", userId).Limit(1).Find(&exemption)
+	if result.Error != nil || result.RowsAffected == 0 {
+		return nil, result.Error
+	}
+	return &exemption, nil
+}
+
+// SetSubscriptionAddressExemption grants or revokes the exemption.
+func SetSubscriptionAddressExemption(userId int, exempt bool, adminId int) error {
+	if !exempt {
+		return DB.Where("user_id = ?", userId).Delete(&SubscriptionAddressExemption{}).Error
+	}
+	existing, err := GetSubscriptionAddressExemption(userId)
+	if err != nil || existing != nil {
+		return err
+	}
+	return DB.Create(&SubscriptionAddressExemption{UserId: userId, CreatedBy: adminId, CreatedAt: common.GetTimestamp()}).Error
 }

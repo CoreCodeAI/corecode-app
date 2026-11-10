@@ -579,3 +579,59 @@ func AdminDeleteUserSubscription(c *gin.Context) {
 	}
 	subscriptionChangeSuccess(c, msg)
 }
+
+type AdminSubscriptionAddressExemptionRequest struct {
+	Exempt bool `json:"exempt"`
+}
+
+// AdminGetUserSubscriptionAddressExemption reports whether a user may buy a
+// per-user plan from an address another buyer of it used.
+func AdminGetUserSubscriptionAddressExemption(c *gin.Context) {
+	userId, _ := strconv.Atoi(c.Param("id"))
+	if userId <= 0 {
+		common.ApiErrorT(c, "Invalid user ID")
+		return
+	}
+	exemption, err := model.GetSubscriptionAddressExemption(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"exempt": exemption != nil, "exemption": exemption})
+}
+
+func AdminSetUserSubscriptionAddressExemption(c *gin.Context) {
+	userId, _ := strconv.Atoi(c.Param("id"))
+	if userId <= 0 {
+		common.ApiErrorT(c, "Invalid user ID")
+		return
+	}
+	var req AdminSubscriptionAddressExemptionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if !canManageTargetRole(c.GetInt("role"), user.Role) {
+		common.ApiErrorT(c, "No permission to update users of same or higher permission level")
+		return
+	}
+	if err := model.SetSubscriptionAddressExemption(userId, req.Exempt, c.GetInt("id")); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	action := "allow_plan_from_shared_address"
+	if !req.Exempt {
+		action = "deny_plan_from_shared_address"
+	}
+	recordManageAuditFor(c, userId, "user.manage", map[string]any{
+		"action":   action,
+		"username": user.Username,
+		"id":       userId,
+	})
+	common.ApiSuccess(c, gin.H{"exempt": req.Exempt})
+}

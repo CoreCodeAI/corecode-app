@@ -1,5 +1,7 @@
 {
   "translation": {
+    "Allow purchase from a shared network": "Autoriser l’achat depuis un réseau partagé",
+    "Lets this account buy a one-per-user plan from a network another buyer used, such as a shared VPN node. The one-per-user limit still applies.": "Permet à ce compte d’acheter un forfait limité par utilisateur depuis un réseau utilisé par un autre acheteur, comme un nœud VPN partagé. La limite par utilisateur reste appliquée.",
     "/ 1M tokens": "/ 1M de tokens",
     "360": "360",
     "1000": "1000",

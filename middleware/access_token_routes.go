@@ -189,6 +189,8 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/subscription/admin/users/:id/subscriptions":            accessTokenScopeRule("billing:read"),
 	"POST /api/subscription/admin/users/:id/subscriptions":           accessTokenScopeRule("billing:write"),
 	"POST /api/subscription/admin/users/:id/subscriptions/reset":     accessTokenScopeRule("billing:write"),
+	"GET /api/subscription/admin/users/:id/address-exemption":        accessTokenScopeRule("billing:read"),
+	"PUT /api/subscription/admin/users/:id/address-exemption":        accessTokenScopeRule("billing:write"),
 	"POST /api/subscription/admin/user_subscriptions/:id/invalidate": accessTokenScopeRule("billing:write"),
 	"DELETE /api/subscription/admin/user_subscriptions/:id":          accessTokenScopeRule("billing:write"),
 

@@ -55,6 +55,18 @@ func TestNewcomerPlanOnePerAddressDatabaseMatrix(t *testing.T) {
 			assert.NoError(t, CheckSubscriptionPurchaseFrom(first.Id, unlimited, "198.51.100.7"))
 			assert.NoError(t, CheckSubscriptionPurchaseFrom(second.Id, newcomer, ""), "no address, no address limit")
 
+			// An administrator exempts an account another person shares a VPN
+			// node with; the per-user limit still holds, and revoking restores
+			// the check.
+			require.NoError(t, SetSubscriptionAddressExemption(second.Id, true, 1))
+			require.NoError(t, SetSubscriptionAddressExemption(second.Id, true, 1), "granting twice is a no-op")
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(second.Id, newcomer, "198.51.100.7"))
+			assert.Error(t, CheckSubscriptionPurchaseFrom(first.Id, newcomer, "198.51.100.8"), "the exemption is not the per-user limit")
+			third := registerAffiliateTestUser(t, "addr_third", "")
+			assert.ErrorIs(t, CheckSubscriptionPurchaseFrom(third.Id, newcomer, "198.51.100.7"), ErrSubscriptionAddressTaken, "only the exempted account")
+			require.NoError(t, SetSubscriptionAddressExemption(second.Id, false, 1))
+			assert.ErrorIs(t, CheckSubscriptionPurchaseFrom(second.Id, newcomer, "198.51.100.7"), ErrSubscriptionAddressTaken)
+
 			// A shared exit carries many customers' requests and proves nothing.
 			for i := range sharedExitUsers {
 				addressTestRequest(t, 100000+i, "203.0.113.9", now-60)
