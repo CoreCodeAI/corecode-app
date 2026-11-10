@@ -48,6 +48,8 @@ import {
 import {
   BOARD_SORTS,
   getExpressionPrice,
+  getOfficialImageYuan,
+  getOfficialSecondYuan,
   matchesModelSearch,
   sortBoardRows,
   type BoardRow,
@@ -95,8 +97,22 @@ const COLUMN_HELP: Partial<Record<UnitPriceKey, string>> = {
 // Opens quickly on hover, and stays long enough to move the pointer onto it.
 const MARKUP_HELP_DELAY = 150
 
+const SAVE_CHIP_CLASS =
+  'inline-flex shrink-0 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400'
+
 function trimNumber(value: number, digits: number): string {
   return String(Number(value.toFixed(digits)))
+}
+
+/** Groups where at least one model is priced by tokens. */
+function tokenPricedGroups(models: PricingModel[]): Set<string> {
+  const names = new Set<string>()
+  for (const model of models) {
+    if (getBaseUnitPrices(model)) {
+      for (const group of model.enable_groups ?? []) names.add(group)
+    }
+  }
+  return names
 }
 
 /** Groups any listed model is enabled in: Claude first, cheapest first within. */
@@ -201,6 +217,9 @@ export function PriceBoard(props: {
     props.groupRatio,
     props.usableGroup
   )
+  // The group discount compares token prices with the official ones, so a group
+  // with none has nothing to claim it for.
+  const tokenGroups = tokenPricedGroups(props.models)
   const isClaude = (name: string) => vendors.get(name)?.name === CLAUDE_VENDOR
   const claudeGroups = groups.filter(isClaude)
   const otherGroups = groups.filter((name) => !isClaude(name))
@@ -221,7 +240,10 @@ export function PriceBoard(props: {
       percent: `${Math.round(combined * 100)}%`,
     })
   const combined = discountAt(ratio)
-  const saving = getDiscountKind(combined) === 'discount' ? 1 - combined : 0
+  const saving =
+    group && tokenGroups.has(group) && getDiscountKind(combined) === 'discount'
+      ? 1 - combined
+      : 0
 
   const groupModels = props.models.filter(
     (model) => !group || (model.enable_groups ?? []).includes(group)
@@ -273,6 +295,8 @@ export function PriceBoard(props: {
   const groupYuan = (usd: number) => usd * ratio * props.priceRate
   const officialYuan = (usd: number, markup: number) =>
     (usd / markup) * props.usdExchangeRate
+  const showsDiscount = (name: string, groupCombined: number) =>
+    tokenGroups.has(name) && getDiscountKind(groupCombined) === 'discount'
   const description = group ? groupDescription(props.usableGroup[group]) : ''
 
   const renderPrice = (usd: number, markup: number) => {
@@ -300,7 +324,7 @@ export function PriceBoard(props: {
     const modelCombined = combined * markup
     const chip =
       getDiscountKind(modelCombined) === 'discount' ? (
-        <span className='inline-flex shrink-0 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400'>
+        <span className={SAVE_CHIP_CLASS}>
           {t('Save {{percent}}', {
             percent: `${Math.round((1 - modelCombined) * 100)}%`,
           })}
@@ -339,6 +363,38 @@ export function PriceBoard(props: {
       </Popover>
     )
   }
+  // What a media model costs here against its official price. Only a real
+  // discount earns a chip.
+  const mediaChip = (ours: number, official: number | null) => {
+    if (official === null || !Number.isFinite(ours)) return null
+    const ratio = ours / official
+    if (getDiscountKind(ratio) !== 'discount') return null
+    return (
+      <span className={SAVE_CHIP_CLASS}>
+        {t('Save {{percent}}', {
+          percent: `${Math.round((1 - ratio) * 100)}%`,
+        })}
+      </span>
+    )
+  }
+  const officialLine = (text: string, struck: boolean) => (
+    <span
+      className={cn(
+        'text-muted-foreground block font-mono text-xs font-normal tabular-nums',
+        struck && 'line-through'
+      )}
+    >
+      {text}
+    </span>
+  )
+  const officialSecondLine = (model: PricingModel, struck: boolean) => {
+    const yuan = getOfficialSecondYuan(model, props.usdExchangeRate)
+    if (yuan === null) return null
+    return officialLine(
+      t('Official {{price}} / second', { price: formatYuan(yuan) }),
+      struck
+    )
+  }
   const modelName = (model: PricingModel) => (
     <span className='flex min-w-0 items-center gap-1.5'>
       <VendorIcon icon={modelVendor(model)?.icon} size={16} />
@@ -360,7 +416,7 @@ export function PriceBoard(props: {
   const renderGroup = (name: string, featured: boolean) => {
     const groupRatio = getConfiguredGroupRatio(props.groupRatio, name)
     const groupCombined = discountAt(groupRatio)
-    const isDiscount = getDiscountKind(groupCombined) === 'discount'
+    const isDiscount = showsDiscount(name, groupCombined)
     const active = name === group
     const forClaudeCode = /claude code/i.test(
       groupDescription(props.usableGroup[name])
@@ -480,11 +536,12 @@ export function PriceBoard(props: {
                     {groups.map((name) => (
                       <SelectItem key={name} value={name}>
                         {name}
-                        {getDiscountKind(
+                        {showsDiscount(
+                          name,
                           discountAt(
                             getConfiguredGroupRatio(props.groupRatio, name)
                           )
-                        ) === 'discount' && (
+                        ) && (
                           <span className='text-primary ml-2 font-mono text-xs'>
                             {discountLabel(
                               discountAt(
@@ -713,24 +770,61 @@ export function PriceBoard(props: {
                         </th>
                         <td className='px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums'>
                           {price?.kind === 'second' && (
-                            <span className='text-primary font-semibold'>
-                              {t('{{price}} / second', {
-                                price: formatYuan(groupYuan(price.usd)),
-                              })}
-                            </span>
+                            <>
+                              <span className='flex items-center justify-end gap-2'>
+                                <span className='text-primary font-semibold'>
+                                  {t('{{price}} / second', {
+                                    price: formatYuan(groupYuan(price.usd)),
+                                  })}
+                                </span>
+                                {mediaChip(
+                                  groupYuan(price.usd),
+                                  getOfficialSecondYuan(
+                                    model,
+                                    props.usdExchangeRate
+                                  )
+                                )}
+                              </span>
+                              {officialSecondLine(model, true)}
+                            </>
                           )}
                           {price?.kind === 'image' && (
-                            <span className='flex flex-wrap justify-end gap-x-4 gap-y-1'>
-                              {price.tiers.map((tier) => (
-                                <span key={tier.size}>
-                                  <span className='text-muted-foreground text-xs'>
-                                    {tier.size}{' '}
+                            <span className='flex flex-wrap items-start justify-end gap-x-4 gap-y-1'>
+                              {price.tiers.map((tier) => {
+                                const official = getOfficialImageYuan(
+                                  model,
+                                  tier.size,
+                                  props.usdExchangeRate
+                                )
+                                return (
+                                  <span key={tier.size}>
+                                    <span className='text-muted-foreground text-xs'>
+                                      {tier.size}{' '}
+                                    </span>
+                                    <span className='text-primary font-semibold'>
+                                      {formatYuan(groupYuan(tier.usd))}
+                                    </span>
+                                    {official !== null &&
+                                      officialLine(
+                                        t('Official {{price}}', {
+                                          price: formatYuan(official),
+                                        }),
+                                        true
+                                      )}
                                   </span>
-                                  <span className='text-primary font-semibold'>
-                                    {formatYuan(groupYuan(tier.usd))}
-                                  </span>
-                                </span>
-                              ))}
+                                )
+                              })}
+                              {mediaChip(
+                                groupYuan(
+                                  price.tiers.find((tier) => tier.size === '1K')
+                                    ?.usd ?? Number.NaN
+                                ),
+                                getOfficialImageYuan(
+                                  model,
+                                  '1K',
+                                  props.usdExchangeRate
+                                )
+                              )}
                             </span>
                           )}
                           {!price && (
@@ -796,6 +890,7 @@ export function PriceBoard(props: {
                         </th>
                         <td className='text-primary px-4 py-3 text-right font-mono font-semibold whitespace-nowrap tabular-nums'>
                           {formatYuan(groupYuan(usd))}
+                          {officialSecondLine(model, false)}
                         </td>
                       </tr>
                     ))}
@@ -804,7 +899,7 @@ export function PriceBoard(props: {
               </div>
               <p className='text-muted-foreground text-xs'>
                 {t(
-                  'Billed per request; each generated image counts as one request.'
+                  'Billed per request: each image counts once, and each video task counts once.'
                 )}
               </p>
             </div>
