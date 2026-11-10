@@ -20,6 +20,8 @@ import { Link } from '@tanstack/react-router'
 import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { BrandWordmark } from '@/components/brand-wordmark'
+import { SignatureMark } from '@/components/signature-mark'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { cn } from '@/lib/utils'
@@ -52,7 +54,7 @@ export function AuthBrandMark(props: AuthBrandMarkProps) {
       {loading ? (
         <Skeleton className='h-6 w-24' />
       ) : (
-        <span className='font-serif text-xl font-medium'>{systemName}</span>
+        <BrandWordmark name={systemName} className='text-xl' />
       )}
     </Link>
   )
@@ -99,6 +101,8 @@ export function AuthBrandPanel() {
         aria-hidden='true'
         className='pointer-events-none absolute -top-48 -right-48 size-[560px] rounded-full bg-[radial-gradient(closest-side,color-mix(in_oklab,var(--chart-1)_32%,transparent),transparent)]'
       />
+      {/* The home page's mark, behind the copy: the same C, in signatures. */}
+      <SignatureMark className='absolute top-4 -right-12 h-full max-h-96 rounded-full opacity-50' />
 
       <AuthBrandMark className='relative' />
 

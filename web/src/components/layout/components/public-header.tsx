@@ -20,6 +20,7 @@ import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { BrandWordmark } from '@/components/brand-wordmark'
 import { Dialog } from '@/components/dialog'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { NotificationPopover } from '@/components/notification-popover'
@@ -239,16 +240,14 @@ export function PublicHeader(props: PublicHeaderProps) {
                 <div className='flex size-7 shrink-0 items-center justify-center transition-all duration-300 group-hover:scale-105'>
                   {logoContent}
                 </div>
-                <span
-                  className='max-w-48 truncate text-sm font-semibold tracking-tight'
-                  title={displaySiteName}
-                >
-                  {loading ? (
-                    <Skeleton className='h-4 w-16' />
-                  ) : (
-                    displaySiteName
-                  )}
-                </span>
+                {loading ? (
+                  <Skeleton className='h-4 w-16' />
+                ) : (
+                  <BrandWordmark
+                    name={displaySiteName}
+                    className='max-w-48 text-base leading-none'
+                  />
+                )}
               </Link>
               <SystemUpdateAction presentation='version' />
             </div>

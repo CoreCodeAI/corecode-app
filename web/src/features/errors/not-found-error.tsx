@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useNavigate, useRouter } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { SignatureMark } from '@/components/signature-mark'
 import { Button } from '@/components/ui/button'
 import { useDocumentTitle } from '@/hooks/use-document-title'
 import { useNoIndex } from '@/hooks/use-no-index'
@@ -38,7 +39,13 @@ export function NotFoundError(props: NotFoundErrorProps) {
   useNoIndex()
   useDocumentTitle('404')
   return (
-    <div className={cn(props.embedded ? 'h-full min-h-80' : 'h-svh')}>
+    <div
+      className={cn(
+        'relative isolate overflow-hidden',
+        props.embedded ? 'h-full min-h-80' : 'h-svh'
+      )}
+    >
+      <SignatureMark className='absolute inset-0 -z-10 m-auto h-full max-h-96 max-w-full rounded-full opacity-10' />
       <div className='m-auto flex h-full w-full flex-col items-center justify-center gap-2'>
         <h1 className='text-[7rem] leading-tight font-bold'>404</h1>
         <span className='font-medium'>{t('Oops! Page Not Found!')}</span>

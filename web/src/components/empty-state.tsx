@@ -21,6 +21,7 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { FadeIn } from '@/components/page-transition'
+import { SignatureMark } from '@/components/signature-mark'
 import {
   Empty,
   EmptyContent,
@@ -48,11 +49,12 @@ export function EmptyState(props: EmptyStateProps) {
     <FadeIn>
       <Empty
         className={cn(
-          'min-h-[300px]',
+          'relative isolate min-h-[300px] overflow-hidden',
           props.bordered && 'border',
           props.className
         )}
       >
+        <SignatureMark className='absolute inset-0 -z-10 m-auto h-full max-h-56 max-w-full rounded-full opacity-10' />
         <EmptyHeader>
           <EmptyMedia variant='icon'>
             <Icon className='size-6' />

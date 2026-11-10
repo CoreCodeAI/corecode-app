@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { BrandWordmark } from '@/components/brand-wordmark'
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -73,7 +74,10 @@ export function SystemBrand(props: SystemBrandProps) {
             className='size-full rounded-md object-cover'
           />
         </div>
-        <span className='max-w-[12rem] truncate'>{name}</span>
+        <BrandWordmark
+          name={name}
+          className='max-w-[12rem] text-base leading-none'
+        />
       </Link>
     )
   }
