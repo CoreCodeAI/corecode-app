@@ -337,6 +337,12 @@ func UpdateOption(c *gin.Context) {
 			common.ApiError(c, err)
 			return
 		}
+	case "OfficialMediaPrice":
+		err = ratio_setting.UpdateOfficialMediaPriceByJSONString(option.Value.(string))
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	case "ModelRequestRateLimitGroup":
 		err = setting.CheckModelRequestRateLimitGroup(option.Value.(string))
 		if err != nil {

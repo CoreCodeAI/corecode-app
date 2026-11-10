@@ -55,6 +55,13 @@ export type BillingPluginVariant = {
   billing_usage_examples?: BillingUsageExample[]
 }
 
+/** A figure per second of video, or per image by size tier; a missing tier has none. */
+export type OfficialMediaPrice = {
+  currency: 'CNY' | 'USD'
+  per_second?: number
+  per_image?: Partial<Record<'1K' | '2K' | '4K', number>>
+}
+
 export type PricingModel = {
   billing_plugin_variants?: BillingPluginVariant[]
   id: number
@@ -73,6 +80,8 @@ export type PricingModel = {
   create_cache_ratio?: number | null
   /** CoreCode fork: how far the model's ratios sit above the official price. */
   official_price_markup?: number | null
+  /** CoreCode fork: the provider's price for a video or image model. */
+  official_media_price?: OfficialMediaPrice | null
   image_ratio?: number | null
   audio_ratio?: number | null
   audio_completion_ratio?: number | null

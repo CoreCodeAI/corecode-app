@@ -140,3 +140,37 @@ export function getExpressionPrice(
   }
   return { kind: 'image', tiers }
 }
+
+function officialYuanOf(
+  model: PricingModel,
+  amount: number | undefined,
+  usdExchangeRate: number
+): number | null {
+  const price = model.official_media_price
+  if (!price || typeof amount !== 'number') return null
+  const yuan = price.currency === 'USD' ? amount * usdExchangeRate : amount
+  return Number.isFinite(yuan) && yuan > 0 ? yuan : null
+}
+
+/** The official price per second of video in yuan, or null when none is set. */
+export function getOfficialSecondYuan(
+  model: PricingModel,
+  usdExchangeRate: number
+): number | null {
+  return officialYuanOf(
+    model,
+    model.official_media_price?.per_second,
+    usdExchangeRate
+  )
+}
+
+/** The official price of one image of a size tier in yuan, or null when none is set. */
+export function getOfficialImageYuan(
+  model: PricingModel,
+  size: string,
+  usdExchangeRate: number
+): number | null {
+  const tiers: Record<string, number | undefined> | undefined =
+    model.official_media_price?.per_image
+  return officialYuanOf(model, tiers?.[size], usdExchangeRate)
+}

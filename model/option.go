@@ -172,6 +172,7 @@ func InitOptionMap() {
 	common.OptionMap["CacheRatio"] = ratio_setting.CacheRatio2JSONString()
 	common.OptionMap["CreateCacheRatio"] = ratio_setting.CreateCacheRatio2JSONString()
 	common.OptionMap["OfficialPriceMarkup"] = ratio_setting.OfficialPriceMarkup2JSONString()
+	common.OptionMap["OfficialMediaPrice"] = ratio_setting.OfficialMediaPrice2JSONString()
 	common.OptionMap["GroupRatio"] = ratio_setting.GroupRatio2JSONString()
 	common.OptionMap["GroupGroupRatio"] = ratio_setting.GroupGroupRatio2JSONString()
 	common.OptionMap["UserUsableGroups"] = setting.UserUsableGroups2JSONString()
@@ -720,6 +721,8 @@ func updateOptionMap(key string, value string) (err error) {
 		err = ratio_setting.UpdateCreateCacheRatioByJSONString(value)
 	case "OfficialPriceMarkup":
 		err = ratio_setting.UpdateOfficialPriceMarkupByJSONString(value)
+	case "OfficialMediaPrice":
+		err = ratio_setting.UpdateOfficialMediaPriceByJSONString(value)
 	case "ImageRatio":
 		err = ratio_setting.UpdateImageRatioByJSONString(value)
 	case "AudioRatio":
