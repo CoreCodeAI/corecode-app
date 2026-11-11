@@ -47,6 +47,25 @@ export function getPaymentErrorTranslation(
 }
 
 /**
+ * Open a checkout page in a new tab, or in this tab when the browser blocks
+ * the popup. The order request is awaited before the page is known, which
+ * spends the click: Safari and iOS browsers then return null from
+ * `window.open`, and the customer would be left on a page that says it is
+ * redirecting.
+ */
+export function openPaymentPage(url: string): 'new-tab' | 'same-tab' {
+  let opened: Window | null = null
+  try {
+    opened = window.open(url, '_blank')
+  } catch {
+    opened = null
+  }
+  if (opened) return 'new-tab'
+  window.location.assign(url)
+  return 'same-tab'
+}
+
+/**
  * Check if browser is Safari
  */
 function isSafariBrowser(): boolean {

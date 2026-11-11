@@ -41,10 +41,15 @@ interface UseBillingHistoryOptions {
   initialPage?: number
   /** Initial page size */
   initialPageSize?: number
+  /**
+   * Fetch only while true, and fetch afresh each time it turns true: an order
+   * placed after the wallet mounted must be in the list when it opens.
+   */
+  enabled?: boolean
 }
 
 export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
-  const { initialPage = 1, initialPageSize = 10 } = options
+  const { initialPage = 1, initialPageSize = 10, enabled = true } = options
   const isAdmin = useIsAdmin()
 
   const [records, setRecords] = useState<TopupRecord[]>([])
@@ -56,6 +61,17 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
   const requestIdRef = useRef(0)
   const [loading, setLoading] = useState(false)
   const [completing, setCompleting] = useState(false)
+  const [wasEnabled, setWasEnabled] = useState(enabled)
+
+  // Drop the list from the last opening before it can paint.
+  if (enabled !== wasEnabled) {
+    setWasEnabled(enabled)
+    if (enabled) {
+      setRecords([])
+      setTotal(0)
+      setLoading(true)
+    }
+  }
 
   /**
    * Fetch billing history
@@ -148,10 +164,10 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
 
   // Fetch data after the search draft has settled.
   useEffect(() => {
-    if (keyword !== debouncedKeyword) return
+    if (!enabled || keyword !== debouncedKeyword) return
 
     fetchBillingHistory()
-  }, [debouncedKeyword, fetchBillingHistory, keyword])
+  }, [debouncedKeyword, enabled, fetchBillingHistory, keyword])
 
   return {
     records,

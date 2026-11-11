@@ -79,12 +79,14 @@ export function BillingHistoryDialog({
     handlePageSizeChange,
     handleSearch,
     handleCompleteOrder,
-  } = useBillingHistory()
+  } = useBillingHistory({ enabled: open })
 
   const [confirmTradeNo, setConfirmTradeNo] = useState<string | null>(null)
   const { copyToClipboard, copiedText } = useCopyToClipboard({ notify: false })
 
   const totalPages = Math.ceil(total / pageSize)
+  // A page change keeps the rows on screen until the next page arrives.
+  const showSkeleton = loading && records.length === 0
 
   const handleConfirmComplete = async () => {
     if (confirmTradeNo) {
@@ -148,7 +150,7 @@ export function BillingHistoryDialog({
 
           {/* Records List */}
           <div className='max-h-[min(54vh,520px)] overflow-y-auto pr-1'>
-            {loading && (
+            {showSkeleton && (
               <div className='space-y-3'>
                 {['first', 'second', 'third', 'fourth', 'fifth'].map(
                   (placeholder) => (
@@ -173,7 +175,7 @@ export function BillingHistoryDialog({
                 )}
               </div>
             )}
-            {!loading && records.length === 0 && (
+            {!showSkeleton && records.length === 0 && (
               <div className='text-muted-foreground flex min-h-40 flex-col items-center justify-center py-10 text-center'>
                 <p className='text-sm font-medium'>
                   {t('No billing records found')}
@@ -185,7 +187,7 @@ export function BillingHistoryDialog({
                 </p>
               </div>
             )}
-            {!loading && records.length > 0 && (
+            {!showSkeleton && records.length > 0 && (
               <div className='space-y-3'>
                 {records.map((record) => {
                   const statusConfig = getStatusConfig(record.status)
@@ -298,7 +300,7 @@ export function BillingHistoryDialog({
           </div>
 
           {/* Pagination */}
-          {!loading && records.length > 0 && (
+          {!showSkeleton && records.length > 0 && (
             <div className='flex flex-col items-center gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between'>
               <div className='text-muted-foreground text-xs sm:text-sm'>
                 {t('Showing')} {(page - 1) * pageSize + 1}-
