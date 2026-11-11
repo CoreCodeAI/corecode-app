@@ -58,6 +58,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   client.clear()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
@@ -108,6 +109,42 @@ describe('ClientSetupGuide', () => {
         'claude',
       ].join('\n')
     )
+  })
+
+  it('starts the clipboard write during the click, before the full key arrives', async () => {
+    const user = userEvent.setup()
+    let answerKeyRequest: (value: unknown) => void = () => {}
+    vi.spyOn(api, 'post').mockReturnValue(
+      new Promise((resolve) => {
+        answerKeyRequest = resolve
+      })
+    )
+    class ClipboardItemStub {
+      constructor(readonly items: Record<string, Promise<Blob>>) {}
+    }
+    vi.stubGlobal('ClipboardItem', ClipboardItemStub)
+    const write = vi.fn(async (items: ClipboardItemStub[]) => {
+      await items[0].items['text/plain']
+    })
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { write, writeText },
+    })
+    await renderGuide([key({})])
+
+    await user.click(screen.getByRole('tab', { name: 'macOS / Linux' }))
+    await user.click(screen.getByRole('button', { name: 'Copy' }))
+
+    expect(write).toHaveBeenCalledTimes(1)
+    answerKeyRequest({
+      data: { success: true, data: { key: 'full-secret-value' } },
+    })
+    const blob = await write.mock.calls[0][0][0].items['text/plain']
+    expect(await blob.text()).toContain(
+      'export ANTHROPIC_AUTH_TOKEN=sk-full-secret-value'
+    )
+    expect(writeText).not.toHaveBeenCalled()
   })
 
   it('does not copy anything when the full key cannot be fetched', async () => {
