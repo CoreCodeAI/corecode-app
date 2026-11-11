@@ -103,6 +103,7 @@ import {
 import { USAGE_BILLING_PATH, type LogOtherData } from '../../types'
 import { ResponseModelDetails } from '../model-badge'
 import { PluginAuthorLink } from '../plugin-author-link'
+import { CopyableDetailValue } from './copyable-detail-value'
 import { CostCheckSection } from './cost-check-section'
 import { DetailRow, DetailSection } from './log-detail-layout'
 
@@ -717,14 +718,24 @@ export function DetailsDialog(props: DetailsDialogProps) {
           {props.log.request_id && (
             <DetailRow
               label={t('Request ID')}
-              value={props.log.request_id}
+              value={
+                <CopyableDetailValue
+                  value={props.log.request_id}
+                  label={`${t('Copy')}: ${t('Request ID')}`}
+                />
+              }
               mono
             />
           )}
           {props.log.upstream_request_id && (
             <DetailRow
               label={t('Upstream Request ID')}
-              value={props.log.upstream_request_id}
+              value={
+                <CopyableDetailValue
+                  value={props.log.upstream_request_id}
+                  label={`${t('Copy')}: ${t('Upstream Request ID')}`}
+                />
+              }
               mono
             />
           )}
