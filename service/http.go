@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -23,13 +24,35 @@ func CloseResponseBodyGracefully(httpResponse *http.Response) {
 	}
 }
 
+// upstreamHostHeaders describe the upstream's own host, not the API response:
+// its cookies, its browser reporting endpoints and its transport. A client must
+// see the relay's, so none of them is copied. Neither is any Access-Control-*
+// header (see isUpstreamHostHeader).
+var upstreamHostHeaders = []string{"Set-Cookie", "Alt-Svc", "NEL", "Report-To"}
+
+// isUpstreamHostHeader reports whether k belongs to the upstream's host rather
+// than to the response. CORS is the relay's own policy: an upstream that
+// answers Access-Control-Allow-Origin with its own site would replace the
+// relay's "*", and a browser app on any other origin could not read a response
+// the user was already charged for. Cf-* headers are the upstream CDN's
+// identifiers. Copying either would also name the upstream to every client.
+func isUpstreamHostHeader(k string) bool {
+	for _, prefix := range []string{"Access-Control-", "Cf-"} {
+		if len(k) >= len(prefix) && strings.EqualFold(k[:len(prefix)], prefix) {
+			return true
+		}
+	}
+	return slices.ContainsFunc(upstreamHostHeaders, func(name string) bool { return strings.EqualFold(name, k) })
+}
+
 // ShouldCopyUpstreamHeader checks whether a given upstream response header
 // should be copied to the client response. It returns false for Content-Length
-// (managed separately) and X-Oneapi-Request-Id (to preserve the local instance
-// ID). The upstream request IDs (X-Oneapi-Request-Id and X-GPTLoad-Request-ID)
-// are captured into the Gin context for later logging.
+// (managed separately), X-Oneapi-Request-Id (to preserve the local instance
+// ID) and the upstream host's own headers (isUpstreamHostHeader). The upstream
+// request IDs (X-Oneapi-Request-Id and X-GPTLoad-Request-ID) are captured into
+// the Gin context for later logging.
 func ShouldCopyUpstreamHeader(c *gin.Context, k string, v []string) bool {
-	if strings.EqualFold(k, "Content-Length") {
+	if strings.EqualFold(k, "Content-Length") || isUpstreamHostHeader(k) {
 		return false
 	}
 	if strings.EqualFold(k, common.RequestIdKey) {
