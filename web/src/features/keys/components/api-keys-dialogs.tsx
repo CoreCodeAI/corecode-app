@@ -22,16 +22,26 @@ import { Dialog } from '@/components/dialog'
 
 import { getSetupTitle } from '../lib/client-setup'
 import { useSetupClients } from '../lib/use-setup-clients'
+import type { ApiKey } from '../types'
 import { ApiKeysDeleteDialog } from './api-keys-delete-dialog'
 import { ApiKeysMutateDrawer } from './api-keys-mutate-drawer'
 import { useApiKeys } from './api-keys-provider'
 import { ClientSetupGuide } from './client-setup-guide'
 import { CCSwitchDialog } from './dialogs/cc-switch-dialog'
 
-export function ApiKeysDialogs() {
+/**
+ * The setup dialog's title, from the clients the key's group admits. The
+ * dialog mounts its title only while it is open, so a closed dialog asks for
+ * no models.
+ */
+function SetupDialogTitle(props: { apiKey: ApiKey | null }) {
   const { t } = useTranslation()
+  const { clients } = useSetupClients(props.apiKey)
+  return t(getSetupTitle(clients))
+}
+
+export function ApiKeysDialogs() {
   const { open, setOpen, currentRow, resolvedKey } = useApiKeys()
-  const { clients: setupClients } = useSetupClients(currentRow)
 
   return (
     <>
@@ -49,7 +59,7 @@ export function ApiKeysDialogs() {
       <Dialog
         open={open === 'setup' && currentRow !== null}
         onOpenChange={(isOpen) => !isOpen && setOpen(null)}
-        title={t(getSetupTitle(setupClients))}
+        title={<SetupDialogTitle apiKey={currentRow} />}
         description={currentRow?.name}
         contentClassName='sm:max-w-2xl'
         contentHeight='auto'
