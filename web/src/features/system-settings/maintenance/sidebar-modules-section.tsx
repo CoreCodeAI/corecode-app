@@ -152,6 +152,10 @@ export function SidebarModulesSection({
         title: t('Feedback'),
         description: t('Report a problem or suggest an idea.'),
       },
+      invoice: {
+        title: t('Invoice center'),
+        description: t('Request invoices for paid orders.'),
+      },
     },
     admin: {
       channel: {
@@ -189,6 +193,10 @@ export function SidebarModulesSection({
       feedback: {
         title: t('Feedback Review'),
         description: t('Reply to customer feedback and grant rewards.'),
+      },
+      invoice: {
+        title: t('Invoice management'),
+        description: t('Issue or reject invoice applications.'),
       },
     },
   }

@@ -113,6 +113,13 @@ const (
 	MsgSecurityEventLoginLinked          = "email.security_event.login_linked"
 	MsgSecurityEventLoginUnlinked        = "email.security_event.login_unlinked"
 	MsgSecurityEventWeChatLinked         = "email.security_event.wechat_linked"
+
+	MsgEmailInvoiceIssuedSubject   = "email.invoice.issued_subject"
+	MsgEmailInvoiceIssuedBody      = "email.invoice.issued_body"
+	MsgEmailInvoiceRejectedSubject = "email.invoice.rejected_subject"
+	MsgEmailInvoiceRejectedBody    = "email.invoice.rejected_body"
+	MsgEmailInvoiceTaxReturned     = "email.invoice.tax_returned"
+	MsgEmailInvoiceCenterLink      = "email.invoice.center_link"
 )
 
 // Low-quota notices, in the recipient's saved language

@@ -46,6 +46,8 @@ import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenti
 import { Route as AuthenticatedFeedbackAdminIndexRouteImport } from './routes/_authenticated/feedback-admin/index'
 import { Route as AuthenticatedFeedbackIndexRouteImport } from './routes/_authenticated/feedback/index'
 import { Route as AuthenticatedInvitationsIndexRouteImport } from './routes/_authenticated/invitations/index'
+import { Route as AuthenticatedInvoiceManagementIndexRouteImport } from './routes/_authenticated/invoice-management/index'
+import { Route as AuthenticatedInvoiceIndexRouteImport } from './routes/_authenticated/invoice/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
@@ -275,6 +277,18 @@ const AuthenticatedInvitationsIndexRoute =
   AuthenticatedInvitationsIndexRouteImport.update({
     id: '/invitations/',
     path: '/invitations/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedInvoiceManagementIndexRoute =
+  AuthenticatedInvoiceManagementIndexRouteImport.update({
+    id: '/invoice-management/',
+    path: '/invoice-management/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedInvoiceIndexRoute =
+  AuthenticatedInvoiceIndexRouteImport.update({
+    id: '/invoice/',
+    path: '/invoice/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedKeysIndexRoute = AuthenticatedKeysIndexRouteImport.update({
@@ -536,6 +550,8 @@ export interface FileRoutesByFullPath {
   '/feedback-admin/': typeof AuthenticatedFeedbackAdminIndexRoute
   '/feedback/': typeof AuthenticatedFeedbackIndexRoute
   '/invitations/': typeof AuthenticatedInvitationsIndexRoute
+  '/invoice-management/': typeof AuthenticatedInvoiceManagementIndexRoute
+  '/invoice/': typeof AuthenticatedInvoiceIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
@@ -609,6 +625,8 @@ export interface FileRoutesByTo {
   '/feedback-admin': typeof AuthenticatedFeedbackAdminIndexRoute
   '/feedback': typeof AuthenticatedFeedbackIndexRoute
   '/invitations': typeof AuthenticatedInvitationsIndexRoute
+  '/invoice-management': typeof AuthenticatedInvoiceManagementIndexRoute
+  '/invoice': typeof AuthenticatedInvoiceIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
@@ -686,6 +704,8 @@ export interface FileRoutesById {
   '/_authenticated/feedback-admin/': typeof AuthenticatedFeedbackAdminIndexRoute
   '/_authenticated/feedback/': typeof AuthenticatedFeedbackIndexRoute
   '/_authenticated/invitations/': typeof AuthenticatedInvitationsIndexRoute
+  '/_authenticated/invoice-management/': typeof AuthenticatedInvoiceManagementIndexRoute
+  '/_authenticated/invoice/': typeof AuthenticatedInvoiceIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
@@ -762,6 +782,8 @@ export interface FileRouteTypes {
     | '/feedback-admin/'
     | '/feedback/'
     | '/invitations/'
+    | '/invoice-management/'
+    | '/invoice/'
     | '/keys/'
     | '/models/'
     | '/playground/'
@@ -835,6 +857,8 @@ export interface FileRouteTypes {
     | '/feedback-admin'
     | '/feedback'
     | '/invitations'
+    | '/invoice-management'
+    | '/invoice'
     | '/keys'
     | '/models'
     | '/playground'
@@ -911,6 +935,8 @@ export interface FileRouteTypes {
     | '/_authenticated/feedback-admin/'
     | '/_authenticated/feedback/'
     | '/_authenticated/invitations/'
+    | '/_authenticated/invoice-management/'
+    | '/_authenticated/invoice/'
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
     | '/_authenticated/playground/'
@@ -1226,6 +1252,20 @@ declare module '@tanstack/react-router' {
       path: '/invitations'
       fullPath: '/invitations/'
       preLoaderRoute: typeof AuthenticatedInvitationsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/invoice-management/': {
+      id: '/_authenticated/invoice-management/'
+      path: '/invoice-management'
+      fullPath: '/invoice-management/'
+      preLoaderRoute: typeof AuthenticatedInvoiceManagementIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/invoice/': {
+      id: '/_authenticated/invoice/'
+      path: '/invoice'
+      fullPath: '/invoice/'
+      preLoaderRoute: typeof AuthenticatedInvoiceIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/keys/': {
@@ -1597,6 +1637,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFeedbackAdminIndexRoute: typeof AuthenticatedFeedbackAdminIndexRoute
   AuthenticatedFeedbackIndexRoute: typeof AuthenticatedFeedbackIndexRoute
   AuthenticatedInvitationsIndexRoute: typeof AuthenticatedInvitationsIndexRoute
+  AuthenticatedInvoiceManagementIndexRoute: typeof AuthenticatedInvoiceManagementIndexRoute
+  AuthenticatedInvoiceIndexRoute: typeof AuthenticatedInvoiceIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
@@ -1633,6 +1675,9 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFeedbackAdminIndexRoute: AuthenticatedFeedbackAdminIndexRoute,
   AuthenticatedFeedbackIndexRoute: AuthenticatedFeedbackIndexRoute,
   AuthenticatedInvitationsIndexRoute: AuthenticatedInvitationsIndexRoute,
+  AuthenticatedInvoiceManagementIndexRoute:
+    AuthenticatedInvoiceManagementIndexRoute,
+  AuthenticatedInvoiceIndexRoute: AuthenticatedInvoiceIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,

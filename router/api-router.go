@@ -62,6 +62,31 @@ func SetApiRouter(router *gin.Engine) {
 			feedbackAdminRoute.GET("", controller.GetAllFeedback)
 			feedbackAdminRoute.PATCH("/:id", controller.UpdateFeedback)
 		}
+		apiRouter.GET("/invoice/epay/notify", controller.InvoiceEpayNotify)
+		apiRouter.POST("/invoice/epay/notify", anonymousRequestBodyLimit, controller.InvoiceEpayNotify)
+		invoiceRoute := apiRouter.Group("/invoice", middleware.DisableCache(), middleware.UserAuth())
+		{
+			invoiceRoute.GET("/config", controller.GetInvoiceConfig)
+			invoiceRoute.GET("/summary", controller.GetInvoiceSummary)
+			invoiceRoute.GET("/orders", controller.GetInvoiceOrders)
+			invoiceRoute.POST("", middleware.UserCriticalRateLimit("invoice"), controller.SubmitInvoice)
+			invoiceRoute.GET("/self", controller.GetSelfInvoices)
+			invoiceRoute.GET("/self/:id", controller.GetSelfInvoice)
+			invoiceRoute.GET("/self/:id/file", controller.DownloadSelfInvoiceFile)
+			invoiceRoute.POST("/self/:id/pay", middleware.UserCriticalRateLimit("invoice"), controller.PayInvoiceTax)
+			invoiceRoute.POST("/self/:id/cancel", controller.CancelSelfInvoice)
+		}
+		invoiceAdminRoute := apiRouter.Group("/invoice/admin", middleware.DisableCache(), middleware.AdminAuth())
+		{
+			invoiceAdminRoute.GET("", controller.GetAllInvoices)
+			invoiceAdminRoute.GET("/review-count", controller.GetInvoiceReviewCount)
+			invoiceAdminRoute.GET("/:id", controller.GetInvoiceAdmin)
+			invoiceAdminRoute.POST("/:id/file", controller.UploadInvoiceFile)
+			invoiceAdminRoute.GET("/:id/file", controller.DownloadInvoiceFileAdmin)
+			invoiceAdminRoute.POST("/:id/issue", controller.IssueInvoiceAdmin)
+			invoiceAdminRoute.POST("/:id/reject", controller.RejectInvoiceAdmin)
+			invoiceAdminRoute.POST("/:id/delete", controller.DeleteInvoiceAdmin)
+		}
 		apiRouter.GET("/verification", middleware.EmailVerificationRateLimit(), middleware.TurnstileCheck(), middleware.PowCheck(), controller.SendEmailVerification)
 		apiRouter.GET("/reset_password", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), middleware.PowCheck(), controller.SendPasswordResetEmail)
 		apiRouter.POST("/user/reset", middleware.CriticalRateLimit(), anonymousRequestBodyLimit, controller.ResetPassword)

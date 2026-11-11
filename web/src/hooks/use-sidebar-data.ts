@@ -22,6 +22,7 @@ import {
   Building2,
   ClipboardList,
   CreditCard,
+  FileCheck,
   FileText,
   FlaskConical,
   HandCoins,
@@ -36,6 +37,7 @@ import {
   PlugZap,
   Radio,
   Receipt,
+  ReceiptText,
   ServerCog,
   ChartNoAxesCombined,
   Settings,
@@ -51,6 +53,8 @@ import { useTranslation } from 'react-i18next'
 
 import type { SidebarBadges, SidebarData } from '@/components/layout/types'
 import { useFeedbackUnreadCount } from '@/features/feedback/hooks/use-feedback-unread'
+import { useInvoiceReviewCount } from '@/features/invoice/hooks/use-invoice-review-count'
+import { useStatus } from '@/hooks/use-status'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -63,6 +67,8 @@ import { useAuthStore } from '@/stores/auth-store'
 export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
   const { t } = useTranslation()
   const unreadFeedback = useFeedbackUnreadCount()
+  const invoiceReviews = useInvoiceReviewCount()
+  const { status } = useStatus()
   const role = useAuthStore((s) => s.auth.user?.role)
   // Customers get a plainer name; "Dashboard" sits beside "Overview" for them.
   const isCustomer = (role ?? ROLE.GUEST) < ROLE.ADMIN
@@ -121,6 +127,16 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             url: '/wallet',
             icon: Wallet,
           },
+          // Shown once an administrator turns invoicing on.
+          ...(status?.invoice_enabled === true
+            ? [
+                {
+                  title: t('Invoice center'),
+                  url: '/invoice',
+                  icon: ReceiptText,
+                },
+              ]
+            : []),
           {
             title: t('Invitations'),
             url: '/invitations',
@@ -195,6 +211,12 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             title: t('Top-up Records'),
             url: '/topups',
             icon: Receipt,
+          },
+          {
+            title: t('Invoice management'),
+            url: '/invoice-management',
+            icon: FileCheck,
+            badge: invoiceReviews > 0 ? String(invoiceReviews) : undefined,
           },
           {
             title: t('Users'),

@@ -368,6 +368,15 @@ func fulfillOrder(ctx context.Context, event stripe.Event, referenceId string, c
 
 	LockOrder(referenceId)
 	defer UnlockOrder(referenceId)
+	// The invoice center invoices what Stripe collected, which a promotion
+	// code or a plan's Stripe Price can make differ from the order's price.
+	// The webhook answers 200 whatever happens here, so a failure is logged
+	// and the order is still credited: a payment must never be dropped.
+	subtotal, _ := strconv.ParseInt(event.GetObjectValue("amount_subtotal"), 10, 64)
+	total, _ := strconv.ParseInt(event.GetObjectValue("amount_total"), 10, 64)
+	if err := model.RecordStripeInvoiceAmount(referenceId, event.GetObjectValue("mode"), subtotal, total); err != nil {
+		logger.LogError(ctx, common.LogText("Stripe failed to record the invoiceable amount trade_no=%s error=%q", referenceId, err.Error()))
+	}
 	payload := map[string]any{
 		"customer":     customerId,
 		"amount_total": event.GetObjectValue("amount_total"),
@@ -392,9 +401,8 @@ func fulfillOrder(ctx context.Context, event stripe.Event, referenceId string, c
 		return
 	}
 
-	total, _ := strconv.ParseFloat(event.GetObjectValue("amount_total"), 64)
 	currency := strings.ToUpper(event.GetObjectValue("currency"))
-	logger.LogInfo(ctx, common.LogText("Stripe top-up succeeded trade_no=%s amount_total=%.2f currency=%s event_type=%s client_ip=%s", referenceId, total/100, currency, string(event.Type), callerIp))
+	logger.LogInfo(ctx, common.LogText("Stripe top-up succeeded trade_no=%s amount_total=%.2f currency=%s event_type=%s client_ip=%s", referenceId, float64(total)/100, currency, string(event.Type), callerIp))
 }
 
 func sessionExpired(ctx context.Context, event stripe.Event) {

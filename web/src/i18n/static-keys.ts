@@ -906,4 +906,20 @@ export const STATIC_I18N_KEYS = [
   'Channel priorities changed. Refresh and try again.',
   'Invalid channel priority move',
   'Channel priority is outside the sortable range',
+  // Invoice center API errors. Only the invoice pages show them, so naming
+  // them here keeps them out of the core pages' locale part.
+  'Invoice application not found',
+  'Some selected orders cannot be invoiced. Refresh the order list and try again.',
+  'The application status has changed. Refresh and try again.',
+  'The tax cannot be converted to balance. Check the top-up price setting.',
+  'Upload the invoice file before confirming it is issued',
+  'Enter an invoice title of at most {{max}} characters',
+  'Select between 1 and {{max}} orders',
+  'The invoice file can be at most {{max}} KB',
+  'Upload a PDF, OFD, PNG or JPG file',
+  'Enter a reason of at most {{max}} characters',
+  // Invoice tax lines in the usage logs.
+  'Paid the tax of ¥{{amount}} for invoice application {{id}} from your balance: {{quota}}',
+  'A tax payment of ¥{{amount}} for invoice application {{id}} arrived after the application no longer needed it, so {{quota}} was returned to your balance',
+  'Invoice application {{id}} was rejected and the tax of ¥{{amount}} was returned as {{quota}}',
 ] as const

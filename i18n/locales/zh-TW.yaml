@@ -93,6 +93,12 @@ email.security_event.email_confirmed: "電子郵件地址已確認"
 email.security_event.login_linked: "已綁定登入帳號 {{.Provider}}"
 email.security_event.login_unlinked: "已解綁登入帳號"
 email.security_event.wechat_linked: "已綁定微信帳號"
+email.invoice.issued_subject: "{{.SystemName}}：發票申請 #{{.Id}} 已開立"
+email.invoice.issued_body: "您的發票申請 #{{.Id}}（{{.Title}}，¥{{.Amount}}）已開立。"
+email.invoice.rejected_subject: "{{.SystemName}}：發票申請 #{{.Id}} 未通過"
+email.invoice.rejected_body: "您的發票申請 #{{.Id}}（{{.Title}}，¥{{.Amount}}）未通過審核。原因：{{.Reason}}"
+email.invoice.tax_returned: "已支付的稅費已退回您的帳戶餘額，相關訂單可以重新申請開票。"
+email.invoice.center_link: "請前往<a href='{{.Link}}'>開票中心</a>查看詳情或下載發票。"
 
 # Low-quota notices
 notify.quota_low_title: "您的額度即將用盡"

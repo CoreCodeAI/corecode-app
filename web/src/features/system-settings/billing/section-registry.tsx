@@ -27,6 +27,12 @@ const CheckinSettingsSection = lazySection(() =>
   )
 )
 
+const InvoiceSettingsSection = lazySection(() =>
+  import('../general/invoice-settings-section').then(
+    (m) => m.InvoiceSettingsSection
+  )
+)
+
 const PricingSection = lazySection(() =>
   import('../general/pricing-section').then((m) => m.PricingSection)
 )
@@ -226,6 +232,24 @@ const BILLING_SECTIONS = [
           enabled: settings['checkin_setting.enabled'],
           minQuota: settings['checkin_setting.min_quota'],
           maxQuota: settings['checkin_setting.max_quota'],
+        }}
+      />
+    ),
+  },
+  {
+    id: 'invoice',
+    titleKey: 'Invoicing',
+    build: (settings: BillingSettings) => (
+      <InvoiceSettingsSection
+        defaultValues={{
+          enabled: settings['invoice_setting.enabled'],
+          tax_rate: settings['invoice_setting.tax_rate'],
+          categories: settings['invoice_setting.categories'],
+          order_days: settings['invoice_setting.order_days'],
+          max_orders: settings['invoice_setting.max_orders'],
+          payment_timeout_minutes:
+            settings['invoice_setting.payment_timeout_minutes'],
+          file_max_kb: settings['invoice_setting.file_max_kb'],
         }}
       />
     ),

@@ -405,6 +405,13 @@ func UpdateOption(c *gin.Context) {
 			common.ApiError(c, err)
 			return
 		}
+	case "invoice_setting.tax_rate", "invoice_setting.order_days", "invoice_setting.max_orders",
+		"invoice_setting.payment_timeout_minutes", "invoice_setting.file_max_kb", "invoice_setting.categories":
+		err = operation_setting.ValidateInvoiceOption(strings.TrimPrefix(option.Key, "invoice_setting."), option.Value.(string))
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	case "violation_guard_setting.mode", "violation_guard_setting.suspend_hours",
 		"violation_guard_setting.ban_strikes", "violation_guard_setting.strike_window_days":
 		field := strings.TrimPrefix(option.Key, "violation_guard_setting.")

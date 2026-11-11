@@ -61,6 +61,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     personal: true,
     security: true,
     feedback: true,
+    invoice: true,
   },
   admin: {
     enabled: true,
@@ -73,6 +74,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     topup_records: true,
     enterprise_application: true,
     feedback: true,
+    invoice: true,
   },
 }
 
@@ -148,6 +150,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/profile': { section: 'personal', module: 'personal' },
   '/security': { section: 'personal', module: 'security' },
   '/feedback': { section: 'personal', module: 'feedback' },
+  '/invoice': { section: 'personal', module: 'invoice' },
   '/channels': { section: 'admin', module: 'channel' },
   '/models': { section: 'admin', module: 'models' },
   '/models/metadata': { section: 'admin', module: 'models' },
@@ -161,6 +164,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
     module: 'enterprise_application',
   },
   '/feedback-admin': { section: 'admin', module: 'feedback' },
+  '/invoice-management': { section: 'admin', module: 'invoice' },
   '/system-settings': { section: 'admin', module: 'setting' },
   '/system-settings/site': { section: 'admin', module: 'setting' },
 }

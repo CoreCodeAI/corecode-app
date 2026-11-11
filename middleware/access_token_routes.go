@@ -70,6 +70,25 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/feedback/admin":       accessTokenSessionRule,
 	"PATCH /api/feedback/admin/:id": accessTokenSessionRule,
 
+	// router/api-router.go: /api/invoice
+	"GET /api/invoice/config":             accessTokenSessionRule,
+	"GET /api/invoice/summary":            accessTokenSessionRule,
+	"GET /api/invoice/orders":             accessTokenSessionRule,
+	"POST /api/invoice":                   accessTokenSessionRule,
+	"GET /api/invoice/self":               accessTokenSessionRule,
+	"GET /api/invoice/self/:id":           accessTokenSessionRule,
+	"GET /api/invoice/self/:id/file":      accessTokenSessionRule,
+	"POST /api/invoice/self/:id/pay":      accessTokenSessionRule,
+	"POST /api/invoice/self/:id/cancel":   accessTokenSessionRule,
+	"GET /api/invoice/admin":              accessTokenSessionRule,
+	"GET /api/invoice/admin/review-count": accessTokenSessionRule,
+	"GET /api/invoice/admin/:id":          accessTokenSessionRule,
+	"POST /api/invoice/admin/:id/file":    accessTokenSessionRule,
+	"GET /api/invoice/admin/:id/file":     accessTokenSessionRule,
+	"POST /api/invoice/admin/:id/issue":   accessTokenSessionRule,
+	"POST /api/invoice/admin/:id/reject":  accessTokenSessionRule,
+	"POST /api/invoice/admin/:id/delete":  accessTokenSessionRule,
+
 	// router/api-router.go: /api/user (self)
 	"GET /api/user/sessions":                       accessTokenSessionRule,
 	"DELETE /api/user/sessions/:sid":               accessTokenSessionRule,

@@ -70,13 +70,15 @@ function sidebarFor(
   admin?: object,
   user?: object,
   canConfigure = true,
-  role: number = ROLE.USER
+  role: number = ROLE.USER,
+  status: object = {}
 ) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   client.setQueryData(['status'], {
     SidebarModulesAdmin: admin ? JSON.stringify(admin) : '',
+    ...status,
   })
   useAuthStore.getState().auth.setUser({
     id: 1,
@@ -277,6 +279,25 @@ describe('customer sidebar defaults', () => {
   })
 })
 
+describe('invoice center entry', () => {
+  it('appears under Personal after Wallet once invoicing is on', () => {
+    const { result } = sidebarFor(undefined, undefined, true, ROLE.USER, {
+      invoice_enabled: true,
+    })
+    const personal = result.current.find((group) => group.id === 'personal')
+    const urls = personal?.items.map((item) => ('url' in item ? item.url : ''))
+    expect(urls?.slice(0, 2)).toEqual(['/wallet', '/invoice'])
+  })
+
+  it('stays hidden while invoicing is off', () => {
+    const { result } = sidebarFor()
+    const urls = result.current.flatMap((group) =>
+      group.items.map((item) => ('url' in item ? item.url : ''))
+    )
+    expect(urls).not.toContain('/invoice')
+  })
+})
+
 describe('sidebar group order', () => {
   it('puts Chat after Personal so the console groups come first', () => {
     const { result } = sidebarFor()
@@ -299,6 +320,7 @@ describe('sidebar group order', () => {
       '/feedback-admin',
       '/enterprise-applications',
       '/topups',
+      '/invoice-management',
       '/users',
       '/affiliates',
       '/redemption-codes',

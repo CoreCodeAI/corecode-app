@@ -139,6 +139,9 @@ func main() {
 	// Invitation commission settlement, hourly
 	service.StartAffiliateSettlementTask()
 
+	// Cancels invoice applications whose tax went unpaid
+	service.StartInvoiceExpiryTask()
+
 	middleware.StartUserConcurrencyRejectionFlush()
 	service.StartRiskGateTasks()
 	service.StartSiteInsightsRollupTask()
