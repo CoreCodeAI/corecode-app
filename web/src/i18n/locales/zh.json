@@ -8068,6 +8068,14 @@
     "The reset could not be prepared; no credit was used. Try again later.": "重置准备失败，没有使用重置券。请稍后再试。",
     "The provider rejected the reset credit.": "上游拒绝了这张重置券。",
     "The reset outcome is unknown. Try again to check the same redemption.": "重置结果暂未确认。再次确认会查询同一次兑换，不会重复使用重置券。",
-    "The account is suspended.": "该账号已暂停。"
+    "The account is suspended.": "该账号已暂停。",
+    "Creation Studio": "创作台",
+    "Unable to open the Creation Studio.": "无法打开创作台。",
+    "The Creation Studio needs an auto-group key": "创作台需要一个 auto 分组的令牌",
+    "The Creation Studio draws images and videos as well as text, and only a key in the auto group reaches all of those models. You have no enabled key in that group.": "创作台除文字外还要生成图片和视频，只有 auto 分组的令牌才能同时使用这些模型。你目前没有已启用的 auto 分组令牌。",
+    "Create Creation Studio key": "创建创作台令牌",
+    "This creates a key named \"{{name}}\" in the \"{{group}}\" group with unlimited quota that never expires. You can edit or delete it on the API Keys page.": "将创建一个名为“{{name}}”、分组为“{{group}}”、额度不限且永不过期的令牌。你可以在“API 密钥”页面修改或删除它。",
+    "Open the AI canvas app with one of your API keys.": "用你的 API 密钥打开 AI 画布应用。",
+    "Open in Creation Studio": "在创作台打开"
   }
 }

@@ -31,6 +31,7 @@ import {
   ListTodo,
   MessageSquare,
   MessageSquareText,
+  Palette,
   PlugZap,
   Radio,
   Receipt,
@@ -145,6 +146,11 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             title: t('Playground'),
             url: '/playground',
             icon: FlaskConical,
+          },
+          {
+            title: t('Creation Studio'),
+            icon: Palette,
+            type: 'canvas-studio',
           },
           {
             title: t('Chat'),

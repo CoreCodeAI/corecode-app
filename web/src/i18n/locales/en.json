@@ -8068,6 +8068,14 @@
     "The reset could not be prepared; no credit was used. Try again later.": "The reset could not be prepared; no credit was used. Try again later.",
     "The provider rejected the reset credit.": "The provider rejected the reset credit.",
     "The reset outcome is unknown. Try again to check the same redemption.": "The reset outcome is unknown. Try again to check the same redemption.",
-    "The account is suspended.": "The account is suspended."
+    "The account is suspended.": "The account is suspended.",
+    "Creation Studio": "Creation Studio",
+    "Unable to open the Creation Studio.": "Unable to open the Creation Studio.",
+    "The Creation Studio needs an auto-group key": "The Creation Studio needs an auto-group key",
+    "The Creation Studio draws images and videos as well as text, and only a key in the auto group reaches all of those models. You have no enabled key in that group.": "The Creation Studio draws images and videos as well as text, and only a key in the auto group reaches all of those models. You have no enabled key in that group.",
+    "Create Creation Studio key": "Create Creation Studio key",
+    "This creates a key named \"{{name}}\" in the \"{{group}}\" group with unlimited quota that never expires. You can edit or delete it on the API Keys page.": "This creates a key named \"{{name}}\" in the \"{{group}}\" group with unlimited quota that never expires. You can edit or delete it on the API Keys page.",
+    "Open the AI canvas app with one of your API keys.": "Open the AI canvas app with one of your API keys.",
+    "Open in Creation Studio": "Open in Creation Studio"
   }
 }

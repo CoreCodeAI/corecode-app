@@ -64,9 +64,22 @@ export type NavChatPresets = BaseNavItem & {
 }
 
 /**
+ * Creation Studio entry - opens the canvas app in a new tab with an API key
+ */
+export type NavCanvasStudio = BaseNavItem & {
+  type: 'canvas-studio'
+  url?: never
+  items?: never
+}
+
+/**
  * Navigation item union type
  */
-export type NavItem = NavCollapsible | NavLink | NavChatPresets
+export type NavItem =
+  | NavCollapsible
+  | NavLink
+  | NavChatPresets
+  | NavCanvasStudio
 
 /**
  * Navigation group type - a group of navigation items in sidebar

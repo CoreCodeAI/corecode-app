@@ -8068,6 +8068,14 @@
     "The reset could not be prepared; no credit was used. Try again later.": "The reset could not be prepared; no credit was used. Try again later.",
     "The provider rejected the reset credit.": "The provider rejected the reset credit.",
     "The reset outcome is unknown. Try again to check the same redemption.": "The reset outcome is unknown. Try again to check the same redemption.",
-    "The account is suspended.": "The account is suspended."
+    "The account is suspended.": "The account is suspended.",
+    "Creation Studio": "Atelier de création",
+    "Unable to open the Creation Studio.": "Impossible d’ouvrir l’Atelier de création.",
+    "The Creation Studio needs an auto-group key": "L’Atelier de création nécessite une clé du groupe auto",
+    "The Creation Studio draws images and videos as well as text, and only a key in the auto group reaches all of those models. You have no enabled key in that group.": "L’Atelier de création génère des images et des vidéos en plus du texte, et seule une clé du groupe auto donne accès à tous ces modèles. Vous n’avez aucune clé activée dans ce groupe.",
+    "Create Creation Studio key": "Créer la clé de l’Atelier de création",
+    "This creates a key named \"{{name}}\" in the \"{{group}}\" group with unlimited quota that never expires. You can edit or delete it on the API Keys page.": "Cela crée une clé nommée « {{name}} » dans le groupe « {{group}} », avec un quota illimité et sans expiration. Vous pouvez la modifier ou la supprimer sur la page Clés API.",
+    "Open the AI canvas app with one of your API keys.": "Ouvrir l’application de canevas IA avec l’une de vos clés API.",
+    "Open in Creation Studio": "Ouvrir dans l’Atelier de création"
   }
 }

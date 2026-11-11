@@ -8068,6 +8068,14 @@
     "The reset could not be prepared; no credit was used. Try again later.": "리셋을 준비하지 못했습니다. 크레딧은 사용되지 않았습니다. 잠시 후 다시 시도하세요.",
     "The provider rejected the reset credit.": "제공자가 리셋 크레딧을 거부했습니다.",
     "The reset outcome is unknown. Try again to check the same redemption.": "리셋 결과를 아직 확인하지 못했습니다. 다시 시도하면 같은 사용 건을 확인하며 중복 사용되지 않습니다.",
-    "The account is suspended.": "이 계정은 정지되었습니다."
+    "The account is suspended.": "이 계정은 정지되었습니다.",
+    "Creation Studio": "크리에이션 스튜디오",
+    "Unable to open the Creation Studio.": "크리에이션 스튜디오를 열 수 없습니다.",
+    "The Creation Studio needs an auto-group key": "크리에이션 스튜디오에는 auto 그룹 키가 필요합니다",
+    "The Creation Studio draws images and videos as well as text, and only a key in the auto group reaches all of those models. You have no enabled key in that group.": "크리에이션 스튜디오는 텍스트뿐 아니라 이미지와 동영상도 생성하며, 이 모델들을 모두 사용할 수 있는 키는 auto 그룹 키뿐입니다. 활성화된 auto 그룹 키가 없습니다.",
+    "Create Creation Studio key": "크리에이션 스튜디오 키 만들기",
+    "This creates a key named \"{{name}}\" in the \"{{group}}\" group with unlimited quota that never expires. You can edit or delete it on the API Keys page.": "\"{{name}}\"이라는 이름으로, \"{{group}}\" 그룹에 할당량 무제한, 만료 없는 키를 만듭니다. API 키 페이지에서 수정하거나 삭제할 수 있습니다.",
+    "Open the AI canvas app with one of your API keys.": "API 키 중 하나로 AI 캔버스 앱을 엽니다.",
+    "Open in Creation Studio": "크리에이션 스튜디오에서 열기"
   }
 }

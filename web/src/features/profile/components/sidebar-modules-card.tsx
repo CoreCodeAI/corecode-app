@@ -71,6 +71,11 @@ export function SidebarModulesCard() {
           description: t('AI model testing environment'),
         },
         {
+          key: 'canvas',
+          title: t('Creation Studio'),
+          description: t('Open the AI canvas app with one of your API keys.'),
+        },
+        {
           key: 'chat',
           title: t('Chat'),
           description: t('Chat session management'),

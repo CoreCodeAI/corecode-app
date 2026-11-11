@@ -8068,6 +8068,14 @@
     "The reset could not be prepared; no credit was used. Try again later.": "重置準備失敗，沒有使用重置券。請稍後再試。",
     "The provider rejected the reset credit.": "上游拒絕了這張重置券。",
     "The reset outcome is unknown. Try again to check the same redemption.": "重置結果暫未確認。再次確認會查詢同一次兌換，不會重複使用重置券。",
-    "The account is suspended.": "該帳號已暫停。"
+    "The account is suspended.": "該帳號已暫停。",
+    "Creation Studio": "創作台",
+    "Unable to open the Creation Studio.": "無法開啟創作台。",
+    "The Creation Studio needs an auto-group key": "創作台需要一個 auto 分組的金鑰",
+    "The Creation Studio draws images and videos as well as text, and only a key in the auto group reaches all of those models. You have no enabled key in that group.": "創作台除文字外還要生成圖片和影片，只有 auto 分組的金鑰才能同時使用這些模型。你目前沒有已啟用的 auto 分組金鑰。",
+    "Create Creation Studio key": "建立創作台金鑰",
+    "This creates a key named \"{{name}}\" in the \"{{group}}\" group with unlimited quota that never expires. You can edit or delete it on the API Keys page.": "將建立一個名為「{{name}}」、分組為「{{group}}」、額度不限且永不過期的金鑰。你可以在「API 金鑰」頁面修改或刪除它。",
+    "Open the AI canvas app with one of your API keys.": "用你的 API 金鑰開啟 AI 畫布應用。",
+    "Open in Creation Studio": "在創作台開啟"
   }
 }

@@ -50,10 +50,12 @@ import {
 import { checkIsActive } from '../lib/url-utils'
 import type {
   NavCollapsible,
+  NavCanvasStudio,
   NavChatPresets,
   NavLink,
   NavGroup as NavGroupProps,
 } from '../types'
+import { CanvasStudioItem } from './canvas-studio-item'
 import { ChatPresetsItem } from './chat-presets-item'
 
 /**
@@ -76,6 +78,10 @@ export function NavGroup({ title, items }: NavGroupProps) {
           // Special handling: dynamic chat presets list
           if (item.type === 'chat-presets') {
             return <ChatPresetsItem key={key} item={item as NavChatPresets} />
+          }
+
+          if (item.type === 'canvas-studio') {
+            return <CanvasStudioItem key={key} item={item as NavCanvasStudio} />
           }
 
           // If no sub-items, render regular link

@@ -8068,6 +8068,14 @@
     "The reset could not be prepared; no credit was used. Try again later.": "リセットの準備に失敗しました。リセット券は使われていません。後でもう一度お試しください。",
     "The provider rejected the reset credit.": "プロバイダーがリセット券を拒否しました。",
     "The reset outcome is unknown. Try again to check the same redemption.": "リセットの結果が未確認です。もう一度実行すると同じ引き換えを確認し、重複して使うことはありません。",
-    "The account is suspended.": "このアカウントは停止中です。"
+    "The account is suspended.": "このアカウントは停止中です。",
+    "Creation Studio": "クリエイションスタジオ",
+    "Unable to open the Creation Studio.": "クリエイションスタジオを開けませんでした。",
+    "The Creation Studio needs an auto-group key": "クリエイションスタジオには auto グループのキーが必要です",
+    "The Creation Studio draws images and videos as well as text, and only a key in the auto group reaches all of those models. You have no enabled key in that group.": "クリエイションスタジオはテキストに加えて画像や動画も生成するため、これらのモデルをすべて使えるのは auto グループのキーだけです。有効な auto グループのキーがありません。",
+    "Create Creation Studio key": "クリエイションスタジオ用キーを作成",
+    "This creates a key named \"{{name}}\" in the \"{{group}}\" group with unlimited quota that never expires. You can edit or delete it on the API Keys page.": "「{{name}}」という名前で、グループ「{{group}}」、無制限の利用枠、無期限のキーを作成します。API キーのページで編集や削除ができます。",
+    "Open the AI canvas app with one of your API keys.": "API キーのひとつで AI キャンバスアプリを開きます。",
+    "Open in Creation Studio": "クリエイションスタジオで開く"
   }
 }

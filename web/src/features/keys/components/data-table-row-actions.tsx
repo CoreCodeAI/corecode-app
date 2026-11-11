@@ -27,6 +27,7 @@ import {
   Copy,
   Link,
   Loader2,
+  Palette,
   TerminalSquare,
 } from 'lucide-react'
 import { useCallback, useState } from 'react'
@@ -48,6 +49,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { buildCanvasUrl } from '@/features/canvas-studio/lib/canvas-link'
+import { openPendingTab } from '@/features/canvas-studio/lib/canvas-tab'
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
 import { resolveChatUrl, type ChatPreset } from '@/features/chat/lib/chat-links'
 import { sendToFluent } from '@/features/chat/lib/send-to-fluent'
@@ -158,6 +161,17 @@ export function DataTableRowActions<TData>({
       providerName: status?.system_name?.trim() || 'CoreCode',
     })
     openDeepLink(url)
+  }
+
+  const handleOpenCanvas = async () => {
+    // The tab opens before the await so popup blockers allow it.
+    const tab = openPendingTab()
+    const realKey = await resolveRealKey(apiKey.id)
+    if (!realKey) {
+      tab.close()
+      return
+    }
+    tab.navigate(buildCanvasUrl(serverAddress, realKey))
   }
 
   const handleToggleStatus = async (
@@ -318,6 +332,15 @@ export function DataTableRowActions<TData>({
           {t('Magpie')}
           <DropdownMenuShortcut>
             <ExternalLink size={16} />
+          </DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={isRealKeyLoading || !isEnabled}
+          onClick={handleOpenCanvas}
+        >
+          {t('Open in Creation Studio')}
+          <DropdownMenuShortcut>
+            <Palette size={16} />
           </DropdownMenuShortcut>
         </DropdownMenuItem>
         {hasChatPresets && (

@@ -8068,6 +8068,14 @@
     "The reset could not be prepared; no credit was used. Try again later.": "The reset could not be prepared; no credit was used. Try again later.",
     "The provider rejected the reset credit.": "The provider rejected the reset credit.",
     "The reset outcome is unknown. Try again to check the same redemption.": "The reset outcome is unknown. Try again to check the same redemption.",
-    "The account is suspended.": "The account is suspended."
+    "The account is suspended.": "The account is suspended.",
+    "Creation Studio": "Xưởng sáng tạo",
+    "Unable to open the Creation Studio.": "Không thể mở Xưởng sáng tạo.",
+    "The Creation Studio needs an auto-group key": "Xưởng sáng tạo cần một khóa thuộc nhóm auto",
+    "The Creation Studio draws images and videos as well as text, and only a key in the auto group reaches all of those models. You have no enabled key in that group.": "Xưởng sáng tạo tạo cả hình ảnh và video chứ không chỉ văn bản, và chỉ khóa thuộc nhóm auto mới dùng được tất cả các mô hình đó. Bạn chưa có khóa nhóm auto nào đang bật.",
+    "Create Creation Studio key": "Tạo khóa cho Xưởng sáng tạo",
+    "This creates a key named \"{{name}}\" in the \"{{group}}\" group with unlimited quota that never expires. You can edit or delete it on the API Keys page.": "Sẽ tạo một khóa tên \"{{name}}\" thuộc nhóm \"{{group}}\", hạn mức không giới hạn và không hết hạn. Bạn có thể sửa hoặc xóa khóa này ở trang Khóa API.",
+    "Open the AI canvas app with one of your API keys.": "Mở ứng dụng canvas AI bằng một trong các khóa API của bạn.",
+    "Open in Creation Studio": "Mở trong Xưởng sáng tạo"
   }
 }
