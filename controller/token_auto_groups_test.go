@@ -110,19 +110,44 @@ func TestAddTokenEmptyAutoGroupsInheritGlobalAuto(t *testing.T) {
 	}
 }
 
-func TestUpdateTokenClearsAStoredAutoGroupOrder(t *testing.T) {
+func TestAddTokenPersistsOrderedAutoGroupsSnapshot(t *testing.T) {
+	configureTokenAutoGroupsTest(t, "5", `["default","vip"]`)
+	user := setupTokenAutoGroupsControllerTest(t)
+	request := baseAutoTokenRequest("ordered-snapshot")
+	request["auto_groups"] = []string{"vip", "default"}
+
+	ctx, recorder := newTokenAutoGroupsAuthenticatedContext(t, http.MethodPost, "/api/token/", request, user.Id)
+	AddToken(ctx)
+	require.True(t, decodeAPIResponse(t, recorder).Success)
+
+	var token model.Token
+	require.NoError(t, model.DB.Where("name = ?", "ordered-snapshot").First(&token).Error)
+	assert.JSONEq(t, `["vip","default"]`, token.AutoGroups)
+
+	getCtx, getRecorder := newTokenAutoGroupsAuthenticatedContext(t, http.MethodGet, "/api/token/"+stringInt(token.Id), nil, user.Id)
+	getCtx.Params = append(getCtx.Params, gin.Param{Key: "id", Value: stringInt(token.Id)})
+	GetToken(getCtx)
+	getResponse := decodeAPIResponse(t, getRecorder)
+	require.True(t, getResponse.Success)
+	var data struct {
+		AutoGroups []string `json:"auto_groups"`
+	}
+	require.NoError(t, common.Unmarshal(getResponse.Data, &data))
+	assert.Equal(t, []string{"vip", "default"}, data.AutoGroups)
+}
+
+func TestUpdateTokenAutoGroupsTriStateAndNonAutoCleanup(t *testing.T) {
 	tests := []struct {
-		name          string
-		includeField  bool
-		value         any
-		group         string
-		rejected      bool
-		expectedRetry bool
+		name               string
+		includeField       bool
+		value              any
+		group              string
+		expectedAutoGroups string
+		expectedRetry      bool
 	}{
-		{name: "omitted clears", group: "auto", expectedRetry: true},
-		{name: "null clears", includeField: true, value: nil, group: "auto", expectedRetry: true},
-		{name: "empty clears", includeField: true, value: []string{}, group: "auto", expectedRetry: true},
-		{name: "an order is refused", includeField: true, value: []string{"default"}, group: "auto", rejected: true},
+		{name: "omitted preserves", group: "auto", expectedAutoGroups: `["vip","default"]`, expectedRetry: true},
+		{name: "null inherits", includeField: true, value: nil, group: "auto", expectedRetry: true},
+		{name: "empty inherits", includeField: true, value: []string{}, group: "auto", expectedRetry: true},
 		{name: "non auto clears and disables retry", includeField: true, value: []string{"vip"}, group: "default"},
 	}
 
@@ -133,7 +158,6 @@ func TestUpdateTokenClearsAStoredAutoGroupOrder(t *testing.T) {
 			token := seedToken(t, model.DB, user.Id, "update-auto", "update-auto-key")
 			token.Group = "auto"
 			token.CrossGroupRetry = true
-			// Stored before the order was fixed.
 			require.NoError(t, token.SetAutoGroups([]string{"vip", "default"}))
 			require.NoError(t, model.DB.Save(token).Error)
 
@@ -147,29 +171,26 @@ func TestUpdateTokenClearsAStoredAutoGroupOrder(t *testing.T) {
 			ctx, recorder := newTokenAutoGroupsAuthenticatedContext(t, http.MethodPut, "/api/token/", request, user.Id)
 			UpdateToken(ctx)
 			response := decodeAPIResponse(t, recorder)
+			require.True(t, response.Success, response.Message)
 
 			var updated model.Token
 			require.NoError(t, model.DB.First(&updated, token.Id).Error)
-			if test.rejected {
-				assert.False(t, response.Success)
-				assert.Equal(t, "update-auto", updated.Name)
-				return
+			if test.expectedAutoGroups == "" {
+				assert.Empty(t, updated.AutoGroups)
+			} else {
+				assert.JSONEq(t, test.expectedAutoGroups, updated.AutoGroups)
 			}
-			require.True(t, response.Success, response.Message)
-			assert.Empty(t, updated.AutoGroups)
 			assert.Equal(t, test.expectedRetry, updated.CrossGroupRetry)
 		})
 	}
 }
 
-func TestAddTokenRejectsAnyAutoGroupOrder(t *testing.T) {
+func TestAddTokenRejectsInvalidAutoGroups(t *testing.T) {
 	tests := []struct {
 		name     string
 		maxCount string
 		groups   []string
 	}{
-		{name: "the global order", maxCount: "5", groups: []string{"default", "vip"}},
-		{name: "reordered", maxCount: "5", groups: []string{"vip", "default"}},
 		{name: "over limit", maxCount: "1", groups: []string{"default", "vip"}},
 		{name: "duplicate", maxCount: "5", groups: []string{"default", "default"}},
 		{name: "auto pseudo group", maxCount: "5", groups: []string{"auto"}},

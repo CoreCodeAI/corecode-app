@@ -92,15 +92,40 @@ func getTokenRequestUserGroup(c *gin.Context, ownerId int) (string, error) {
 	return model.GetUserGroup(ownerId, false)
 }
 
-// setTokenAutoGroups clears a token's Auto group override. CoreCode routes every
-// Auto token in the operator's AutoGroups order, so a request that names its
-// own groups is refused rather than stored.
 func setTokenAutoGroups(c *gin.Context, token *model.Token, groups []string) bool {
-	if len(groups) > 0 {
-		common.ApiErrorT(c, "The Auto group order is set by the operator and cannot be changed")
+	if len(groups) == 0 {
+		if err := token.SetAutoGroups(nil); err != nil {
+			common.ApiError(c, err)
+			return false
+		}
+		return true
+	}
+
+	maxCount := setting.GetMaxTokenAutoGroups()
+	if len(groups) > maxCount {
+		common.ApiErrorT(c, "A token can select at most {{max}} Auto groups", map[string]any{"max": maxCount})
 		return false
 	}
-	if err := token.SetAutoGroups(nil); err != nil {
+
+	userGroup, err := getTokenRequestUserGroup(c, token.UserId)
+	if err != nil {
+		common.ApiError(c, err)
+		return false
+	}
+	seen := make(map[string]struct{}, len(groups))
+	for _, group := range groups {
+		if _, ok := seen[group]; ok {
+			common.ApiErrorT(c, "Auto group {{group}} is duplicated", map[string]any{"group": group})
+			return false
+		}
+		seen[group] = struct{}{}
+		if !service.IsUserSelectableGroup(userGroup, group) {
+			common.ApiErrorT(c, "Auto group {{group}} is unavailable or unauthorized", map[string]any{"group": group})
+			return false
+		}
+	}
+
+	if err := token.SetAutoGroups(groups); err != nil {
 		common.ApiError(c, err)
 		return false
 	}
@@ -450,8 +475,10 @@ func UpdateToken(c *gin.Context) {
 		if token.Group != "auto" {
 			cleanToken.CrossGroupRetry = false
 			_ = cleanToken.SetAutoGroups(nil)
-		} else if !setTokenAutoGroups(c, cleanToken, request.AutoGroups.Groups) {
-			return
+		} else if request.AutoGroups.Set {
+			if !setTokenAutoGroups(c, cleanToken, request.AutoGroups.Groups) {
+				return
+			}
 		}
 	}
 	err = cleanToken.Update()
