@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -107,35 +108,69 @@ func LogQuotaData(params QuotaDataLogParams) {
 	logQuotaDataCache(quotaData)
 }
 
+// quotaDataFlushLock keeps flushes one at a time, so the shutdown flush
+// returns only after a background flush still writing has finished.
+var quotaDataFlushLock sync.Mutex
+
+// quotaDataRetrySeconds is how long past its hour a row that failed to write
+// is kept for the next flush.
+const quotaDataRetrySeconds = 24 * 60 * 60
+
+// SaveQuotaDataCache writes the cached dashboard rows to the database. The
+// cache lock is held only to swap in an empty map, so accounting continues
+// during the writes; a row that fails to write is merged back into the cache
+// for the next flush.
 func SaveQuotaDataCache() {
+	quotaDataFlushLock.Lock()
+	defer quotaDataFlushLock.Unlock()
+
 	CacheQuotaDataLock.Lock()
-	defer CacheQuotaDataLock.Unlock()
-	size := len(CacheQuotaData)
-	// 如果缓存中有数据，就保存到数据库中
-	// 1. 先查询数据库中是否有数据
-	// 2. 如果有数据，就更新数据
-	// 3. 如果没有数据，就插入数据
-	for _, quotaData := range CacheQuotaData {
-		quotaDataDB := &QuotaData{}
-		DB.Table("quota_data").
-			Where("user_id = ? and username = ? and model_name = ? and created_at = ? and use_group = ? and token_id = ? and channel_id = ? and node_name = ?",
-				quotaData.UserID, quotaData.Username, quotaData.ModelName, quotaData.CreatedAt, quotaData.UseGroup, quotaData.TokenID, quotaData.ChannelID, quotaData.NodeName).
-			First(quotaDataDB)
-		if quotaDataDB.Id > 0 {
-			//quotaDataDB.Count += quotaData.Count
-			//quotaDataDB.Quota += quotaData.Quota
-			//DB.Table("quota_data").Save(quotaDataDB)
-			increaseQuotaData(quotaData)
-		} else {
-			DB.Table("quota_data").Create(quotaData)
-		}
-	}
+	pending := CacheQuotaData
 	CacheQuotaData = make(map[string]*QuotaData)
-	common.SysLog(common.LogText("saved dashboard data, %d records", size))
+	CacheQuotaDataLock.Unlock()
+
+	failed := 0
+	retryAfter := common.GetTimestamp() - quotaDataRetrySeconds
+	for _, quotaData := range pending {
+		err := saveQuotaData(quotaData)
+		if err == nil {
+			continue
+		}
+		failed++
+		// A row that keeps failing for a day is dropped, so a write the
+		// database always refuses cannot grow the cache without bound.
+		if quotaData.CreatedAt < retryAfter {
+			common.SysError(common.LogText("failed to save dashboard data, dropping the row: %s", err.Error()))
+			continue
+		}
+		common.SysError(common.LogText("failed to save dashboard data, retrying at the next save: %s", err.Error()))
+		quotaData.Id = 0
+		CacheQuotaDataLock.Lock()
+		logQuotaDataCache(quotaData)
+		CacheQuotaDataLock.Unlock()
+	}
+	common.SysLog(common.LogText("saved dashboard data, %d records", len(pending)-failed))
 }
 
-func increaseQuotaData(quotaData *QuotaData) {
+// saveQuotaData adds one cached row to its database row, creating the row
+// when there is none.
+func saveQuotaData(quotaData *QuotaData) error {
+	quotaDataDB := &QuotaData{}
 	err := DB.Table("quota_data").
+		Where("user_id = ? and username = ? and model_name = ? and created_at = ? and use_group = ? and token_id = ? and channel_id = ? and node_name = ?",
+			quotaData.UserID, quotaData.Username, quotaData.ModelName, quotaData.CreatedAt, quotaData.UseGroup, quotaData.TokenID, quotaData.ChannelID, quotaData.NodeName).
+		First(quotaDataDB).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	if quotaDataDB.Id > 0 {
+		return increaseQuotaData(quotaData)
+	}
+	return DB.Table("quota_data").Create(quotaData).Error
+}
+
+func increaseQuotaData(quotaData *QuotaData) error {
+	return DB.Table("quota_data").
 		Where("user_id = ? and username = ? and model_name = ? and created_at = ? and use_group = ? and token_id = ? and channel_id = ? and node_name = ?",
 			quotaData.UserID, quotaData.Username, quotaData.ModelName, quotaData.CreatedAt, quotaData.UseGroup, quotaData.TokenID, quotaData.ChannelID, quotaData.NodeName).
 		Updates(map[string]any{
@@ -145,9 +180,6 @@ func increaseQuotaData(quotaData *QuotaData) {
 			"cache_read_tokens":     gorm.Expr("cache_read_tokens + ?", quotaData.CacheReadTokens),
 			"cache_creation_tokens": gorm.Expr("cache_creation_tokens + ?", quotaData.CacheCreationTokens),
 		}).Error
-	if err != nil {
-		common.SysLog(common.LogText("increaseQuotaData error: %s", err))
-	}
 }
 
 func GetQuotaDataByUsername(username string, startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
