@@ -84,9 +84,6 @@ func GetUserLogs(c *gin.Context) {
 		}
 		filter.StartTimestamp = startTimestamp
 	}
-	// skip_count=1 is for callers that never read total, like the overview's
-	// recent requests; see model.LogFilter.SkipCount.
-	filter.SkipCount = c.Query("skip_count") == "1"
 	logs, total, err := model.GetUserLogs(c.GetInt("id"), filter, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)

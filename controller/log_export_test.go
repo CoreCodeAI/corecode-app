@@ -128,10 +128,6 @@ func TestLogExportDatabaseMatrix(t *testing.T) {
 			listed := callLogHandler(t, GetUserLogs, 1, common.RoleCommonUser, query)[0]
 			require.Equal(t, true, listed["success"])
 			assert.EqualValues(t, 2, listed["data"].(map[string]any)["total"])
-			uncounted := callLogHandler(t, GetUserLogs, 1, common.RoleCommonUser, query+"&page_size=1&skip_count=1")[0]
-			require.Equal(t, true, uncounted["success"])
-			assert.EqualValues(t, 1, uncounted["data"].(map[string]any)["total"], "skip_count reports the rows through this page")
-			assert.Len(t, uncounted["data"].(map[string]any)["items"], 1)
 			listed = callLogHandler(t, GetAllLogs, 3, common.RoleAdminUser, query+"&username=alice")[0]
 			require.Equal(t, true, listed["success"])
 			assert.EqualValues(t, 2, listed["data"].(map[string]any)["total"])

@@ -514,8 +514,6 @@ type LogFilter struct {
 	Group             string
 	RequestId         string
 	UpstreamRequestId string
-	// SkipCount leaves the page total uncounted. Only GetUserLogs reads it.
-	SkipCount bool
 }
 
 func (f LogFilter) apply(tx *gorm.DB) (*gorm.DB, error) {
@@ -627,12 +625,10 @@ func GetUserLogs(userId int, filter LogFilter, startIdx int, num int) (logs []*L
 	if err != nil {
 		return nil, 0, err
 	}
-	if !filter.SkipCount {
-		total, err = countUpTo(tx.Model(&Log{}), logSearchCountLimit)
-		if err != nil {
-			common.SysError(common.LogText("failed to count user logs: %s", err.Error()))
-			return nil, 0, common.NewMessage("Failed to query logs")
-		}
+	total, err = countUpTo(tx.Model(&Log{}), logSearchCountLimit)
+	if err != nil {
+		common.SysError(common.LogText("failed to count user logs: %s", err.Error()))
+		return nil, 0, common.NewMessage("Failed to query logs")
 	}
 	order := "logs.id desc"
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
@@ -644,10 +640,6 @@ func GetUserLogs(userId int, filter LogFilter, startIdx int, num int) (logs []*L
 		return nil, 0, common.NewMessage("Failed to query logs")
 	}
 
-	if filter.SkipCount {
-		// An uncounted page reports the rows known to exist through it.
-		total = int64(startIdx + len(logs))
-	}
 	formatUserLogs(logs, startIdx)
 	return logs, total, err
 }
