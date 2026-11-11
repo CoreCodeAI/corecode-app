@@ -16,11 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState, type PointerEvent } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { TapTooltip, TapTooltipTrigger } from '@/components/tap-tooltip'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -35,13 +36,15 @@ import {
   POOL_PROVIDERS,
   type EngineAccount,
   type EngineGroup,
-  type EngineHorizon,
+  type EngineOutlook,
   type EnginePool,
-  type EngineRunway,
   type PoolProvider,
   type PoolUsage,
 } from '../types'
-import { CapacityVerdict, PoolUsagePanel } from './pool-usage'
+import { pickModel, windowOf } from './outlook'
+import { ForecastPanel } from './pool-forecast'
+import { RemainingPanel } from './pool-remaining'
+import { PoolUsagePanel } from './pool-usage'
 import { ResetCreditsCell } from './reset-credits-cell'
 import {
   MetricGrid,
@@ -78,14 +81,12 @@ function useStatusLabel() {
 }
 
 /**
- * corecode-engine's account pool, live: every group and account the engine's
- * own capacity page shows, read from its control API. Read-only; limits and
- * budgets are still set in the engine.
- */
-/**
- * The engine's pool for one provider at a time, Claude by default: its
- * accounts and groups, its use on new-api and gpt-load, and for Claude,
- * whose dollar capacity the engine estimates, whether the pool keeps up.
+ * corecode-engine's account pool, live, for one provider at a time, Claude by
+ * default: its groups and accounts as the engine's own capacity page shows
+ * them, and its use on new-api and gpt-load. For Claude, whose dollar
+ * capacity the engine estimates, two panels come first: the quota left over
+ * the next 5 hours, 24 hours and 7 days, and whether it meets the demand a
+ * forecast expects. Read-only; limits and budgets are still set in the engine.
  */
 export function PoolTab(props: {
   data: EnginePool | undefined
@@ -93,6 +94,9 @@ export function PoolTab(props: {
   onProvider?: (provider: PoolProvider) => void
   usage?: PoolUsage
   usageError?: string
+  /** The Claude pool's quota ahead; absent while it loads. */
+  outlook?: EngineOutlook
+  outlookError?: string
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -138,12 +142,7 @@ export function PoolTab(props: {
   const slots = providerGroups.reduce((sum, row) => sum + row.slots, 0)
   const inFlight = providerGroups.reduce((sum, row) => sum + row.in_flight, 0)
   const attention = accounts.filter((account) => ATTENTION.has(account.status))
-  const five = pool?.five_hour_estimate
-  const week = pool?.week_estimate
-  const usd = (value: number) => fmt.usdWhole(value)
   const at = (ms: number) => (ms ? fmt.time(Math.floor(ms / 1000)) : '-')
-  const share = (horizon: EngineHorizon) =>
-    horizon.capacity_usd ? horizon.remaining_usd / horizon.capacity_usd : 0
   const groups = new Map((pool?.groups ?? []).map((row) => [row.id, row]))
   // The engine pauses an account at its group's budget, or at the default
   // budget when the group is not known here.
@@ -195,77 +194,15 @@ export function PoolTab(props: {
       tone: attention.length > 0 ? 'danger' : 'default',
     },
   ]
-  // The engine estimates dollar capacity for Claude subscription accounts only.
-  if (claude) {
-    summary.push(
-      {
-        label: t('5-hour left'),
-        value: five ? `≈ ${usd(five.remaining_usd)}` : '-',
-        help: t(
-          'Dollars schedulable accounts can still spend before their 5-hour budget line, estimated from their usage and calibrated capacity.'
-        ),
-        meter: five
-          ? {
-              value: share(five),
-              tone: remainingTone(share(five)),
-              label: t('5-hour left'),
-            }
-          : undefined,
-        hint: five
-          ? t('{{share}} of {{capacity}}', {
-              share: fmt.pct(share(five)),
-              capacity: usd(five.capacity_usd),
-            })
-          : pool?.estimate_error,
-      },
-      {
-        label: t('7-day left'),
-        value: week ? `≈ ${usd(week.remaining_usd)}` : '-',
-        help: [
-          t(
-            'Dollars schedulable accounts can still spend before their 7-day budget line, estimated from their usage and calibrated capacity.'
-          ),
-          t(
-            'It is what the pool holds now; the weekly resets ahead are not in it, so it is not a day of demand to compare against.'
-          ),
-        ].join(' '),
-        meter: week
-          ? {
-              value: share(week),
-              tone: remainingTone(share(week)),
-              label: t('7-day left'),
-            }
-          : undefined,
-        hint: week
-          ? t('{{share}} of {{capacity}}', {
-              share: fmt.pct(share(week)),
-              capacity: usd(week.capacity_usd),
-            })
-          : undefined,
-      }
-    )
-    // Only an engine with the projection sends it; the tile is skipped without it.
-    if (pool?.week_unused) {
-      const unused = pool.week_unused.usd
-      // A pool projected to run short will use it: the figure holds each
-      // account at its own recent rate, and the others hit their lines first.
-      const short = poolRunsShort(pool.runway)
-      summary.push({
-        label: t('Unused at reset'),
-        value: `≈ ${usd(unused)}`,
-        help: t(
-          'Weekly quota the pool will not spend before the resets, at the last 24 hours’ spend rates.'
-        ),
-        hint: short
-          ? t('Most of this will be used: the pool is projected to run short.')
-          : undefined,
-        tone:
-          !short && week && unused >= week.capacity_usd * 0.05
-            ? 'warning'
-            : 'default',
-      })
-    }
-  }
+  // Whether the pool runs short over the next 7 days, as the forecast panel
+  // opens: under the smart forecast. A server before the outlook leaves the
+  // engine's runway to say.
+  const smart = props.outlook?.configured
+    ? pickModel(props.outlook, 'smart')
+    : undefined
+  const short = smart
+    ? smart.week_load >= 1 || (windowOf(smart.windows, 168)?.short_usd ?? 0) > 0
+    : poolRunsShort(pool?.runway)
 
   return (
     <div className='grid gap-4'>
@@ -280,22 +217,24 @@ export function PoolTab(props: {
         }))}
       />
 
-      <MetricGrid loading={!pool} items={summary} />
-
-      {claude && pool?.runway?.sustainable_usd_per_hour != null && (
-        <CapacityVerdict
-          runway={pool.runway}
-          five={pool.five_hour_estimate}
-          usage={props.usage}
-        />
-      )}
+      <MetricGrid
+        loading={!pool}
+        items={summary}
+        className='sm:grid-cols-4 lg:grid-cols-4'
+      />
 
       {claude && (
+        <PoolOutlook outlook={props.outlook} error={props.outlookError} />
+      )}
+
+      {/* Each account is held at its own recent rate there. A pool that runs
+          short spends what one account would leave, so the list would
+          contradict the forecast above. */}
+      {claude && !short && (
         <UnusedQuotaPanel
           accounts={accounts}
           observedAt={pool?.observed_at_ms ?? 0}
           total={pool?.week_unused}
-          runway={pool?.runway}
         />
       )}
 
@@ -311,11 +250,6 @@ export function PoolTab(props: {
             { provider: PROVIDER_LABELS[provider] }
           )}
         </p>
-      )}
-
-      {/* A server before the supply figures sends a runway without them. */}
-      {claude && pool?.runway?.sustainable_usd_per_hour != null && (
-        <RunwayPanel runway={pool.runway} observedAt={pool.observed_at_ms} />
       )}
 
       <Panel
@@ -633,632 +567,59 @@ export function PoolTab(props: {
 }
 
 /**
- * The Claude accounts' quota supply against their recent demand: whether the
- * weekly resets keep up, and over the next week whether the remainder covers
- * the difference, where it is tightest, and how high a burst can go.
+ * The Claude pool's quota ahead: what it can spend in each window, then
+ * whether that meets demand. Old figures stay up through a failed refresh;
+ * without any, the failure is said where the panels would be, which is also
+ * what a server before the outlook shows.
  */
-function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
+function PoolOutlook(props: {
+  outlook: EngineOutlook | undefined
+  error: string | undefined
+}) {
   const { t } = useTranslation()
-  const fmt = useInsightsFormat()
-  const { runway } = props
-  const burn = runway.burn_usd_per_hour
-  const duration = (hours: number) => {
-    if (hours < 1) {
-      return t('{{minutes}} minutes', { minutes: Math.round(hours * 60) })
-    }
-    if (hours < 48) {
-      return t('{{hours}} hours', { hours: hours.toFixed(1) })
-    }
-    return t('{{days}} days', { days: (hours / 24).toFixed(1) })
-  }
-  const at = (hours: number) =>
-    fmt.time(Math.floor((props.observedAt + hours * 3_600_000) / 1000))
-  const gapStart = runway.week_hours
-  const gapLength = runway.first_short_hours
-  const lowestCovers = burn > 0 ? runway.lowest_usd / burn : null
-  // The next 24 hours against the quota they can draw on: what is left now
-  // plus what the weekly resets inside the day bring back. The remainder
-  // alone reads short of a day's demand whenever a reset is due.
-  const day = runway.supply_windows?.find((window) => window.hours === 24)
-  let dayTone: Tone = 'default'
-  if (day) {
-    if (day.short_usd > 0) dayTone = 'danger'
-    else if (day.demand_usd > day.supply_usd * 0.8) dayTone = 'warning'
-  }
-
-  if (burn <= 0) {
+  const outlook = props.outlook
+  if (!outlook) {
     return (
-      <Panel title={t('Claude pool supply')}>
-        <p className='text-muted-foreground text-sm'>
-          {t('No Claude spend logged in the last 24 hours.')}
+      <Panel title={t('Quota left')}>
+        {props.error ? (
+          <p className='text-destructive text-sm'>
+            {t('The pool’s quota ahead could not be read: {{error}}', {
+              error: props.error,
+            })}
+          </p>
+        ) : (
+          <div
+            aria-busy
+            aria-label={t('Loading')}
+            className='grid gap-3 sm:grid-cols-3'
+          >
+            <Skeleton className='h-28' />
+            <Skeleton className='h-28' />
+            <Skeleton className='h-28' />
+          </div>
+        )}
+      </Panel>
+    )
+  }
+  // The pool tab says so itself when the engine is not configured.
+  if (!outlook.configured) return null
+  if (outlook.error) {
+    return (
+      <Panel title={t('Quota left')}>
+        <p className='text-destructive text-sm'>
+          {t('The pool’s quota ahead could not be read: {{error}}', {
+            error: outlook.error,
+          })}
         </p>
       </Panel>
     )
   }
-
-  const supply =
-    runway.week_load >= 1
-      ? t(
-          'Demand of {{demand}}/h is above the {{supply}}/h the weekly resets bring back; closing the gap takes about {{capacity}} more weekly capacity.',
-          {
-            demand: fmt.usd(burn),
-            supply: fmt.usd(runway.sustainable_usd_per_hour),
-            capacity: fmt.usdWhole(
-              (burn - runway.sustainable_usd_per_hour) * 168
-            ),
-          }
-        )
-      : t(
-          'Demand of {{demand}}/h is below the {{supply}}/h the weekly resets bring back.',
-          {
-            demand: fmt.usd(burn),
-            supply: fmt.usd(runway.sustainable_usd_per_hour),
-          }
-        )
-  let week = t(
-    'Over the next 7 days the quota is tightest around {{time}}, with {{amount}} left.',
-    { time: at(runway.lowest_hours), amount: fmt.usdWhole(runway.lowest_usd) }
-  )
-  if (gapStart != null && gapLength != null) {
-    // One gap reads once; its length and the total are the same figure.
-    week =
-      runway.short_hours - gapLength < 0.05
-        ? t(
-            'Over the next 7 days the quota runs out around {{time}} for {{length}}.',
-            { time: at(gapStart), length: duration(gapLength) }
-          )
-        : t(
-            'Over the next 7 days the quota first runs out around {{time}} for {{length}}; {{total}} without quota in all.',
-            {
-              time: at(gapStart),
-              length: duration(gapLength),
-              total: duration(runway.short_hours),
-            }
-          )
-  }
-
-  // How the week changes if use keeps growing as it has.
-  const growth = runway.growth_per_day ?? 0
-  const trendStart = runway.trend?.week_hours
-  let trend: string | null = null
-  if (runway.trend && growth >= 0.01) {
-    if (trendStart == null) {
-      trend = t('Growing {{rate}} a day, it still lasts the 7 days.', {
-        rate: fmt.pct(growth),
-      })
-    } else if (gapStart == null || trendStart < gapStart - 1) {
-      trend = t(
-        'If use keeps growing {{rate}} a day, it runs out around {{time}}.',
-        { rate: fmt.pct(growth), time: at(trendStart) }
-      )
-    }
-  }
-  const headroom = runway.headroom_scale
-  const signedPct = (value: number) =>
-    `${value >= 0 ? '+' : '−'}${fmt.pct(Math.abs(value))}`
-  const peakHour = runway.peak_hour_usd_per_hour
-  let peakHint: string | undefined
-  if (runway.peak_usd_per_hour && peakHour) {
-    peakHint = t('Busiest hour {{amount}}/h · {{share}}', {
-      amount: fmt.usdWhole(peakHour),
-      share: fmt.pct(peakHour / runway.peak_usd_per_hour),
-    })
-  } else if (runway.peak_usd_per_hour) {
-    peakHint = t('{{multiple}} the demand', {
-      multiple: fmt.multiple(runway.peak_usd_per_hour / burn),
-    })
-  }
-
-  let lowestTone: Tone = 'default'
-  if (gapStart != null) {
-    lowestTone = 'danger'
-  } else if (lowestCovers != null && lowestCovers < 3) {
-    lowestTone = 'warning'
-  }
-
   return (
-    <Panel
-      title={t('Claude pool supply')}
-      description={[supply, week, trend].filter(Boolean).join(' ')}
-      help={t(
-        'Demand is every Claude account’s spend per hour at its current level, read from the last four days with each hour counting half as much as the one 12 hours later, moved through the day by the last week’s hourly use. Supply is each counted account’s weekly capacity up to its budget line, refilled at its weekly reset; quota left at a reset is lost. Turned-away requests are not in the demand.'
-      )}
-    >
-      <MetricGrid
-        items={[
-          {
-            label: t('Weekly load'),
-            help: t(
-              'Demand over what weekly resets bring back. Above 100% the pool spends its remainder.'
-            ),
-            value: fmt.pct(runway.week_load),
-            tone: loadShareTone(runway.week_load),
-            meter: {
-              value: Math.min(runway.week_load, 1),
-              tone: loadShareTone(runway.week_load),
-              label: t('Weekly load'),
-            },
-            hint: t('{{demand}}/h of {{supply}}/h', {
-              demand: fmt.usd(burn),
-              supply: fmt.usd(runway.sustainable_usd_per_hour),
-            }),
-          },
-          ...(day
-            ? [
-                {
-                  label: t('Next 24 hours · quota'),
-                  help: t(
-                    'Quota the next 24 hours can draw on: what the counted accounts have left now plus what their weekly resets bring back inside the day, against the day’s demand at its current level. An account drops what it still held at its reset, so the refill is what the reset adds, not a whole week. Unserved demand can be above zero while the supply covers the demand, when the refill lands too late.'
-                  ),
-                  value: `≈ ${fmt.usdWhole(day.supply_usd)}`,
-                  tone: dayTone,
-                  hint: [
-                    t('Demand {{amount}}', {
-                      amount: fmt.usdWhole(day.demand_usd),
-                    }),
-                    t('{{left}} left now + {{refill}} from resets', {
-                      left: fmt.usdWhole(runway.week_remaining_usd),
-                      refill: fmt.usdWhole(day.refill_usd),
-                    }),
-                    day.short_usd > 0 &&
-                      t('{{amount}} unserved', {
-                        amount: fmt.usdWhole(day.short_usd),
-                      }),
-                  ]
-                    .filter(Boolean)
-                    .join(' · '),
-                },
-              ]
-            : []),
-          {
-            label: t('Without quota, 7 days'),
-            help: t(
-              'Hours in the next 7 days with no weekly quota left on any counted account.'
-            ),
-            value:
-              runway.short_hours > 0
-                ? ['≈', duration(runway.short_hours)].join(' ')
-                : t('None'),
-            tone: runway.short_hours > 0 ? 'danger' : 'default',
-            hint:
-              gapStart != null
-                ? t('From {{time}} · {{share}} of demand served', {
-                    time: at(gapStart),
-                    share: fmt.pct(runway.served_share),
-                  })
-                : t('{{amount}} left now', {
-                    amount: fmt.usdWhole(runway.week_remaining_usd),
-                  }),
-          },
-          {
-            label: t('Tightest point'),
-            help: t(
-              'The least weekly quota left in the next 7 days. A small figure means the pool nearly runs dry before a reset.'
-            ),
-            value: fmt.usdWhole(runway.lowest_usd),
-            tone: lowestTone,
-            hint:
-              lowestCovers != null && runway.lowest_usd > 0
-                ? t('{{time}} · {{length}} of demand', {
-                    time: at(runway.lowest_hours),
-                    length: duration(lowestCovers),
-                  })
-                : at(runway.lowest_hours),
-          },
-          {
-            label: t('Demand headroom'),
-            help: t(
-              'How far demand can move before the next 7 days run short: the most the pool serves without a gap, against demand now.'
-            ),
-            value:
-              headroom == null
-                ? t('Over {{multiple}}', { multiple: fmt.multiple(4) })
-                : signedPct(headroom - 1),
-            tone: headroomTone(headroom),
-            hint:
-              headroom == null
-                ? undefined
-                : t(
-                    headroom < 1
-                      ? 'Lasts 7 days at {{amount}}/h or less'
-                      : 'Runs short above {{amount}}/h',
-                    { amount: fmt.usd(burn * headroom) }
-                  ),
-          },
-          {
-            label: t('Peak throughput'),
-            help: t(
-              '5-hour capacity up to the budget line, per hour: the most a burst can draw.'
-            ),
-            value: runway.peak_usd_per_hour
-              ? t('{{amount}}/h', {
-                  amount: fmt.usdWhole(runway.peak_usd_per_hour),
-                })
-              : '-',
-            tone:
-              peakHour && runway.peak_usd_per_hour
-                ? loadShareTone(peakHour / runway.peak_usd_per_hour)
-                : 'default',
-            hint: peakHint,
-          },
-          {
-            label: t('Demand per hour'),
-            help: t(
-              'Spend per hour at its current level, used for the projection: the last four days, each hour counting half as much as the one 12 hours later. Week to date is use since each account’s weekly reset; close figures mean demand was steady.'
-            ),
-            value: fmt.usd(burn),
-            hint: runway.trend
-              ? t('Week to date {{amount}}/h · {{growth}} a day', {
-                  amount: fmt.usd(runway.week_to_date_usd_per_hour),
-                  growth: signedPct(growth),
-                })
-              : t('Week to date {{amount}}/h · {{counted}} accounts', {
-                  amount: fmt.usd(runway.week_to_date_usd_per_hour),
-                  counted: runway.counted,
-                }),
-          },
-        ]}
-      />
-      {runway.curve && runway.curve.length > 1 && (
-        <RunwayCurve
-          curve={runway.curve}
-          trend={runway.trend?.curve}
-          low={runway.low?.curve}
-          high={runway.high?.curve}
-          shaped={(runway.profile_hours ?? 0) > 0}
-          observedAt={props.observedAt}
-        />
-      )}
-      {runway.unknown > 0 && (
-        <p className='text-muted-foreground mt-2 text-xs'>
-          {t('{{count}} accounts without an estimate are not counted.', {
-            count: runway.unknown,
-          })}
-        </p>
-      )}
-    </Panel>
+    <>
+      <RemainingPanel outlook={outlook} />
+      <ForecastPanel outlook={outlook} />
+    </>
   )
-}
-
-const HOUR_MS = 3_600_000
-
-/**
- * The projected weekly quota left, hour by hour over the next 7 days, with
- * a tick at each midnight. The line is the base projection; a band spans the
- * 10th to 90th percentile demand and a dashed line follows growing use, when
- * the server sends them. Hours the base projection has nothing left are
- * shaded. Hovering, or focusing and pressing the arrow keys, reads out the
- * hour under the pointer.
- */
-function RunwayCurve(props: {
-  curve: number[]
-  trend?: number[] | null
-  low?: number[] | null
-  high?: number[] | null
-  shaped: boolean
-  observedAt: number
-}) {
-  const { t } = useTranslation()
-  const fmt = useInsightsFormat()
-  const [active, setActive] = useState<number | null>(null)
-  const { curve, observedAt } = props
-  const last = curve.length - 1
-  const matches = (series?: number[] | null) =>
-    series && series.length === curve.length ? series : null
-  const trend = matches(props.trend)
-  // Low demand leaves the most quota: the band's top edge.
-  const upper = matches(props.low)
-  const lower = matches(props.high)
-  const band = upper && lower ? { upper, lower } : null
-  const top = niceTop(
-    Math.max(...curve, ...(trend ?? []), ...(band?.upper ?? []))
-  )
-  const xOf = (hours: number) => (hours / last) * 100
-  const yOf = (usd: number) => 100 - (usd / top) * 100
-  const at = (hours: number) =>
-    fmt.time(Math.floor((observedAt + hours * HOUR_MS) / 1000))
-  const line = (series: number[]) =>
-    series
-      .map(
-        (usd, hour) =>
-          `${hour === 0 ? 'M' : 'L'}${xOf(hour).toFixed(2)},${yOf(usd).toFixed(2)}`
-      )
-      .join(' ')
-  const path = line(curve)
-  const bandPath = band
-    ? `${line(band.upper)} ${band.lower
-        .map((usd, hour) => `L${xOf(hour).toFixed(2)},${yOf(usd).toFixed(2)}`)
-        .reverse()
-        .join(' ')} Z`
-    : null
-
-  // Runs of hours with nothing left, each widened by half an hour a side:
-  // a gap starts and ends between two samples.
-  const gaps: { from: number; to: number }[] = []
-  curve.forEach((usd, hour) => {
-    if (usd > 0) return
-    const previous = gaps.at(-1)
-    if (previous && previous.to === hour - 1) {
-      previous.to = hour
-    } else {
-      gaps.push({ from: hour, to: hour })
-    }
-  })
-
-  // Each local midnight in the range, labelled with the day it starts.
-  const days: { hours: number; label: string }[] = []
-  const midnight = new Date(observedAt)
-  midnight.setHours(24, 0, 0, 0)
-  while (midnight.getTime() < observedAt + last * HOUR_MS) {
-    days.push({
-      hours: (midnight.getTime() - observedAt) / HOUR_MS,
-      label: fmt.day(midnight.getTime() / 1000),
-    })
-    midnight.setDate(midnight.getDate() + 1)
-  }
-
-  const nearest = (event: PointerEvent<HTMLDivElement>) => {
-    const box = event.currentTarget.getBoundingClientRect()
-    const share = (event.clientX - box.left) / Math.max(box.width, 1)
-    return Math.min(last, Math.max(0, Math.round(share * last)))
-  }
-  const lowest = curve.indexOf(Math.min(...curve))
-  const point = active === null ? null : curve[active]
-  const x = active === null ? 0 : xOf(active)
-  const amount = (usd: number) =>
-    usd > 0 ? fmt.usdWhole(usd) : t('No quota left')
-
-  return (
-    <figure className='mt-4'>
-      <figcaption className='mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs'>
-        <span className='text-muted-foreground'>
-          {props.shaped
-            ? t('Weekly quota left, next 7 days, at each hour’s usual use')
-            : t('Weekly quota left, next 7 days')}
-        </span>
-        <span className='text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1'>
-          {(trend || band) && (
-            <span className='flex items-center gap-1.5'>
-              <span aria-hidden className='bg-primary h-0.5 w-3 rounded-full' />
-              {t('Demand as now')}
-            </span>
-          )}
-          {trend && (
-            <span className='flex items-center gap-1.5'>
-              <span
-                aria-hidden
-                className='border-foreground/60 w-3 border-t-2 border-dashed'
-              />
-              {t('Growing as this week')}
-            </span>
-          )}
-          {band && (
-            <span className='flex items-center gap-1.5'>
-              <span aria-hidden className='bg-primary/20 size-2.5 rounded-sm' />
-              {t('Usual range')}
-            </span>
-          )}
-          {gaps.length > 0 && (
-            <span className='flex items-center gap-1.5'>
-              <span
-                aria-hidden
-                className='bg-destructive/20 size-2.5 rounded-sm'
-              />
-              {t('No quota left')}
-            </span>
-          )}
-        </span>
-      </figcaption>
-      <div className='flex gap-2'>
-        <div
-          aria-hidden
-          className='text-muted-foreground flex h-28 flex-col justify-between text-right text-[10px] leading-none tabular-nums'
-        >
-          <span>{fmt.usdCompact(top)}</span>
-          <span>{fmt.usdCompact(top / 2)}</span>
-          <span>{fmt.usdCompact(0)}</span>
-        </div>
-        <div className='min-w-0 flex-1'>
-          <div
-            tabIndex={0}
-            role='img'
-            aria-label={t(
-              'Weekly quota left over the next 7 days: {{now}} now, least {{lowest}} around {{time}}',
-              {
-                now: fmt.usdWhole(curve[0]),
-                lowest: fmt.usdWhole(curve[lowest]),
-                time: at(lowest),
-              }
-            )}
-            className='focus-visible:ring-ring/50 relative h-28 cursor-crosshair touch-pan-y rounded-sm outline-none focus-visible:ring-2'
-            onPointerDown={(event) => setActive(nearest(event))}
-            onPointerMove={(event) => setActive(nearest(event))}
-            onPointerLeave={(event) => {
-              if (event.pointerType !== 'touch') setActive(null)
-            }}
-            onFocus={() => setActive((current) => current ?? 0)}
-            onBlur={() => setActive(null)}
-            onKeyDown={(event) => {
-              if (event.key === 'ArrowLeft') {
-                event.preventDefault()
-                setActive((current) => Math.max(0, (current ?? 0) - 1))
-              } else if (event.key === 'ArrowRight') {
-                event.preventDefault()
-                setActive((current) => Math.min(last, (current ?? 0) + 1))
-              }
-            }}
-          >
-            <svg
-              aria-hidden
-              viewBox='0 0 100 100'
-              preserveAspectRatio='none'
-              className='text-primary block size-full overflow-visible'
-            >
-              {[0, 50, 100].map((y) => (
-                <line
-                  key={y}
-                  x1={0}
-                  x2={100}
-                  y1={y}
-                  y2={y}
-                  className='stroke-border'
-                  vectorEffect='non-scaling-stroke'
-                />
-              ))}
-              {days.map((day) => (
-                <line
-                  key={day.hours}
-                  x1={xOf(day.hours)}
-                  x2={xOf(day.hours)}
-                  y1={0}
-                  y2={100}
-                  className='stroke-border'
-                  strokeDasharray='2 3'
-                  vectorEffect='non-scaling-stroke'
-                />
-              ))}
-              {gaps.map((gap) => {
-                const from = xOf(Math.max(0, gap.from - 0.5))
-                const to = xOf(Math.min(last, gap.to + 0.5))
-                return (
-                  <rect
-                    key={gap.from}
-                    x={from}
-                    width={to - from}
-                    y={0}
-                    height={100}
-                    className='fill-destructive/20'
-                  />
-                )
-              })}
-              {bandPath ? (
-                <path d={bandPath} className='fill-current opacity-20' />
-              ) : (
-                <path
-                  d={`${path} L100,100 L0,100 Z`}
-                  className='fill-current opacity-10'
-                />
-              )}
-              {trend && (
-                <path
-                  d={line(trend)}
-                  fill='none'
-                  className='stroke-foreground/60'
-                  strokeWidth={1.5}
-                  strokeDasharray='4 3'
-                  vectorEffect='non-scaling-stroke'
-                  strokeLinejoin='round'
-                />
-              )}
-              <path
-                d={path}
-                fill='none'
-                stroke='currentColor'
-                strokeWidth={2}
-                vectorEffect='non-scaling-stroke'
-                strokeLinejoin='round'
-              />
-            </svg>
-            {active !== null && point !== null && (
-              <>
-                <span
-                  aria-hidden
-                  className='border-foreground/30 pointer-events-none absolute inset-y-0 border-l border-dashed'
-                  style={{ left: `${x}%` }}
-                />
-                <span
-                  aria-hidden
-                  className='bg-primary ring-background pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2'
-                  style={{ left: `${x}%`, top: `${yOf(point)}%` }}
-                />
-                <span
-                  role='status'
-                  className={cn(
-                    'bg-popover text-popover-foreground pointer-events-none absolute bottom-full mb-1 flex flex-col rounded-md border px-2 py-1 text-xs whitespace-nowrap shadow-sm',
-                    x < 20 && 'translate-x-0',
-                    x >= 20 && x <= 80 && '-translate-x-1/2',
-                    x > 80 && '-translate-x-full'
-                  )}
-                  style={{ left: `${x}%` }}
-                >
-                  <span>
-                    <span className='text-muted-foreground'>{at(active)}</span>{' '}
-                    <span
-                      className={cn(
-                        'font-medium tabular-nums',
-                        point <= 0 && 'text-destructive'
-                      )}
-                    >
-                      {amount(point)}
-                    </span>
-                  </span>
-                  {band && (
-                    <span className='text-muted-foreground tabular-nums'>
-                      {t('Usual range {{low}} – {{high}}', {
-                        low: fmt.usdWhole(band.lower[active]),
-                        high: fmt.usdWhole(band.upper[active]),
-                      })}
-                    </span>
-                  )}
-                  {trend && (
-                    <span className='text-muted-foreground tabular-nums'>
-                      {t('Growing: {{amount}}', {
-                        amount: amount(trend[active]),
-                      })}
-                    </span>
-                  )}
-                </span>
-              </>
-            )}
-          </div>
-          <div
-            aria-hidden
-            className='text-muted-foreground relative mt-1 h-3 text-[10px] leading-none'
-          >
-            {days
-              .filter((day) => day.hours < last - 6)
-              .map((day) => (
-                <span
-                  key={day.hours}
-                  className='absolute'
-                  style={{ left: `${xOf(day.hours)}%` }}
-                >
-                  {day.label}
-                </span>
-              ))}
-          </div>
-        </div>
-      </div>
-    </figure>
-  )
-}
-
-// The axis top: the least 1, 2, 2.5 or 5 step at or above the highest value.
-function niceTop(value: number) {
-  if (value <= 0) return 1
-  const magnitude = 10 ** Math.floor(Math.log10(value))
-  const step = [1, 2, 2.5, 5, 10].find((n) => n * magnitude >= value) ?? 10
-  return step * magnitude
-}
-
-function headroomTone(scale: number | null | undefined): Tone {
-  if (scale == null) return 'default'
-  if (scale < 1) return 'danger'
-  if (scale < 1.2) return 'warning'
-  return 'default'
-}
-
-function loadShareTone(load: number): Tone {
-  if (load >= 1) return 'danger'
-  if (load >= 0.8) return 'warning'
-  return 'default'
-}
-
-// Remaining shares below these read as running low.
-function remainingTone(share: number): Tone {
-  if (share < 0.1) return 'danger'
-  if (share < 0.25) return 'warning'
-  return 'default'
 }
 
 function loadTone(inFlight: number, limit: number): Tone {

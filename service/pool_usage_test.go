@@ -111,7 +111,7 @@ func TestReadPoolUsageReadsBothSidesForOneProvider(t *testing.T) {
 		assert.Equal(t, "claude", channel)
 	}
 	require.Len(t, usage.Windows, len(PoolUsageWindowHours))
-	one, day, week := usage.Windows[0], usage.Windows[3], usage.Windows[4]
+	one, day, week := usage.Windows[0], usage.Windows[4], usage.Windows[5]
 	// The open hour's ¥2, and half of the hour before's ¥4.
 	assert.InDelta(t, 4, one.Quota, 1e-9)
 	assert.InDelta(t, 6, day.Quota, 1e-9, "the hour 30 hours back is outside a day")

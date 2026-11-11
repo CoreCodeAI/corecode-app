@@ -21,11 +21,10 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 
 import { useInsightsFormat } from '../lib'
-import type { EngineAccount, EngineRunway } from '../types'
+import type { EngineAccount } from '../types'
 import { Panel, SimpleTable } from './shared'
 import {
   expiringAccounts,
-  poolRunsShort,
   UNUSED_CAPACITY_SHARE,
   UNUSED_FLOOR_USD,
   type ExpiringAccount,
@@ -41,29 +40,12 @@ export function UnusedQuotaPanel(props: {
   accounts: EngineAccount[]
   observedAt: number
   total?: { usd: number; counted: number } | null
-  runway?: EngineRunway | null
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const rows = expiringAccounts(props.accounts, props.observedAt)
   if (rows.length === 0) return null
   const amount = rows.reduce((sum, row) => sum + row.unused, 0)
-  // The projection holds each account at its own recent rate. When the pool
-  // as a whole runs short, the accounts that reach their budget lines first
-  // send their traffic to the rest, so what one account would leave gets used.
-  // Listing it as quota about to expire would contradict the runway.
-  if (poolRunsShort(props.runway)) {
-    return (
-      <Panel title={t('Quota that will expire unused')}>
-        <p className='text-muted-foreground text-sm'>
-          {t(
-            'The pool is projected to run short, so the {{amount}} the accounts would leave at their own recent rates will most likely be used: accounts that reach their budget lines first send their traffic to the rest.',
-            { amount: fmt.usdWhole(props.total?.usd ?? amount) }
-          )}
-        </p>
-      </Panel>
-    )
-  }
   return (
     <Panel
       title={t('Quota that will expire unused')}

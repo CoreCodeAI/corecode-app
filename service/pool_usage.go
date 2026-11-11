@@ -19,8 +19,9 @@ import (
 )
 
 // PoolUsageWindowHours are the spans the pool tab reads usage over, newest
-// first: the last hour to the last week.
-var PoolUsageWindowHours = []int64{1, 3, 5, 24, 168}
+// first: the last hour to the last week. The outlook's linear models read
+// the 1, 12 and 24 hours.
+var PoolUsageWindowHours = []int64{1, 3, 5, 12, 24, 168}
 
 const (
 	// poolUsageSeriesHours is the hourly history the pool tab draws.
