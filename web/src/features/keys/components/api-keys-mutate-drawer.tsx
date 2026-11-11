@@ -89,6 +89,7 @@ import {
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from '../lib'
+import { useUnsavedChangesGuard } from '../lib/use-unsaved-changes-guard'
 import type { ApiKey } from '../types'
 import {
   ApiKeyGroupCombobox,
@@ -433,9 +434,13 @@ export function ApiKeysMutateDrawer({
   const unlimitedQuota = form.watch('unlimited_quota')
   let submitLabel = isUpdate ? t('Save changes') : t('Create key')
   if (isSubmitting) submitLabel = t('Saving...')
+  const closeGuard = useUnsavedChangesGuard({
+    isDirty: isFormInitialized && form.formState.isDirty,
+    onOpenChange,
+  })
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={closeGuard.onOpenChange}>
       <SheetContent
         className={sideDrawerContentClassName('max-w-none sm:!max-w-[620px]')}
       >
@@ -866,6 +871,7 @@ export function ApiKeysMutateDrawer({
           </Button>
         </SheetFooter>
       </SheetContent>
+      {closeGuard.confirmDialog}
     </Sheet>
   )
 }

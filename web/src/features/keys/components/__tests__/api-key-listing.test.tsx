@@ -32,6 +32,7 @@ import {
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   within,
@@ -356,7 +357,8 @@ async function renderKeysPage(
       </QueryClientProvider>
     </I18nextProvider>
   )
-  await screen.findByText(currentKey.name)
+  if (currentKey.name) await screen.findByText(currentKey.name)
+  else await screen.findByRole('button', { name: 'Open menu' })
   return { post, put, client }
 }
 
@@ -634,4 +636,46 @@ it('names the icon-only copy and row action buttons for assistive technology', a
   ).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Disable' })).toBeInTheDocument()
+})
+
+it('offers to undo a disable from its success toast and re-enables the key', async () => {
+  const { put } = await renderKeysPage(1)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Disable' }))
+  await screen.findByText('Disabled')
+  fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenLastCalledWith('/api/token/?status_only=true', {
+      id: 7,
+      status: 1,
+    })
+  )
+  await screen.findByText('Enabled')
+  expect(put).toHaveBeenCalledTimes(2)
+})
+
+it('offers no undo after enabling a key', async () => {
+  await renderKeysPage(2)
+  await userEvent.click(screen.getByRole('button', { name: 'Enable' }))
+  await screen.findByText('API Key enabled successfully')
+  expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
+})
+
+it('links a key to the usage logs filtered by its name', async () => {
+  await renderKeysPage(1, { name: 'claude code/main' })
+  await userEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+  const item = await screen.findByRole('menuitem', { name: 'View logs' })
+  const href = item.closest('a')?.getAttribute('href') ?? ''
+  const url = new URL(href, 'http://localhost')
+  expect(url.pathname).toBe('/usage-logs/common')
+  expect(url.searchParams.get('token')).toBe('claude code/main')
+})
+
+it('offers no logs link for a key without a name', async () => {
+  await renderKeysPage(1, { name: '' })
+  await userEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+  await screen.findByRole('menuitem', { name: 'Delete' })
+  expect(
+    screen.queryByRole('menuitem', { name: 'View logs' })
+  ).not.toBeInTheDocument()
 })

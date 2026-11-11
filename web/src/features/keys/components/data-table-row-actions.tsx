@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Link as RouterLink } from '@tanstack/react-router'
 import type { Row } from '@tanstack/react-table'
 import {
   Trash2,
@@ -28,6 +29,7 @@ import {
   Link,
   Loader2,
   Palette,
+  ScrollText,
   TerminalSquare,
 } from 'lucide-react'
 import { useCallback, useState } from 'react'
@@ -174,22 +176,21 @@ export function DataTableRowActions<TData>({
     tab.navigate(buildCanvasUrl(serverAddress, realKey))
   }
 
-  const handleToggleStatus = async (
-    event?: React.MouseEvent<HTMLButtonElement>
-  ) => {
-    event?.stopPropagation()
-    const newStatus = isEnabled
-      ? API_KEY_STATUS.DISABLED
-      : API_KEY_STATUS.ENABLED
-
+  const setStatus = async (newStatus: number) => {
     setIsTogglingStatus(true)
     try {
       const result = await updateApiKeyStatus(apiKey.id, newStatus)
       if (result.success) {
-        const message = isEnabled
-          ? t(SUCCESS_MESSAGES.API_KEY_DISABLED)
-          : t(SUCCESS_MESSAGES.API_KEY_ENABLED)
-        toast.success(message)
+        if (newStatus === API_KEY_STATUS.DISABLED) {
+          toast.success(t(SUCCESS_MESSAGES.API_KEY_DISABLED), {
+            action: {
+              label: t('Undo'),
+              onClick: () => void setStatus(API_KEY_STATUS.ENABLED),
+            },
+          })
+        } else {
+          toast.success(t(SUCCESS_MESSAGES.API_KEY_ENABLED))
+        }
         triggerRefresh()
       } else {
         handleServerError(result, t(ERROR_MESSAGES.STATUS_UPDATE_FAILED))
@@ -199,6 +200,11 @@ export function DataTableRowActions<TData>({
     } finally {
       setIsTogglingStatus(false)
     }
+  }
+
+  const handleToggleStatus = (event?: React.MouseEvent<HTMLButtonElement>) => {
+    event?.stopPropagation()
+    void setStatus(isEnabled ? API_KEY_STATUS.DISABLED : API_KEY_STATUS.ENABLED)
   }
 
   let statusIcon = <Power className='size-4' />
@@ -362,6 +368,25 @@ export function DataTableRowActions<TData>({
               ))}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
+        )}
+        {apiKey.name && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              render={
+                <RouterLink
+                  to='/usage-logs/$section'
+                  params={{ section: 'common' }}
+                  search={{ token: apiKey.name }}
+                />
+              }
+            >
+              {t('View logs')}
+              <DropdownMenuShortcut>
+                <ScrollText size={16} />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
