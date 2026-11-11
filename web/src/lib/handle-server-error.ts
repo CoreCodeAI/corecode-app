@@ -43,9 +43,13 @@ export function handleServerError(
   if (reported) return
   const message =
     presentation?.title || getServerErrorMessage(error, fallbackMessage)
+  // Requests that fail together with the same message share one toast.
   if (presentation?.description) {
-    toast.error(message, { description: presentation.description })
+    toast.error(message, {
+      id: message,
+      description: presentation.description,
+    })
   } else {
-    toast.error(message)
+    toast.error(message, { id: message })
   }
 }

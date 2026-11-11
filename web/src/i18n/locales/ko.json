@@ -5517,6 +5517,7 @@
     "Showing": "표시 중",
     "Showing {{shown}} of {{total}} mappings": "매핑 {{total}}개 중 {{shown}}개 표시",
     "Showing the last successfully checked release.": "마지막으로 성공적으로 확인한 릴리스를 표시합니다.",
+    "Showing the last results that loaded.": "마지막으로 불러온 결과를 표시하고 있습니다.",
     "Shown": "표시됨",
     "Shown {{count}} models in model square": "모델 광장에 모델 {{count}}개 표시됨",
     "Sidebar": "사이드바",

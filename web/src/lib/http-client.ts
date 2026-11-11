@@ -101,7 +101,10 @@ function redirectToSignIn(): void {
     typeof window !== 'undefined' &&
     window.location.pathname !== '/sign-in'
   ) {
-    window.location.replace('/sign-in')
+    // Sign-in checks the target with sanitizeAuthRedirect before using it.
+    window.location.replace(
+      `/sign-in?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`
+    )
   }
 }
 

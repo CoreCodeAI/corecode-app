@@ -5517,6 +5517,7 @@
     "Showing": "顯示第",
     "Showing {{shown}} of {{total}} mappings": "顯示 {{shown}} / {{total}} 筆映射",
     "Showing the last successfully checked release.": "目前顯示上次成功檢查的發行資訊。",
+    "Showing the last results that loaded.": "目前顯示的是上次成功載入的結果。",
     "Shown": "顯示",
     "Shown {{count}} models in model square": "已在模型定價頁顯示 {{count}} 個模型",
     "Sidebar": "側邊欄",
