@@ -20,6 +20,9 @@ func init() {
 	Register("github", &GitHubProvider{})
 }
 
+// gitHubAPIURL is the REST API root. Tests point it at a local server.
+var gitHubAPIURL = "https://api.github.com"
+
 // GitHubProvider implements OAuth for GitHub
 type GitHubProvider struct{}
 
@@ -38,6 +41,7 @@ type gitHubUser struct {
 
 type gitHubEmail struct {
 	Email    string `json:"email"`
+	Primary  bool   `json:"primary"`
 	Verified bool   `json:"verified"`
 }
 
@@ -107,7 +111,7 @@ func (p *GitHubProvider) ExchangeToken(ctx context.Context, code string, c *gin.
 func (p *GitHubProvider) GetUserInfo(ctx context.Context, token *OAuthToken) (*OAuthUser, error) {
 	logger.LogDebug(ctx, "[OAuth-GitHub] GetUserInfo: fetching user info")
 
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/user", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", gitHubAPIURL+"/user", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -151,11 +155,35 @@ func (p *GitHubProvider) GetUserInfo(ctx context.Context, token *OAuthToken) (*O
 	logger.LogDebug(ctx, "[OAuth-GitHub] GetUserInfo success: id=%d, login=%s, name=%s, email=%s",
 		githubUser.Id, githubUser.Login, githubUser.Name, githubUser.Email)
 
+	// The user endpoint's email is only the public profile address and says
+	// nothing about confirmation. GitHub's email list does: an address it has
+	// confirmed links to the account holding it, as Google's does. The public
+	// address is preferred, so a customer who registered with it reaches that
+	// account; otherwise the primary confirmed one, so an account whose public
+	// address is hidden still gets one. Without the list the public address is
+	// kept unconfirmed, as before.
+	email, emailVerified := githubUser.Email, false
+	if emails, err := p.listEmails(ctx, token); err == nil {
+		for _, candidate := range emails {
+			if !candidate.Verified || candidate.Email == "" {
+				continue
+			}
+			if model.NormalizeEmail(candidate.Email) == model.NormalizeEmail(githubUser.Email) {
+				email, emailVerified = candidate.Email, true
+				break
+			}
+			if candidate.Primary {
+				email, emailVerified = candidate.Email, true
+			}
+		}
+	}
+
 	return &OAuthUser{
 		ProviderUserID: strconv.FormatInt(githubUser.Id, 10), // Use numeric ID as primary identifier
 		Username:       githubUser.Login,
 		DisplayName:    githubUser.Name,
-		Email:          githubUser.Email,
+		Email:          email,
+		EmailVerified:  emailVerified,
 		Extra: map[string]any{
 			"legacy_id": githubUser.Login, // Store login for migration from old accounts
 		},
@@ -166,7 +194,24 @@ func (p *GitHubProvider) GetUserInfo(ctx context.Context, token *OAuthToken) (*O
 // account. The email field of the user endpoint carries no confirmation status
 // and is not used for this.
 func (p *GitHubProvider) GetVerifiedEmails(ctx context.Context, token *OAuthToken) ([]string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/user/emails", nil)
+	emails, err := p.listEmails(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	verified := make([]string, 0, len(emails))
+	for _, email := range emails {
+		if email.Verified && email.Email != "" {
+			verified = append(verified, email.Email)
+		}
+	}
+	logger.LogDebug(ctx, "[OAuth-GitHub] GetVerifiedEmails success: verified=%d", len(verified))
+	return verified, nil
+}
+
+// listEmails reads the signed-in account's addresses with their primary and
+// confirmation flags. It needs the user:email scope the sign-in requests.
+func (p *GitHubProvider) listEmails(ctx context.Context, token *OAuthToken) ([]gitHubEmail, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, gitHubAPIURL+"/user/emails", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -193,14 +238,7 @@ func (p *GitHubProvider) GetVerifiedEmails(ctx context.Context, token *OAuthToke
 		logger.LogError(ctx, common.LogText("[OAuth-GitHub] GetVerifiedEmails decode error: %s", err.Error()))
 		return nil, err
 	}
-	verified := make([]string, 0, len(emails))
-	for _, email := range emails {
-		if email.Verified && email.Email != "" {
-			verified = append(verified, email.Email)
-		}
-	}
-	logger.LogDebug(ctx, "[OAuth-GitHub] GetVerifiedEmails success: verified=%d", len(verified))
-	return verified, nil
+	return emails, nil
 }
 
 func (p *GitHubProvider) IsUserIDTaken(providerUserID string) bool {
