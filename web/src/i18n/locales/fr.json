@@ -8195,6 +8195,8 @@
     "{{title}}: {{now}} spendable now, least {{lowest}} around {{time}}": "{{title}} : {{now}} dépensables maintenant, minimum {{lowest}} vers {{time}}",
     "Nothing": "Rien",
     "Demand": "Demande",
+    "Dollars per hour": "Dollars par heure",
+    "; demand {{now}}/h now, peak {{peak}}/h": " ; demande {{now}}/h maintenant, pic {{peak}}/h",
     "Same hours, last 7 days": "Mêmes heures, 7 derniers jours",
     "Smart forecast": "Prévision intelligente",
     "Linear · last hour": "Linéaire · dernière heure",

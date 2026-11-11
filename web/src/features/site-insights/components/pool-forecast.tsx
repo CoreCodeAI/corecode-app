@@ -232,6 +232,9 @@ export function ForecastPanel(props: { outlook: EngineOutlook }) {
   const series = hours === 168 ? 'weekLeft' : 'drawable'
   const bandOf = (row: { drawable: number[]; week_left: number[] }) =>
     (series === 'weekLeft' ? row.week_left : row.drawable).slice(0, count)
+  // A band's projection runs the model's demand times its scale.
+  const demandAt = (scale: number) =>
+    model.demand.slice(0, count).map((usd) => usd * scale)
   const resets: OutlookChartReset[] = outlook.resets
     .map((reset) => ({
       reset,
@@ -455,6 +458,14 @@ export function ForecastPanel(props: { outlook: EngineOutlook }) {
             band={
               model.low && model.high
                 ? { upper: bandOf(model.low), lower: bandOf(model.high) }
+                : null
+            }
+            demandBand={
+              model.low && model.high
+                ? {
+                    upper: demandAt(model.high.scale),
+                    lower: demandAt(model.low.scale),
+                  }
                 : null
             }
             resets={resets}

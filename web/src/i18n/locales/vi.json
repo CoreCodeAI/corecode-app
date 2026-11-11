@@ -8195,6 +8195,8 @@
     "{{title}}: {{now}} spendable now, least {{lowest}} around {{time}}": "{{title}}: hiện có thể chi ngay {{now}}, thấp nhất {{lowest}} vào khoảng {{time}}",
     "Nothing": "Không có",
     "Demand": "Nhu cầu",
+    "Dollars per hour": "Đô la mỗi giờ",
+    "; demand {{now}}/h now, peak {{peak}}/h": "; nhu cầu hiện tại {{now}}/h, đỉnh {{peak}}/h",
     "Same hours, last 7 days": "Cùng khung giờ, 7 ngày qua",
     "Smart forecast": "Dự báo thông minh",
     "Linear · last hour": "Tuyến tính · 1 giờ qua",
