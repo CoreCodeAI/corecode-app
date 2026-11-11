@@ -112,6 +112,12 @@ it('sends a page whose refresh fails to sign-in with the page as the redirect ta
   expect(signInTarget(target)).toBe('/usage-logs?type=2&q=prod')
 })
 
+it('tells sign-in that the session expired', async () => {
+  const target = await expireSessionOn({ pathname: '/keys' })
+
+  expect(target.searchParams.get('reason')).toBe('expired')
+})
+
 it.each([
   ['a protocol-relative path', '//attacker.example'],
   ['a dot segment that normalizes to another host', '/.//attacker.example'],

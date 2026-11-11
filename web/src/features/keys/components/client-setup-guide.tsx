@@ -282,15 +282,22 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
   const handleCopySnippet = async () => {
     setBusy('copy')
     try {
-      const apiKey = await resolveKey()
-      if (!apiKey) return
-      const text = buildClientSetupSnippet(activeTarget, {
-        baseUrl,
-        apiKey,
-        providerName,
-        models,
+      const pendingKey = resolveKey()
+      const text = pendingKey.then((apiKey) => {
+        // No key to copy: the rejection makes the clipboard drop the write.
+        if (!apiKey) throw new Error('no API key')
+        return buildClientSetupSnippet(activeTarget, {
+          baseUrl,
+          apiKey,
+          providerName,
+          models,
+        })
       })
-      if (await copyToClipboard(text)) {
+      // Hand over the promise before awaiting anything: Safari accepts a
+      // clipboard write only during the click.
+      const copied = await copyToClipboard(text)
+      if (!(await pendingKey)) return
+      if (copied) {
         flashCopied('copy')
         toast.success(t('Copied with your full API key'))
       } else {

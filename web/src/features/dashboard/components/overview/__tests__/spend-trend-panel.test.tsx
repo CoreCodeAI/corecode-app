@@ -16,7 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { render, screen, waitFor, within } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -67,12 +73,91 @@ describe('daily bar hover areas', () => {
     const chart = screen.getByRole('list', { name: 'Daily spend' })
     expect(chart.className).not.toMatch(/\bgap-/)
     const bar = within(chart).getByLabelText(/12 requests$/)
-    expect(bar).toHaveClass('px-[3px]')
 
     await userEvent.hover(bar)
     expect(await openTooltip()).toHaveTextContent('12 requests')
   })
+})
 
+const TWO_DAYS = [
+  {
+    day: 1759248000,
+    quota: 500000,
+    requests: 12,
+    cacheReadTokens: 900,
+    cacheWriteTokens: 100,
+  },
+  {
+    day: 1759334400,
+    quota: 250000,
+    requests: 5,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+  },
+]
+
+describe('spend trend on a touch screen', () => {
+  it('makes each day a list item that is its own trigger, so no edge is dead', () => {
+    render(<SpendTrendPanel loading={false} daily={TWO_DAYS} />)
+    const chart = screen.getByRole('list', { name: 'Daily spend' })
+
+    for (const item of within(chart).getAllByRole('listitem')) {
+      expect(item).toHaveAttribute('data-slot', 'tooltip-trigger')
+      expect(item).toHaveAttribute('tabindex', '0')
+    }
+  })
+
+  it('reads out a day on a tap and puts it away on a second tap', async () => {
+    render(<SpendTrendPanel loading={false} daily={TWO_DAYS} />)
+    const bar = screen.getByLabelText(/12 requests$/)
+
+    fireEvent.pointerDown(bar, { pointerType: 'touch' })
+    fireEvent.click(bar)
+    expect(await openTooltip()).toHaveTextContent('12 requests')
+
+    fireEvent.pointerDown(bar, { pointerType: 'touch' })
+    fireEvent.click(bar)
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-slot="tooltip-content"][data-open]')
+      ).toBeNull()
+    )
+  })
+
+  it('reads out a day when the keyboard focuses it', async () => {
+    const user = userEvent.setup()
+    render(<SpendTrendPanel loading={false} daily={TWO_DAYS} />)
+    const bar = screen.getByLabelText(/12 requests$/)
+
+    for (let step = 0; step < 10 && document.activeElement !== bar; step++) {
+      await user.tab()
+    }
+    expect(bar).toHaveFocus()
+
+    expect(await openTooltip()).toHaveTextContent('12 requests')
+  })
+
+  it('shows every other date at phone width, counting back from today, and lets it spill past its column', () => {
+    const days = Array.from({ length: 4 }, (_, index) => ({
+      ...TWO_DAYS[0],
+      day: TWO_DAYS[0].day + index * 86400,
+    }))
+    render(<SpendTrendPanel loading={false} daily={days} />)
+    const labels = within(screen.getByRole('list', { name: 'Daily spend' }))
+      .getAllByRole('listitem')
+      .map((item) => item.querySelector('[aria-hidden]') as HTMLElement)
+
+    expect(
+      labels.map((label) => label.classList.contains('invisible'))
+    ).toEqual([true, false, true, false])
+    expect(labels[3]).toHaveTextContent('Today')
+    for (const label of labels) {
+      expect(label).toHaveClass('truncate', 'max-sm:overflow-visible')
+    }
+  })
+})
+
+describe('uptime strip hover areas', () => {
   it('opens a day of the uptime strip at once, with no dead gap between days', async () => {
     render(
       <UptimeSparkline

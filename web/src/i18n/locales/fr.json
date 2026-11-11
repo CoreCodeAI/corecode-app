@@ -5441,6 +5441,7 @@
     "Session defaults": "Sessions par défaut",
     "Session expired!": "Session expirée !",
     "Session expired?": "Session expirée ?",
+    "Your session expired. Please sign in again.": "Votre session a expiré. Veuillez vous reconnecter.",
     "Session rule": "Règle de session",
     "Session rule matched": "Règle de session correspondante",
     "Session rules": "Règles de session",

@@ -32,10 +32,12 @@ contract (a same-origin relative path) did not hold.
 ## Alternatives considered
 
 - **An inline "Your session expired. Please sign in again." notice on sign-in, via
-  `reason=expired`.** It was built and tested, and does not fit the first-load budget. The
-  sign-in route imports its page directly, so the page, its forms and the route's search
-  schema ride in the entry bundle every page downloads. With the notice, `/sign-in`,
-  `/dashboard/overview` and `/keys` all went over (by 124 to 199 bytes after the redirect).
+  `reason=expired`.** It was built and tested, and did not fit the first-load budget of
+  the day. The sign-in route imports its page directly, so the page, its forms and the
+  route's search schema ride in the entry bundle every page downloads. With the notice,
+  `/sign-in`, `/dashboard/overview` and `/keys` all went over (by 124 to 199 bytes after
+  the redirect). It landed once the budget was raised:
+  `2026-11-12-say-why-after-session-expiry.md`.
 - **A helper module building the address, with its own `sanitizeAuthRedirect` check.** It
   cost about 110 bytes on `/keys` against 22 for the inline template.
 
@@ -44,8 +46,8 @@ contract (a same-origin relative path) did not hold.
 - First load after this change, in bytes: `/sign-in` 361,408 of 361,472,
   `/dashboard/overview` 540,601 of 540,672, `/keys` 622,569 of 622,592.
 - The "Session expired!" toast raised before the navigation still disappears with the
-  page, so the user is not told why they are on sign-in. The notice above is the fix once
-  the budget has room.
+  page. The sign-in page's own notice, added the next day, tells the user why they are
+  there.
 - Changes to `sanitizeAuthRedirect` reach every sign-in and OAuth path.
 
 ## Verification

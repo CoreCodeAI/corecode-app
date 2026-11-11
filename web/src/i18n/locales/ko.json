@@ -5441,6 +5441,7 @@
     "Session defaults": "세션 기본값",
     "Session expired!": "세션이 만료되었습니다!",
     "Session expired?": "세션이 만료되었나요?",
+    "Your session expired. Please sign in again.": "세션이 만료되었습니다. 다시 로그인하세요.",
     "Session rule": "세션 규칙",
     "Session rule matched": "세션 규칙 일치",
     "Session rules": "세션 규칙",
