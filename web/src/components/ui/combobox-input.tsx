@@ -24,6 +24,8 @@ import { useTranslation } from 'react-i18next'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
+export type ComboboxCommitSource = 'list' | 'enter'
+
 export type ComboboxInputOption = {
   value: string
   label: string
@@ -37,7 +39,7 @@ interface ComboboxInputProps {
   value?: string
   onValueChange: (value: string) => void
   /** Called when a value is picked from the list or entered with Enter. */
-  onValueCommit?: (value: string) => void
+  onValueCommit?: (value: string, source: ComboboxCommitSource) => void
   placeholder?: string
   emptyText?: string
   className?: string
@@ -159,9 +161,12 @@ export function ComboboxInput({
     }
   }, [open])
 
-  const handleSelect = (selectedValue: string) => {
+  const handleSelect = (
+    selectedValue: string,
+    source: ComboboxCommitSource = 'list'
+  ) => {
     onValueChange(selectedValue)
-    onValueCommit?.(selectedValue)
+    onValueCommit?.(selectedValue, source)
     setOpen(false)
     setSearchValue('')
     inputRef.current?.focus()
@@ -194,10 +199,10 @@ export function ComboboxInput({
       case 'Enter':
         if (highlightedIndex >= 0 && filteredOptions[highlightedIndex]) {
           e.preventDefault()
-          handleSelect(filteredOptions[highlightedIndex].value)
+          handleSelect(filteredOptions[highlightedIndex].value, 'enter')
         } else if (allowCustomValue && searchValue.trim()) {
           e.preventDefault()
-          handleSelect(searchValue.trim())
+          handleSelect(searchValue.trim(), 'enter')
         } else {
           if (!onKeyDown) e.preventDefault()
           // No highlighted option, just close the dropdown and keep current value

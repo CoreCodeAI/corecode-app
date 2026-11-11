@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Combobox } from '@/components/ui/combobox'
+import type { ComboboxCommitSource } from '@/components/ui/combobox-input'
 import {
   Select,
   SelectContent,
@@ -239,10 +240,17 @@ export function CommonLogsFilterBar<TData>(
     },
     [filters, logType, navigate, queryClient]
   )
-  // Picking a value applies it on desktop; the mobile drawer applies on Search.
+  // Picking from a list applies on desktop; the mobile drawer waits for
+  // Search. Enter submits everywhere, as it does in a plain input.
   const applyPicked = useCallback(
-    (field: keyof CommonLogFilters, value: string) => {
-      if (!isMobile) handleApply({ ...filters, [field]: value })
+    (
+      field: keyof CommonLogFilters,
+      value: string,
+      source: ComboboxCommitSource
+    ) => {
+      if (!isMobile || source === 'enter') {
+        handleApply({ ...filters, [field]: value })
+      }
     },
     [filters, handleApply, isMobile]
   )
@@ -363,7 +371,9 @@ export function CommonLogsFilterBar<TData>(
         className='h-8 min-w-0 text-sm leading-5'
         value={filters.model || ''}
         onValueChange={(value) => handleChange('model', value ?? '')}
-        onValueCommit={(value: string) => applyPicked('model', value)}
+        onValueCommit={(value: string, source: ComboboxCommitSource) =>
+          applyPicked('model', value, source)
+        }
         onKeyDown={handleKeyDown}
       />
     </LogsFilterField>
@@ -380,7 +390,9 @@ export function CommonLogsFilterBar<TData>(
         popupClassName={sensitiveInputClass}
         value={filters.group || ''}
         onValueChange={(value) => handleChange('group', value ?? '')}
-        onValueCommit={(value: string) => applyPicked('group', value)}
+        onValueCommit={(value: string, source: ComboboxCommitSource) =>
+          applyPicked('group', value, source)
+        }
         onKeyDown={handleKeyDown}
       />
     </LogsFilterField>
@@ -472,7 +484,9 @@ export function CommonLogsFilterBar<TData>(
           popupClassName={sensitiveInputClass}
           value={filters.token || ''}
           onValueChange={(value) => handleChange('token', value ?? '')}
-          onValueCommit={(value: string) => applyPicked('token', value)}
+          onValueCommit={(value: string, source: ComboboxCommitSource) =>
+            applyPicked('token', value, source)
+          }
           onKeyDown={handleKeyDown}
         />
       </LogsFilterField>

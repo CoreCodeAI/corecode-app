@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
   ComboboxInput as LegacyComboboxInput,
+  type ComboboxCommitSource,
   type ComboboxInputOption,
 } from '@/components/ui/combobox-input'
 import {
@@ -44,7 +45,7 @@ type LegacyComboboxProps = {
   options: readonly ComboboxInputOption[]
   value?: string | null
   onValueChange?: (value: string | null) => void
-  onValueCommit?: (value: string) => void
+  onValueCommit?: (value: string, source: ComboboxCommitSource) => void
   placeholder?: string
   searchPlaceholder?: string
   emptyText?: string
@@ -125,7 +126,7 @@ function OptionCombobox(props: LegacyComboboxProps) {
       onValueChange={(option) => {
         if (!option) return
         props.onValueChange?.(option.value)
-        props.onValueCommit?.(option.value)
+        props.onValueCommit?.(option.value, 'list')
       }}
       filter={(option, query) => {
         const term = query.trim().toLowerCase()

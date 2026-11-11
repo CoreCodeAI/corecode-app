@@ -25,7 +25,13 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import { getCoreRowModel, useReactTable } from '@tanstack/react-table'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 
@@ -51,7 +57,18 @@ function Fixture() {
 const keyNames = ['claude-code', 'codex', 'claude-code']
 const models = ['claude-opus-4-1', 'gpt-5-codex']
 
-async function renderFilter() {
+async function renderFilter(options: { mobile?: boolean } = {}) {
+  if (options.mobile) {
+    Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', {
+      configurable: true,
+      value: vi.fn(),
+    })
+    const originalMatchMedia = window.matchMedia
+    vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+      ...originalMatchMedia(query),
+      matches: query === '(max-width: 640px)',
+    }))
+  }
   vi.spyOn(api, 'get').mockImplementation(async (url) => {
     if (url.startsWith('/api/token/')) {
       return {
@@ -91,6 +108,15 @@ async function renderFilter() {
       <RouterProvider router={router} />
     </QueryClientProvider>
   )
+  if (options.mobile) {
+    await userEvent.click(
+      await screen.findByRole('button', { name: /^Filter/ })
+    )
+    await within(screen.getByRole('dialog')).findByRole('combobox', {
+      name: 'Model Name',
+    })
+    return router
+  }
   await screen.findByRole('combobox', { name: 'Model Name' })
   await userEvent.click(screen.getByRole('button', { name: 'Expand' }))
   return router
@@ -99,6 +125,7 @@ async function renderFilter() {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  Reflect.deleteProperty(HTMLElement.prototype, 'setPointerCapture')
   useAuthStore.getState().auth.setUser(null)
 })
 
@@ -152,6 +179,45 @@ it('keeps a typed % wildcard as the model filter', async () => {
   await user.keyboard('{Enter}')
   await waitFor(() =>
     expect(router.state.location.search).toMatchObject({ model: '%opus%' })
+  )
+})
+
+it.each([
+  ['Model Name', 'model'],
+  ['Token Name', 'token'],
+  ['Group', 'group'],
+])(
+  'searches a %s typed in the mobile drawer on Enter',
+  async (label, field) => {
+    const router = await renderFilter({ mobile: true })
+    const user = userEvent.setup()
+    const dialog = screen.getByRole('dialog')
+    await user.type(
+      within(dialog).getByRole('combobox', { name: label }),
+      'typed-value{Enter}'
+    )
+    await waitFor(() =>
+      expect(router.state.location.search).toMatchObject({
+        [field]: 'typed-value',
+      })
+    )
+  }
+)
+
+it('keeps a name picked from the list in the mobile drawer until Search', async () => {
+  const router = await renderFilter({ mobile: true })
+  const user = userEvent.setup()
+  const dialog = screen.getByRole('dialog')
+  await user.click(within(dialog).getByRole('combobox', { name: 'Model Name' }))
+  await user.click(
+    await within(dialog).findByRole('option', { name: 'gpt-5-codex' })
+  )
+  expect(router.state.location.search).not.toHaveProperty('model')
+  await user.click(within(dialog).getByRole('button', { name: 'Search' }))
+  await waitFor(() =>
+    expect(router.state.location.search).toMatchObject({
+      model: 'gpt-5-codex',
+    })
   )
 })
 
