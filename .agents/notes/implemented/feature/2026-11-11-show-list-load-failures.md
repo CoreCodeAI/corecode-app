@@ -26,9 +26,10 @@ sign of the failure was a toast that disappears after five seconds.
 - **Wired into `/keys` and the usage logs only**, with the query's `refetch` as the retry
   and the existing "Failed to load API keys" and "Failed to load logs" strings as titles.
   The other 19 `DataTablePage` lists can opt in the same way.
-- While a retry is in flight on `/keys` the error state stays (TanStack keeps
-  `status: 'error'` during the refetch); hiding it would flash the create prompt again.
-  The usage logs already show the skeleton while they fetch with no data.
+- A retry with no rows shows the loading skeleton: TanStack resets a query without data
+  to `status: 'pending'` when it refetches, so `isLoading` is true and the error state
+  steps aside. If the retry fails, the error state returns. Neither step shows the empty
+  state or the create prompt.
 
 ## Alternatives considered
 
