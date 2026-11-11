@@ -560,10 +560,15 @@ it('reads the list again on the next visit after a change', async () => {
   await waitFor(() => expect(listRequests()).toHaveLength(1))
 })
 
-async function renderEmptyKeysPage() {
+async function renderEmptyKeysPage(
+  listResponse: () => unknown = () => ({
+    success: true,
+    data: { items: [], total: 0 },
+  })
+) {
   vi.mocked(api.get).mockImplementation(async (url) => {
     if (url.startsWith('/api/token/')) {
-      return { data: { success: true, data: { items: [], total: 0 } } }
+      return { data: listResponse() }
     }
     return { data: { success: true, data: { default: { ratio: 1 } } } }
   })
@@ -626,6 +631,25 @@ it.each([
     expect(screen.getByTestId('open-probe')).toHaveTextContent('create')
   }
 )
+
+it('shows a retryable load error instead of the create prompt when the first list request fails', async () => {
+  let failing = true
+  await renderEmptyKeysPage(() =>
+    failing
+      ? { success: false, message: 'Database unavailable' }
+      : { success: true, data: { items: [key], total: 1 } }
+  )
+  await screen.findByText('Failed to load API keys')
+  expect(screen.queryByText('No API Keys Found')).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Create API Key' })
+  ).not.toBeInTheDocument()
+
+  failing = false
+  await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await screen.findByText(key.name)
+  expect(screen.queryByText('Failed to load API keys')).not.toBeInTheDocument()
+})
 
 it('names the icon-only copy and row action buttons for assistive technology', async () => {
   await renderKeysPage()

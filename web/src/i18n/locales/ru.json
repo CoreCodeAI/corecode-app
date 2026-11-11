@@ -5517,6 +5517,7 @@
     "Showing": "Отображать",
     "Showing {{shown}} of {{total}} mappings": "Показано {{shown}} из {{total}} сопоставлений",
     "Showing the last successfully checked release.": "Показаны сведения о выпуске из последней успешной проверки.",
+    "Showing the last results that loaded.": "Показаны результаты последней успешной загрузки.",
     "Shown": "Показано",
     "Shown {{count}} models in model square": "Показано моделей в каталоге: {{count}}",
     "Sidebar": "Боковая панель",
