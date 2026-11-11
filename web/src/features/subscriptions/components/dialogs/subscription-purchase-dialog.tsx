@@ -30,6 +30,7 @@ import { Separator } from '@/components/ui/separator'
 import {
   formatPaymentMoney,
   isStripePayment,
+  openPaymentPage,
   paysThroughEpay,
 } from '@/features/wallet/lib'
 import type { NowPaymentsCurrency } from '@/features/wallet/types'
@@ -144,7 +145,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
     try {
       const res = await paySubscriptionStripe({ plan_id: plan.id })
       if (res.message === 'success' && res.data?.pay_link) {
-        window.open(res.data.pay_link, '_blank')
+        openPaymentPage(res.data.pay_link)
         toast.success(t('Payment page opened'))
         props.onOpenChange(false)
       } else {
@@ -162,7 +163,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
     try {
       const res = await paySubscriptionCreem({ plan_id: plan.id })
       if (res.message === 'success' && res.data?.checkout_url) {
-        window.open(res.data.checkout_url, '_blank')
+        openPaymentPage(res.data.checkout_url)
         toast.success(t('Payment page opened'))
         props.onOpenChange(false)
       } else {
