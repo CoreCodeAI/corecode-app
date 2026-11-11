@@ -45,6 +45,14 @@ const usageLogsSearchSchema = z.object({
   token: z.string().optional().catch(''),
   channel: z.string().optional().catch(''),
   group: z.string().optional().catch(''),
+  // A hand-written ?userId=546 arrives as a number; links the console builds
+  // carry a string.
+  userId: z
+    .preprocess(
+      (value) => (typeof value === 'number' ? String(value) : value),
+      z.string().optional()
+    )
+    .catch(''),
   username: z.string().optional().catch(''),
   requestId: z.string().optional().catch(''),
   upstreamRequestId: z.string().optional().catch(''),

@@ -14,7 +14,7 @@ import (
 )
 
 // logFilterFromQuery reads the log search shared by the log list and the log
-// export. Username and channel are read only for administrators.
+// export. User ID, username and channel are read only for administrators.
 func logFilterFromQuery(c *gin.Context, admin bool) model.LogFilter {
 	logType, _ := strconv.Atoi(c.Query("type"))
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
@@ -30,6 +30,7 @@ func logFilterFromQuery(c *gin.Context, admin bool) model.LogFilter {
 		UpstreamRequestId: c.Query("upstream_request_id"),
 	}
 	if admin {
+		filter.UserId, _ = strconv.Atoi(c.Query("user_id"))
 		filter.Username = c.Query("username")
 		filter.Channel, _ = strconv.Atoi(c.Query("channel"))
 	}
@@ -205,11 +206,12 @@ func GetLogsStat(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	tokenName := c.Query("token_name")
+	userId, _ := strconv.Atoi(c.Query("user_id"))
 	username := c.Query("username")
 	modelName := c.Query("model_name")
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
-	stat, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group)
+	stat, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, userId, username, tokenName, channel, group)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -243,7 +245,7 @@ func GetLogsSelfStat(c *gin.Context) {
 	modelName := c.Query("model_name")
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
-	quotaNum, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group)
+	quotaNum, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, 0, username, tokenName, channel, group)
 	if err != nil {
 		common.ApiError(c, err)
 		return
