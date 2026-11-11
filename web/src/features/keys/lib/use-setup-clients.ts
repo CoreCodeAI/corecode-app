@@ -32,7 +32,14 @@ import { getSetupClients, type SetupClient } from './client-setup'
 
 const EMPTY_MODELS: string[] = []
 
-export function useSetupClients(key: Pick<ApiKey, 'group'> | null): {
+/**
+ * `enabled: false` sends no request and answers from whatever is cached, for
+ * a caller whose output is not on screen yet.
+ */
+export function useSetupClients(
+  key: Pick<ApiKey, 'group'> | null,
+  enabled = true
+): {
   clients: SetupClient[]
   models: string[]
 } {
@@ -41,13 +48,14 @@ export function useSetupClients(key: Pick<ApiKey, 'group'> | null): {
     queryKey: ['user-groups'],
     queryFn: async () => requireServerSuccess(await getUserGroups()),
     staleTime: 5 * 60 * 1000,
-    enabled: key !== null,
+    enabled: enabled && key !== null,
   })
   const modelsQuery = useQuery({
     queryKey: ['client-setup', 'user-models', group],
     queryFn: async () =>
       requireServerSuccess(await getUserModels(group || undefined)).data ?? [],
     staleTime: 5 * 60 * 1000,
+    enabled,
   })
 
   const groups = groupsQuery.data?.data

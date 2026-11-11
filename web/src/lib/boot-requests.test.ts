@@ -104,6 +104,9 @@ describe('the page data index.html fetches', () => {
     await vi.waitFor(() => expect(queryClient.isFetching()).toBe(0))
 
     expect(dataRequests()).toHaveLength(6)
+    expect(dataRequests().map(({ url }) => url)).toContain(
+      '/api/log/self?p=1&page_size=100&type=2&skip_count=1'
+    )
     for (const request of dataRequests()) {
       expect(request.authorization).toBe('Bearer boot-token')
     }

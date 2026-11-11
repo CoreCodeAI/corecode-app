@@ -31,7 +31,10 @@ import { CCSwitchDialog } from './dialogs/cc-switch-dialog'
 export function ApiKeysDialogs() {
   const { t } = useTranslation()
   const { open, setOpen, currentRow, resolvedKey } = useApiKeys()
-  const { clients: setupClients } = useSetupClients(currentRow)
+  const { clients: setupClients } = useSetupClients(
+    currentRow,
+    open === 'setup'
+  )
 
   return (
     <>

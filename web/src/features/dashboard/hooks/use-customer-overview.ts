@@ -73,6 +73,8 @@ const recentLogsQueryOptions = queryOptions({
         p: 1,
         page_size: OVERVIEW_RECENT_LOGS,
         type: LOG_TYPE_CONSUME,
+        // The overview never shows the total, so the server skips the count.
+        skip_count: 1,
       })
     )
     return (result.data?.items ?? []) as UsageLog[]
