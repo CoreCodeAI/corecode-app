@@ -63,8 +63,12 @@ of client identity: the client headers and prompt remain client-supplied.
   gained a malformed auto-group body, an aborted upload after an extra field,
   and an oversized body from another client. All of them passed against the
   previous `clientCheck` before the scan was added.
-- With the scan's nesting checks removed (any string after a comma treated as
-  a top-level key), seven of those cases fail.
+- With the scan's nesting checks removed (a comma at any depth starts a key,
+  and any key is compared), seven of those cases fail. With only the
+  `depth == 1` condition on the key comparison removed, none fail: in valid
+  JSON `expectingKey` is set only at depth 1 and cleared by the first string
+  after it, so the condition matters only for malformed bodies, where any "not a
+  check" agrees with the failing map decode. It stays as a guard.
 - Benchmark, same machine (Apple M4 Pro, darwin/arm64) and flags before and
   after:
   `go test ./middleware -run '^$' -bench '^BenchmarkClaudeCodeAdmission$' -benchmem -benchtime=10x -count=3`.

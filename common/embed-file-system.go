@@ -52,6 +52,7 @@ type DiskFrontend struct {
 	disk     http.FileSystem
 	fallback static.ServeFileSystem
 	dir      string
+	kept     keptReleases
 }
 
 func DiskFolder(dir string, fallback static.ServeFileSystem) *DiskFrontend {

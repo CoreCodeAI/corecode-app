@@ -98,6 +98,38 @@ func TestDiskFrontendServesStaticFilesOfKeptReleases(t *testing.T) {
 	assert.False(t, frontend.Exists("/", "/static/js/none.js"))
 }
 
+// A miss lists the release directory once per link target, not once per
+// lookup: a release added beside the link is read only after the link moves.
+func TestDiskFrontendListsKeptReleasesOncePerLinkTarget(t *testing.T) {
+	root := t.TempDir()
+	now := time.Now()
+	writeRelease(t, root, "previous", now.Add(-time.Hour), map[string]string{"static/js/lazy.js": "previous lazy"})
+	writeRelease(t, root, "served", now, map[string]string{})
+	link := filepath.Join(root, "current")
+	require.NoError(t, os.Symlink("served", link))
+	frontend := DiskFolder(link, EmbedFolder(os.DirFS(t.TempDir()), "."))
+
+	content, err := readFrontendFile(t, frontend, "/static/js/lazy.js")
+	require.NoError(t, err)
+	assert.Equal(t, "previous lazy", content)
+
+	writeRelease(t, root, "later", now.Add(time.Hour), map[string]string{"static/js/later.js": "later"})
+	_, err = readFrontendFile(t, frontend, "/static/js/later.js")
+	assert.ErrorIs(t, err, os.ErrNotExist, "the listing was read again without the link moving")
+
+	// A pruned release in the remembered listing is skipped.
+	require.NoError(t, os.RemoveAll(filepath.Join(root, "previous")))
+	_, err = readFrontendFile(t, frontend, "/static/js/lazy.js")
+	assert.ErrorIs(t, err, os.ErrNotExist)
+
+	writeRelease(t, root, "next", now.Add(2*time.Hour), map[string]string{})
+	require.NoError(t, os.Remove(link))
+	require.NoError(t, os.Symlink("next", link))
+	content, err = readFrontendFile(t, frontend, "/static/js/later.js")
+	require.NoError(t, err)
+	assert.Equal(t, "later", content)
+}
+
 // Without a symlink there is no release layout, so nothing beside the
 // directory is read.
 func TestDiskFrontendReadsNoSiblingsOfAPlainDirectory(t *testing.T) {

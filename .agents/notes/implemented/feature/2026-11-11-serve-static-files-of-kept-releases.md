@@ -42,8 +42,14 @@ before the release, or any chunk after a purge or restart, still failed.
 A request outside `/static/` does no extra filesystem work: `openKeptStatic`
 returns on the prefix check before any call. `Exists` runs on every NoRoute
 request (in the compression gate, `GlobalWebRateLimit` and
-`ServeFrontendFiles`), so a `/static/` miss now lists `console/` and checks up
-to four directories each of those three times. A hit in the current build
+`ServeFrontendFiles`), so a `/static/` miss runs the lookup three times. The
+list of kept releases is read once per target of the symlink and kept on the
+`DiskFrontend` (`keptReleases`): the release script unpacks a build, repoints
+the link and only then prunes, so the set changes only when the link moves,
+and a directory pruned since the listing fails its open and is skipped. Each
+lookup then costs an `lstat`, a `readlink` and one open per kept release. A
+miss falls under the per-IP web limiter (`GLOBAL_WEB_RATE_LIMIT`, on by
+default), because it is not a file of any build. A hit in the current build
 costs what it did.
 
 ## Alternatives considered
@@ -51,9 +57,12 @@ costs what it did.
 - **Look in kept releases for every path.** Console routes such as
   `/dashboard/overview` miss the build on every navigation, and the lookup
   would add a directory listing to each.
-- **Keep the list of releases in memory per `Release()`.** It saves the
-  listing on a miss, but misses are rare after the edge cache, and a list read
-  per miss cannot go stale when a release is pruned.
+- **List the release directory on every miss.** It needs no state, but one
+  miss read `console/` and up to four `index.html` files three times over, and
+  anyone can send random `/static/` paths.
+- **Remember the lookup on the request's `gin.Context`.** `Exists` and `Open`
+  get no context, so it would mean changing the upstream `static` interface's
+  call sites.
 - **Only the 404.** It removes the HTML served as a script, but the tab still
   reloads. The lookup is what lets it keep running.
 
@@ -79,6 +88,11 @@ costs what it did.
   `Open` and by the lookup itself.
   `TestDiskFrontendReadsNoSiblingsOfAPlainDirectory` requires nothing to be
   read beside a directory that is not a symlink.
+  `TestDiskFrontendListsKeptReleasesOncePerLinkTarget` requires a release
+  added beside an unmoved link to stay unread, a pruned release in the listing
+  to be skipped, and the listing to be read again once the link moves. With
+  the listing read on every call it fails ("the listing was read again without
+  the link moving").
 - `go test ./middleware -run 'ServeFrontendFiles|Cache' -count=1`: ok.
   `TestServeFrontendFilesServesChunksOfKeptReleases` requires a previous
   release's chunk with status 200 and the immutable header, plain, gzip and br;
