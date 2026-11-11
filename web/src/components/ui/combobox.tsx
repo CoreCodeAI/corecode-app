@@ -44,6 +44,7 @@ type LegacyComboboxProps = {
   options: readonly ComboboxInputOption[]
   value?: string | null
   onValueChange?: (value: string | null) => void
+  onValueCommit?: (value: string) => void
   placeholder?: string
   searchPlaceholder?: string
   emptyText?: string
@@ -85,6 +86,7 @@ function Combobox(
         options={props.options}
         value={props.value ?? ''}
         onValueChange={(value) => props.onValueChange?.(value)}
+        onValueCommit={props.onValueCommit}
         placeholder={props.searchPlaceholder ?? props.placeholder}
         emptyText={props.emptyText}
         className={props.className}
@@ -121,7 +123,9 @@ function OptionCombobox(props: LegacyComboboxProps) {
         if (details.reason !== 'input-change') setSearch('')
       }}
       onValueChange={(option) => {
-        if (option) props.onValueChange?.(option.value)
+        if (!option) return
+        props.onValueChange?.(option.value)
+        props.onValueCommit?.(option.value)
       }}
       filter={(option, query) => {
         const term = query.trim().toLowerCase()

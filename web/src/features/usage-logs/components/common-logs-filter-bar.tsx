@@ -45,6 +45,8 @@ import { getUserGroups } from '@/lib/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
+import { useNameFilterOptions } from '../hooks/use-name-filter-options'
+import { isDefaultTimeRange } from '../lib/default-time-range'
 import { buildSearchParams } from '../lib/filter'
 import { getDefaultTimeRange } from '../lib/utils'
 import type { CommonLogFilters } from '../types'
@@ -139,6 +141,7 @@ export function CommonLogsFilterBar<TData>(
     queryFn: async () => requireServerSuccess(await getUserGroups()),
     enabled: !isAdmin,
   })
+  const { tokenOptions, modelOptions } = useNameFilterOptions(isAdmin)
   const groupOptions = useMemo(() => {
     const groups = isAdmin
       ? (adminGroups?.data ?? [])
@@ -217,14 +220,17 @@ export function CommonLogsFilterBar<TData>(
   )
 
   const handleApply = useCallback(
-    (nextFilters: CommonLogFilters = filters) => {
+    (
+      nextFilters: CommonLogFilters = filters,
+      nextLogType: LogTypeValue = logType
+    ) => {
       const filterParams = buildSearchParams(nextFilters, 'common')
       navigate({
         to: '/usage-logs/$section',
         params: { section: 'common' },
         search: {
           ...filterParams,
-          type: [logType],
+          type: [nextLogType],
           page: 1,
         },
       })
@@ -232,6 +238,13 @@ export function CommonLogsFilterBar<TData>(
       queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
     },
     [filters, logType, navigate, queryClient]
+  )
+  // Picking a value applies it on desktop; the mobile drawer applies on Search.
+  const applyPicked = useCallback(
+    (field: keyof CommonLogFilters, value: string) => {
+      if (!isMobile) handleApply({ ...filters, [field]: value })
+    },
+    [filters, handleApply, isMobile]
   )
 
   const handleReset = useCallback(() => {
@@ -334,19 +347,23 @@ export function CommonLogsFilterBar<TData>(
         onChange={({ start, end }) => {
           handleChange('startTime', start)
           handleChange('endTime', end)
-          if (isMobile) {
-            handleApply({ ...filters, startTime: start, endTime: end })
-          }
+          handleApply({ ...filters, startTime: start, endTime: end })
         }}
       />
     </LogsFilterField>
   )
   const modelFilter = (
     <LogsFilterField>
-      <LogsFilterInput
+      <Combobox
+        options={modelOptions}
+        allowCustomValue
+        aria-label={t('Model Name')}
+        emptyText={t('No model found.')}
         placeholder={t('Model Name')}
+        className='h-8 min-w-0 text-sm leading-5'
         value={filters.model || ''}
-        onChange={(e) => handleChange('model', e.target.value)}
+        onValueChange={(value) => handleChange('model', value ?? '')}
+        onValueCommit={(value: string) => applyPicked('model', value)}
         onKeyDown={handleKeyDown}
       />
     </LogsFilterField>
@@ -363,6 +380,7 @@ export function CommonLogsFilterBar<TData>(
         popupClassName={sensitiveInputClass}
         value={filters.group || ''}
         onValueChange={(value) => handleChange('group', value ?? '')}
+        onValueCommit={(value: string) => applyPicked('group', value)}
         onKeyDown={handleKeyDown}
       />
     </LogsFilterField>
@@ -386,6 +404,7 @@ export function CommonLogsFilterBar<TData>(
               logType: nextLogType,
             }
           })
+          if (!isMobile) handleApply(filters, nextLogType)
         }}
       >
         <SelectTrigger
@@ -442,12 +461,18 @@ export function CommonLogsFilterBar<TData>(
   )
   const advancedFilters = (
     <>
-      <LogsFilterField>
-        <LogsFilterInput
+      <LogsFilterField className={sensitiveInputClass}>
+        <Combobox
+          options={tokenOptions}
+          allowCustomValue
+          aria-label={t('Token Name')}
+          emptyText={t('No API Keys Found')}
           placeholder={t('Token Name')}
-          className={sensitiveInputClass}
+          className='h-8 min-w-0 text-sm leading-5'
+          popupClassName={sensitiveInputClass}
           value={filters.token || ''}
-          onChange={(e) => handleChange('token', e.target.value)}
+          onValueChange={(value) => handleChange('token', value ?? '')}
+          onValueCommit={(value: string) => applyPicked('token', value)}
           onKeyDown={handleKeyDown}
         />
       </LogsFilterField>
@@ -535,7 +560,10 @@ export function CommonLogsFilterBar<TData>(
       }
       hasAdvancedActiveFilters={hasExpandedFilters}
       advancedFilterCount={expandedFilterCount}
-      hasActiveFilters={hasAdditionalFilters}
+      hasActiveFilters={
+        hasAdditionalFilters ||
+        !isDefaultTimeRange(filters.startTime, filters.endTime)
+      }
       onSearch={() => handleApply()}
       searchLoading={fetchingLogs > 0}
       onReset={handleReset}

@@ -36,6 +36,8 @@ interface ComboboxInputProps {
   options: readonly ComboboxInputOption[]
   value?: string
   onValueChange: (value: string) => void
+  /** Called when a value is picked from the list or entered with Enter. */
+  onValueCommit?: (value: string) => void
   placeholder?: string
   emptyText?: string
   className?: string
@@ -54,6 +56,7 @@ export function ComboboxInput({
   options,
   value = '',
   onValueChange,
+  onValueCommit,
   placeholder = 'Select or type...',
   emptyText = 'No option found.',
   className,
@@ -158,6 +161,7 @@ export function ComboboxInput({
 
   const handleSelect = (selectedValue: string) => {
     onValueChange(selectedValue)
+    onValueCommit?.(selectedValue)
     setOpen(false)
     setSearchValue('')
     inputRef.current?.focus()
