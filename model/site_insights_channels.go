@@ -110,6 +110,8 @@ const (
 // range (given plans, and administrators' balance changes); FeeUSD the
 // channel's fee over the range; CommissionUSD what the channel earned in
 // commission. GiftOutstandingUSD is given credit not yet spent, now.
+// RevenueNewAccounts is the part of Revenue paid by accounts created in the
+// range.
 type ChannelRow struct {
 	Segment            string  `json:"segment"`
 	Channel            UserRef `json:"channel"`
@@ -120,6 +122,7 @@ type ChannelRow struct {
 	Paid               int64   `json:"paid"`
 	Repeat             int64   `json:"repeat"`
 	Revenue            float64 `json:"revenue"`
+	RevenueNewAccounts float64 `json:"revenue_new_accounts"`
 	Payers             int64   `json:"payers"`
 	NewPayers          int64   `json:"new_payers"`
 	ConsumptionUSD     float64 `json:"consumption_usd"`
@@ -182,7 +185,11 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 		return nil, err
 	}
 	rowOf := make(map[int]*ChannelRow, len(users))
+	createdInRange := make(map[int]bool)
 	for _, user := range users {
+		if user.CreatedAt >= r.Start && user.CreatedAt < r.End {
+			createdInRange[user.Id] = true
+		}
 		row := organic
 		if found := rows[user.InviterId]; found != nil {
 			row = found
@@ -216,6 +223,9 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 			continue
 		}
 		row.Revenue += order.Money
+		if createdInRange[order.UserId] {
+			row.RevenueNewAccounts += order.Money
+		}
 		if !payers[order.UserId] {
 			payers[order.UserId] = true
 			row.Payers++
@@ -355,6 +365,7 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 	for i := range result.Channels {
 		row := &result.Channels[i]
 		row.Revenue = roundTo(row.Revenue, 2)
+		row.RevenueNewAccounts = roundTo(row.RevenueNewAccounts, 2)
 		row.ConsumptionUSD = roundTo(row.ConsumptionUSD/common.QuotaPerUnit, 4)
 		row.GiftConsumptionUSD = roundTo(row.GiftConsumptionUSD/common.QuotaPerUnit, 4)
 		row.GrantedUSD = roundTo(row.GrantedUSD/common.QuotaPerUnit, 4)

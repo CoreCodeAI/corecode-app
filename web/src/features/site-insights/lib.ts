@@ -23,8 +23,9 @@ import { toIntlLocale } from '@/i18n/languages'
 import { useAuthStore } from '@/stores/auth-store'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
+import { hourBars, type HourAxis, type HourBar } from './analysis'
 import type { InsightsView } from './api'
-import type { Tone } from './components/shared'
+import type { BarPoint, Tone } from './components/shared'
 import type {
   ChannelRow,
   FinanceInsights,
@@ -51,13 +52,66 @@ export const OVERVIEW_VIEWS = [
   'quality',
   'finance',
   'risk',
+  'upstream',
+  'activity',
 ] as const satisfies readonly InsightsView[]
+
+/** A range of this many days or fewer reads by the hour. */
+export const HOURLY_MAX_DAYS = 3
+
+/**
+ * The range a tab reads, in unix seconds. Its last hour is still filling
+ * when end is now.
+ */
+export type InsightsRangeInfo = {
+  start: number
+  end: number
+  days: number
+  /** days <= HOURLY_MAX_DAYS: series are drawn per hour. */
+  hourly: boolean
+}
 
 // Thresholds the tabs color by and the overview raises signals at, so a
 // signal there always matches a colored figure in its tab.
 
 /** Below this many requests, a model's rates and percentiles are noise. */
 export const SMALL_SAMPLE = 100
+
+/** Below this many requests in one hour, the hour has no rate. */
+export const HOUR_SAMPLE = 20
+
+/** An hourly count at this multiple of its baseline is a spike. */
+export const SPIKE_FACTOR = 3
+
+/** The fewest events an hour needs to count as a spike. */
+export const SPIKE_FLOOR = 20
+
+/** The fewest sign-ups an hour needs to count as a spike. */
+export const SIGNUP_SPIKE_FLOOR = 5
+
+/** The last closed hour under this share of its baseline may be an outage. */
+export const DROP_SHARE = 0.5
+
+/** Under this many orders in either period, revenue moves by amount, not percent. */
+export const MIN_ORDERS = 5
+
+/** Under this many sign-ups, a funnel or conversion rate is not colored. */
+export const MIN_COHORT = 20
+
+/** One customer past this share of consumption is a concentration risk. */
+export const CONCENTRATION_SHARE = 0.3
+
+/** Gifted credit past this share of consumption needs a look. */
+export const GIFT_SHARE_WARN = 0.3
+
+/** An upstream bill read longer ago than this leaves recent revenue uncosted. */
+export const COST_STALE_SECONDS = 1800
+
+/** A channel's ROI over a shorter range than this is not judged. */
+export const SHORT_ROI_DAYS = 7
+
+/** An hour whose peak passed this share of the pool's slots was near full. */
+export const HEADROOM_SHARE = 0.8
 
 /** Debt within a dollar is rounding and test traffic; past it, someone owes. */
 export const DEBT_ALERT_USD = -1
@@ -69,6 +123,55 @@ export const ATTENTION = new Set([
   'blacklisted',
   'quota_observation_unavailable',
 ])
+
+/** The text color of each tone. */
+export const TONES: Record<Tone, string> = {
+  default: '',
+  warning: 'text-amber-600 dark:text-amber-400',
+  danger: 'text-destructive',
+  good: 'text-emerald-600 dark:text-emerald-400',
+}
+
+/** Each tab's name, as the tab row prints it. */
+export function useTabLabel(): (tab: InsightsTab) => string {
+  const { t } = useTranslation()
+  const labels: Record<InsightsTab, string> = {
+    overview: t('Overview'),
+    capacity: t('Capacity'),
+    pool: t('Account pool'),
+    quality: t('Service quality'),
+    finance: t('Funds'),
+    growth: t('Growth'),
+    channels: t('Promotion channels'),
+    upstream: t('Upstreams'),
+    activity: t('Activity & retention'),
+    risk: t('Risk'),
+  }
+  return (tab) => labels[tab]
+}
+
+/**
+ * The hour formats for a bar series: an hour's full title, and an axis
+ * label only where the viewer's day starts. bars is hourBars bound to them.
+ */
+export function useHourAxis(): HourAxis & {
+  bars: <T extends { hour: number }>(
+    rows: T[] | null | undefined,
+    end: number,
+    build: (row: T, index: number) => HourBar
+  ) => BarPoint[]
+} {
+  const fmt = useInsightsFormat()
+  const axis: HourAxis = {
+    title: (hour) => fmt.time(hour),
+    axis: (hour) =>
+      new Date(hour * 1000).getHours() === 0 ? fmt.day(hour) : undefined,
+  }
+  return {
+    ...axis,
+    bars: (rows, end, build) => hourBars(rows, end, build, axis),
+  }
+}
 
 /** A failure rate above 5% needs action; above 2%, a look. */
 /**

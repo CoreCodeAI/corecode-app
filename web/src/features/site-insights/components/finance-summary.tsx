@@ -23,7 +23,22 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
-import { DEBT_ALERT_USD, useChargeFormat, useInsightsFormat } from '../lib'
+import { isOpenHour } from '../analysis'
+import {
+  balanceRunway,
+  financeHours,
+  financeRange,
+  ordersComparable,
+  RUNWAY_WARN_DAYS,
+  signed,
+} from '../finance-analysis'
+import {
+  DEBT_ALERT_USD,
+  TONES,
+  useChargeFormat,
+  useInsightsFormat,
+  type InsightsRangeInfo,
+} from '../lib'
 import type { FinanceInsights } from '../types'
 import {
   DeltaBadge,
@@ -67,6 +82,7 @@ function creditTotals(data: FinanceInsights | undefined) {
 export function FinanceSummary(props: {
   data: FinanceInsights | undefined
   previous?: FinanceInsights
+  range?: InsightsRangeInfo
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -77,11 +93,51 @@ export function FinanceSummary(props: {
   const before = previous ? creditTotals(previous) : undefined
   const loading = !data
   const dollars = (yuan: number) => `≈ ${fmt.usd(charge.toUSD(yuan))}`
+  const range = financeRange(data, props.range)
+  const hours = financeHours(data, range)
+
+  // A day split at the viewer's midnight is two partial days on a short
+  // range: there the cash trend reads by the hour, the open one marked.
+  const cashTrend: TrendPoint[] = hours
+    ? hours.map((hour) => ({
+        title: isOpenHour(hour.hour, range.end)
+          ? t('{{time}} (in progress)', { time: fmt.time(hour.hour) })
+          : fmt.time(hour.hour),
+        value: hour.topup + hour.subscription,
+      }))
+    : (data?.daily ?? []).map((day) => ({
+        title: fmt.day(day.day),
+        value: day.topup + day.subscription,
+      }))
+
+  // Over a handful of orders a percentage is noise: the change reads as an
+  // amount with the order counts instead.
+  const fewOrders =
+    !!data && !!previous && !ordersComparable(data.orders, previous.orders)
+  let revenueNote: string | undefined
+  if (fewOrders && data && previous) {
+    revenueNote = t('{{amount}} on {{before}} → {{now}} orders', {
+      amount: signed(data.revenue - previous.revenue, fmt.cny),
+      before: fmt.num(previous.orders),
+      now: fmt.num(data.orders),
+    })
+  }
+
+  const runway = balanceRunway(data, range.days)
+  let runwayNote: string | undefined
+  if (runway != null) {
+    runwayNote = t(
+      'Covers {{days}} days of customers’ paid use at this range’s pace.',
+      { days: fmt.num(Math.round(runway)) }
+    )
+  } else if (data && data.liability_usd > 0) {
+    runwayNote = t('No paid use in this range to measure a runway against.')
+  }
 
   let balanceTone: Tone = 'default'
   if ((data?.debt_usd ?? 0) < DEBT_ALERT_USD) {
     balanceTone = 'danger'
-  } else if ((data?.liability_usd ?? 0) > credit.consumed) {
+  } else if (runway != null && runway > RUNWAY_WARN_DAYS) {
     balanceTone = 'warning'
   }
 
@@ -101,16 +157,19 @@ export function FinanceSummary(props: {
                 'Money customers paid in the range, in yuan: wallet top-ups and plans, counted when paid. Credit given away brings in nothing.'
               )}
               value={fmt.cny(data?.revenue ?? 0)}
-              delta={{
-                current: data?.revenue ?? 0,
-                previous: previous?.revenue,
-                better: 'up',
-              }}
-              trend={(data?.daily ?? []).map((day) => ({
-                title: fmt.day(day.day),
-                value: day.topup + day.subscription,
-              }))}
+              delta={
+                fewOrders
+                  ? undefined
+                  : {
+                      current: data?.revenue ?? 0,
+                      previous: previous?.revenue,
+                      better: 'up',
+                    }
+              }
+              sub={revenueNote}
+              trend={cashTrend}
               trendFormat={fmt.cny}
+              trendBars={!!hours}
               hint={t(
                 '{{orders}} orders · {{users}} payers · top-ups {{topup}} · plans {{plans}}',
                 {
@@ -133,10 +192,14 @@ export function FinanceSummary(props: {
                 previous: previous?.recognized_revenue,
                 better: 'up',
               }}
-              trend={(data?.daily ?? []).map((day) => ({
-                title: fmt.day(day.day),
-                value: day.recognized_revenue ?? 0,
-              }))}
+              trend={
+                hours
+                  ? undefined
+                  : (data?.daily ?? []).map((day) => ({
+                      title: fmt.day(day.day),
+                      value: day.recognized_revenue ?? 0,
+                    }))
+              }
               trendFormat={fmt.cny}
               trendBars
               hint={t('Wallets {{wallet}} · plans {{plans}}', {
@@ -196,29 +259,26 @@ export function FinanceSummary(props: {
               loading={loading}
               label={t('Balances owed')}
               help={t(
-                'Credit customers hold now and can still spend, in yuan. Paid is what they paid for it at each wallet’s price; the rest was given. Root’s balance is internal and not counted. Red when debt passes the alert line, amber when the balance exceeds this range’s consumption.'
+                'Credit customers hold now and can still spend, in yuan. Deferred revenue is what they paid for it at each wallet’s price, money taken but not yet earned; the rest was given. Root’s balance is internal and not counted. The runway is the balance over customers’ paid use per day in this range. Red when debt passes the alert line; amber when the balance covers more than 60 days of paid use, money owed back in use or refunds that the current pace takes over two months to earn.'
               )}
               value={fmt.cny(data?.liability_usd ?? 0)}
               sub={dollars(data?.liability_usd ?? 0)}
               tone={balanceTone}
-              hint={t('{{count}} customers · paid {{paid}} · debt {{debt}}', {
-                count: data?.liability_users ?? 0,
-                paid: fmt.cny(data?.liability_paid_value ?? 0),
-                debt: fmt.cny(Math.abs(data?.debt_usd ?? 0)),
-              })}
+              hint={t(
+                '{{count}} customers · deferred revenue {{paid}} · debt {{debt}}',
+                {
+                  count: data?.liability_users ?? 0,
+                  paid: fmt.cny(data?.liability_paid_value ?? 0),
+                  debt: fmt.cny(Math.abs(data?.debt_usd ?? 0)),
+                }
+              )}
+              note={runwayNote}
             />
           </div>
         </Panel>
       </div>
     </TooltipProvider>
   )
-}
-
-const TONES: Record<Tone, string> = {
-  default: '',
-  warning: 'text-amber-600 dark:text-amber-400',
-  danger: 'text-destructive',
-  good: 'text-emerald-600 dark:text-emerald-400',
 }
 
 const PART_COLORS = ['bg-primary', 'bg-sky-500', 'bg-muted-foreground/50']
@@ -240,6 +300,8 @@ function Stat(props: {
   /** Draws the trend as a bar per day, for amounts settled each day. */
   trendBars?: boolean
   hint?: ReactNode
+  /** A line read with the figure's tone, such as what explains its color. */
+  note?: ReactNode
   parts?: { label: string; value: number }[]
   loading: boolean
 }) {
@@ -311,6 +373,11 @@ function Stat(props: {
       )}
       {props.hint != null && (
         <dd className='text-muted-foreground text-xs'>{props.hint}</dd>
+      )}
+      {props.note != null && !props.loading && (
+        <dd className={cn('text-xs', TONES[props.tone ?? 'default'])}>
+          {props.note}
+        </dd>
       )}
     </dl>
   )

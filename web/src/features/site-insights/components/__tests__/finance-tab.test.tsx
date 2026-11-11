@@ -29,7 +29,22 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
-import type { EngineDailyCost, FinanceInsights } from '../../types'
+import {
+  balanceRunway,
+  bestWholeDay,
+  financeDrivers,
+  monthProjection,
+  ordersComparable,
+  peakHour,
+  poolUse,
+  spendFlags,
+} from '../../finance-analysis'
+import type {
+  EngineDailyCost,
+  FinanceHour,
+  FinanceInsights,
+  UserSpendRow,
+} from '../../types'
 import { FinanceTab } from '../finance-tab'
 
 // The user table at the bottom reads its own window; these tests are about
@@ -143,7 +158,7 @@ describe('cash and credit at the head of the funds view', () => {
     const owed = screen.getByText('Balances owed').closest('dl') as HTMLElement
     expect(within(owed).getByText('¥50')).toBeInTheDocument()
     expect(
-      within(owed).getByText('1 customers · paid ¥40 · debt ¥0.5')
+      within(owed).getByText('1 customers · deferred revenue ¥40 · debt ¥0.5')
     ).toBeInTheDocument()
   })
 
@@ -541,5 +556,286 @@ describe('new-api’s charge in dollars', () => {
         config: { ...state.config, currency: before },
       }))
     }
+  })
+})
+
+const hour = (index: number) => 1761580800 + index * 3600
+
+function hourRow(index: number, topup: number): FinanceHour {
+  return {
+    hour: hour(index),
+    topup,
+    subscription: 0,
+    consumption_usd: 2,
+    root_consumption_usd: 1,
+  }
+}
+
+describe('a short range on the funds view', () => {
+  // Three hours, the last still open; it took the most but is not the peak.
+  const hourly = (): FinanceInsights => ({
+    ...earned(),
+    start_time: hour(0),
+    end_time: hour(2) + 1800,
+    hourly: [hourRow(0, 5), hourRow(1, 9), hourRow(2, 40)],
+  })
+  const range = {
+    start: hour(0),
+    end: hour(2) + 1800,
+    days: 2.5 / 24,
+    hourly: true,
+  }
+
+  it('draws revenue by the hour and names the peak closed hour', () => {
+    render(<FinanceTab data={hourly()} range={range} />)
+    const bars = screen
+      .getByRole('list', { name: 'Hourly revenue' })
+      .querySelectorAll('[tabindex="0"]')
+    expect(bars).toHaveLength(3)
+    expect(bars[0].getAttribute('aria-label')).toMatch(
+      /Consumed at list price ¥3/
+    )
+    expect(screen.getByText(/^Peak hour .*: ¥9\.$/)).toBeInTheDocument()
+    expect(screen.queryByText(/^Best day/)).toBeNull()
+  })
+
+  it('keeps the daily chart when the server sends no hours', () => {
+    render(<FinanceTab data={earned()} range={range} />)
+    expect(screen.getByRole('list', { name: 'Daily revenue' })).toBeTruthy()
+    expect(screen.queryByRole('list', { name: 'Hourly revenue' })).toBeNull()
+  })
+
+  it('never calls a partial day the best day', () => {
+    // The range starts an hour into the first day, the only one with money.
+    const data = {
+      ...earned(),
+      start_time: day(0) + 3600,
+      end_time: day(2),
+    }
+    render(<FinanceTab data={data} />)
+    expect(screen.queryByText(/^Best day/)).toBeNull()
+    cleanup()
+    render(<FinanceTab data={{ ...data, start_time: day(0) }} />)
+    expect(screen.getByText(/^Best day .*: ¥14\.$/)).toBeInTheDocument()
+  })
+})
+
+describe('revenue over few orders', () => {
+  it('reads the change as an amount with the order counts', () => {
+    const previous = { ...earned(), revenue: 10, orders: 3 }
+    render(<FinanceTab data={earned()} previous={previous} />)
+    expect(screen.getByText('+¥4 on 3 → 1 orders')).toBeInTheDocument()
+    expect(screen.getByText(/^Paid ¥14 \(\+¥4, 3 → 1 orders\)/)).toBeTruthy()
+  })
+})
+
+describe('balances owed against customers’ paid use', () => {
+  // ¥17 paid use over two days is ¥8.5 a day.
+  const twoDays = (liability: number): FinanceInsights => ({
+    ...earned(),
+    start_time: day(0),
+    end_time: day(2),
+    liability_usd: liability,
+  })
+
+  it('states the runway and leaves a short one uncolored', () => {
+    render(<FinanceTab data={twoDays(50)} />)
+    const owed = screen.getByText('Balances owed').closest('dl') as HTMLElement
+    expect(
+      within(owed).getByText(
+        'Covers 6 days of customers’ paid use at this range’s pace.'
+      )
+    ).toBeInTheDocument()
+    expect(within(owed).getByText('¥50')).not.toHaveClass('text-amber-600')
+  })
+
+  it('colors a balance that covers over 60 days of paid use', () => {
+    render(<FinanceTab data={twoDays(1000)} />)
+    const owed = screen.getByText('Balances owed').closest('dl') as HTMLElement
+    expect(within(owed).getByText('¥1,000')).toHaveClass('text-amber-600')
+    expect(within(owed).getByText(/^Covers 118 days/)).toBeInTheDocument()
+  })
+})
+
+describe('gift watch', () => {
+  it('does not judge a gifted share over little consumption', () => {
+    render(<FinanceTab data={earned()} />)
+    expect(
+      screen.getByText('Too little consumption to judge')
+    ).toBeInTheDocument()
+  })
+
+  it('flags gifted use and unpaid credit, linked to where to look', () => {
+    const onOpen = vi.fn()
+    const data = {
+      ...earned(),
+      consumption_usd: 200,
+      gift_consumption_usd: 80,
+      bonus_usd: 30,
+      topup_credit_usd: 50,
+    }
+    render(<FinanceTab data={data} onOpen={onOpen} />)
+    expect(
+      screen.getAllByText('Gifted credit is 40% of customers’ consumption.')
+    ).not.toHaveLength(0)
+    expect(
+      screen.getByText('¥0.6 of unpaid credit was issued for each ¥1 paid.')
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Growth →' }))
+    expect(onOpen).toHaveBeenCalledWith('growth')
+  })
+})
+
+describe('the Claude pool against its measured capacity', () => {
+  it('recommends fewer accounts when the pool is mostly idle', () => {
+    render(<FinanceTab data={priced(7, 7)} />)
+    // $100 over 7 days against 3 Pro at $250 a week: 13.3%.
+    expect(
+      screen.getByText(
+        'The pool used 13.3% of its measured capacity, $14.29 a day at official prices of $107.14: fewer accounts would serve this use.'
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /^The accounts break even at \$6\.17 .* a day; it charged \$28\.57/
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('says nothing while a plan’s capacity is unmeasured', () => {
+    const data = priced(7, 7)
+    data.plans = [{ ...data.plans[0], measured: 0 }]
+    render(<FinanceTab data={data} />)
+    expect(screen.queryByText(/measured capacity/)).toBeNull()
+  })
+})
+
+describe('funds analysis', () => {
+  it('names the model and payment method that drove a change', () => {
+    const now = {
+      ...earned(),
+      revenue: 200,
+      methods: [
+        { payment_method: 'alipay', money: 180, count: 6 },
+        { payment_method: 'stripe', money: 20, count: 1 },
+      ],
+      vendor_models: [
+        { vendor: 'claude', model: 'claude-opus', usd: 300, requests: 9 },
+        { vendor: 'codex', model: 'gpt-6', usd: 50, requests: 5 },
+      ],
+    }
+    const before = {
+      ...earned(),
+      revenue: 100,
+      methods: [
+        { payment_method: 'alipay', money: 60, count: 2 },
+        { payment_method: 'stripe', money: 40, count: 2 },
+      ],
+      vendor_models: [
+        { vendor: 'claude', model: 'claude-opus', usd: 100, requests: 3 },
+        { vendor: 'codex', model: 'gpt-6', usd: 60, requests: 6 },
+      ],
+    }
+    const drivers = financeDrivers(now, before)
+    expect(drivers?.consumption).toEqual({
+      current: 350,
+      previous: 160,
+      change: 190,
+    })
+    expect(drivers?.consumptionBy).toEqual({
+      kind: 'model',
+      parts: [{ key: 'claude-opus', current: 300, previous: 100, change: 200 }],
+    })
+    expect(drivers?.revenueBy).toEqual([
+      { key: 'alipay', current: 180, previous: 60, change: 120 },
+    ])
+    expect(financeDrivers(now, undefined)).toBeUndefined()
+  })
+
+  it('compares revenue in percent only over enough orders', () => {
+    expect(ordersComparable(5, 5)).toBe(true)
+    expect(ordersComparable(5, 4)).toBe(false)
+    expect(ordersComparable(9, undefined)).toBe(false)
+  })
+
+  it('projects earned revenue, cost and margin to 30 days', () => {
+    expect(monthProjection(100, 40, 2)).toEqual({
+      revenue: 1500,
+      cost: 600,
+      margin: 900,
+    })
+  })
+
+  it('sets the balance against paid use per day', () => {
+    const data = { ...earned(), liability_usd: 85 }
+    // ¥25 consumed less ¥8 gifted over 2 days: ¥8.5 a day.
+    expect(balanceRunway(data, 2)).toBe(10)
+    expect(balanceRunway({ ...data, gift_consumption_usd: 25 }, 2)).toBeNull()
+    expect(balanceRunway(data, 0)).toBeNull()
+  })
+
+  it('picks the peak closed hour and the best whole day', () => {
+    const rows = [hourRow(0, 5), hourRow(1, 9), hourRow(2, 40)]
+    expect(peakHour(rows, hour(2) + 60)?.hour).toBe(hour(1))
+    expect(peakHour([hourRow(0, 0)], hour(5))).toBeUndefined()
+    const days = earned().daily
+    expect(bestWholeDay(days)?.day).toBe(day(0))
+    expect(bestWholeDay(days, day(0) + 1, day(2))).toBeUndefined()
+  })
+
+  it('reads the pool’s use against measured capacity', () => {
+    const plan = {
+      plan: 'Pro',
+      tier: 'default_claude_ai',
+      accounts: 2,
+      measured: 2,
+      week_usd: 70,
+      week_low_usd: 70,
+      week_high_usd: 70,
+    }
+    const input = {
+      plans: [plan],
+      officialUSD: 36,
+      chargedUSD: 20,
+      coveredDays: 2,
+      costPerDayUSD: 4,
+    }
+    // $20 a day of capacity, $18 used: 90%.
+    expect(poolUse(input)).toEqual({
+      usedPerDay: 18,
+      capacityPerDay: 20,
+      utilisation: 0.9,
+      breakEven: 4,
+      chargedPerDay: 10,
+      advice: 'more',
+    })
+    expect(poolUse({ ...input, officialUSD: 10 })?.advice).toBe('fewer')
+    expect(poolUse({ ...input, officialUSD: 20 })?.advice).toBe('fits')
+    expect(
+      poolUse({ ...input, plans: [plan, { ...plan, measured: 0 }] })
+    ).toBeNull()
+  })
+
+  it('flags a customer below cost, in debt or holding the window', () => {
+    const row: UserSpendRow = {
+      user_id: 1,
+      username: 'a',
+      email: '',
+      requests: 1,
+      quota_usd: 50,
+      engine_usd: 16.5,
+      topup_paid: 0,
+      subscription_paid: 0,
+      balance_usd: -2,
+    }
+    // ¥50 at ¥5 a dollar is $10, under $16.50.
+    expect(spendFlags(row, 60, 5, true)).toEqual([
+      'below_cost',
+      'debt',
+      'concentrated',
+    ])
+    expect(spendFlags({ ...row, balance_usd: -0.5 }, 1000, 5, false)).toEqual(
+      []
+    )
   })
 })

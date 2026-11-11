@@ -18,22 +18,36 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import { Badge } from '@/components/ui/badge'
-
 import {
+  useHourAxis,
   useInsightsFormat,
   useSharedAddresses,
   useSignupMethodLabel,
+  type InsightsRangeInfo,
+  type InsightsTab,
 } from '../lib'
 import type { RiskInsights } from '../types'
 import { useRiskVerdict } from '../verdicts'
+import { largestSurge, useSurgeText } from '../verdicts/risk'
+import {
+  clusteredUserIds,
+  materialDebtors,
+  neverUsed,
+  neverUsedComparable,
+  rankClusters,
+  riskRangeStart,
+  riskSurges,
+  signalDelta,
+  signupUnit,
+} from './risk-analysis'
+import { ClusterList, DebtPanel, RiskControlLinks } from './risk-insights'
 import {
   BarSeries,
   Breakdown,
   MetricGrid,
   Panel,
   SimpleTable,
-  UserLabel,
+  type BarPoint,
   type Tone,
   Verdict,
 } from './shared'
@@ -41,23 +55,93 @@ import {
 export function RiskTab(props: {
   data: RiskInsights | undefined
   previous?: RiskInsights
+  range?: InsightsRangeInfo
+  onOpen?: (tab: InsightsTab) => void
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
-  const verdict = useRiskVerdict(props.data)
+  const hourAxis = useHourAxis()
+  const surgeText = useSurgeText()
+  const verdict = useRiskVerdict(props.data, props.previous, props.range)
   const methodLabel = useSignupMethodLabel()
   const data = props.data
   const previous = props.previous
   const clusters = useSharedAddresses(data)
+  const previousClusters = useSharedAddresses(previous)
+  const ranked = data
+    ? rankClusters(clusters, riskRangeStart(data, props.range))
+    : []
   const repeatBuyers = clusters.some(
     (cluster) => cluster.subscription_buyers > 1
   )
   let sharedTone: Tone = clusters.length > 0 ? 'warning' : 'default'
   if (repeatBuyers) sharedTone = 'danger'
-  const zeroShare = (insights: RiskInsights | undefined) =>
-    insights?.signups ? insights.zero_use_accounts / insights.signups : 0
-  const pointTitle = (at: number) =>
-    data?.series_unit === 'day' ? fmt.day(at) : fmt.time(at)
+
+  const daily = data?.series_unit === 'day'
+  const unit = daily ? 'day' : 'hour'
+  const hourly = props.range?.hourly ?? !daily
+  const end = props.range?.end ?? Number.POSITIVE_INFINITY
+  const series = data?.signup_series ?? []
+  const surges = data ? riskSurges(data, previous, props.range) : []
+  const surgeAt = new Map(surges.map((surge) => [surge.at, surge]))
+  const surge = largestSurge(surges)
+  const span = props.range ? props.range.end - props.range.start : undefined
+  const previousAt = new Map(
+    (previous?.signup_series ?? []).map((point) => [point.at, point.count])
+  )
+  const pointTitle = (at: number) => (daily ? fmt.day(at) : fmt.time(at))
+  const sameHourExtra = (at: number) => {
+    if (daily || span == null || !previous) return undefined
+    const before = previousAt.get(at - span)
+    if (before == null) return undefined
+    return [{ label: t('Same hour, previous period'), value: fmt.num(before) }]
+  }
+  const points: BarPoint[] = daily
+    ? series.map((point) => ({
+        key: point.at,
+        title: pointTitle(point.at),
+        values: [point.count],
+        tone: surgeAt.has(point.at) ? 'danger' : undefined,
+        faded: data ? point.at + signupUnit(data) > end : false,
+      }))
+    : hourAxis.bars(
+        series.map((point) => ({ hour: point.at, count: point.count })),
+        end,
+        (row) => ({
+          values: [row.count],
+          extra: sameHourExtra(row.hour),
+          tone: surgeAt.has(row.hour) ? 'danger' : undefined,
+        })
+      )
+
+  let signupHint: string | undefined
+  if (surge) {
+    signupHint = surgeText(surge, unit)
+  } else if (data?.peak_signups?.count) {
+    signupHint = t('Busiest {{unit}}: {{count}} at {{time}}', {
+      unit: daily ? t('day') : t('hour'),
+      count: fmt.num(data.peak_signups.count),
+      time: fmt.time(data.peak_signups.at),
+    })
+  }
+
+  const cohort = data ? neverUsed(data) : undefined
+  const previousCohort = previous ? neverUsed(previous) : undefined
+  const share = (part: { zero: number; signups: number }) =>
+    part.signups ? part.zero / part.signups : 0
+  const comparable =
+    !!cohort && neverUsedComparable(cohort, previousCohort, hourly)
+  let neverUsedHint: string | undefined
+  if (cohort?.signups) {
+    neverUsedHint = cohort.mature
+      ? t('{{share}} of sign-ups at least 6 hours old', {
+          share: fmt.pct(share(cohort)),
+        })
+      : fmt.pct(share(cohort))
+  }
+
+  const debtors = materialDebtors(data?.debtors)
+  const clustered = clusteredUserIds(clusters)
 
   return (
     <div className='grid gap-4'>
@@ -66,6 +150,7 @@ export function RiskTab(props: {
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text}
       />
+      <RiskControlLinks />
       <MetricGrid
         loading={!data}
         items={[
@@ -78,62 +163,68 @@ export function RiskTab(props: {
               previous: previous?.signups,
               better: 'neutral',
             },
-            trend: (data?.signup_series ?? []).map((point) => ({
+            trend: series.map((point) => ({
               title: pointTitle(point.at),
               value: point.count,
             })),
-            hint: data?.peak_signups.count
-              ? t('Busiest {{unit}}: {{count}} at {{time}}', {
-                  unit: data.series_unit === 'day' ? t('day') : t('hour'),
-                  count: fmt.num(data.peak_signups.count),
-                  time: fmt.time(data.peak_signups.at),
-                })
-              : undefined,
+            tone: surge ? 'warning' : undefined,
+            hint: signupHint,
           },
           {
             label: t('Never sent a request'),
-            value: fmt.num(data?.zero_use_accounts ?? 0),
-            hint: data?.signups ? fmt.pct(zeroShare(data)) : undefined,
-            delta: {
-              current: zeroShare(data),
-              previous: previous ? zeroShare(previous) : undefined,
-              better: 'down',
-              points: true,
-            },
+            value: fmt.num(cohort?.zero ?? 0),
+            hint: neverUsedHint,
+            help: cohort?.mature
+              ? t(
+                  'Counts only sign-ups at least 6 hours old, so new accounts have had time to send a first request.'
+                )
+              : undefined,
+            delta:
+              cohort && previousCohort && comparable
+                ? {
+                    current: share(cohort),
+                    previous: share(previousCohort),
+                    better: 'down',
+                    points: true,
+                  }
+                : undefined,
           },
           {
             label: t('Alias emails'),
             value: fmt.num(data?.alias_emails ?? 0),
             tone: (data?.alias_emails ?? 0) > 0 ? 'warning' : 'default',
+            delta: signalDelta(data?.alias_emails ?? 0, previous?.alias_emails),
           },
           {
             label: t('Off the domain allowlist'),
             value: fmt.num(data?.off_whitelist ?? 0),
             tone: (data?.off_whitelist ?? 0) > 0 ? 'warning' : 'default',
+            delta: signalDelta(
+              data?.off_whitelist ?? 0,
+              previous?.off_whitelist
+            ),
           },
           {
             label: t('Shared addresses'),
             value: fmt.num(clusters.length),
             hint: repeatBuyers ? t('One has several plan buyers') : undefined,
             tone: sharedTone,
+            delta: signalDelta(
+              clusters.length,
+              previous ? previousClusters.length : undefined
+            ),
           },
         ]}
       />
 
-      <Panel title={t('Sign-ups over time')}>
+      <Panel
+        title={t('Sign-ups over time')}
+        description={surge ? surgeText(surge, unit) : undefined}
+      >
         <BarSeries
           ariaLabel={t('Sign-ups over time')}
           series={[{ label: t('Sign-ups') }]}
-          points={(data?.signup_series ?? []).map((point) => ({
-            key: point.at,
-            title: pointTitle(point.at),
-            axis:
-              data?.series_unit === 'hour' &&
-              new Date(point.at * 1000).getHours() === 0
-                ? fmt.day(point.at)
-                : undefined,
-            values: [point.count],
-          }))}
+          points={points}
         />
       </Panel>
 
@@ -142,13 +233,14 @@ export function RiskTab(props: {
         description={
           data &&
           (clusters.length
-            ? t('{{count}} addresses are shared by several accounts.', {
-                count: clusters.length,
-              })
+            ? t(
+                '{{count}} addresses are shared by several accounts, the riskiest first.',
+                { count: clusters.length }
+              )
             : undefined)
         }
         help={t(
-          'Addresses several accounts sent requests or signed in from: one person with several accounts, a shared machine, or a reseller. Several plan buyers on one address suggest repeated trial purchases.'
+          'Addresses several accounts sent requests or signed in from: one person with several accounts, a shared machine, or a reseller. Ranked by accounts created in the range, registrations within 10 minutes of each other, several plan buyers, and unpaid accounts with nothing left; an address where every account paid ranks low.'
         )}
       >
         {clusters.length === 0 ? (
@@ -156,71 +248,7 @@ export function RiskTab(props: {
             {t('No address is shared in this range')}
           </p>
         ) : (
-          <ul className='grid gap-3'>
-            {clusters.map((cluster) => (
-              <li
-                key={cluster.ip}
-                className='min-w-0 rounded-md border px-4 py-3'
-              >
-                <div className='mb-2 flex flex-wrap items-center gap-2 text-sm'>
-                  <span className='font-mono'>{cluster.ip}</span>
-                  <Badge variant='outline'>
-                    {t('{{count}} accounts', { count: cluster.users.length })}
-                  </Badge>
-                  {cluster.subscription_buyers > 1 && (
-                    <Badge variant='destructive'>
-                      {t('{{count}} plan buyers', {
-                        count: cluster.subscription_buyers,
-                      })}
-                    </Badge>
-                  )}
-                  <span className='text-muted-foreground text-xs'>
-                    {t('{{count}} requests', { count: cluster.requests })}
-                  </span>
-                </div>
-                <SimpleTable
-                  rows={cluster.users}
-                  rowKey={(row) => row.user_id}
-                  empty=''
-                  columns={[
-                    {
-                      key: 'user',
-                      label: t('User'),
-                      render: (row) => <UserLabel {...row} />,
-                    },
-                    {
-                      key: 'created',
-                      label: t('Registered'),
-                      render: (row) => fmt.time(row.created_at),
-                    },
-                    {
-                      key: 'flags',
-                      label: t('Has paid'),
-                      render: (row) =>
-                        [
-                          row.paid && t('Topped up'),
-                          row.subscription && t('Plan'),
-                        ]
-                          .filter(Boolean)
-                          .join(' · ') || '-',
-                    },
-                    {
-                      key: 'req',
-                      label: t('Requests'),
-                      align: 'right',
-                      render: (row) => fmt.num(row.requests),
-                    },
-                    {
-                      key: 'bal',
-                      label: t('Balance'),
-                      align: 'right',
-                      render: (row) => fmt.usd(row.balance_usd),
-                    },
-                  ]}
-                />
-              </li>
-            ))}
-          </ul>
+          <ClusterList clusters={ranked} />
         )}
       </Panel>
 
@@ -262,26 +290,7 @@ export function RiskTab(props: {
             ]}
           />
         </Panel>
-        <Panel title={t('Negative balances')}>
-          <SimpleTable
-            rows={data?.debtors}
-            rowKey={(row) => row.user_id}
-            empty={t('No customer owes money')}
-            columns={[
-              {
-                key: 'user',
-                label: t('User'),
-                render: (row) => <UserLabel {...row} />,
-              },
-              {
-                key: 'b',
-                label: t('Balance'),
-                align: 'right',
-                render: (row) => fmt.usd(row.balance_usd),
-              },
-            ]}
-          />
-        </Panel>
+        <DebtPanel debtors={debtors} clustered={clustered} loading={!data} />
       </div>
     </div>
   )

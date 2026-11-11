@@ -325,6 +325,18 @@ type UpstreamDay struct {
 	CostUSD    float64 `json:"cost_usd"`
 }
 
+// UpstreamHour is one channel's UTC hour, with the UpstreamDay figures.
+// Revenue is bucketed by the hour our request began, an upstream bill by its
+// own created_at, so a request near an hour's end may land in two hours.
+type UpstreamHour struct {
+	Hour       int64   `json:"hour"`
+	ChannelID  int     `json:"channel_id"`
+	Requests   int64   `json:"requests"`
+	Errors     int64   `json:"errors"`
+	RevenueUSD float64 `json:"revenue_usd"`
+	CostUSD    float64 `json:"cost_usd"`
+}
+
 // UpstreamRescue counts requests that failed on From and were served by To.
 type UpstreamRescue struct {
 	From  int   `json:"from"`
@@ -332,10 +344,14 @@ type UpstreamRescue struct {
 	Count int64 `json:"count"`
 }
 
+// UpstreamInsights is the upstream view. Hourly, like Daily, holds a row per
+// hour and channel with traffic or cost, for a range up to
+// insightsHourlySpan.
 type UpstreamInsights struct {
 	Channels  []UpstreamChannel `json:"channels"`
 	Models    []UpstreamModel   `json:"models"`
 	Daily     []UpstreamDay     `json:"daily"`
+	Hourly    []UpstreamHour    `json:"hourly,omitempty"`
 	Rescues   []UpstreamRescue  `json:"rescues"`
 	Truncated bool              `json:"truncated"`
 }
@@ -394,6 +410,17 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 		}
 		return entry
 	}
+	hourStarts := r.hourStarts()
+	hourly := map[dayKey]*UpstreamHour{}
+	hourOf := func(hour int64, channel int) *UpstreamHour {
+		key := dayKey{hour, channel}
+		entry := hourly[key]
+		if entry == nil {
+			entry = &UpstreamHour{Hour: hour, ChannelID: channel}
+			hourly[key] = entry
+		}
+		return entry
+	}
 	result := &UpstreamInsights{}
 	for _, hour := range hours {
 		result.Truncated = result.Truncated || hour.summary.Truncated
@@ -431,6 +458,12 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 			entry.Requests += row.Requests
 			entry.Errors += row.Errors
 			entry.RevenueUSD += float64(row.Quota) / common.QuotaPerUnit
+			if hourStarts != nil {
+				slot := hourOf(hour.start, key.channel)
+				slot.Requests += row.Requests
+				slot.Errors += row.Errors
+				slot.RevenueUSD += float64(row.Quota) / common.QuotaPerUnit
+			}
 		}
 	}
 
@@ -448,6 +481,9 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 		costByModel[insightChannelKey{cost.ChannelId, cost.ModelName}] += usd
 		costByChannel[cost.ChannelId] += usd
 		dayOf(r.DayStart(cost.CreatedAt), cost.ChannelId).CostUSD += usd
+		if hourStarts != nil {
+			hourOf(insightHourKey(cost.CreatedAt), cost.ChannelId).CostUSD += usd
+		}
 	}
 	type latest struct {
 		ChannelId  int
@@ -516,6 +552,9 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 			for _, day := range r.days() {
 				dayOf(day, channel.Id).CostUSD += fee * float64(min(r.End, day+86400)-max(r.Start, day)) / 86400 / 30
 			}
+			for _, hour := range hourStarts {
+				hourOf(hour, channel.Id).CostUSD += fee * float64(min(r.End, hour+3600)-max(r.Start, hour)) / 86400 / 30
+			}
 		}
 		result.Channels = append(result.Channels, row)
 		for id, count := range total.rescuedFrom {
@@ -546,6 +585,12 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 	}
 	slices.SortFunc(result.Daily, func(a, b UpstreamDay) int {
 		return cmp.Or(cmp.Compare(a.Day, b.Day), cmp.Compare(a.ChannelID, b.ChannelID))
+	})
+	for _, entry := range hourly {
+		result.Hourly = append(result.Hourly, *entry)
+	}
+	slices.SortFunc(result.Hourly, func(a, b UpstreamHour) int {
+		return cmp.Or(cmp.Compare(a.Hour, b.Hour), cmp.Compare(a.ChannelID, b.ChannelID))
 	})
 	slices.SortFunc(result.Rescues, func(a, b UpstreamRescue) int {
 		return cmp.Or(cmp.Compare(b.Count, a.Count), cmp.Compare(a.From, b.From), cmp.Compare(a.To, b.To))

@@ -21,6 +21,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import type { InsightsView } from '../../api'
+import type { InsightsRangeInfo } from '../../lib'
 import type {
   CapacityInsights,
   EnginePool,
@@ -243,6 +244,140 @@ describe('overview signals', () => {
     expect(
       debt.compareDocumentPosition(rate) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
+  })
+})
+
+function renderOverviewWith(
+  data: Partial<Record<InsightsView, unknown>>,
+  previous: Partial<Record<InsightsView, unknown>>,
+  range?: InsightsRangeInfo
+) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  const query = (source: typeof data, tag: string) => (view: InsightsView) => ({
+    queryKey: [tag, view],
+    queryFn: async () => source[view] ?? null,
+    staleTime: Infinity,
+  })
+  render(
+    <QueryClientProvider client={client}>
+      <OverviewTab
+        current={query(data, 'test')}
+        previous={query(previous, 'prev')}
+        refreshMs={{}}
+        range={range}
+      />
+    </QueryClientProvider>
+  )
+}
+
+describe('overview depth', () => {
+  const HOUR = 3600
+  const end = 10 * 86400 + 5 * HOUR + 900
+  const range: InsightsRangeInfo = {
+    start: end - 86400,
+    end,
+    days: 1,
+    hourly: true,
+  }
+  const hour = (at: number, requests: number) => ({
+    hour: at,
+    requests,
+    errors: 0,
+    peak_concurrency: 0,
+    engine_rejections: 0,
+    upstream_rate_limits: 0,
+  })
+
+  it('calls a fall in the last full hour a possible outage, ahead of warnings', async () => {
+    const last = end - 900 - HOUR
+    const data = views({ quality: { error_rate: 0.03, errors: 30 } })
+    data.capacity = {
+      ...capacity,
+      hourly: [hour(last - HOUR, 500), hour(last, 40), hour(last + HOUR, 1)],
+    }
+    renderOverviewWith(
+      data,
+      { capacity: { ...capacity, hourly: [hour(last - 86400, 480)] } },
+      range
+    )
+    const drop = await screen.findByText(
+      /^Requests fell to 40 in the hour from/
+    )
+    expect(drop.textContent).toMatch(/against 480 at the same hour before$/)
+    const rate = screen.getByText('Failure rate 3%')
+    expect(
+      drop.compareDocumentPosition(rate) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+  })
+
+  it('does not raise a failure rate over too few requests', async () => {
+    renderOverviewWith(
+      views({ quality: { requests: 50, errors: 5, error_rate: 0.1 } }),
+      {}
+    )
+    expect(
+      await screen.findByText('Nothing needs attention in this range.')
+    ).toBeInTheDocument()
+    expect(screen.getByText('Too few requests to judge')).toBeInTheDocument()
+  })
+
+  it('keeps debt and shared addresses when the pool is not configured', async () => {
+    const data = views({ finance: { debt_usd: -25, debtors: [] } })
+    data.pool = pool({ configured: false })
+    renderOverviewWith(data, {})
+    expect(
+      await screen.findByText('Debt (negative balances)')
+    ).toBeInTheDocument()
+    expect(screen.getByText('Shared addresses')).toBeInTheDocument()
+    expect(screen.queryByText('Schedulable accounts')).not.toBeInTheDocument()
+  })
+
+  it('raises failing upstream channels and a concentrated customer', async () => {
+    const data = views({})
+    data.upstream = {
+      channels: [
+        {
+          id: 1,
+          name: 'relay-a',
+          requests: 900,
+          errors: 100,
+          failure_rate: 0.1,
+          revenue_usd: 0,
+          cost_usd: 0,
+          cost_source: 'none',
+          latest_cost_at: 0,
+        },
+      ],
+      models: [],
+      daily: [],
+      rescues: [],
+      truncated: false,
+    }
+    data.activity = {
+      active_users: 3,
+      top1_share: 0.6,
+      top_users: [
+        {
+          user_id: 9,
+          username: 'whale',
+          quota_usd: 60,
+          requests: 10,
+          share: 0.6,
+        },
+      ],
+    }
+    renderOverviewWith(data, {})
+    expect(
+      await screen.findByText(
+        '1 upstream channels fail more than 5% of attempts'
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByText('relay-a 10%')).toBeInTheDocument()
+    expect(
+      screen.getByText('One customer, whale, used 60% of the consumption')
+    ).toBeInTheDocument()
   })
 })
 

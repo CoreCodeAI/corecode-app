@@ -53,12 +53,15 @@ import { QualityTab } from './components/quality-tab'
 import { RiskTab } from './components/risk-tab'
 import { UpstreamTab } from './components/upstream-tab'
 import {
+  HOURLY_MAX_DAYS,
   INSIGHTS_PRESETS,
   INSIGHTS_TAB_GROUPS,
   OVERVIEW_VIEWS,
   POOL_REFRESH_CHOICES,
   readPoolRefresh,
+  useInsightsFormat,
   writePoolRefresh,
+  type InsightsRangeInfo,
   type InsightsTab,
 } from './lib'
 import type { EngineOutlook, PoolProvider, PoolUsage } from './types'
@@ -93,6 +96,7 @@ function tabMaxDays(tab: InsightsTab) {
  */
 export function SiteInsights() {
   const { t } = useTranslation()
+  const fmt = useInsightsFormat()
   const search = route.useSearch()
   const navigate = route.useNavigate()
   const tab: InsightsTab = search.tab ?? 'overview'
@@ -101,6 +105,14 @@ export function SiteInsights() {
   // not refetch on every render; Refresh moves it to now.
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
   const [poolRefresh, setPoolRefresh] = useState(readPoolRefresh)
+  const range: InsightsRangeInfo = {
+    start: now - days * 86400,
+    end: now,
+    days,
+    hourly: days <= HOURLY_MAX_DAYS,
+  }
+  const openTab = (next: InsightsTab) =>
+    navigate({ search: (prev) => ({ ...prev, tab: next }) })
 
   const queryClient = useQueryClient()
   const viewDays = (view: InsightsView) =>
@@ -190,7 +202,7 @@ export function SiteInsights() {
   })
   const businessPrevious = useQuery({
     ...previousQuery('business'),
-    enabled: tab === 'growth',
+    enabled: tab === 'growth' || tab === 'finance',
   })
   // The pool is live and has no earlier period.
   const previous = useQuery({
@@ -352,6 +364,11 @@ export function SiteInsights() {
                   ))}
                 </ToggleGroup>
               )}
+              {tab !== 'pool' && (
+                <span className='text-muted-foreground text-xs whitespace-nowrap tabular-nums'>
+                  {t('As of {{time}}', { time: fmt.clock(now) })}
+                </span>
+              )}
               <Button
                 variant='outline'
                 size='icon-sm'
@@ -375,6 +392,8 @@ export function SiteInsights() {
               view={view}
               data={query.data}
               previous={previous.data}
+              range={range}
+              onOpen={openTab}
               business={{
                 data: business.data,
                 previous: businessPrevious.data,
@@ -422,9 +441,8 @@ export function SiteInsights() {
               current={(next) => insightsQuery(next, false)}
               previous={(next) => previousQuery(next, false)}
               refreshMs={REFRESH_MS}
-              onOpen={(next) =>
-                navigate({ search: (prev) => ({ ...prev, tab: next }) })
-              }
+              onOpen={openTab}
+              range={range}
             />
           )}
         </div>
@@ -437,6 +455,8 @@ function InsightsView(props: {
   view: Exclude<InsightsView, 'business'>
   data: unknown
   previous: unknown
+  range: InsightsRangeInfo
+  onOpen: (tab: InsightsTab) => void
   business: { data: unknown; previous: unknown }
   models: { selected: string[]; onChange: (models: string[]) => void }
   pool: {
@@ -455,6 +475,8 @@ function InsightsView(props: {
   // Each query key includes the view, so data always matches it. The
   // previous period's key does too, and is undefined until it loads.
   const previous = props.previous as never
+  const range = props.range
+  const onOpen = props.onOpen
   switch (props.view) {
     case 'capacity':
       return (
@@ -463,6 +485,8 @@ function InsightsView(props: {
           previous={previous}
           vendor={props.capacity.vendor}
           onVendor={props.capacity.onVendor}
+          range={range}
+          onOpen={onOpen}
         />
       )
     case 'finance':
@@ -471,10 +495,20 @@ function InsightsView(props: {
           data={props.data as never}
           previous={previous}
           business={props.business.data as never}
+          businessPrevious={props.business.previous as never}
+          range={range}
+          onOpen={onOpen}
         />
       )
     case 'risk':
-      return <RiskTab data={props.data as never} previous={previous} />
+      return (
+        <RiskTab
+          data={props.data as never}
+          previous={previous}
+          range={range}
+          onOpen={onOpen}
+        />
+      )
     case 'growth':
       return (
         <GrowthTab
@@ -482,10 +516,19 @@ function InsightsView(props: {
           previous={previous}
           business={props.business.data as never}
           businessPrevious={props.business.previous as never}
+          range={range}
+          onOpen={onOpen}
         />
       )
     case 'activity':
-      return <ActivityTab data={props.data as never} previous={previous} />
+      return (
+        <ActivityTab
+          data={props.data as never}
+          previous={previous}
+          range={range}
+          onOpen={onOpen}
+        />
+      )
     case 'quality':
       return (
         <QualityTab
@@ -493,13 +536,29 @@ function InsightsView(props: {
           previous={previous}
           models={props.models}
           business={props.business.data as never}
+          range={range}
+          onOpen={onOpen}
         />
       )
     case 'pool':
       return <PoolTab data={props.data as never} {...props.pool} />
     case 'channels':
-      return <ChannelsTab data={props.data as never} />
+      return (
+        <ChannelsTab
+          data={props.data as never}
+          previous={previous}
+          range={range}
+          onOpen={onOpen}
+        />
+      )
     case 'upstream':
-      return <UpstreamTab data={props.data as never} previous={previous} />
+      return (
+        <UpstreamTab
+          data={props.data as never}
+          previous={previous}
+          range={range}
+          onOpen={onOpen}
+        />
+      )
   }
 }

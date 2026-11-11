@@ -27,14 +27,41 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 
 import { saveChannelCosts } from '../api'
-import { channelEconomics, useInsightsFormat } from '../lib'
+import {
+  GIFT_SHARE_WARN,
+  MIN_COHORT,
+  SHORT_ROI_DAYS,
+  TONES,
+  channelEconomics,
+  useInsightsFormat,
+  type InsightsRangeInfo,
+  type InsightsTab,
+} from '../lib'
 import type { ChannelCost, ChannelInsights, ChannelRow } from '../types'
+import { useChannelsVerdict } from '../verdicts/channels'
+import {
+  MIN_NEW_PAYERS,
+  channelKey,
+  channelTotals,
+  cohortRate,
+  giftShare,
+  monthFees,
+  monthStartOf,
+  newAccountShare,
+  organicLift,
+  paidChannels,
+  revenuePerPayer,
+  roiMuted,
+} from './channels-analysis'
+import { ChannelContractPanel, ChannelCostChart } from './channels-insights'
 import {
   CountRate,
   MetricGrid,
   Panel,
   SimpleTable,
   UserLabel,
+  Verdict,
+  type MetricItem,
   type Tone,
 } from './shared'
 
@@ -60,40 +87,61 @@ function useSegmentLabel() {
  * channel's fee or, without one, its commission, and the given credit its
  * accounts spent.
  */
-export function ChannelsTab(props: { data: ChannelInsights | undefined }) {
+export function ChannelsTab(props: {
+  data: ChannelInsights | undefined
+  previous?: ChannelInsights
+  range?: InsightsRangeInfo
+  onOpen?: (tab: InsightsTab) => void
+}) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const label = useSegmentLabel()
   const data = props.data
+  const verdict = useChannelsVerdict(data, props.previous, props.range)
+  // Without a range, the moment the tab first drew stands for now, so the
+  // contract read keeps one query key.
+  const [mounted] = useState(() => Math.floor(Date.now() / 1000))
+  const end = props.range?.end ?? mounted
+  const days = props.range?.days
   const rate = data?.usd_exchange_rate || 1
   // A segment with no account, payment or fee has nothing to compare.
   const rows = (data?.channels ?? []).filter(
     (row) => row.accounts > 0 || row.revenue > 0 || row.fee_usd > 0
   )
-  const paidChannels = rows.filter((row) => row.fee_usd > 0)
-  const totals = paidChannels.reduce(
-    (sum, row) => {
-      const economics = channelEconomics(row, rate)
-      sum.fee += economics.fee
-      sum.revenue += row.revenue
-      sum.net += economics.net
-      sum.newPayers += row.new_payers
-      return sum
-    },
-    { fee: 0, revenue: 0, net: 0, newPayers: 0 }
+  const paid = paidChannels(rows)
+  const totals = channelTotals(rows, rate)
+  const previous = props.previous
+  const previousRate = previous?.usd_exchange_rate || 1
+  const before = previous
+    ? channelTotals(previous.channels ?? [], previousRate)
+    : undefined
+  const previousRows = new Map(
+    (previous?.channels ?? []).map((row) => [channelKey(row), row])
   )
-  const pct = (part: number, whole: number) =>
-    whole ? fmt.pct(part / whole) : '-'
-  const money = (value: number | null) => (value == null ? '-' : fmt.cny(value))
+  const organic = rows.find((row) => row.segment === 'organic')
+  // Channels by how much better than organic their sign-ups pay; the
+  // invited and organic segments stay last.
+  const cohortRows = [...rows].sort((a, b) => {
+    if ((a.segment === 'channel') !== (b.segment === 'channel')) {
+      return a.segment === 'channel' ? -1 : 1
+    }
+    if (a.segment !== 'channel') return 0
+    const liftA = organicLift(a, organic).paid ?? -1
+    const liftB = organicLift(b, organic).paid ?? -1
+    return liftB - liftA
+  })
+  const muted = roiMuted(days, totals.newPayers)
+  const fees = monthFees(data?.costs ?? [], monthStartOf(end), end)
+  const showsNewAccounts = rows.some((row) => row.revenue_new_accounts != null)
+  const rateOf = (events: number, whole: number) => {
+    const value = cohortRate(events, whole)
+    return value == null ? '-' : fmt.pct(value)
+  }
+  const signed = (value: number) =>
+    value > 0 ? `+${fmt.cny(value)}` : fmt.cny(value)
   const tone = (value: number | null): Tone => {
     if (value == null) return 'default'
     return value < 0 ? 'danger' : 'good'
-  }
-  const toneClass: Record<Tone, string> = {
-    default: '',
-    warning: 'text-amber-600 dark:text-amber-400',
-    danger: 'text-destructive',
-    good: 'text-emerald-600 dark:text-emerald-400',
   }
   const economicsHelp = t(
     'Money is in yuan. Revenue is what the source’s accounts paid in the range, whenever they signed up. Cost is the channel fee over the range at the site’s exchange rate, and the given credit its accounts spent (gift plans, administrators’ credits, and the unpaid share of each wallet), at list price. A channel with a fee is not charged its commission, shown struck through: its affiliate account only attributes sign-ups. A channel without a fee is charged the commission it earned. Net is revenue less cost; ROI is net over the fee.'
@@ -101,9 +149,51 @@ export function ChannelsTab(props: { data: ChannelInsights | undefined }) {
   const cohortHelp = t(
     'Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.'
   )
+  let mutedHint: string | undefined
+  if (muted === 'short') {
+    mutedHint = t('Not judged over a range under {{days}} days', {
+      days: SHORT_ROI_DAYS,
+    })
+  } else if (muted === 'few') {
+    mutedHint = t('Not judged on fewer than {{count}} new payers', {
+      count: MIN_NEW_PAYERS,
+    })
+  }
+  const roiItem: MetricItem = {
+    label: t('ROI'),
+    value: totals.fee && !muted ? fmt.pct(totals.net / totals.fee) : '-',
+    tone: tone(totals.fee && !muted ? totals.net : null),
+    hint: mutedHint,
+    help: economicsHelp,
+  }
+  const cacItem: MetricItem = {
+    label: t('Fee per new payer'),
+    value:
+      totals.newPayers && !muted ? fmt.cny(totals.fee / totals.newPayers) : '-',
+    hint: mutedHint ?? t('{{count}} new payers', { count: totals.newPayers }),
+    help: t(
+      'The paid channels’ fee over the range divided by their accounts that paid for the first time in the range.'
+    ),
+    ...(!muted &&
+      totals.newPayers > 0 &&
+      before &&
+      before.newPayers >= MIN_NEW_PAYERS && {
+        delta: {
+          current: totals.fee / totals.newPayers,
+          previous: before.fee / before.newPayers,
+          better: 'down' as const,
+        },
+      }),
+  }
+  const projects = days != null && days >= SHORT_ROI_DAYS
 
   return (
     <div className='grid gap-4'>
+      <Verdict
+        tone={verdict?.tone ?? 'default'}
+        text={verdict?.text}
+        loading={!data}
+      />
       <MetricGrid
         loading={!data}
         items={[
@@ -111,40 +201,68 @@ export function ChannelsTab(props: { data: ChannelInsights | undefined }) {
             label: t('Channel fees'),
             featured: true,
             value: fmt.cny(totals.fee),
-            hint: t('{{count}} paid channels', {
-              count: paidChannels.length,
-            }),
+            hint: t(
+              '{{count}} paid channels; the monthly fee prorated over the range',
+              { count: paid.length }
+            ),
             help: economicsHelp,
+            delta: {
+              current: totals.fee,
+              previous: before?.fee,
+              better: 'neutral',
+            },
           },
           {
             label: t('Revenue from paid channels'),
             value: fmt.cny(totals.revenue),
             help: economicsHelp,
+            delta: {
+              current: totals.revenue,
+              previous: before?.revenue,
+              better: 'up',
+            },
           },
           {
             label: t('Net after channel cost'),
             value: fmt.cny(totals.net),
-            tone: tone(paidChannels.length ? totals.net : null),
-            help: economicsHelp,
-          },
-          {
-            label: t('ROI'),
-            value: totals.fee ? fmt.pct(totals.net / totals.fee) : '-',
-            tone: tone(totals.fee ? totals.net : null),
-            help: economicsHelp,
-          },
-          {
-            label: t('Fee per new payer'),
-            value: totals.newPayers
-              ? fmt.cny(totals.fee / totals.newPayers)
-              : '-',
-            hint: t('{{count}} new payers', { count: totals.newPayers }),
+            tone: tone(paid.length ? totals.net : null),
+            hint: projects
+              ? t('Projected month: {{net}}', {
+                  net: fmt.cny((totals.net / days) * 30),
+                })
+              : undefined,
             help: t(
-              'The paid channels’ fee over the range divided by their accounts that paid for the first time in the range.'
+              'Revenue from the paid channels less their fees and the given credit their accounts spent. The projection runs the range’s daily net over 30 days; it is shown from ranges of 7 days.'
             ),
+            delta: { current: totals.net, previous: before?.net, better: 'up' },
+          },
+          roiItem,
+          cacItem,
+          {
+            label: t('Fees this month'),
+            value: fmt.cny(fees.accrued * rate),
+            hint: t('of {{monthly}} a month running now', {
+              monthly: fmt.cny(fees.monthly * rate),
+            }),
+            help: t(
+              'Channel fees accrued from the first of this month to now, a thirtieth of each monthly fee a day, at the site’s exchange rate, against the monthly fees of the entries running now.'
+            ),
+            ...(fees.monthly > 0 && {
+              meter: {
+                value: Math.min(fees.accrued / fees.monthly, 1),
+                label: t('Share of this month’s fees accrued'),
+              },
+            }),
           },
         ]}
       />
+      <ChannelContractPanel
+        costs={data?.costs ?? []}
+        current={rows}
+        days={days}
+        end={end}
+      />
+      <ChannelCostChart rows={rows} rate={rate} />
       <Panel title={t('Channel return')} help={economicsHelp}>
         <SimpleTable<ChannelRow>
           rows={rows}
@@ -156,15 +274,39 @@ export function ChannelsTab(props: { data: ChannelInsights | undefined }) {
               key: 'revenue',
               label: t('Revenue'),
               align: 'right',
-              render: (row) => (
-                <span className='tabular-nums'>
-                  {fmt.cny(row.revenue)}
-                  <span className='text-muted-foreground ml-1 text-xs'>
-                    {t('{{count}} payers', { count: row.payers })}
+              render: (row) => {
+                const perPayer = revenuePerPayer(row)
+                return (
+                  <span className='tabular-nums'>
+                    {fmt.cny(row.revenue)}
+                    <span className='text-muted-foreground ml-1 text-xs'>
+                      {perPayer == null
+                        ? t('{{count}} payers', { count: row.payers })
+                        : t('{{count}} payers, {{each}} each', {
+                            count: row.payers,
+                            each: fmt.cny(perPayer),
+                          })}
+                    </span>
                   </span>
-                </span>
-              ),
+                )
+              },
             },
+            ...(showsNewAccounts
+              ? [
+                  {
+                    key: 'new-accounts',
+                    label: t('From new accounts'),
+                    hint: t(
+                      'The share of revenue paid by accounts the source brought in this range; the rest came from accounts it brought earlier.'
+                    ),
+                    align: 'right' as const,
+                    render: (row: ChannelRow) => {
+                      const share = newAccountShare(row)
+                      return share == null ? '-' : fmt.pct(share)
+                    },
+                  },
+                ]
+              : []),
             {
               key: 'fee',
               label: t('Channel fee'),
@@ -204,17 +346,45 @@ export function ChannelsTab(props: { data: ChannelInsights | undefined }) {
                 'Given credit the accounts spent in the range, at list price.'
               ),
               align: 'right',
-              render: (row) => fmt.cny(row.gift_consumption_usd),
+              render: (row) => {
+                const share = giftShare(row)
+                const warn = share != null && share > GIFT_SHARE_WARN
+                return (
+                  <span className='tabular-nums'>
+                    {fmt.cny(row.gift_consumption_usd)}
+                    {share != null && (
+                      <span
+                        className={`ml-1 text-xs ${warn ? TONES.warning : 'text-muted-foreground'}`}
+                        title={t('Gift share of use')}
+                      >
+                        {fmt.pct(share)}
+                      </span>
+                    )}
+                  </span>
+                )
+              },
             },
             {
               key: 'net',
               label: t('Net'),
+              hint: t(
+                'The change is against the previous period of the same length.'
+              ),
               align: 'right',
               render: (row) => {
                 const { net } = channelEconomics(row, rate)
+                const prior = previousRows.get(channelKey(row))
+                const moved = prior
+                  ? net - channelEconomics(prior, previousRate).net
+                  : null
                 return (
-                  <span className={`tabular-nums ${toneClass[tone(net)]}`}>
-                    {fmt.cny(net)}
+                  <span className='tabular-nums'>
+                    <span className={TONES[tone(net)]}>{fmt.cny(net)}</span>
+                    {moved != null && Math.abs(moved) >= 0.01 && (
+                      <span className='text-muted-foreground ml-1 text-xs'>
+                        {signed(moved)}
+                      </span>
+                    )}
                   </span>
                 )
               },
@@ -225,23 +395,36 @@ export function ChannelsTab(props: { data: ChannelInsights | undefined }) {
               align: 'right',
               render: (row) => {
                 const { roi } = channelEconomics(row, rate)
-                return roi == null ? '-' : fmt.pct(roi)
+                if (roi == null || roiMuted(days, row.new_payers)) return '-'
+                return fmt.pct(roi)
               },
             },
             {
               key: 'cac',
               label: t('Fee per new payer'),
               align: 'right',
-              render: (row) => money(channelEconomics(row, rate).cac),
+              render: (row) => {
+                const { cac } = channelEconomics(row, rate)
+                if (cac == null || roiMuted(days, row.new_payers)) return '-'
+                return fmt.cny(cac)
+              },
             },
           ]}
         />
       </Panel>
-      <Panel title={t('Sign-ups by source')} help={cohortHelp}>
+      <Panel
+        title={t('Sign-ups by source')}
+        help={cohortHelp}
+        description={t(
+          'Rates show from {{count}} sign-ups. Against organic: the rate as a multiple of organic sign-ups’, when both reach {{count}}.',
+          { count: MIN_COHORT }
+        )}
+      >
         <SimpleTable<ChannelRow>
-          rows={rows}
-          rowKey={(row) => `${row.segment}-${row.channel.user_id}`}
+          rows={cohortRows}
+          rowKey={(row) => channelKey(row)}
           empty={t('No data')}
+          faded={(row) => row.registered < MIN_COHORT}
           columns={[
             { key: 'source', label: t('Source'), render: label },
             {
@@ -257,7 +440,7 @@ export function ChannelsTab(props: { data: ChannelInsights | undefined }) {
               render: (row) => (
                 <CountRate
                   count={fmt.num(row.activated)}
-                  rate={pct(row.activated, row.registered)}
+                  rate={rateOf(row.activated, row.registered)}
                 />
               ),
             },
@@ -268,9 +451,33 @@ export function ChannelsTab(props: { data: ChannelInsights | undefined }) {
               render: (row) => (
                 <CountRate
                   count={fmt.num(row.paid)}
-                  rate={pct(row.paid, row.registered)}
+                  rate={rateOf(row.paid, row.registered)}
                 />
               ),
+            },
+            {
+              key: 'lift',
+              label: t('Against organic'),
+              hint: t(
+                'Activation and paying rates as multiples of organic sign-ups’ rates, when both cohorts reach the minimum.'
+              ),
+              align: 'right',
+              render: (row) => {
+                if (row.segment === 'organic') return '-'
+                const lift = organicLift(row, organic)
+                if (lift.activated == null && lift.paid == null) return '-'
+                return (
+                  <span className='tabular-nums'>
+                    {t('Active {{active}}, paid {{paid}}', {
+                      active:
+                        lift.activated == null
+                          ? '-'
+                          : fmt.multiple(lift.activated),
+                      paid: lift.paid == null ? '-' : fmt.multiple(lift.paid),
+                    })}
+                  </span>
+                )
+              },
             },
             {
               key: 'repeat',
@@ -279,7 +486,7 @@ export function ChannelsTab(props: { data: ChannelInsights | undefined }) {
               render: (row) => (
                 <CountRate
                   count={fmt.num(row.repeat)}
-                  rate={pct(row.repeat, row.paid)}
+                  rate={rateOf(row.repeat, row.paid)}
                 />
               ),
             },
@@ -324,7 +531,10 @@ export function ChannelsTab(props: { data: ChannelInsights | undefined }) {
             },
             {
               key: 'unspent',
-              label: t('Unspent'),
+              label: t('Unspent now'),
+              hint: t(
+                'Valued now, whatever the range: it does not compare with the range’s figures.'
+              ),
               align: 'right',
               render: (row) => fmt.cny(row.gift_outstanding_usd),
             },

@@ -94,6 +94,16 @@ type FinanceDay struct {
 	VendorUSD map[string]float64 `json:"vendor_usd"`
 }
 
+// FinanceHour is one hour of the FinanceDay fields of the same names: cash
+// by order time, and list-price consumption of customers and of root.
+type FinanceHour struct {
+	Hour               int64   `json:"hour"`
+	Topup              float64 `json:"topup"`
+	Subscription       float64 `json:"subscription"`
+	ConsumptionUSD     float64 `json:"consumption_usd"`
+	RootConsumptionUSD float64 `json:"root_consumption_usd"`
+}
+
 // BalanceUser is a wallet balance in USD.
 type BalanceUser struct {
 	UserRef
@@ -134,9 +144,11 @@ type FinanceInsights struct {
 	PayingUsers         int64              `json:"paying_users"`
 	Methods             []TopUpMethodTotal `json:"methods"`
 	Daily               []FinanceDay       `json:"daily"`
-	ConsumptionUSD      float64            `json:"consumption_usd"`
-	RootConsumptionUSD  float64            `json:"root_consumption_usd"`
-	GiftConsumptionUSD  float64            `json:"gift_consumption_usd"`
+	// Hourly is every UTC hour of a range up to insightsHourlySpan.
+	Hourly             []FinanceHour `json:"hourly,omitempty"`
+	ConsumptionUSD     float64       `json:"consumption_usd"`
+	RootConsumptionUSD float64       `json:"root_consumption_usd"`
+	GiftConsumptionUSD float64       `json:"gift_consumption_usd"`
 	// ClaudeUSD is the range's Claude charge, root included (FinanceDay).
 	ClaudeUSD float64 `json:"claude_usd"`
 	// VendorModels is the range's charge by model, largest first; each
@@ -180,6 +192,11 @@ func GetFinanceInsights(r InsightsRange) (*FinanceInsights, error) {
 	for _, day := range r.days() {
 		days[day] = &FinanceDay{Day: day, VendorUSD: map[string]float64{}}
 	}
+	hourStarts := r.hourStarts()
+	hourly := make(map[int64]*FinanceHour, len(hourStarts))
+	for _, start := range hourStarts {
+		hourly[start] = &FinanceHour{Hour: start}
+	}
 	type money struct {
 		total decimal.Decimal
 		count int64
@@ -191,16 +208,23 @@ func GetFinanceInsights(r InsightsRange) (*FinanceInsights, error) {
 	for _, order := range orders {
 		amount := decimal.NewFromFloat(order.Money)
 		day := days[r.DayStart(order.CreateTime)]
+		hour := hourly[insightHourKey(order.CreateTime)]
 		if order.Subscription {
 			subscription = subscription.Add(amount)
 			if day != nil {
 				day.Subscription += order.Money
+			}
+			if hour != nil {
+				hour.Subscription += order.Money
 			}
 		} else {
 			topup = topup.Add(amount)
 			credit += order.Amount
 			if day != nil {
 				day.Topup += order.Money
+			}
+			if hour != nil {
+				hour.Topup += order.Money
 			}
 		}
 		payers[order.UserId] = struct{}{}
@@ -248,6 +272,10 @@ func GetFinanceInsights(r InsightsRange) (*FinanceInsights, error) {
 		if day != nil {
 			day.RootConsumptionUSD += float64(hour.summary.RootQuota) / common.QuotaPerUnit
 		}
+		slot := hourly[hour.start]
+		if slot != nil {
+			slot.RootConsumptionUSD += float64(hour.summary.RootQuota) / common.QuotaPerUnit
+		}
 		for _, user := range hour.users {
 			price := prices[user.UserId]
 			earned := float64(user.WalletQuota) * price.perQuota
@@ -257,6 +285,9 @@ func GetFinanceInsights(r InsightsRange) (*FinanceInsights, error) {
 			if day != nil {
 				day.ConsumptionUSD += float64(user.Quota) / common.QuotaPerUnit
 				day.RecognizedRevenue += earned
+			}
+			if slot != nil {
+				slot.ConsumptionUSD += float64(user.Quota) / common.QuotaPerUnit
 			}
 		}
 	}
@@ -342,6 +373,12 @@ func GetFinanceInsights(r InsightsRange) (*FinanceInsights, error) {
 		result.Daily = append(result.Daily, *day)
 	}
 	slices.SortFunc(result.Daily, func(a, b FinanceDay) int { return cmp.Compare(a.Day, b.Day) })
+	for _, start := range hourStarts {
+		hour := hourly[start]
+		hour.Topup, hour.Subscription = roundTo(hour.Topup, 2), roundTo(hour.Subscription, 2)
+		hour.ConsumptionUSD, hour.RootConsumptionUSD = roundTo(hour.ConsumptionUSD, 4), roundTo(hour.RootConsumptionUSD, 4)
+		result.Hourly = append(result.Hourly, *hour)
+	}
 
 	if err := fillBalances(result, prices); err != nil {
 		return nil, err

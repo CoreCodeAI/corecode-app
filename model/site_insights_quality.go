@@ -50,9 +50,27 @@ type CacheDay struct {
 	ErrorCount int64   `json:"errors"`
 }
 
+// QualityHour is one hour of the figures CacheDay holds for a day: requests
+// and failures of the selected models, root included, and their streamed
+// first-response times.
+type QualityHour struct {
+	Hour      int64   `json:"hour"`
+	Requests  int64   `json:"requests"`
+	Errors    int64   `json:"errors"`
+	ErrorRate float64 `json:"error_rate"`
+	TTFTP50   int64   `json:"ttft_p50_ms"`
+	TTFTP95   int64   `json:"ttft_p95_ms"`
+}
+
 // QualityInsights reads latency, cache use and failures from the request
 // logs. Unlike the performance panel it counts every logged failure,
 // including requests the pool turned away.
+//
+// Hourly is every hour of a range up to insightsHourlySpan, keyed by UTC
+// hour start, and follows the model filter as Daily does. ErrorCategories
+// counts customers' failures only, as the capacity view does; when the
+// filter selects models of one vendor it counts that vendor's, otherwise
+// every model's.
 type QualityInsights struct {
 	Requests   int64           `json:"requests"`
 	Errors     int64           `json:"errors"`
@@ -64,12 +82,14 @@ type QualityInsights struct {
 	Vendors    []VendorQuality `json:"vendors"`
 	// AllModels is every model's figures whatever the filter selects, for
 	// the quick-select card that clears it. Its Vendor and Models are empty.
-	AllModels    VendorQuality `json:"all_models"`
-	Daily        []CacheDay    `json:"daily"`
-	StreamEnds   []NamedCount  `json:"stream_ends"`
-	StatusCodes  []NamedCount  `json:"status_codes"`
-	ErrorReasons []NamedCount  `json:"error_reasons"`
-	Truncated    bool          `json:"truncated"`
+	AllModels       VendorQuality `json:"all_models"`
+	Daily           []CacheDay    `json:"daily"`
+	Hourly          []QualityHour `json:"hourly,omitempty"`
+	StreamEnds      []NamedCount  `json:"stream_ends"`
+	StatusCodes     []NamedCount  `json:"status_codes"`
+	ErrorReasons    []NamedCount  `json:"error_reasons"`
+	ErrorCategories []NamedCount  `json:"error_categories"`
+	Truncated       bool          `json:"truncated"`
 }
 
 // logOtherFields is the part of a log's other column the quality, business
@@ -128,6 +148,21 @@ func QualityModelFilter(models []string) func(string) bool {
 	return func(name string) bool { return slices.Contains(models, name) }
 }
 
+// filterVendor is the vendor every named model is sold under, or "" when
+// the filter is empty or spans vendors.
+func filterVendor(models []string) string {
+	if len(models) == 0 {
+		return ""
+	}
+	vendor := ModelVendor(models[0])
+	for _, name := range models[1:] {
+		if ModelVendor(name) != vendor {
+			return ""
+		}
+	}
+	return vendor
+}
+
 func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error) {
 	selected := QualityModelFilter(only)
 	hours, err := loadInsightHours(r)
@@ -149,9 +184,20 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	for _, day := range r.days() {
 		days[day] = &dayBucket{day: CacheDay{Day: day}, ttft: histogram{}}
 	}
+	type hourBucket struct {
+		hour QualityHour
+		ttft histogram
+	}
+	hourStarts := r.hourStarts()
+	hourly := make(map[int64]*hourBucket, len(hourStarts))
+	for _, start := range hourStarts {
+		hourly[start] = &hourBucket{hour: QualityHour{Hour: start}, ttft: histogram{}}
+	}
+	vendor := filterVendor(only)
 	streamEnds := make(map[string]int64)
 	statusCodes := make(map[string]int64)
 	reasons := make(map[string]int64)
+	categories := make(map[string]int64)
 	allTTFT := histogram{}
 	var cacheRead, inputTotal int64
 	for _, hour := range hours {
@@ -159,7 +205,15 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 		mergeCounts(streamEnds, hour.summary.StreamEnds)
 		mergeCounts(statusCodes, hour.summary.StatusCodes)
 		mergeCounts(reasons, hour.summary.ErrorReasons)
+		// An hour without customers' requests holds no vendor split and no
+		// categories either.
+		if vendor != "" && hour.summary.Vendors != nil {
+			mergeCounts(categories, vendorSummary(hour.summary, vendor).Categories)
+		} else {
+			mergeCounts(categories, hour.summary.Categories)
+		}
 		day := days[r.DayStart(hour.start)]
+		slot := hourly[hour.start]
 		for name, model := range hour.models {
 			row := model.row
 			bucket := models[name]
@@ -190,8 +244,20 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 				day.day.Uncached += row.Uncached
 				day.ttft.merge(model.ttft)
 			}
+			if slot != nil {
+				slot.hour.Requests += row.Requests
+				slot.hour.Errors += row.Errors
+				slot.ttft.merge(model.ttft)
+			}
 		}
 	}
+	for _, start := range hourStarts {
+		slot := hourly[start]
+		slot.hour.ErrorRate = ratio(float64(slot.hour.Errors), float64(slot.hour.Requests))
+		slot.hour.TTFTP50, slot.hour.TTFTP95 = slot.ttft.percentile(0.5), slot.ttft.percentile(0.95)
+		result.Hourly = append(result.Hourly, slot.hour)
+	}
+	result.ErrorCategories = sortedCounts(categories)
 	result.TTFTP50, result.TTFTP95 = allTTFT.percentile(0.5), allTTFT.percentile(0.95)
 	type vendorBucket struct {
 		quality VendorQuality

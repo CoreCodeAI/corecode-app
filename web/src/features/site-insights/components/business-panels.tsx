@@ -21,15 +21,18 @@ import { useTranslation } from 'react-i18next'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
+import { financeRange, monthProjection } from '../finance-analysis'
 import {
   clientFamilies,
   joinSentences,
   MARGIN_VENDORS,
+  PRICE_MONTH_DAYS,
   SMALL_SAMPLE,
   useChargeFormat,
   useInsightsFormat,
   useVendorName,
   vendorMargins,
+  type InsightsRangeInfo,
 } from '../lib'
 import type { BusinessInsights, FinanceInsights } from '../types'
 import {
@@ -55,6 +58,7 @@ const MARGIN_TONES: Record<Tone, string> = {
  */
 export function VendorMarginPanel(props: {
   data: FinanceInsights | undefined
+  range?: InsightsRangeInfo
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -65,6 +69,12 @@ export function VendorMarginPanel(props: {
   const revenue = rows.reduce((sum, row) => sum + row.revenue, 0)
   const cost = rows.reduce((sum, row) => sum + row.cost, 0)
   const margin = revenue - cost
+  const days = financeRange(data, props.range).days
+  // A month's range already reads as a month; any other is projected to one.
+  const month =
+    days > 0 && Math.abs(days - PRICE_MONTH_DAYS) >= 0.5
+      ? monthProjection(revenue, cost, days)
+      : undefined
   const scale = Math.max(
     ...rows.map((row) => Math.max(row.revenue, row.cost)),
     1
@@ -88,6 +98,17 @@ export function VendorMarginPanel(props: {
             rate: revenue > 0 ? fmt.pct(margin / revenue) : '-',
           }
         ),
+        month &&
+          revenue + cost > 0 &&
+          t(
+            'At this pace a 30-day month earns {{revenue}} against {{cost}} of accounts, margin {{margin}} (projected from {{days}} days).',
+            {
+              revenue: fmt.cny(month.revenue),
+              cost: fmt.cny(month.cost),
+              margin: fmt.cny(month.margin),
+              days: fmt.num(Math.round(days * 10) / 10),
+            }
+          ),
         ...losing.map((row) =>
           t('{{vendor}} loses {{amount}}.', {
             vendor: name(row.vendor),
@@ -360,10 +381,13 @@ export function ReferralPanel(props: {
                 previous: previous?.invitee_payments,
                 better: 'up',
               },
-              hint: t('{{inviters}} inviters brought {{invitees}} invitees', {
-                inviters: fmt.num(data?.inviters ?? 0),
-                invitees: fmt.num(data?.invitees ?? 0),
-              }),
+              hint: t(
+                'All time: {{inviters}} inviters brought {{invitees}} invitees',
+                {
+                  inviters: fmt.num(data?.inviters ?? 0),
+                  invitees: fmt.num(data?.invitees ?? 0),
+                }
+              ),
             },
             {
               label: t('Invitee consumption'),
@@ -410,6 +434,9 @@ export function ReferralPanel(props: {
             {
               key: 'inv',
               label: t('Invitees (active)'),
+              hint: t(
+                'Invitees over all time; active: sent a request in the range.'
+              ),
               align: 'right',
               render: (row) => `${row.invitees} (${row.active_invitees})`,
             },
@@ -442,7 +469,10 @@ export function ReferralPanel(props: {
 export function GroupsPanel(props: { data: BusinessInsights | undefined }) {
   const { t } = useTranslation()
   return (
-    <Panel title={t('Users by group')}>
+    <Panel
+      title={t('Users by group')}
+      description={t('Every user, not only those of this range.')}
+    >
       <Breakdown items={props.data?.groups} empty={t('No users')} />
     </Panel>
   )

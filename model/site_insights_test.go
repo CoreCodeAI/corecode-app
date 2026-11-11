@@ -130,6 +130,11 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 				{Vendor: VendorOther, Model: "opus", USD: 3, Requests: 3},
 				{Vendor: VendorClaude, Model: "claude-sonnet-5-5", USD: 1, Requests: 1},
 			}, finance.VendorModels, "largest first")
+			require.Len(t, finance.Hourly, 48)
+			assert.InDelta(t, finance.TopupRevenue, sumOf(finance.Hourly, func(h FinanceHour) float64 { return h.Topup }), 1e-9)
+			assert.InDelta(t, finance.SubscriptionRevenue, sumOf(finance.Hourly, func(h FinanceHour) float64 { return h.Subscription }), 1e-9)
+			assert.InDelta(t, finance.ConsumptionUSD, sumOf(finance.Hourly, func(h FinanceHour) float64 { return h.ConsumptionUSD }), 1e-9)
+			assert.Equal(t, FinanceHour{Hour: day1 + 3600, Subscription: 9.9}, finance.Hourly[1], "bob's plan order at second 4000")
 
 			risk, err := GetRiskInsights(r)
 			require.NoError(t, err)
@@ -143,6 +148,8 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 			assert.Len(t, risk.SharedIPs[0].Users, 2)
 			assert.Equal(t, 1, risk.SharedIPs[0].SubscriptionBuyers)
 			assert.Equal(t, []BalanceUser{{UserRef{bob.Id, "bob"}, -2}}, risk.Debtors)
+			assert.EqualValues(t, 3, risk.SignupsMature, "every sign-up is older than six hours at the end")
+			assert.EqualValues(t, 1, risk.ZeroUseMature, "carol never sent a request")
 
 			growth, err := GetGrowthInsights(r)
 			require.NoError(t, err)
@@ -153,10 +160,17 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 			}, growth.ByInvite)
 			assert.EqualValues(t, 1, growth.SubscriptionBuyers)
 			assert.Zero(t, growth.SubscriptionToTopup)
+			require.Len(t, growth.Hourly, 48)
+			assert.Equal(t, GrowthHour{Hour: day1, Registered: 1, Activated: 1, Paid: 1}, growth.Hourly[0], "alice signed up in the first hour")
+			assert.EqualValues(t, 3, sumOf(growth.Hourly, func(h GrowthHour) float64 { return float64(h.Registered) }))
 
 			activity, err := GetActivityInsights(r)
 			require.NoError(t, err)
 			assert.EqualValues(t, 2, activity.ActiveUsers)
+			require.Len(t, activity.Hourly, 48)
+			assert.Equal(t, ActivityHour{Hour: day1, ActiveUsers: 2, Requests: 3, QuotaUSD: 3}, activity.Hourly[0])
+			assert.EqualValues(t, activity.Requests, sumOf(activity.Hourly, func(h ActivityHour) float64 { return float64(h.Requests) }))
+			assert.InDelta(t, activity.QuotaUSD, sumOf(activity.Hourly, func(h ActivityHour) float64 { return h.QuotaUSD }), 1e-9)
 			require.Len(t, activity.Daily, 2)
 			assert.Equal(t, ActivityDay{Day: day1, DAU: 2, WAU: 2, Requests: 3, QuotaUSD: 3}, activity.Daily[0])
 			assert.Equal(t, ActivityDay{Day: day1 + 86400, DAU: 1, WAU: 2, Requests: 1, QuotaUSD: 1}, activity.Daily[1])
@@ -185,6 +199,12 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 			assert.Len(t, sonnetOnly.Models, len(quality.Models), "the table keeps every model, as the filter's options")
 			assert.Equal(t, quality.StatusCodes, sonnetOnly.StatusCodes, "counted per hour, not per model")
 			assert.Equal(t, quality.Vendors, sonnetOnly.Vendors, "the vendor cards ignore the filter")
+			assert.Len(t, quality.Hourly, 48)
+			assert.EqualValues(t, quality.Requests, sumOf(quality.Hourly, func(h QualityHour) float64 { return float64(h.Requests) }))
+			assert.EqualValues(t, quality.Errors, sumOf(quality.Hourly, func(h QualityHour) float64 { return float64(h.Errors) }))
+			assert.Equal(t, QualityHour{Hour: day1, Requests: 2, Errors: 1, ErrorRate: 0.5}, sonnetOnly.Hourly[0], "the hourly series follows the filter")
+			assert.EqualValues(t, 2, sumOf(sonnetOnly.Hourly, func(h QualityHour) float64 { return float64(h.Requests) }))
+			assert.Equal(t, capacity.ErrorCategories, quality.ErrorCategories, "customers' failures, as on the capacity view")
 			assert.Equal(t, VendorQuality{Requests: 6, Errors: 2, ErrorRate: 0.3333, TTFTP50: quality.TTFTP50, TTFTP95: quality.TTFTP95},
 				sonnetOnly.AllModels, "the all-models card ignores the filter")
 			assert.Equal(t, []VendorQuality{{
@@ -312,6 +332,106 @@ func TestFinanceRecognizesRevenueAsItIsEarned(t *testing.T) {
 	}
 }
 
+func sumOf[T any](rows []T, value func(T) float64) float64 {
+	var total float64
+	for _, row := range rows {
+		total += value(row)
+	}
+	return total
+}
+
+// A range of 24 hours that starts mid-hour spans 25 UTC hours, each listed
+// and zero-filled, and adds up to the range's totals; a week has no hourly
+// series.
+func TestInsightsHourlySeries(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			const hour1 = int64(1759248000)
+			dollar := int64(common.QuotaPerUnit)
+			start := hour1 + 1800
+			r := InsightsRange{Start: start, End: start + 86400, Offset: 8 * 3600}
+
+			alice := registerAffiliateTestUser(t, "alice", "")
+			bob := registerAffiliateTestUser(t, "bob", "")
+			carol := registerAffiliateTestUser(t, "carol", "")
+			for id, created := range map[int]int64{alice.Id: start + 60, bob.Id: r.End - 3600, carol.Id: start + 7200} {
+				require.NoError(t, DB.Model(&User{}).Where("id = ?", id).Update("created_at", created).Error)
+			}
+			require.NoError(t, DB.Model(&User{}).Where("id = ?", alice.Id).Update("request_count", 2).Error)
+			require.NoError(t, LOG_DB.Create(&[]Log{
+				{UserId: alice.Id, Username: "alice", Type: LogTypeConsume, CreatedAt: start + 100, ModelName: "claude-opus-5-5", Quota: int(dollar), IsStream: true, Other: `{"frt":700}`},
+				{UserId: alice.Id, Username: "alice", Type: LogTypeError, CreatedAt: start + 3700, ModelName: "gpt-6-luna", Content: "status_code=429, Credential concurrency limit exceeded."},
+			}).Error)
+			require.NoError(t, DB.Create(&[]QuotaData{
+				{UserID: alice.Id, Username: "alice", ModelName: "claude-opus-5-5", CreatedAt: hour1, Count: 5, Quota: int(5 * dollar)},
+				{UserID: alice.Id, Username: "alice", ModelName: "claude-opus-5-5", CreatedAt: hour1 + 3600, Count: 1, Quota: int(dollar)},
+			}).Error)
+			require.NoError(t, DB.Create(&TopUp{UserId: alice.Id, Amount: 10, Money: 10, PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, TradeNo: "T1", CreateTime: start + 200}).Error)
+
+			quality, err := GetQualityInsights(r, nil)
+			require.NoError(t, err)
+			require.Len(t, quality.Hourly, 25)
+			assert.Equal(t, hour1, quality.Hourly[0].Hour, "keyed by the rollup's UTC hour, not the range's start")
+			assert.Equal(t, QualityHour{Hour: hour1, Requests: 1, TTFTP50: 700, TTFTP95: 700}, quality.Hourly[0])
+			assert.Equal(t, QualityHour{Hour: hour1 + 3600, Requests: 1, Errors: 1, ErrorRate: 1}, quality.Hourly[1])
+			assert.Equal(t, QualityHour{Hour: hour1 + 2*3600}, quality.Hourly[2], "an hour without requests is listed")
+			assert.EqualValues(t, quality.Requests, sumOf(quality.Hourly, func(h QualityHour) float64 { return float64(h.Requests) }))
+			claude, err := GetQualityInsights(r, []string{"claude-opus-5-5"})
+			require.NoError(t, err)
+			assert.Zero(t, claude.Hourly[1].Requests, "the GPT failure is not a Claude model's")
+			assert.EqualValues(t, claude.Requests, sumOf(claude.Hourly, func(h QualityHour) float64 { return float64(h.Requests) }))
+
+			finance, err := GetFinanceInsights(r)
+			require.NoError(t, err)
+			require.Len(t, finance.Hourly, 25)
+			assert.Equal(t, FinanceHour{Hour: hour1, Topup: 10, ConsumptionUSD: 1}, finance.Hourly[0])
+			assert.InDelta(t, finance.TopupRevenue, sumOf(finance.Hourly, func(h FinanceHour) float64 { return h.Topup }), 1e-9)
+			assert.InDelta(t, finance.ConsumptionUSD, sumOf(finance.Hourly, func(h FinanceHour) float64 { return h.ConsumptionUSD }), 1e-9)
+
+			growth, err := GetGrowthInsights(r)
+			require.NoError(t, err)
+			require.Len(t, growth.Hourly, 25)
+			assert.Equal(t, GrowthHour{Hour: hour1, Registered: 1, Activated: 1, Paid: 1}, growth.Hourly[0])
+			assert.Equal(t, GrowthHour{Hour: hour1 + 2*3600, Registered: 1}, growth.Hourly[2])
+			assert.EqualValues(t, growth.Funnel.Registered, sumOf(growth.Hourly, func(h GrowthHour) float64 { return float64(h.Registered) }))
+
+			activity, err := GetActivityInsights(r)
+			require.NoError(t, err)
+			require.Len(t, activity.Hourly, 25)
+			assert.Equal(t, ActivityHour{Hour: hour1}, activity.Hourly[0], "the quota row before the range's start is left out, as in the totals")
+			assert.Equal(t, ActivityHour{Hour: hour1 + 3600, ActiveUsers: 1, Requests: 1, QuotaUSD: 1}, activity.Hourly[1])
+			assert.EqualValues(t, activity.Requests, sumOf(activity.Hourly, func(h ActivityHour) float64 { return float64(h.Requests) }))
+			assert.InDelta(t, activity.QuotaUSD, sumOf(activity.Hourly, func(h ActivityHour) float64 { return h.QuotaUSD }), 1e-9)
+
+			risk, err := GetRiskInsights(r)
+			require.NoError(t, err)
+			assert.EqualValues(t, 3, risk.Signups)
+			assert.EqualValues(t, 2, risk.ZeroUseAccounts)
+			assert.EqualValues(t, 2, risk.SignupsMature, "bob signed up an hour before the end")
+			assert.EqualValues(t, 1, risk.ZeroUseMature, "carol is old enough and never sent a request")
+
+			week := InsightsRange{Start: hour1, End: hour1 + 7*86400, Offset: 8 * 3600}
+			weekQuality, err := GetQualityInsights(week, nil)
+			require.NoError(t, err)
+			assert.Nil(t, weekQuality.Hourly)
+			assert.NotEmpty(t, weekQuality.Daily)
+			weekFinance, err := GetFinanceInsights(week)
+			require.NoError(t, err)
+			assert.Nil(t, weekFinance.Hourly)
+			weekGrowth, err := GetGrowthInsights(week)
+			require.NoError(t, err)
+			assert.Nil(t, weekGrowth.Hourly)
+			weekActivity, err := GetActivityInsights(week)
+			require.NoError(t, err)
+			assert.Nil(t, weekActivity.Hourly)
+			encoded, err := common.Marshal(weekQuality)
+			require.NoError(t, err)
+			assert.NotContains(t, string(encoded), `"hourly"`, "a long range's payload does not grow")
+		})
+	}
+}
+
 func TestResolveInsightsRange(t *testing.T) {
 	r, ok := ResolveInsightsRange(0, 1_000_000, 0, 31)
 	assert.True(t, ok)
@@ -405,6 +525,19 @@ func TestCapacitySplitsByVendor(t *testing.T) {
 			grok, err := GetCapacityInsights(r, VendorGrok)
 			require.NoError(t, err)
 			assert.Zero(t, grok.Requests)
+
+			quality, err := GetQualityInsights(r, nil)
+			require.NoError(t, err)
+			assert.Equal(t, []NamedCount{{ErrorEngineConcurrency, 1}}, quality.ErrorCategories)
+			gpt, err := GetQualityInsights(r, []string{"gpt-6-luna"})
+			require.NoError(t, err)
+			assert.Equal(t, codex.ErrorCategories, gpt.ErrorCategories, "one vendor's models narrow the categories to it")
+			claudeOnly, err := GetQualityInsights(r, []string{"claude-opus-5-5", "claude-sonnet-5-5"})
+			require.NoError(t, err)
+			assert.Empty(t, claudeOnly.ErrorCategories)
+			mixed, err := GetQualityInsights(r, []string{"claude-opus-5-5", "gpt-6-luna"})
+			require.NoError(t, err)
+			assert.Equal(t, quality.ErrorCategories, mixed.ErrorCategories, "models of several vendors keep every category")
 		})
 	}
 }

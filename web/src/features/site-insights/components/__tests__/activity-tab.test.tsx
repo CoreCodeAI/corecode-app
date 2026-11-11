@@ -18,10 +18,15 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import type { ReactNode } from 'react'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { ActivityInsights, EngineDailyCost } from '../../types'
 import { ActivityTab } from '../growth-tab'
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: (props: { children: ReactNode }) => <a href='#'>{props.children}</a>,
+}))
 
 const day = (offset: number) => 1761408000 + offset * 86400
 
@@ -162,6 +167,81 @@ describe('daily consumption', () => {
     ).toBeDisabled()
     expect(
       screen.getByText(/^In the range, new-api charged \$3\.75 \(¥30/)
+    ).toBeInTheDocument()
+  })
+})
+
+describe('a short range', () => {
+  const H = 3600
+  const T0 = day(0)
+  const range = { start: T0, end: T0 + 3 * H - 600, days: 1, hourly: true }
+  const claude: EngineDailyCost = {
+    configured: true,
+    cost_usd: 0,
+    requests: 0,
+    daily: [],
+  }
+  const data = activity(claude, {
+    hourly: [
+      { hour: T0, active_users: 2, requests: 10, quota_usd: 8 },
+      { hour: T0 + H, active_users: 5, requests: 20, quota_usd: 40 },
+      // Still filling: drawn, but not the busiest hour.
+      { hour: T0 + 2 * H, active_users: 9, requests: 30, quota_usd: 80 },
+    ],
+    top_users: [
+      { user_id: 1, username: 'alice', quota_usd: 20, requests: 6, share: 0.6 },
+      { user_id: 2, username: 'bob', quota_usd: 10, requests: 3, share: 0.3 },
+    ],
+  })
+  const previous = activity(claude, {
+    hourly: [{ hour: T0 - 3 * H, active_users: 1, requests: 2, quota_usd: 4 }],
+    top_users: [
+      { user_id: 1, username: 'alice', quota_usd: 4, requests: 1, share: 0.4 },
+      { user_id: 3, username: 'carol', quota_usd: 6, requests: 2, share: 0.6 },
+    ],
+  })
+
+  it('draws hours against the previous period and names the busiest closed hour', () => {
+    render(<ActivityTab data={data} previous={previous} range={range} />)
+    const bars = screen
+      .getByRole('list', { name: 'Active users by hour' })
+      .querySelectorAll('[tabindex="0"]')
+    expect(bars).toHaveLength(3)
+    expect(bars[0].getAttribute('aria-label')).toMatch(
+      /Same hour, previous period 1/
+    )
+    expect(
+      screen.getByText(/^Busiest hour .*: 5 active users\.$/)
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Busiest hour .*: \$5\.00\.$/)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('list', { name: 'Daily consumption' })
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('No full day in this range')).toBeInTheDocument()
+  })
+
+  it('says retention needs a longer range instead of a near-empty grid', () => {
+    render(<ActivityTab data={data} range={range} />)
+    expect(
+      screen.getByText(
+        'A short range holds only a sign-up day or two, too few to read retention.'
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'See the last 30 days' })
+    ).toBeInTheDocument()
+  })
+
+  it('shows each top customer’s change and marks new and departed ones', () => {
+    render(<ActivityTab data={data} previous={previous} range={range} />)
+    expect(screen.getByText('+$2.00')).toBeInTheDocument()
+    expect(screen.getByText('New')).toBeInTheDocument()
+    expect(screen.getByText('Left the list')).toBeInTheDocument()
+    expect(screen.getByText('was $0.75')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        '1 new to the list and 1 that left it or halved, against the previous period.'
+      )
     ).toBeInTheDocument()
   })
 })

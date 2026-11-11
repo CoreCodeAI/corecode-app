@@ -17,11 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQueries } from '@tanstack/react-query'
-import { CircleAlert, CircleCheck, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 
 import type { InsightsView } from '../api'
 import {
@@ -30,32 +26,39 @@ import {
   failureTone,
   OVERVIEW_VIEWS,
   SMALL_SAMPLE,
+  useChargeFormat,
+  useHourAxis,
   useInsightsFormat,
   useSharedAddresses,
+  useTabLabel,
+  type InsightsRangeInfo,
+  type InsightsTab,
 } from '../lib'
 import type {
+  ActivityInsights,
   CapacityInsights,
   EngineHorizon,
   EnginePool,
   FinanceInsights,
   QualityInsights,
   RiskInsights,
+  UpstreamInsights,
 } from '../types'
+import { Findings, type Finding } from './insight-kit'
+import {
+  closedTrend,
+  FAILING_RATE,
+  marginCard,
+  overviewExtraSignals,
+} from './overview-analysis'
 import { ProvidersPanel, ShareCharts, TopModelsPanel } from './overview-charts'
-import { MetricGrid, Panel } from './shared'
+import { TabDigest, WhatChanged } from './overview-insights'
+import { MetricGrid, Panel, type TrendPoint } from './shared'
 
 type InsightsQuery = {
   queryKey: readonly unknown[]
   queryFn: () => Promise<unknown>
   staleTime: number
-}
-
-type Signal = {
-  key: string
-  tone: 'danger' | 'warning'
-  title: string
-  detail?: string
-  tab: Exclude<InsightsView, 'business'>
 }
 
 // The thresholds the tabs color by, so a signal here matches a colored
@@ -65,19 +68,41 @@ const REMAINING_DANGER = 0.1
 const REMAINING_WARNING = 0.25
 const TTFT_P95_SLOW_MS = 10_000
 
+/** The views compared with the period before. */
+const EARLIER_VIEWS = [
+  'capacity',
+  'quality',
+  'finance',
+  'risk',
+  'upstream',
+  'activity',
+] as const satisfies readonly InsightsView[]
+
+/** Vendors the quality verdict names when they fail. */
+const NAMED_VENDORS: Record<string, string> = {
+  claude: 'Claude',
+  codex: 'GPT',
+  grok: 'Grok',
+  gemini: 'Gemini',
+}
+
 /**
- * The first tab: headline figures from several views, and a list of what
- * needs attention now, each linked to the tab that explains it. It reads
- * the same queries the tabs read, so opening one after it is instant.
+ * The first tab: headline figures from several views, each tab's verdict,
+ * what drove the headline changes, and a list of what needs attention now,
+ * each linked to the tab that explains it. It reads the same queries the
+ * tabs read, so opening one after it is instant.
  */
 export function OverviewTab(props: {
   current: (view: InsightsView) => InsightsQuery
   previous: (view: InsightsView) => InsightsQuery
   refreshMs: Partial<Record<InsightsView, number>>
-  onOpen: (view: Exclude<InsightsView, 'business'>) => void
+  onOpen?: (tab: InsightsTab) => void
+  range?: InsightsRangeInfo
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const hours = useHourAxis()
+  const tabLabel = useTabLabel()
   const current = useQueries({
     queries: OVERVIEW_VIEWS.map((view) => ({
       ...props.current(view),
@@ -85,40 +110,45 @@ export function OverviewTab(props: {
     })),
   })
   const earlier = useQueries({
-    queries: (['quality', 'finance', 'risk'] as const).map((view) =>
-      props.previous(view)
-    ),
+    queries: EARLIER_VIEWS.map((view) => props.previous(view)),
   })
-  const capacity = current[0].data as CapacityInsights | undefined
-  const pool = current[1].data as EnginePool | undefined
-  const quality = current[2].data as QualityInsights | undefined
-  const finance = current[3].data as FinanceInsights | undefined
-  const risk = current[4].data as RiskInsights | undefined
-  const previousQuality = earlier[0].data as QualityInsights | undefined
-  const previousFinance = earlier[1].data as FinanceInsights | undefined
-  const previousRisk = earlier[2].data as RiskInsights | undefined
+  const now = <T,>(view: (typeof OVERVIEW_VIEWS)[number]) =>
+    (current[OVERVIEW_VIEWS.indexOf(view)].data ?? undefined) as T | undefined
+  const before = <T,>(view: (typeof EARLIER_VIEWS)[number]) =>
+    (earlier[EARLIER_VIEWS.indexOf(view)].data ?? undefined) as T | undefined
+  const capacity = now<CapacityInsights>('capacity')
+  const pool = now<EnginePool>('pool')
+  const quality = now<QualityInsights>('quality')
+  const finance = now<FinanceInsights>('finance')
+  const risk = now<RiskInsights>('risk')
+  const upstream = now<UpstreamInsights>('upstream')
+  const activity = now<ActivityInsights>('activity')
+  const previousCapacity = before<CapacityInsights>('capacity')
+  const previousQuality = before<QualityInsights>('quality')
+  const previousFinance = before<FinanceInsights>('finance')
+  const previousRisk = before<RiskInsights>('risk')
+  const previousUpstream = before<UpstreamInsights>('upstream')
+  const previousActivity = before<ActivityInsights>('activity')
   const clusters = useSharedAddresses(risk)
+  const charge = useChargeFormat(finance)
+  const margin = marginCard(t, fmt, finance, charge.rate)
+  const range = props.range
 
-  const viewLabels: Record<Exclude<InsightsView, 'business'>, string> = {
-    capacity: t('Capacity'),
-    pool: t('Account pool'),
-    quality: t('Service quality'),
-    finance: t('Funds'),
-    growth: t('Growth'),
-    channels: t('Promotion channels'),
-    upstream: t('Upstreams'),
-    activity: t('Activity & retention'),
-    risk: t('Risk'),
-  }
   const loading = current.filter((result) => result.isPending).length
-  const signals: Signal[] = []
+  const signals: Finding[] = overviewExtraSignals(t, fmt, {
+    capacity,
+    previousCapacity,
+    upstream,
+    activity,
+    range,
+  })
 
   OVERVIEW_VIEWS.forEach((view, index) => {
     if (current[index].isError) {
       signals.push({
         key: `error-${view}`,
         tone: 'warning',
-        title: t('{{view}} could not be read', { view: viewLabels[view] }),
+        title: t('{{view}} could not be read', { view: tabLabel(view) }),
         detail:
           current[index].error instanceof Error
             ? current[index].error.message
@@ -202,7 +232,7 @@ export function OverviewTab(props: {
   }
 
   if (capacity) {
-    const slots = capacity.pool.configured ? capacity.pool.effective_slots : 0
+    const slots = capacity.pool?.configured ? capacity.pool.effective_slots : 0
     const engine =
       capacity.error_categories.find(
         (item) => item.name === 'engine_concurrency'
@@ -217,15 +247,17 @@ export function OverviewTab(props: {
         }),
         detail: fmt.time(capacity.peak_at),
         tab: 'capacity',
+        impact: capacity.peak_concurrency - slots,
       })
     }
     if (engine > 0) {
       signals.push({
         key: 'capacity-engine',
-        tone: 'warning',
+        tone: 'danger',
         title: t('The pool was full {{count}} times', { count: engine }),
         detail: t('Requests the engine turned away with 429'),
         tab: 'capacity',
+        impact: engine,
       })
     }
     if (capacity.limit_rejection_total > 0) {
@@ -244,12 +276,16 @@ export function OverviewTab(props: {
             })
           : undefined,
         tab: 'capacity',
+        impact: capacity.limit_rejection_total,
       })
     }
   }
 
   if (quality) {
-    const tone = failureTone(quality.error_rate)
+    const tone =
+      quality.requests >= SMALL_SAMPLE
+        ? failureTone(quality.error_rate)
+        : 'default'
     if (tone === 'danger' || tone === 'warning') {
       signals.push({
         key: 'quality-rate',
@@ -259,22 +295,50 @@ export function OverviewTab(props: {
         }),
         detail: t('{{count}} failed', { count: quality.errors }),
         tab: 'quality',
+        impact: quality.errors,
       })
     }
-    if (quality.ttft_p95_ms > TTFT_P95_SLOW_MS) {
+    const claude = (quality.vendors ?? []).find(
+      (vendor) => vendor.vendor === 'claude' && vendor.ttft_p50_ms > 0
+    )
+    if (claude && claude.ttft_p95_ms > TTFT_P95_SLOW_MS) {
       signals.push({
         key: 'quality-ttft',
         tone: 'warning',
-        title: t('TTFT p95 is {{value}}', {
-          value: fmt.measuredMs(quality.ttft_p95_ms),
+        title: t('Claude TTFT p95 is {{value}}', {
+          value: fmt.measuredMs(claude.ttft_p95_ms),
         }),
         tab: 'quality',
+        impact: claude.requests,
       })
     }
-    const failing = (quality.models ?? []).filter(
-      (row) =>
-        row.requests >= SMALL_SAMPLE && failureTone(row.error_rate) === 'danger'
-    )
+    for (const vendor of quality.vendors ?? []) {
+      if (
+        !NAMED_VENDORS[vendor.vendor] ||
+        vendor.requests < SMALL_SAMPLE ||
+        vendor.error_rate <= FAILING_RATE
+      ) {
+        continue
+      }
+      signals.push({
+        key: `quality-vendor-${vendor.vendor}`,
+        tone: 'warning',
+        title: t('{{vendor}} fails {{rate}} of requests.', {
+          vendor: NAMED_VENDORS[vendor.vendor],
+          rate: fmt.pct(vendor.error_rate),
+        }),
+        detail: t('{{count}} failed', { count: vendor.errors }),
+        tab: 'quality',
+        impact: vendor.errors,
+      })
+    }
+    const failing = (quality.models ?? [])
+      .filter(
+        (row) =>
+          row.requests >= SMALL_SAMPLE &&
+          failureTone(row.error_rate) === 'danger'
+      )
+      .sort((a, b) => b.errors - a.errors)
     if (failing.length > 0) {
       signals.push({
         key: 'quality-models',
@@ -286,6 +350,7 @@ export function OverviewTab(props: {
           .map((row) => `${row.model} ${fmt.pct(row.error_rate)}`)
           .join(', '),
         tab: 'quality',
+        impact: failing.reduce((sum, row) => sum + row.errors, 0),
       })
     }
   }
@@ -299,6 +364,7 @@ export function OverviewTab(props: {
         amount: fmt.cny(-finance.debt_usd),
       }),
       tab: 'finance',
+      impact: -finance.debt_usd,
     })
   }
 
@@ -329,10 +395,54 @@ export function OverviewTab(props: {
     }
   }
 
-  // Danger first; within a tone, the order the checks run.
-  const rank = (signal: Signal) => (signal.tone === 'danger' ? 0 : 1)
-  signals.sort((a, b) => rank(a) - rank(b))
+  // A short range reads by the hour, the hour still filling left out; a
+  // longer one by the day.
+  const hourly = range?.hourly ?? false
+  const end = range?.end ?? 0
+  const hourPoints = (points: { hour: number; value: number }[]) =>
+    points.map((point) => ({
+      title: hours.title(point.hour),
+      value: point.value,
+    }))
+  let revenueTrend: TrendPoint[] | undefined = (finance?.daily ?? []).map(
+    (day) => ({ title: fmt.day(day.day), value: day.topup + day.subscription })
+  )
+  let requestsTrend: TrendPoint[] | undefined = (quality?.daily ?? []).map(
+    (day) => ({ title: fmt.day(day.day), value: day.requests })
+  )
+  let signupTrend: TrendPoint[] | undefined
+  if (hourly) {
+    revenueTrend = finance?.hourly
+      ? hourPoints(
+          closedTrend(
+            finance.hourly,
+            end,
+            (row) => row.topup + row.subscription
+          )
+        )
+      : undefined
+    const requestHours: { hour: number; requests: number }[] | undefined =
+      quality?.hourly ?? capacity?.hourly
+    requestsTrend = requestHours
+      ? hourPoints(closedTrend(requestHours, end, (row) => row.requests))
+      : undefined
+  }
+  if (risk?.signup_series) {
+    const series = risk.signup_series.map((point) => ({
+      hour: point.at,
+      value: point.count,
+    }))
+    signupTrend =
+      risk.series_unit === 'hour'
+        ? hourPoints(closedTrend(series, end || Infinity, (row) => row.value))
+        : series.map((point) => ({
+            title: fmt.day(point.hour),
+            value: point.value,
+          }))
+  }
+  const qualitySampled = (quality?.requests ?? 0) >= SMALL_SAMPLE
   const five = pool?.five_hour_estimate
+  const slots = capacity?.pool?.configured ? capacity.pool.effective_slots : 0
 
   return (
     <div className='grid gap-4'>
@@ -348,11 +458,9 @@ export function OverviewTab(props: {
               previous: previousFinance?.revenue,
               better: 'up',
             },
-            trend: (finance?.daily ?? []).map((day) => ({
-              title: fmt.day(day.day),
-              value: day.topup + day.subscription,
-            })),
+            trend: revenueTrend,
             trendFormat: fmt.cny,
+            trendBars: hourly,
             hint: t('{{orders}} orders · {{users}} payers', {
               orders: finance?.orders ?? 0,
               users: finance?.paying_users ?? 0,
@@ -367,10 +475,8 @@ export function OverviewTab(props: {
               previous: previousQuality?.requests,
               better: 'neutral',
             },
-            trend: (quality?.daily ?? []).map((day) => ({
-              title: fmt.day(day.day),
-              value: day.requests,
-            })),
+            trend: requestsTrend,
+            trendBars: hourly,
             hint: t('Consumption {{amount}} at list price', {
               amount: fmt.cny(
                 (finance?.consumption_usd ?? 0) +
@@ -379,29 +485,81 @@ export function OverviewTab(props: {
             }),
           },
           {
-            label: t('Failure rate'),
-            value: fmt.pct(quality?.error_rate ?? 0),
-            delta: {
-              current: quality?.error_rate ?? 0,
-              previous: previousQuality?.error_rate,
-              better: 'down',
-              points: true,
-            },
-            tone: failureTone(quality?.error_rate ?? 0),
-          },
-          {
             label: t('Sign-ups'),
+            featured: true,
             value: fmt.num(risk?.signups ?? 0),
             delta: {
               current: risk?.signups ?? 0,
               previous: previousRisk?.signups,
               better: 'neutral',
             },
+            trend: signupTrend,
+            trendBars: true,
+          },
+        ]}
+      />
+      <MetricGrid
+        items={[
+          {
+            label: t('Failure rate'),
+            value: fmt.pct(quality?.error_rate ?? 0),
+            delta: qualitySampled
+              ? {
+                  current: quality?.error_rate ?? 0,
+                  previous: previousQuality?.error_rate,
+                  better: 'down',
+                  points: true,
+                }
+              : undefined,
+            tone: qualitySampled
+              ? failureTone(quality?.error_rate ?? 0)
+              : 'default',
+            hint:
+              quality && !qualitySampled
+                ? t('Too few requests to judge')
+                : undefined,
+          },
+          margin,
+          {
+            label: t('Active users'),
+            value: fmt.num(activity?.active_users ?? 0),
+            delta: {
+              current: activity?.active_users ?? 0,
+              previous: previousActivity?.active_users,
+              better: 'up',
+            },
+          },
+          {
+            label: t('Peak concurrency'),
+            value: fmt.num(capacity?.peak_concurrency ?? 0),
+            tone:
+              slots && (capacity?.peak_concurrency ?? 0) > slots
+                ? 'danger'
+                : 'default',
+            delta: capacity
+              ? {
+                  current: capacity.peak_concurrency,
+                  previous: previousCapacity?.peak_concurrency,
+                  better: 'neutral',
+                }
+              : undefined,
+            hint: capacity ? fmt.time(capacity.peak_at) : undefined,
+          },
+          {
+            label: t('Debt (negative balances)'),
+            value: fmt.cny(finance?.debt_usd ?? 0),
+            tone:
+              (finance?.debt_usd ?? 0) < DEBT_ALERT_USD ? 'danger' : 'default',
+          },
+          {
+            label: t('Shared addresses'),
+            value: fmt.num(clusters.length),
           },
         ]}
       />
       {pool?.configured && !pool.error && (
         <MetricGrid
+          className='grid-cols-2 sm:grid-cols-3'
           items={[
             {
               label: t('Schedulable accounts'),
@@ -432,27 +590,19 @@ export function OverviewTab(props: {
                   }
                 : undefined,
             },
-            {
-              label: t('Peak concurrency'),
-              value: fmt.num(capacity?.peak_concurrency ?? 0),
-              hint: capacity ? fmt.time(capacity.peak_at) : undefined,
-            },
-            {
-              label: t('Debt (negative balances)'),
-              value: fmt.cny(finance?.debt_usd ?? 0),
-              tone:
-                (finance?.debt_usd ?? 0) < DEBT_ALERT_USD
-                  ? 'danger'
-                  : 'default',
-            },
-            {
-              label: t('Shared addresses'),
-              value: fmt.num(clusters.length),
-            },
           ]}
         />
       )}
 
+      <TabDigest
+        capacity={[capacity, previousCapacity]}
+        quality={[quality, previousQuality]}
+        finance={[finance, previousFinance]}
+        risk={risk}
+        upstream={[upstream, previousUpstream]}
+        range={range}
+        onOpen={props.onOpen}
+      />
       <Panel
         title={t('Needs attention')}
         description={
@@ -461,57 +611,30 @@ export function OverviewTab(props: {
             : undefined
         }
         help={t(
-          'Signals use the thresholds the tabs color by: failure rate above 2%, TTFT p95 above 10 s, under a quarter of a quota budget left, debt beyond $1, two or fewer schedulable accounts.'
+          'Signals use the thresholds the tabs color by: failure rate above 2% over at least 100 requests, Claude TTFT p95 above 10 s, under a quarter of a quota budget left, debt beyond ¥1, two or fewer schedulable accounts. The last full hour is compared with the same hour of the previous period. The worst and largest come first.'
         )}
       >
-        {signals.length === 0 && loading === 0 ? (
-          <p className='text-muted-foreground flex items-center gap-2 text-sm'>
-            <CircleCheck className='size-4 text-emerald-600 dark:text-emerald-400' />
-            {t('Nothing needs attention in this range.')}
-          </p>
-        ) : (
-          <ul className='-my-2 divide-y'>
-            {signals.map((signal) => {
-              const Icon =
-                signal.tone === 'danger' ? CircleAlert : TriangleAlert
-              return (
-                <li key={signal.key} className='flex items-start gap-3 py-2.5'>
-                  <Icon
-                    className={cn(
-                      'mt-0.5 size-4 shrink-0',
-                      signal.tone === 'danger'
-                        ? 'text-destructive'
-                        : 'text-amber-600 dark:text-amber-400'
-                    )}
-                  />
-                  <div className='min-w-0 flex-1'>
-                    <p className='text-sm font-medium'>{signal.title}</p>
-                    {signal.detail && (
-                      <p className='text-muted-foreground text-xs break-words'>
-                        {signal.detail}
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    variant='ghost'
-                    size='sm'
-                    className='shrink-0'
-                    onClick={() => props.onOpen(signal.tab)}
-                  >
-                    {viewLabels[signal.tab]} →
-                  </Button>
-                </li>
-              )
-            })}
-          </ul>
-        )}
+        <Findings
+          items={signals}
+          empty={
+            loading === 0
+              ? t('Nothing needs attention in this range.')
+              : undefined
+          }
+          onOpen={props.onOpen}
+        />
       </Panel>
+
+      <WhatChanged
+        quality={[quality, previousQuality]}
+        finance={[finance, previousFinance]}
+      />
 
       <ProvidersPanel pool={pool} quality={quality} finance={finance} />
       <ShareCharts quality={quality} finance={finance} />
       <TopModelsPanel
         quality={quality}
-        onOpen={() => props.onOpen('quality')}
+        onOpen={props.onOpen ? () => props.onOpen?.('quality') : undefined}
       />
     </div>
   )

@@ -24,10 +24,22 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
+import { alignPrevious } from '../analysis'
 import {
+  hourSpan,
+  lastFullDay,
+  perActiveUser,
+  signupBurst,
+  stickiness,
+} from '../growth-analysis'
+import {
+  MIN_COHORT,
   useChargeFormat,
+  useHourAxis,
   useInsightsFormat,
   useSignupMethodLabel,
+  type InsightsRangeInfo,
+  type InsightsTab,
 } from '../lib'
 import type {
   ActivityInsights,
@@ -36,8 +48,16 @@ import type {
   GrowthInsights,
 } from '../types'
 import { useActivityVerdict, useGrowthVerdict } from '../verdicts'
+import { ACTIVATION_WARN, cohortJudgeable } from '../verdicts/growth'
+import {
+  HourlyActivePanel,
+  HourlyConsumptionPanel,
+  RetentionNeedsRange,
+  TopCustomersPanel,
+} from './activity-insights'
 import { FunnelChart } from './advanced-charts'
 import { GroupsPanel, ReferralPanel } from './business-panels'
+import { SignupDriversPanel } from './growth-insights'
 import {
   BarSeries,
   type BarPoint,
@@ -45,7 +65,6 @@ import {
   MetricGrid,
   Panel,
   SimpleTable,
-  UserLabel,
   Verdict,
 } from './shared'
 
@@ -55,19 +74,43 @@ export function GrowthTab(props: {
   /** Read for referrals and groups, which moved here from their own tab. */
   business?: BusinessInsights
   businessPrevious?: BusinessInsights
+  range?: InsightsRangeInfo
+  onOpen?: (tab: InsightsTab) => void
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
-  const verdict = useGrowthVerdict(props.data, props.previous)
+  const verdict = useGrowthVerdict(props.data, props.previous, props.range)
   const label = useSignupMethodLabel()
+  const hours = useHourAxis()
   const data = props.data
   const previous = props.previous
+  const range = props.range
   const cohortHelp = t(
     'Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.'
   )
   const funnel = data?.funnel
+  const registered = funnel?.registered ?? 0
+  const judgeable = cohortJudgeable(registered, range)
+  const young = !!range?.hourly && registered > 0
+  const hourly =
+    range?.hourly && data?.hourly && data.hourly.length > 0 ? data.hourly : null
+  const burst = hourly ? signupBurst(hourly) : null
   const rate = (part: number, whole: number) =>
     whole ? fmt.pct(part / whole) : '-'
+  const sofar = (value: string) =>
+    young ? t('{{rate}} so far', { rate: value }) : value
+  const previousSegments = (rows: FunnelRow[] | null | undefined) =>
+    new Map((rows ?? []).map((row) => [row.segment, row.registered]))
+  const changeColumn = (before: Map<string, number>) => ({
+    key: 'change',
+    label: t('vs. previous period'),
+    hint: t('Sign-ups against the same segment in the previous period.'),
+    align: 'right' as const,
+    render: (row: FunnelRow) => {
+      const moved = row.registered - (before.get(row.segment) ?? 0)
+      return moved > 0 ? `+${fmt.num(moved)}` : fmt.num(moved)
+    },
+  })
   const funnelColumns = [
     {
       key: 'segment',
@@ -114,6 +157,35 @@ export function GrowthTab(props: {
       ),
     },
   ]
+  const columnsWith = (before: FunnelRow[] | null | undefined) => {
+    if (!previous) return funnelColumns
+    return [
+      ...funnelColumns.slice(0, 2),
+      changeColumn(previousSegments(before)),
+      ...funnelColumns.slice(2),
+    ]
+  }
+  const small = (row: FunnelRow) => row.registered < MIN_COHORT
+  const signupSeries = [
+    { label: t('Has paid') },
+    { label: t('Activated, not paid') },
+    { label: t('Not activated'), muted: true },
+  ]
+  const previousHours =
+    hourly && range
+      ? alignPrevious(hourly, previous?.hourly, hourSpan(range))
+      : []
+  let funnelSentence: string | undefined
+  if (funnel && young) {
+    funnelSentence = t(
+      '{{rate}} of sign-ups in this range have paid so far; they signed up hours ago.',
+      { rate: fmt.pct(funnel.paid / registered) }
+    )
+  } else if (funnel && registered > 0) {
+    funnelSentence = t('{{rate}} of sign-ups in this range have paid.', {
+      rate: fmt.pct(funnel.paid / registered),
+    })
+  }
 
   return (
     <div className='grid gap-4'>
@@ -135,27 +207,37 @@ export function GrowthTab(props: {
               previous: previous?.funnel.registered,
               better: 'up',
             },
-            trend: (data?.daily ?? []).map((day) => ({
-              title: fmt.day(day.day),
-              value: day.registered,
-            })),
+            trend: hourly
+              ? hourly.map((hour) => ({
+                  title: fmt.time(hour.hour),
+                  value: hour.registered,
+                }))
+              : (data?.daily ?? []).map((day) => ({
+                  title: fmt.day(day.day),
+                  value: day.registered,
+                })),
+            trendBars: !!hourly,
           },
           {
             label: t('Activated'),
             value: fmt.num(funnel?.activated ?? 0),
-            hint: rate(funnel?.activated ?? 0, funnel?.registered ?? 0),
-            help: cohortHelp,
+            hint: sofar(rate(funnel?.activated ?? 0, registered)),
+            help: young
+              ? t(
+                  'Accounts created in the range sent a request. They signed up hours ago, so the rate is not judged until a longer range.'
+                )
+              : cohortHelp,
             tone:
               funnel &&
-              funnel.registered > 0 &&
-              funnel.activated / funnel.registered < 0.3
+              judgeable &&
+              funnel.activated / registered < ACTIVATION_WARN
                 ? 'warning'
                 : 'default',
           },
           {
             label: t('Has paid'),
             value: fmt.num(funnel?.paid ?? 0),
-            hint: rate(funnel?.paid ?? 0, funnel?.registered ?? 0),
+            hint: sofar(rate(funnel?.paid ?? 0, registered)),
             help: cohortHelp,
           },
           {
@@ -178,34 +260,63 @@ export function GrowthTab(props: {
           },
         ]}
       />
-      <Panel title={t('Sign-ups by day and what they did')} help={cohortHelp}>
-        <BarSeries
-          ariaLabel={t('Sign-ups by day')}
-          series={[
-            { label: t('Has paid') },
-            { label: t('Activated, not paid') },
-            { label: t('Not activated'), muted: true },
-          ]}
-          points={(data?.daily ?? []).map((day) => ({
-            key: day.day,
-            title: fmt.day(day.day),
-            values: [
-              day.paid,
-              Math.max(day.activated - day.paid, 0),
-              Math.max(day.registered - day.activated, 0),
-            ],
-          }))}
-        />
-      </Panel>
+      {hourly && range ? (
+        <Panel
+          title={t('Sign-ups by hour and what they did')}
+          help={t(
+            'Accounts created in each hour, followed up to now. The readout lists the same hour of the previous period. The last hour is still filling.'
+          )}
+        >
+          <BarSeries
+            ariaLabel={t('Sign-ups by hour')}
+            series={signupSeries}
+            points={hours.bars(hourly, range.end, (hour, index) => {
+              const before = previousHours[index]
+              return {
+                values: [
+                  hour.paid,
+                  Math.max(hour.activated - hour.paid, 0),
+                  Math.max(hour.registered - hour.activated, 0),
+                ],
+                extra: before
+                  ? [
+                      {
+                        label: t('Same hour, previous period'),
+                        value: fmt.num(before.registered),
+                      },
+                    ]
+                  : undefined,
+                tone: burst?.hour === hour.hour ? 'warning' : undefined,
+              }
+            })}
+          />
+        </Panel>
+      ) : (
+        <Panel title={t('Sign-ups by day and what they did')} help={cohortHelp}>
+          <BarSeries
+            ariaLabel={t('Sign-ups by day')}
+            series={signupSeries}
+            points={(data?.daily ?? []).map((day) => ({
+              key: day.day,
+              title: fmt.day(day.day),
+              values: [
+                day.paid,
+                Math.max(day.activated - day.paid, 0),
+                Math.max(day.registered - day.activated, 0),
+              ],
+            }))}
+          />
+        </Panel>
+      )}
+      <SignupDriversPanel
+        data={data}
+        previous={previous}
+        range={range}
+        onOpen={props.onOpen}
+      />
       <Panel
         title={t('Sign-up funnel')}
-        description={
-          funnel && funnel.registered > 0
-            ? t('{{rate}} of sign-ups in this range have paid.', {
-                rate: fmt.pct(funnel.paid / funnel.registered),
-              })
-            : undefined
-        }
+        description={funnelSentence}
         help={cohortHelp}
       >
         <FunnelChart
@@ -223,16 +334,18 @@ export function GrowthTab(props: {
           <SimpleTable
             rows={data?.by_source}
             rowKey={(row) => row.segment}
+            faded={small}
             empty={t('No sign-ups in this range')}
-            columns={funnelColumns}
+            columns={columnsWith(previous?.by_source)}
           />
         </Panel>
         <Panel title={t('Funnel by referral')}>
           <SimpleTable
             rows={data?.by_invite}
             rowKey={(row) => row.segment}
+            faded={small}
             empty={t('No sign-ups in this range')}
-            columns={funnelColumns}
+            columns={columnsWith(previous?.by_invite)}
           />
         </Panel>
       </div>
@@ -248,6 +361,8 @@ type SpendMeasure = 'usd' | 'cny' | 'engine'
 export function ActivityTab(props: {
   data: ActivityInsights | undefined
   previous?: ActivityInsights
+  range?: InsightsRangeInfo
+  onOpen?: (tab: InsightsTab) => void
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -255,8 +370,23 @@ export function ActivityTab(props: {
   const data = props.data
   const charge = useChargeFormat(data)
   const previous = props.previous
+  const range = props.range
   const daily = data?.daily ?? []
   const last = daily.at(-1)
+  const hourly =
+    range?.hourly && data?.hourly && data.hourly.length > 0 ? data.hourly : null
+  const span = range ? range.end - range.start : 0
+  const fullDay = lastFullDay(daily, range)
+  const previousFullDay = lastFullDay(
+    previous?.daily,
+    range ? { start: range.start - span, end: range.start } : undefined
+  )
+  const sticky = fullDay ? stickiness(fullDay.dau, fullDay.wau) : null
+  const stickyBefore = previousFullDay
+    ? stickiness(previousFullDay.dau, previousFullDay.wau)
+    : null
+  const perUser = perActiveUser(data)
+  const perUserBefore = perActiveUser(previous)
   const engine = data?.engine_cost
   const engineReady = !!engine?.configured && !engine.error
   const engineByDay = new Map(
@@ -354,10 +484,16 @@ export function ActivityTab(props: {
               previous: previous?.active_users,
               better: 'up',
             },
-            trend: daily.map((day) => ({
-              title: fmt.day(day.day),
-              value: day.dau,
-            })),
+            trend: hourly
+              ? hourly.map((hour) => ({
+                  title: fmt.time(hour.hour),
+                  value: hour.active_users,
+                }))
+              : daily.map((day) => ({
+                  title: fmt.day(day.day),
+                  value: day.dau,
+                })),
+            trendBars: !!hourly,
             hint: t('DAU {{dau}} · WAU {{wau}} on the last day', {
               dau: fmt.num(last?.dau ?? 0),
               wau: fmt.num(last?.wau ?? 0),
@@ -411,10 +547,31 @@ export function ActivityTab(props: {
           },
           {
             label: t('Per active user'),
-            value: data?.active_users
-              ? fmt.usd(charge.toUSD(data.quota_usd) / data.active_users)
-              : '-',
+            value: perUser == null ? '-' : fmt.usd(charge.toUSD(perUser)),
             hint: t('Consumption per active user'),
+            delta:
+              perUser == null
+                ? undefined
+                : { current: perUser, previous: perUserBefore, better: 'up' },
+          },
+          {
+            label: t('Stickiness'),
+            value: sticky == null ? '-' : fmt.pct(sticky),
+            hint: fullDay
+              ? t('DAU ÷ WAU on {{day}}', { day: fmt.day(fullDay.day) })
+              : t('No full day in this range'),
+            help: t(
+              'Users active on the last full day of the range, over users active in the seven days to it. Higher means users come back daily rather than now and then.'
+            ),
+            delta:
+              sticky == null
+                ? undefined
+                : {
+                    current: sticky,
+                    previous: stickyBefore ?? undefined,
+                    better: 'up',
+                    points: true,
+                  },
           },
           {
             label: t('Top 3 share'),
@@ -427,91 +584,110 @@ export function ActivityTab(props: {
               'Share of consumption from the three largest customers. Colored above 60%, where losing one customer moves the total.'
             ),
             tone: (data?.top3_share ?? 0) > 0.6 ? 'warning' : 'default',
+            delta: {
+              current: data?.top3_share ?? 0,
+              previous: previous?.top3_share,
+              better: 'down',
+              points: true,
+            },
           },
         ]}
       />
-      <div className='grid gap-4 lg:grid-cols-2'>
-        <Panel title={t('Daily active users')}>
-          <BarSeries
-            ariaLabel={t('Daily active users')}
-            series={[{ label: t('DAU') }]}
-            points={daily.map((day) => ({
-              key: day.day,
-              title: fmt.day(day.day),
-              values: [day.dau],
-              extra: [{ label: t('WAU'), value: fmt.num(day.wau) }],
-            }))}
+      {hourly && range && data ? (
+        <div className='grid gap-4 lg:grid-cols-2'>
+          <HourlyActivePanel rows={hourly} previous={previous} range={range} />
+          <HourlyConsumptionPanel
+            data={data}
+            rows={hourly}
+            previous={previous}
+            range={range}
+            totals={spendTotals}
           />
-        </Panel>
-        <Panel
-          title={t('Daily consumption')}
-          help={t(
-            'Three measures of the same use. new-api, US$ and ¥: what new-api charged for every model, quota dollars that customers pay ¥1 each for, so yuan, and in dollars at the site’s exchange rate. gpt-load value: what gpt-load’s requests for every model were worth at official prices, the unit the pool’s quota is in.'
-          )}
-          description={[
-            spendTotals,
-            busiest && shown.value(busiest) > 0
-              ? t('Busiest day {{day}}: {{amount}}.', {
-                  day: fmt.day(busiest.day),
-                  amount: shown.format(shown.value(busiest)),
-                })
-              : undefined,
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          actions={
-            <ToggleGroup
-              variant='outline'
-              size='sm'
-              aria-label={t('Measure')}
-              value={[measure]}
-              onValueChange={(value: string[]) => {
-                const next = value.at(-1) as SpendMeasure | undefined
-                if (next) setPicked(next)
-              }}
-            >
-              <ToggleGroupItem value='usd' aria-label={measures.usd.label}>
-                US$
-              </ToggleGroupItem>
-              <ToggleGroupItem value='cny' aria-label={measures.cny.label}>
-                ¥
-              </ToggleGroupItem>
-              <ToggleGroupItem
-                value='engine'
-                aria-label={measures.engine.label}
-                disabled={!totalReady}
-              >
-                gpt-load
-              </ToggleGroupItem>
-            </ToggleGroup>
-          }
-        >
-          <div className='grid gap-2'>
+        </div>
+      ) : (
+        <div className='grid gap-4 lg:grid-cols-2'>
+          <Panel title={t('Daily active users')}>
             <BarSeries
-              ariaLabel={t('Daily consumption')}
-              series={[
-                {
-                  label: shown.label,
-                  format: shown.format,
-                  compact: shown.compact,
-                },
-              ]}
-              points={spendPoints}
+              ariaLabel={t('Daily active users')}
+              series={[{ label: t('DAU') }]}
+              points={daily.map((day) => ({
+                key: day.day,
+                title: fmt.day(day.day),
+                values: [day.dau],
+                extra: [{ label: t('WAU'), value: fmt.num(day.wau) }],
+              }))}
             />
-            {total?.error && (
-              <p className='text-destructive text-xs'>{total.error}</p>
+          </Panel>
+          <Panel
+            title={t('Daily consumption')}
+            help={t(
+              'Three measures of the same use. new-api, US$ and ¥: what new-api charged for every model, quota dollars that customers pay ¥1 each for, so yuan, and in dollars at the site’s exchange rate. gpt-load value: what gpt-load’s requests for every model were worth at official prices, the unit the pool’s quota is in.'
             )}
-            {measure === 'engine' && (total?.unpriced_requests ?? 0) > 0 && (
-              <p className='text-muted-foreground text-xs'>
-                {t(
-                  '{{count}} requests had no gpt-load price and are not in its value.',
-                  { count: total?.unpriced_requests }
-                )}
-              </p>
-            )}
-          </div>
-        </Panel>
-      </div>
+            description={[
+              spendTotals,
+              busiest && shown.value(busiest) > 0
+                ? t('Busiest day {{day}}: {{amount}}.', {
+                    day: fmt.day(busiest.day),
+                    amount: shown.format(shown.value(busiest)),
+                  })
+                : undefined,
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            actions={
+              <ToggleGroup
+                variant='outline'
+                size='sm'
+                aria-label={t('Measure')}
+                value={[measure]}
+                onValueChange={(value: string[]) => {
+                  const next = value.at(-1) as SpendMeasure | undefined
+                  if (next) setPicked(next)
+                }}
+              >
+                <ToggleGroupItem value='usd' aria-label={measures.usd.label}>
+                  US$
+                </ToggleGroupItem>
+                <ToggleGroupItem value='cny' aria-label={measures.cny.label}>
+                  ¥
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value='engine'
+                  aria-label={measures.engine.label}
+                  disabled={!totalReady}
+                >
+                  gpt-load
+                </ToggleGroupItem>
+              </ToggleGroup>
+            }
+          >
+            <div className='grid gap-2'>
+              <BarSeries
+                ariaLabel={t('Daily consumption')}
+                series={[
+                  {
+                    label: shown.label,
+                    format: shown.format,
+                    compact: shown.compact,
+                  },
+                ]}
+                points={spendPoints}
+              />
+              {total?.error && (
+                <p className='text-destructive text-xs'>{total.error}</p>
+              )}
+              {measure === 'engine' && (total?.unpriced_requests ?? 0) > 0 && (
+                <p className='text-muted-foreground text-xs'>
+                  {t(
+                    '{{count}} requests had no gpt-load price and are not in its value.',
+                    { count: total?.unpriced_requests }
+                  )}
+                </p>
+              )}
+            </div>
+          </Panel>
+        </div>
+      )}
       <Panel
         title={t('Daily Claude cost at official prices')}
         help={engineHelp}
@@ -574,40 +750,13 @@ export function ActivityTab(props: {
           'Share of each day’s sign-ups that sent a request N days later. Day 0 is the sign-up day.'
         )}
       >
-        <RetentionGrid data={data} />
+        {range?.hourly ? (
+          <RetentionNeedsRange />
+        ) : (
+          <RetentionGrid data={data} />
+        )}
       </Panel>
-      <Panel title={t('Top customers by consumption')}>
-        <SimpleTable
-          rows={data?.top_users}
-          rowKey={(row) => row.user_id}
-          empty={t('No consumption in this range')}
-          columns={[
-            {
-              key: 'user',
-              label: t('User'),
-              render: (row) => <UserLabel {...row} />,
-            },
-            {
-              key: 'usd',
-              label: t('Consumption'),
-              align: 'right',
-              render: (row) => charge.usd(charge.toUSD(row.quota_usd)),
-            },
-            {
-              key: 'share',
-              label: t('Share'),
-              align: 'right',
-              render: (row) => fmt.pct(row.share),
-            },
-            {
-              key: 'req',
-              label: t('Requests'),
-              align: 'right',
-              render: (row) => fmt.num(row.requests),
-            },
-          ]}
-        />
-      </Panel>
+      <TopCustomersPanel data={data} previous={previous} />
     </div>
   )
 }

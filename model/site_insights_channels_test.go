@@ -42,9 +42,13 @@ func TestChannelInsightsDatabaseMatrix(t *testing.T) {
 			plan := SubscriptionPlan{Title: "trial", PriceAmount: 29.9, MaxPurchasePerUser: 1, Enabled: true}
 			require.NoError(t, DB.Create(&plan).Error)
 			require.NoError(t, DB.Create(&SubscriptionOrder{UserId: payer.Id, PlanId: plan.Id, Money: 29.9, TradeNo: "SUB1", Status: common.TopUpStatusSuccess, CreateTime: day1 + 300}).Error)
+			// The gifted account, created before the range, buys a plan in it:
+			// the channel's revenue, but not from a new account.
+			require.NoError(t, DB.Create(&SubscriptionOrder{UserId: gifted.Id, PlanId: plan.Id, Money: 5, TradeNo: "SUB2", Status: common.TopUpStatusSuccess, CreateTime: day1 + 900}).Error)
 			require.NoError(t, DB.Create(&[]TopUp{
 				{UserId: payer.Id, Amount: 50, Money: 50, PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, TradeNo: "T1", CreateTime: day1 + 200},
 				{UserId: payer.Id, Money: 29.9, PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, TradeNo: "SUB1", CreateTime: day1 + 300},
+				{UserId: gifted.Id, Money: 5, PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, TradeNo: "SUB2", CreateTime: day1 + 900},
 				{UserId: organic.Id, Amount: 10, Money: 10, PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, TradeNo: "T2", CreateTime: day1 + 400},
 			}).Error)
 
@@ -80,14 +84,14 @@ func TestChannelInsightsDatabaseMatrix(t *testing.T) {
 			assert.Equal(t, ChannelRow{
 				Segment: ChannelSegmentChannel, Channel: UserRef{channel.Id, "magpie"}, Tier: "retail",
 				Accounts: 2, Registered: 1, Activated: 1, Paid: 1, Repeat: 1,
-				Revenue: 79.9, Payers: 1, NewPayers: 1,
+				Revenue: 84.9, RevenueNewAccounts: 79.9, Payers: 2, NewPayers: 2,
 				ConsumptionUSD: 3, GiftConsumptionUSD: 1, GrantedUSD: 9, GiftOutstandingUSD: 8,
 				CommissionUSD: 1, FeeUSD: 2,
 			}, insights.Channels[0])
 			assert.Equal(t, ChannelRow{Segment: ChannelSegmentInvited, Accounts: 1, Registered: 1}, insights.Channels[1],
 				"an invitation that is not a channel's")
 			// The channel's own account is organic: nobody invited it.
-			assert.Equal(t, ChannelRow{Segment: ChannelSegmentOrganic, Accounts: 2, Registered: 1, Paid: 1, Revenue: 10, Payers: 1, NewPayers: 1}, insights.Channels[2])
+			assert.Equal(t, ChannelRow{Segment: ChannelSegmentOrganic, Accounts: 2, Registered: 1, Paid: 1, Revenue: 10, RevenueNewAccounts: 10, Payers: 1, NewPayers: 1}, insights.Channels[2])
 		})
 	}
 }

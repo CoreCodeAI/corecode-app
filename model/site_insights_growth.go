@@ -28,13 +28,23 @@ type GrowthDay struct {
 	Paid       int64 `json:"paid"`
 }
 
+// GrowthHour is one sign-up hour of the GrowthDay figures.
+type GrowthHour struct {
+	Hour       int64 `json:"hour"`
+	Registered int64 `json:"registered"`
+	Activated  int64 `json:"activated"`
+	Paid       int64 `json:"paid"`
+}
+
 // GrowthInsights follows the accounts created in the range through the
-// funnel, up to now.
+// funnel, up to now. Hourly is every UTC hour of a range up to
+// insightsHourlySpan.
 type GrowthInsights struct {
-	Funnel   FunnelRow   `json:"funnel"`
-	BySource []FunnelRow `json:"by_source"`
-	ByInvite []FunnelRow `json:"by_invite"`
-	Daily    []GrowthDay `json:"daily"`
+	Funnel   FunnelRow    `json:"funnel"`
+	BySource []FunnelRow  `json:"by_source"`
+	ByInvite []FunnelRow  `json:"by_invite"`
+	Daily    []GrowthDay  `json:"daily"`
+	Hourly   []GrowthHour `json:"hourly,omitempty"`
 	// SubscriptionToTopup counts plan buyers among the cohort who later
 	// topped up the wallet too: how many trial buyers converted.
 	SubscriptionBuyers  int64 `json:"subscription_buyers"`
@@ -82,6 +92,11 @@ func GetGrowthInsights(r InsightsRange) (*GrowthInsights, error) {
 	for _, day := range r.days() {
 		days[day] = &GrowthDay{Day: day}
 	}
+	hourStarts := r.hourStarts()
+	hourly := make(map[int64]*GrowthHour, len(hourStarts))
+	for _, start := range hourStarts {
+		hourly[start] = &GrowthHour{Hour: start}
+	}
 	add := func(row *FunnelRow, activated, paid, repeat bool) {
 		row.Registered++
 		if activated {
@@ -118,6 +133,15 @@ func GetGrowthInsights(r InsightsRange) (*GrowthInsights, error) {
 				day.Paid++
 			}
 		}
+		if hour := hourly[insightHourKey(user.CreatedAt)]; hour != nil {
+			hour.Registered++
+			if activated {
+				hour.Activated++
+			}
+			if paid {
+				hour.Paid++
+			}
+		}
 		if boughtPlan[user.Id] {
 			result.SubscriptionBuyers++
 			if toppedUp[user.Id] {
@@ -136,6 +160,9 @@ func GetGrowthInsights(r InsightsRange) (*GrowthInsights, error) {
 		result.Daily = append(result.Daily, *day)
 	}
 	slices.SortFunc(result.Daily, func(a, b GrowthDay) int { return cmp.Compare(a.Day, b.Day) })
+	for _, start := range hourStarts {
+		result.Hourly = append(result.Hourly, *hourly[start])
+	}
 	return result, nil
 }
 
@@ -146,6 +173,15 @@ type ActivityDay struct {
 	WAU      int64   `json:"wau"`
 	Requests int64   `json:"requests"`
 	QuotaUSD float64 `json:"quota_usd"`
+}
+
+// ActivityHour is one hour of customers' activity: who sent requests, how
+// many, and their list-price cost in USD, as on ActivityDay.
+type ActivityHour struct {
+	Hour        int64   `json:"hour"`
+	ActiveUsers int64   `json:"active_users"`
+	Requests    int64   `json:"requests"`
+	QuotaUSD    float64 `json:"quota_usd"`
 }
 
 // RetentionCohort is the share of one day's sign-ups active on each of the
@@ -164,12 +200,14 @@ type UserSpend struct {
 	Share    float64 `json:"share"`
 }
 
-// ActivityInsights reads the hourly quota_data aggregates.
+// ActivityInsights reads the hourly quota_data aggregates. Hourly is every
+// UTC hour of a range up to insightsHourlySpan.
 type ActivityInsights struct {
 	ActiveUsers int64             `json:"active_users"`
 	QuotaUSD    float64           `json:"quota_usd"`
 	Requests    int64             `json:"requests"`
 	Daily       []ActivityDay     `json:"daily"`
+	Hourly      []ActivityHour    `json:"hourly,omitempty"`
 	Retention   []RetentionCohort `json:"retention"`
 	TopUsers    []UserSpend       `json:"top_users"`
 	Top1Share   float64           `json:"top1_share"`
@@ -191,6 +229,13 @@ func GetActivityInsights(r InsightsRange) (*ActivityInsights, error) {
 	for _, day := range r.days() {
 		days[day] = &ActivityDay{Day: day}
 	}
+	hourStarts := r.hourStarts()
+	hourly := make(map[int64]*ActivityHour, len(hourStarts))
+	activeByHour := make(map[int64]map[int]bool, len(hourStarts))
+	for _, start := range hourStarts {
+		hourly[start] = &ActivityHour{Hour: start}
+		activeByHour[start] = make(map[int]bool)
+	}
 	spend := make(map[int]*UserSpend)
 	active := make(map[int]bool)
 	var total int64
@@ -209,6 +254,11 @@ func GetActivityInsights(r InsightsRange) (*ActivityInsights, error) {
 		if bucket := days[day]; bucket != nil {
 			bucket.Requests += int64(row.Count)
 			bucket.QuotaUSD += float64(row.Quota)
+		}
+		if hour := hourly[insightHourKey(row.CreatedAt)]; hour != nil {
+			activeByHour[hour.Hour][row.UserID] = true
+			hour.Requests += int64(row.Count)
+			hour.QuotaUSD += float64(row.Quota)
 		}
 		user := spend[row.UserID]
 		if user == nil {
@@ -233,6 +283,12 @@ func GetActivityInsights(r InsightsRange) (*ActivityInsights, error) {
 		result.Daily = append(result.Daily, *bucket)
 	}
 	slices.SortFunc(result.Daily, func(a, b ActivityDay) int { return cmp.Compare(a.Day, b.Day) })
+	for _, start := range hourStarts {
+		hour := hourly[start]
+		hour.ActiveUsers = int64(len(activeByHour[start]))
+		hour.QuotaUSD = quotaUSD(int64(hour.QuotaUSD))
+		result.Hourly = append(result.Hourly, *hour)
+	}
 
 	users := make([]UserSpend, 0, len(spend))
 	for _, user := range spend {

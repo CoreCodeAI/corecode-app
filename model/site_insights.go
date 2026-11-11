@@ -24,6 +24,9 @@ const (
 	// and users.
 	InsightsMaxDays = 366
 	insightsTopN    = 10
+	// insightsHourlySpan is the longest range whose views add an hourly
+	// series beside the daily one.
+	insightsHourlySpan = 3 * 86400
 )
 
 // InsightsRange is a half-open [Start, End) range in unix seconds. Offset is
@@ -67,6 +70,28 @@ func (r InsightsRange) days() []int64 {
 		days = append(days, day)
 	}
 	return days
+}
+
+// insightHourKey is the UTC hour start containing at: the key of the hourly
+// rollups (loadInsightHours), of quota_data, and of every hourly series, so
+// series from different views line up. For a viewer whose offset is not a
+// whole hour it differs from HourStart.
+func insightHourKey(at int64) int64 {
+	return at - ((at%3600)+3600)%3600
+}
+
+// hourStarts lists the UTC hour starts of the range, oldest first, as
+// loadInsightHours returns them, or nil when the range is longer than
+// insightsHourlySpan and the views leave their hourly series out.
+func (r InsightsRange) hourStarts() []int64 {
+	if r.End-r.Start > insightsHourlySpan {
+		return nil
+	}
+	var hours []int64
+	for hour := insightHourKey(r.Start); hour < r.End; hour += 3600 {
+		hours = append(hours, hour)
+	}
+	return hours
 }
 
 // NamedCount is one slice of a breakdown.

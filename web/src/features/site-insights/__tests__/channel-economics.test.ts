@@ -18,8 +18,25 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { describe, expect, it } from 'vitest'
 
+import {
+  breakEvenDays,
+  channelTotals,
+  cohortRate,
+  contractRows,
+  contractStart,
+  costParts,
+  giftShare,
+  monthFees,
+  newAccountShare,
+  organicLift,
+  revenuePerPayer,
+  roiMuted,
+  worstPaidChannel,
+} from '../components/channels-analysis'
 import { channelEconomics } from '../lib'
 import type { ChannelRow } from '../types'
+
+const DAY = 86400
 
 const row: ChannelRow = {
   segment: 'channel',
@@ -59,5 +76,161 @@ describe('channelEconomics', () => {
     expect(free.roi).toBeNull()
     expect(free.cac).toBeNull()
     expect(channelEconomics({ ...row, new_payers: 0 }, 7).cac).toBeNull()
+  })
+})
+
+const organic: ChannelRow = {
+  ...row,
+  segment: 'organic',
+  channel: { user_id: 0, username: '' },
+  registered: 100,
+  activated: 20,
+  paid: 4,
+  fee_usd: 0,
+}
+
+describe('channel analysis', () => {
+  it('names the largest cost part, gifts at ¥1 a quota dollar and the fee at the rate', () => {
+    expect(costParts(row, 7)).toEqual({
+      fee: 3500,
+      commission: 0,
+      gift: 200,
+      main: 'fee',
+    })
+    expect(costParts({ ...row, gift_consumption_usd: 4000 }, 7).main).toBe(
+      'gift'
+    )
+    expect(
+      costParts({ ...row, fee_usd: 0, gift_consumption_usd: 0 }, 7)
+    ).toEqual({ fee: 0, commission: 100, gift: 0, main: 'commission' })
+  })
+
+  it('totals only the paid channels and picks the one with the lowest net', () => {
+    const losing = {
+      ...row,
+      channel: { user_id: 7, username: 'loser' },
+      revenue: 100,
+    }
+    expect(channelTotals([row, losing, organic], 7)).toEqual({
+      fee: 7000,
+      revenue: 6100,
+      net: 2300 + (100 - 3500 - 200),
+      gift: 400,
+      newPayers: 20,
+    })
+    expect(worstPaidChannel([row, losing, organic], 7)).toBe(losing)
+    expect(worstPaidChannel([organic], 7)).toBeUndefined()
+  })
+
+  it('reads gift share, revenue per payer and the new accounts’ share', () => {
+    expect(giftShare(row)).toBeCloseTo(200 / 3000)
+    expect(giftShare({ ...row, consumption_usd: 0 })).toBeNull()
+    expect(revenuePerPayer(row)).toBe(150)
+    expect(revenuePerPayer({ ...row, payers: 0 })).toBeNull()
+    expect(newAccountShare(row)).toBeNull()
+    expect(newAccountShare({ ...row, revenue_new_accounts: 1500 })).toBe(0.25)
+  })
+
+  it('lifts against organic only when both cohorts reach the minimum', () => {
+    // Channel: 20/50 active, 8/50 paid; organic: 20/100, 4/100.
+    expect(organicLift(row, organic)).toEqual({ activated: 2, paid: 4 })
+    expect(organicLift({ ...row, registered: 19 }, organic)).toEqual({
+      activated: null,
+      paid: null,
+    })
+    expect(organicLift(row, { ...organic, registered: 10 }).paid).toBeNull()
+    expect(organicLift(row, { ...organic, paid: 0 }).paid).toBeNull()
+    expect(organicLift(row, undefined).activated).toBeNull()
+    expect(cohortRate(5, 19)).toBeNull()
+    expect(cohortRate(5, 20)).toBe(0.25)
+  })
+
+  it('mutes ROI on a short range or too few new payers', () => {
+    expect(roiMuted(1, 10)).toBe('short')
+    expect(roiMuted(7, 2)).toBe('few')
+    expect(roiMuted(7, 3)).toBeNull()
+    expect(roiMuted(undefined, 3)).toBeNull()
+  })
+
+  it('starts the contract read at the earliest fee, clamped to 366 days', () => {
+    const end = 1_000 * DAY
+    const cost = (user_id: number, start: number) => ({
+      user_id,
+      monthly_usd: 100,
+      start,
+      end: 0,
+      note: '',
+    })
+    expect(contractStart([], end)).toBeNull()
+    expect(contractStart([cost(1, 900 * DAY), cost(2, 950 * DAY)], end)).toBe(
+      900 * DAY
+    )
+    expect(contractStart([cost(1, 100 * DAY)], end)).toBe(end - 366 * DAY)
+    expect(
+      contractStart([{ ...cost(1, 900 * DAY), monthly_usd: 0 }], end)
+    ).toBeNull()
+  })
+
+  it('reads each paid channel since its own fee started, with days to break even', () => {
+    const end = 100 * DAY
+    const costs = [
+      { user_id: 306, monthly_usd: 500, start: 40 * DAY, end: 0, note: '' },
+      { user_id: 7, monthly_usd: 300, start: 70 * DAY, end: 0, note: '' },
+    ]
+    const late = {
+      ...row,
+      channel: { user_id: 7, username: 'late' },
+      fee_usd: 300,
+      revenue: 1000,
+    }
+    const rows = contractRows([row, late, organic], costs, 7, 40 * DAY, end)
+    expect(rows.map((item) => item.row.channel.user_id)).toEqual([7, 306])
+    // late: 1000 - 2100 - 200 = -1300 over 60 read days: falling, no date.
+    expect(rows[0]).toMatchObject({
+      start: 70 * DAY,
+      days: 30,
+      net: -1300,
+      paidBack: false,
+      breakEvenDays: null,
+      preContractDays: 30,
+    })
+    expect(rows[1]).toMatchObject({
+      net: 2300,
+      paidBack: true,
+      breakEvenDays: 0,
+      preContractDays: 0,
+    })
+    // At a current daily net of +100, -1300 is 13 days away.
+    const climbing = contractRows([late], costs, 7, 40 * DAY, end, () => 100)
+    expect(climbing[0].breakEvenDays).toBe(13)
+    expect(breakEvenDays(-50, 0)).toBeNull()
+  })
+
+  it('accrues this month’s fees a thirtieth a day and sums the fees running now', () => {
+    const monthStart = 300 * DAY
+    const now = monthStart + 10 * DAY
+    expect(
+      monthFees(
+        [
+          { user_id: 1, monthly_usd: 300, start: 0, end: 0, note: '' },
+          {
+            user_id: 2,
+            monthly_usd: 600,
+            start: 0,
+            end: monthStart + 5 * DAY,
+            note: '',
+          },
+          {
+            user_id: 3,
+            monthly_usd: 90,
+            start: now + DAY,
+            end: 0,
+            note: '',
+          },
+        ],
+        monthStart,
+        now
+      )
+    ).toEqual({ accrued: 100 + 100, monthly: 300 })
   })
 })

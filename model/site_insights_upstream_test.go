@@ -118,6 +118,32 @@ func TestUpstreamInsightsDatabaseMatrix(t *testing.T) {
 			}
 			assert.InDelta(t, 10.15, dayCost, 1e-9, "the daily costs add up to the channels' costs")
 
+			// Hourly rows: the engine's fee is prorated over each of the 24
+			// hours; the relay's bill and traffic sit in the first.
+			assert.Len(t, insights.Hourly, 25, "the engine's 24 fee hours and the relay's one")
+			var hourCost, hourRevenue float64
+			var hourRequests int64
+			for _, hour := range insights.Hourly {
+				hourCost += hour.CostUSD
+				hourRevenue += hour.RevenueUSD
+				hourRequests += hour.Requests
+				if hour.ChannelID == 2 {
+					assert.InDelta(t, 10.0/24, hour.CostUSD, 1e-9, "an hour of a $300 month")
+				}
+			}
+			assert.InDelta(t, 10.15, hourCost, 1e-9, "the hourly costs add up to the channels' costs")
+			assert.InDelta(t, engineRow.RevenueUSD+relayRow.RevenueUSD, hourRevenue, 1e-9)
+			assert.Equal(t, engineRow.Requests+relayRow.Requests, hourRequests)
+			relayHour := insights.Hourly[1]
+			assert.InDelta(t, 0.15, relayHour.CostUSD, 1e-9)
+			relayHour.CostUSD = 0
+			assert.Equal(t, UpstreamHour{Hour: hour1, ChannelID: 7, Requests: 2, RevenueUSD: 1}, relayHour)
+
+			week, err := GetUpstreamInsights(InsightsRange{Start: hour1, End: hour1 + 7*86400, Offset: 8 * 3600})
+			require.NoError(t, err)
+			assert.Nil(t, week.Hourly, "a week has no hourly series")
+			assert.NotEmpty(t, week.Daily)
+
 			// Stored hours read back the same figures.
 			again, err := GetUpstreamInsights(r)
 			require.NoError(t, err)

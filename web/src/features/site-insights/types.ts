@@ -23,6 +23,55 @@ export type NamedCount = { name: string; count: number }
 export type UserRef = { user_id: number; username: string }
 export type CountPoint = { at: number; count: number }
 
+/**
+ * Hourly series for ranges of 3 days or less. hour is the UTC hour start, as
+ * CapacityHour.hour; each series has every hour of the range, zero-filled,
+ * oldest first, except UpstreamHour (one row per hour and channel with
+ * traffic or cost).
+ */
+export type QualityHour = {
+  hour: number
+  requests: number
+  errors: number
+  error_rate: number
+  ttft_p50_ms: number
+  ttft_p95_ms: number
+}
+
+/** Charges as FinanceInsights.daily's fields of the same names. */
+export type FinanceHour = {
+  hour: number
+  topup: number
+  subscription: number
+  consumption_usd: number
+  root_consumption_usd: number
+}
+
+export type ActivityHour = {
+  hour: number
+  active_users: number
+  requests: number
+  /** Quota dollars, which customers pay ¥1 each for, so yuan. */
+  quota_usd: number
+}
+
+/** By sign-up hour, as GrowthInsights.daily. */
+export type GrowthHour = {
+  hour: number
+  registered: number
+  activated: number
+  paid: number
+}
+
+export type UpstreamHour = {
+  hour: number
+  channel_id: number
+  requests: number
+  errors: number
+  revenue_usd: number
+  cost_usd: number
+}
+
 export type CapacityHour = {
   hour: number
   requests: number
@@ -518,6 +567,8 @@ export type FinanceInsights = {
   usd_exchange_rate?: number
   bonus_usd: number
   topup_credit_usd: number
+  /** Ranges of 3 days or less; absent before the server's release. */
+  hourly?: FinanceHour[] | null
 }
 
 export type RiskInsights = {
@@ -545,6 +596,10 @@ export type RiskInsights = {
     })[]
   }[]
   debtors: BalanceUser[]
+  /** Sign-ups created at least 6 hours before the range's end; absent before the server's release. */
+  signups_mature?: number
+  /** Those of signups_mature with no request; absent before the server's release. */
+  zero_use_mature?: number
 }
 
 export type FunnelRow = {
@@ -562,6 +617,8 @@ export type GrowthInsights = {
   daily: { day: number; registered: number; activated: number; paid: number }[]
   subscription_buyers: number
   subscription_to_topup: number
+  /** Ranges of 3 days or less; absent before the server's release. */
+  hourly?: GrowthHour[] | null
 }
 
 /** A fee paid to a promotion channel: monthly_usd every 30 days from start until end, or until now when end is 0. Unix seconds. */
@@ -597,6 +654,8 @@ export type ChannelRow = {
   gift_outstanding_usd: number
   commission_usd: number
   fee_usd: number
+  /** The part of revenue paid by accounts created in the range; absent before the server's release. */
+  revenue_new_accounts?: number
 }
 
 export type ChannelInsights = {
@@ -672,6 +731,8 @@ export type ActivityInsights = {
   top1_share: number
   top3_share: number
   top10_share: number
+  /** Ranges of 3 days or less; absent before the server's release. */
+  hourly?: ActivityHour[] | null
 }
 
 export type VendorQuality = {
@@ -725,6 +786,10 @@ export type QualityInsights = {
   status_codes: NamedCount[]
   error_reasons: NamedCount[]
   truncated: boolean
+  /** Ranges of 3 days or less, following the model filter as daily does; absent before the server's release. */
+  hourly?: QualityHour[] | null
+  /** Customers only, as the capacity view's categories; absent before the server's release. */
+  error_categories?: NamedCount[] | null
 }
 
 export type BusinessInsights = {
@@ -855,4 +920,6 @@ export type UpstreamInsights = {
   daily: UpstreamDay[]
   rescues: UpstreamRescue[]
   truncated: boolean
+  /** Ranges of 3 days or less; absent before the server's release. */
+  hourly?: UpstreamHour[] | null
 }

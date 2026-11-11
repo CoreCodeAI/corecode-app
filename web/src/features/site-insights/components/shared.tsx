@@ -47,7 +47,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
-import { useInsightsFormat } from '../lib'
+import { TONES, useInsightsFormat } from '../lib'
 import type { NamedCount } from '../types'
 
 export function Panel(props: {
@@ -246,13 +246,8 @@ export type MetricItem = {
   trend?: TrendPoint[]
   /** How a trend point's value reads out; plain numbers by default. */
   trendFormat?: (value: number) => string
-}
-
-const TONES = {
-  default: '',
-  warning: 'text-amber-600 dark:text-amber-400',
-  danger: 'text-destructive',
-  good: 'text-emerald-600 dark:text-emerald-400',
+  /** Draws the trend as a bar per point, for amounts per hour or day. */
+  trendBars?: boolean
 }
 
 const METER_TONES = {
@@ -669,6 +664,7 @@ export function MetricGrid(props: {
                   points={item.trend}
                   format={item.trendFormat ?? fmt.num}
                   label={item.label}
+                  bars={item.trendBars}
                 />
               </dd>
             )}
@@ -700,6 +696,10 @@ export type BarPoint = {
   values: number[]
   /** Further figures listed in the tooltip below the series. */
   extra?: { label: string; value: string }[]
+  /** A period still filling, such as the open hour: drawn faint, read out as in progress. */
+  faded?: boolean
+  /** Warning or danger recolors the bar; other tones leave its series colors. */
+  tone?: Tone
 }
 
 export type BarSeriesItem = {
@@ -719,6 +719,12 @@ const SEGMENT_COLORS = [
 ]
 const MUTED_SEGMENT =
   'bg-muted-foreground/25 group-hover/bar:bg-muted-foreground/45 group-focus-visible/bar:bg-muted-foreground/45'
+
+// A flagged bar, such as a spike, wears its tone over its series colors.
+const BAR_TONES: Partial<Record<Tone, string>> = {
+  warning: METER_TONES.warning,
+  danger: METER_TONES.danger,
+}
 
 const DOT_COLORS = ['bg-primary', 'bg-sky-500', 'bg-amber-500', 'bg-rose-500']
 const MUTED_DOT = 'bg-muted-foreground/40'
@@ -755,6 +761,8 @@ export function BarSeries(props: {
   ariaLabel: string
   /** Draws the series side by side to compare them, instead of stacking parts of a whole. */
   grouped?: boolean
+  /** A level to read the bars against, such as the pool's slots: a dashed line, listed in each bar's readout. */
+  reference?: { value: number; label: string }
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -763,8 +771,10 @@ export function BarSeries(props: {
   const axisFormat =
     props.series[0]?.compact ?? props.series[0]?.format ?? fmt.num
   const sum = (values: number[]) => values.reduce((a, b) => a + b, 0)
+  const reference = props.reference
   const max = Math.max(
     0,
+    reference?.value ?? 0,
     ...props.points.map((point) =>
       props.grouped ? Math.max(0, ...point.values) : sum(point.values)
     )
@@ -850,6 +860,13 @@ export function BarSeries(props: {
                 style={{ bottom: `${(tick / top) * 100}%` }}
               />
             ))}
+            {reference && reference.value > 0 && (
+              <span
+                aria-hidden
+                className='border-foreground/30 absolute inset-x-0 border-t border-dashed'
+                style={{ bottom: `${(reference.value / top) * 100}%` }}
+              />
+            )}
           </div>
           <TooltipProvider delay={0}>
             <ol
@@ -872,8 +889,27 @@ export function BarSeries(props: {
                     dot: '',
                   })
                 }
+                if (reference) {
+                  rows.push({
+                    id: 'reference',
+                    label: reference.label,
+                    value: formatOf(0)(reference.value),
+                    dot: '',
+                  })
+                }
+                const title = point.faded
+                  ? t('{{time}} (in progress)', { time: point.title })
+                  : point.title
+                const toned = point.tone ? BAR_TONES[point.tone] : undefined
+                const segmentClass = (index: number) =>
+                  cn(
+                    toned && !props.series[index]?.muted
+                      ? toned
+                      : colorOf(index),
+                    point.faded && 'opacity-50'
+                  )
                 const ariaLabel = [
-                  point.title,
+                  title,
                   ...rows.map((row) => `${row.label} ${row.value}`),
                   ...(point.extra ?? []).map(
                     (row) => `${row.label} ${row.value}`
@@ -909,7 +945,7 @@ export function BarSeries(props: {
                               key={rows[index].id}
                               className={cn(
                                 'min-w-0 flex-1 rounded-t-[3px]',
-                                colorOf(index)
+                                segmentClass(index)
                               )}
                               style={{ height: `${(value / top) * 100}%` }}
                             />
@@ -923,7 +959,7 @@ export function BarSeries(props: {
                             key={rows[index].id}
                             className={cn(
                               'w-full first:rounded-b-none last:rounded-t-[3px]',
-                              colorOf(index)
+                              segmentClass(index)
                             )}
                             style={{ height: `${(value / top) * 100}%` }}
                           />
@@ -941,7 +977,7 @@ export function BarSeries(props: {
                       )}
                     </TapTooltipTrigger>
                     <TooltipContent className='block min-w-40 py-2'>
-                      <p className='mb-1.5 font-semibold'>{point.title}</p>
+                      <p className='mb-1.5 font-semibold'>{title}</p>
                       <dl className='grid grid-cols-[1fr_auto] gap-x-4 gap-y-1'>
                         {rows.map((row) => (
                           <div key={row.id} className='contents'>

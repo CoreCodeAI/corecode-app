@@ -23,9 +23,11 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
+import { poolUse } from '../finance-analysis'
 import {
   accountPrice,
   PRICE_MONTH_DAYS,
+  TONES,
   useChargeFormat,
   useInsightsFormat,
 } from '../lib'
@@ -104,6 +106,49 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
     chargedHint = t('{{total}} over the whole range', {
       total: charge.usd(charge.toUSD(data.claude_usd ?? 0)),
     })
+  }
+  const poolFit = engineReady
+    ? poolUse({
+        plans: data?.plans,
+        officialUSD: official,
+        chargedUSD: charged,
+        coveredDays,
+        costPerDayUSD: perDayUSD,
+      })
+    : null
+  let advice: string | undefined
+  if (poolFit) {
+    const vars = {
+      share: fmt.pct(poolFit.utilisation),
+      used: fmt.usd(poolFit.usedPerDay),
+      capacity: fmt.usd(poolFit.capacityPerDay),
+    }
+    if (poolFit.advice === 'fewer') {
+      advice = t(
+        'The pool used {{share}} of its measured capacity, {{used}} a day at official prices of {{capacity}}: fewer accounts would serve this use.',
+        vars
+      )
+    } else if (poolFit.advice === 'more') {
+      advice = t(
+        'The pool used {{share}} of its measured capacity, {{used}} a day at official prices of {{capacity}}: add accounts before it fills.',
+        vars
+      )
+    } else {
+      advice = t(
+        'The pool used {{share}} of its measured capacity, {{used}} a day at official prices of {{capacity}}: the account count fits the use.',
+        vars
+      )
+    }
+  }
+  let breakEven: string | undefined
+  if (poolFit && hasCost) {
+    breakEven = t(
+      'The accounts break even at {{breakEven}} of new-api Claude charge a day; it charged {{charged}} a day.',
+      {
+        breakEven: charge.usd(poolFit.breakEven),
+        charged: charge.usd(poolFit.chargedPerDay),
+      }
+    )
   }
   let coverage: string | undefined
   if (engineReady && rangeDays > 0 && rangeDays - coveredDays >= 1 / 24) {
@@ -239,6 +284,27 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
             }
           />
         </div>
+
+        {advice && (
+          <p className='mt-3 text-sm'>
+            <span
+              className={TONES[poolFit?.advice === 'fits' ? 'good' : 'warning']}
+            >
+              {advice}
+            </span>{' '}
+            {breakEven && (
+              <span
+                className={cn(
+                  poolFit && poolFit.chargedPerDay < poolFit.breakEven
+                    ? TONES.danger
+                    : 'text-muted-foreground'
+                )}
+              >
+                {breakEven}
+              </span>
+            )}
+          </p>
+        )}
 
         {!engine?.error && (
           <div className='mt-4 border-t pt-4'>

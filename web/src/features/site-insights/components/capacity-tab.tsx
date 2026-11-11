@@ -21,12 +21,24 @@ import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 
+import { closedHours } from '../analysis'
+import {
+  diagnoseRejections,
+  headroom,
+  periodSpan,
+  rangeEnd,
+} from '../capacity-analysis'
 import {
   foldIntoWeek,
   groupProvider,
+  HEADROOM_SHARE,
   PROVIDER_LABELS,
+  SMALL_SAMPLE,
   useErrorCategoryLabel,
+  useHourAxis,
   useInsightsFormat,
+  type InsightsRangeInfo,
+  type InsightsTab,
 } from '../lib'
 import {
   POOL_PROVIDERS,
@@ -35,6 +47,12 @@ import {
 } from '../types'
 import { useCapacityVerdict } from '../verdicts'
 import { WeekHeatmap } from './advanced-charts'
+import {
+  FailureRatePanel,
+  HourlyPeakChart,
+  PeakTrendPanel,
+  RejectionDiagnosisNote,
+} from './capacity-insights'
 import { ConcurrencyLimitsPanel } from './concurrency-limits-panel'
 import {
   BarSeries,
@@ -46,6 +64,7 @@ import {
   TruncatedNotice,
   UserLabel,
   Verdict,
+  type Tone,
 } from './shared'
 
 // Where a live user's limit comes from, marked after the limit.
@@ -59,6 +78,8 @@ export function CapacityTab(props: {
   previous?: CapacityInsights
   vendor?: CapacityVendor
   onVendor?: (vendor: CapacityVendor) => void
+  range?: InsightsRangeInfo
+  onOpen?: (tab: InsightsTab) => void
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -92,10 +113,13 @@ export function CapacityTab(props: {
   const inFlight = all
     ? (data?.in_flight ?? 0)
     : groups.reduce((sum, row) => sum + row.in_flight, 0)
-  const verdict = useCapacityVerdict(props.data, props.previous, {
-    slots,
-    userLimits: all,
-  })
+  const verdict = useCapacityVerdict(
+    props.data,
+    props.previous,
+    { slots, userLimits: all },
+    props.range
+  )
+  const axis = useHourAxis()
   const engineRejectionsOf = (insights: CapacityInsights | undefined) =>
     insights?.error_categories.find(
       (item) => item.name === 'engine_concurrency'
@@ -105,6 +129,14 @@ export function CapacityTab(props: {
     (data?.limit_rejections ?? []).map((point) => [point.at, point.count])
   )
   const hourly = data?.hourly ?? []
+  const end = rangeEnd(props.range)
+  const span = periodSpan(props.range, hourly, previous?.hourly)
+  const closed = closedHours(hourly, end)
+  const room = headroom(hourly, slots, end)
+  const diagnosis = diagnoseRejections(hourly, slots)
+  // A week of hours fills the weekday grid; a shorter range leaves it
+  // one or two rows that say nothing.
+  const weekly = (props.range?.days ?? hourly.length / 24) >= 7
   // Only Claude's upstream says which limit it hit; the rest say rate limit.
   const upstreamLabel =
     all || vendor === 'claude'
@@ -119,9 +151,6 @@ export function CapacityTab(props: {
   const eligible = all
     ? (pool?.eligible_accounts ?? 0)
     : vendorAccounts.filter((account) => account.eligible).length
-  // An hourly series marks each day where the viewer's day starts.
-  const dayAxis = (hour: number) =>
-    new Date(hour * 1000).getHours() === 0 ? fmt.day(hour) : undefined
   const rejectionTotals = [
     {
       name: t('Engine account concurrency full'),
@@ -158,6 +187,54 @@ export function CapacityTab(props: {
         })
   }
 
+  // Slots are the pool's value now, so past hours read against today's.
+  let peakHint: string | undefined = data ? fmt.time(data.peak_at) : undefined
+  const tightest = room?.tightest
+  if (room && tightest) {
+    const time = fmt.time(tightest.hour)
+    if (tightest.free < 0) {
+      peakHint = t(
+        "{{hours}} hours past today's slots · {{over}} over at {{time}}",
+        { hours: fmt.num(room.over), over: fmt.num(-tightest.free), time }
+      )
+    } else if (room.near > 0) {
+      peakHint = t(
+        "{{hours}} hours at {{share}} of today's slots or more · tightest {{time}}, {{free}} free",
+        {
+          hours: fmt.num(room.near),
+          share: fmt.pct(HEADROOM_SHARE),
+          time,
+          free: fmt.num(tightest.free),
+        }
+      )
+    } else {
+      peakHint = t(
+        "Tightest {{time}}: {{free}} of today's {{slots}} slots free",
+        { time, free: fmt.num(tightest.free), slots: fmt.num(slots) }
+      )
+    }
+  }
+  let peakTone: Tone = 'default'
+  if (slots && (data?.peak_concurrency ?? 0) > slots) peakTone = 'danger'
+  else if (room && room.near > 0) peakTone = 'warning'
+
+  let requestsHint: string | undefined
+  if (data) {
+    const values = {
+      count: data.errors,
+      rpm: fmt.num(data.peak_rpm),
+      time: fmt.time(data.peak_rpm_at),
+    }
+    // Too few requests leave the failure rate to chance.
+    requestsHint =
+      data.requests >= SMALL_SAMPLE
+        ? t('{{count}} failed ({{rate}}) · peak {{rpm}}/min at {{time}}', {
+            ...values,
+            rate: fmt.pct(data.errors / data.requests),
+          })
+        : t('{{count}} failed · peak {{rpm}}/min at {{time}}', values)
+  }
+
   return (
     <div className='grid gap-4'>
       <ProviderSwitch
@@ -180,6 +257,8 @@ export function CapacityTab(props: {
       />
       <MetricGrid
         loading={!data}
+        // Two headline cards and three more do not fit six columns.
+        className={all ? 'lg:grid-cols-4' : undefined}
         items={[
           {
             label: t('Requests'),
@@ -190,31 +269,29 @@ export function CapacityTab(props: {
               previous: previous?.requests,
               better: 'neutral',
             },
-            trend: hourly.map((hour) => ({
-              title: fmt.time(hour.hour),
+            // The open hour is still filling and would read as a drop.
+            trend: closed.map((hour) => ({
+              title: axis.title(hour.hour),
               value: hour.requests,
             })),
-            hint: data
-              ? t('{{count}} failed · peak {{rpm}}/min at {{time}}', {
-                  count: data.errors,
-                  rpm: fmt.num(data.peak_rpm),
-                  time: fmt.time(data.peak_rpm_at),
-                })
-              : undefined,
+            trendBars: true,
+            hint: requestsHint,
           },
           {
             label: t('Peak concurrency'),
+            featured: true,
             value: fmt.num(data?.peak_concurrency ?? 0),
-            hint: data ? fmt.time(data.peak_at) : undefined,
+            hint: peakHint,
             delta: {
               current: data?.peak_concurrency ?? 0,
               previous: previous?.peak_concurrency,
               better: 'neutral',
             },
-            tone:
-              slots && (data?.peak_concurrency ?? 0) > slots
-                ? 'danger'
-                : 'default',
+            tone: peakTone,
+            trend: closed.map((hour) => ({
+              title: axis.title(hour.hour),
+              value: hour.peak_concurrency,
+            })),
           },
           {
             label: t('In flight now'),
@@ -309,37 +386,47 @@ export function CapacityTab(props: {
           'Reconstructed from request logs: each request was in flight from its start to its end.'
         )}
       >
-        <BarSeries
-          ariaLabel={t('Hourly peak concurrency')}
-          series={[{ label: t('Peak concurrency') }]}
-          points={hourly.map((hour) => ({
-            key: hour.hour,
-            title: fmt.time(hour.hour),
-            axis: dayAxis(hour.hour),
-            values: [hour.peak_concurrency],
-            extra: [{ label: t('Requests'), value: fmt.num(hour.requests) }],
-          }))}
+        <HourlyPeakChart
+          hourly={hourly}
+          previous={previous?.hourly}
+          span={span}
+          end={end}
+          slots={slots}
         />
       </Panel>
 
-      <Panel
-        title={t('Peak concurrency by weekday and hour')}
-        help={t(
-          'Each cell is the highest concurrency that hour reached on any matching day in the range. A red ring marks one past the pool slots.'
-        )}
-      >
-        <WeekHeatmap
-          cells={foldIntoWeek(
-            hourly.map((hour) => ({
-              hour: hour.hour,
-              value: hour.peak_concurrency,
-            }))
-          )}
-          format={fmt.num}
-          limit={slots || undefined}
-          empty={t('No requests in this range')}
+      {weekly ? (
+        <div className='grid gap-4 lg:grid-cols-2'>
+          <PeakTrendPanel hourly={hourly} end={end} slots={slots} />
+          <Panel
+            title={t('Peak concurrency by weekday and hour')}
+            help={t(
+              'Each cell is the highest concurrency that hour reached on any matching day in the range. A red ring marks one past the pool slots.'
+            )}
+          >
+            <WeekHeatmap
+              cells={foldIntoWeek(
+                hourly.map((hour) => ({
+                  hour: hour.hour,
+                  value: hour.peak_concurrency,
+                }))
+              )}
+              format={fmt.num}
+              limit={slots || undefined}
+              empty={t('No requests in this range')}
+            />
+          </Panel>
+        </div>
+      ) : null}
+
+      {hourly.length > 0 && (
+        <FailureRatePanel
+          hourly={hourly}
+          previous={previous?.hourly}
+          span={span}
+          end={end}
         />
-      </Panel>
+      )}
 
       <div
         className={cn('grid gap-4', all ? 'lg:grid-cols-3' : 'lg:grid-cols-2')}
@@ -356,6 +443,11 @@ export function CapacityTab(props: {
               : t('Nothing was rejected in this range.'))
           }
         >
+          <RejectionDiagnosisNote
+            diagnosis={diagnosis}
+            slots={slots}
+            vendor={vendor}
+          />
           <BarSeries
             ariaLabel={t('Rejections by hour')}
             series={[
@@ -363,14 +455,22 @@ export function CapacityTab(props: {
               { label: upstreamLabel },
               ...(all ? [{ label: t('Per-user limit') }] : []),
             ]}
-            points={hourly.map((hour) => ({
-              key: hour.hour,
-              title: fmt.time(hour.hour),
-              axis: dayAxis(hour.hour),
+            points={axis.bars(hourly, end, (hour) => ({
               values: [
                 hour.engine_rejections,
                 hour.upstream_rate_limits,
                 ...(all ? [limitRejections.get(hour.hour) ?? 0] : []),
+              ],
+              extra: [
+                {
+                  label: t('Peak concurrency'),
+                  value: slots
+                    ? t('{{peak}} of {{slots}}', {
+                        peak: fmt.num(hour.peak_concurrency),
+                        slots: fmt.num(slots),
+                      })
+                    : fmt.num(hour.peak_concurrency),
+                },
               ],
             }))}
           />

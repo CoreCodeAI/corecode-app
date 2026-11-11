@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 
 import {
   failureTone,
+  SMALL_SAMPLE,
   groupProvider,
   paymentSlices,
   useInsightsFormat,
@@ -43,6 +44,12 @@ const TONE_TEXT = {
   danger: 'text-destructive font-medium',
   warning: 'text-amber-600 dark:text-amber-400',
 } as Record<string, string>
+
+/** A failure rate's color, none over too few requests to judge. */
+function rateClass(row: { requests: number; error_rate: number }) {
+  if (row.requests < SMALL_SAMPLE) return undefined
+  return TONE_TEXT[failureTone(row.error_rate)]
+}
 
 /** What each vendor charged at list price over the range. */
 function vendorCharges(finance: FinanceInsights | undefined) {
@@ -154,9 +161,7 @@ export function ProvidersPanel(props: {
             align: 'right',
             render: (row) =>
               row.quality ? (
-                <span
-                  className={TONE_TEXT[failureTone(row.quality.error_rate)]}
-                >
+                <span className={rateClass(row.quality)}>
                   {fmt.pct(row.quality.error_rate)}
                 </span>
               ) : (
@@ -320,8 +325,7 @@ export function TopModelsPanel(props: {
                 <span
                   className={cn(
                     'w-14 shrink-0 text-right tabular-nums',
-                    TONE_TEXT[failureTone(row.error_rate)] ??
-                      'text-muted-foreground'
+                    rateClass(row) ?? 'text-muted-foreground'
                   )}
                   title={t('Failure rate')}
                 >

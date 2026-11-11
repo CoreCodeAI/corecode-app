@@ -20,10 +20,23 @@ import { useTranslation } from 'react-i18next'
 
 import { getPaymentMethodName } from '@/features/wallet/lib/billing'
 
-import { paymentSlices, useInsightsFormat } from '../lib'
+import {
+  bestWholeDay,
+  financeHours,
+  financeRange,
+  peakHour,
+} from '../finance-analysis'
+import {
+  paymentSlices,
+  useHourAxis,
+  useInsightsFormat,
+  type InsightsRangeInfo,
+  type InsightsTab,
+} from '../lib'
 import type { BusinessInsights, FinanceInsights } from '../types'
 import { useFinanceVerdict } from '../verdicts'
 import { ModelMixPanel, VendorMarginPanel } from './business-panels'
+import { FinanceDriversPanel, GiftWatchPanel } from './finance-insights'
 import { FinanceSummary } from './finance-summary'
 import { ShareDonut } from './share-donut'
 import {
@@ -42,20 +55,38 @@ export function FinanceTab(props: {
   previous?: FinanceInsights
   /** Read for the revenue by model, which moved here from its own tab. */
   business?: BusinessInsights
+  businessPrevious?: BusinessInsights
+  range?: InsightsRangeInfo
+  onOpen?: (tab: InsightsTab) => void
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const hourAxis = useHourAxis()
   const verdict = useFinanceVerdict(props.data, props.previous)
   const data = props.data
   const previous = props.previous
+  const range = financeRange(data, props.range)
+  const hours = financeHours(data, range)
   const daily = data?.daily ?? []
-  const best = daily.reduce<(typeof daily)[number] | undefined>(
-    (top, day) =>
-      !top || day.topup + day.subscription > top.topup + top.subscription
-        ? day
-        : top,
-    undefined
-  )
+  // Partial days at either end of the range are never the best day.
+  const best = bestWholeDay(daily, data?.start_time, data?.end_time)
+  const peak = hours ? peakHour(hours, range.end) : undefined
+  let chartNote: string | undefined
+  if (peak) {
+    chartNote = t('Peak hour {{hour}}: {{amount}}.', {
+      hour: fmt.time(peak.hour),
+      amount: fmt.cny(peak.topup + peak.subscription),
+    })
+  } else if (!hours && best) {
+    chartNote = t('Best day {{day}}: {{amount}}.', {
+      day: fmt.day(best.day),
+      amount: fmt.cny(best.topup + best.subscription),
+    })
+  }
+  const revenueSeries = [
+    { label: t('Top-ups'), format: fmt.cny, compact: fmt.cnyCompact },
+    { label: t('Subscriptions'), format: fmt.cny },
+  ]
   const issued = [
     data?.topup_credit_usd ?? 0,
     data?.bonus_usd ?? 0,
@@ -70,53 +101,69 @@ export function FinanceTab(props: {
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text}
       />
-      <FinanceSummary data={data} previous={previous} />
+      <FinanceSummary data={data} previous={previous} range={range} />
 
-      <VendorMarginPanel data={data} />
+      <FinanceDriversPanel data={data} previous={previous} />
+
+      <VendorMarginPanel data={data} range={range} />
 
       <VendorTabs data={data} />
 
       <ModelMixPanel data={props.business} />
 
       <Panel
-        title={t('Daily revenue and consumption')}
-        description={
-          best && best.topup + best.subscription > 0
-            ? t('Best day {{day}}: {{amount}}.', {
-                day: fmt.day(best.day),
-                amount: fmt.cny(best.topup + best.subscription),
-              })
-            : undefined
+        title={
+          hours
+            ? t('Hourly revenue and consumption')
+            : t('Daily revenue and consumption')
         }
+        description={chartNote}
         help={t(
           'Revenue is the money paid, in yuan. Consumption is new-api credit used at list price, in yuan, root’s internal use included.'
         )}
       >
-        <BarSeries
-          ariaLabel={t('Daily revenue')}
-          series={[
-            { label: t('Top-ups'), format: fmt.cny, compact: fmt.cnyCompact },
-            { label: t('Subscriptions'), format: fmt.cny },
-          ]}
-          points={daily.map((day) => ({
-            key: day.day,
-            title: fmt.day(day.day),
-            values: [day.topup, day.subscription],
-            extra: [
-              {
-                label: t('Revenue earned'),
-                value: fmt.cny(day.recognized_revenue ?? 0),
-              },
-              {
-                label: t('Consumed at list price'),
-                value: fmt.cny(
-                  day.consumption_usd + (day.root_consumption_usd ?? 0)
-                ),
-              },
-            ],
-          }))}
-        />
+        {hours ? (
+          <BarSeries
+            ariaLabel={t('Hourly revenue')}
+            series={revenueSeries}
+            points={hourAxis.bars(hours, range.end, (hour) => ({
+              values: [hour.topup, hour.subscription],
+              extra: [
+                {
+                  label: t('Consumed at list price'),
+                  value: fmt.cny(
+                    hour.consumption_usd + hour.root_consumption_usd
+                  ),
+                },
+              ],
+            }))}
+          />
+        ) : (
+          <BarSeries
+            ariaLabel={t('Daily revenue')}
+            series={revenueSeries}
+            points={daily.map((day) => ({
+              key: day.day,
+              title: fmt.day(day.day),
+              values: [day.topup, day.subscription],
+              extra: [
+                {
+                  label: t('Revenue earned'),
+                  value: fmt.cny(day.recognized_revenue ?? 0),
+                },
+                {
+                  label: t('Consumed at list price'),
+                  value: fmt.cny(
+                    day.consumption_usd + (day.root_consumption_usd ?? 0)
+                  ),
+                },
+              ],
+            }))}
+          />
+        )}
       </Panel>
+
+      <GiftWatchPanel data={data} previous={previous} onOpen={props.onOpen} />
 
       <div className='grid gap-4 lg:grid-cols-3'>
         <Panel
@@ -298,7 +345,7 @@ export function FinanceTab(props: {
         </Panel>
       </div>
 
-      <UserSpendPanel />
+      <UserSpendPanel onOpen={props.onOpen} />
     </div>
   )
 }

@@ -31,11 +31,37 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
-import { failureTone, SMALL_SAMPLE, useInsightsFormat } from '../lib'
+import {
+  failureTone,
+  SMALL_SAMPLE,
+  TONES,
+  useInsightsFormat,
+  useVendorName,
+  type InsightsRangeInfo,
+  type InsightsTab,
+} from '../lib'
+import {
+  abnormalStreams,
+  excessFailures,
+  failingWindow,
+  failsAboveSite,
+  failureShift,
+  hourFlags,
+  modelChange,
+  rankByExcess,
+  serviceFailureRate,
+  siteFailureRate,
+} from '../quality-analysis'
 import type { BusinessInsights, QualityInsights, VendorQuality } from '../types'
 import { useQualityVerdict } from '../verdicts'
 import { ModelMap } from './advanced-charts'
 import { ClientsPanel } from './business-panels'
+import { Findings, type Finding } from './insight-kit'
+import {
+  FailureDriversPanel,
+  FailureOwnersPanel,
+  QualityHourlyPanels,
+} from './quality-insights'
 import {
   BarSeries,
   Breakdown,
@@ -259,25 +285,38 @@ export function QualityTab(props: {
   /** Read for the clients panel, which moved here from its own tab. */
   business?: BusinessInsights
   models: { selected: string[]; onChange: (models: string[]) => void }
+  range?: InsightsRangeInfo
+  onOpen?: (tab: InsightsTab) => void
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const modelMapLabels = useVendorLabels()
-  const verdict = useQualityVerdict(props.data, props.previous)
+  const verdict = useQualityVerdict(props.data, props.previous, {
+    selected: props.models.selected,
+    end: props.range?.end,
+  })
   const data = props.data
   const previous = props.previous
   const daily = data?.daily ?? []
+  const range = props.range
+  const hourly = range?.hourly && data?.hourly?.length ? data.hourly : null
+  const siteRate = data ? siteFailureRate(data) : 0
+  const shift = data ? failureShift(data, previous) : { kind: 'none' as const }
+  const judged = (data?.requests ?? 0) >= SMALL_SAMPLE
+  const serviceRate = data ? serviceFailureRate(data) : null
+  const previousServiceRate = previous ? serviceFailureRate(previous) : null
+  const streams = abnormalStreams(data?.stream_ends)
+  const previousStreams = abnormalStreams(previous?.stream_ends)
+  const ranked = rankByExcess(data?.models, siteRate)
+  const findings = useQualityFindings(data, previous, siteRate, range?.end)
+  const requestTrend = hourly
+    ? hourly.map((row) => ({ title: fmt.time(row.hour), value: row.requests }))
+    : daily.map((day) => ({ title: fmt.day(day.day), value: day.requests }))
   const worstDay = daily.reduce<(typeof daily)[number] | undefined>(
     (top, day) => (!top || day.error_rate > top.error_rate ? day : top),
     undefined
   )
-  const sampled = (data?.models ?? []).filter(
-    (row) => row.requests >= SMALL_SAMPLE
-  )
-  const worstModel = sampled.reduce<(typeof sampled)[number] | undefined>(
-    (top, row) => (!top || row.error_rate > top.error_rate ? row : top),
-    undefined
-  )
+  const worstModel = ranked.find((row) => failsAboveSite(row, siteRate))
 
   return (
     <div className='grid gap-4'>
@@ -309,24 +348,47 @@ export function QualityTab(props: {
               previous: previous?.requests,
               better: 'neutral',
             },
-            trend: daily.map((day) => ({
-              title: fmt.day(day.day),
-              value: day.requests,
-            })),
+            trend: requestTrend,
+            trendBars: !!hourly,
             hint: t('{{count}} failed', { count: data?.errors ?? 0 }),
           },
           {
             label: t('Failure rate'),
             value: fmt.pct(data?.error_rate ?? 0),
-            help: t('Colored above 2%; red above 5%.'),
+            help: t(
+              'Colored above 2%; red above 5%, from 100 requests. Root’s requests count.'
+            ),
             delta: {
               current: data?.error_rate ?? 0,
-              previous: previous?.error_rate,
+              previous:
+                shift.kind === 'small' ? undefined : previous?.error_rate,
               better: 'down',
               points: true,
             },
-            tone: failureTone(data?.error_rate ?? 0),
+            hint:
+              shift.kind === 'small'
+                ? t('Too few requests before to compare')
+                : undefined,
+            tone: judged ? failureTone(data?.error_rate ?? 0) : 'default',
           },
+          ...(serviceRate == null
+            ? []
+            : [
+                {
+                  label: t('Service failure rate'),
+                  value: fmt.pct(serviceRate),
+                  help: t(
+                    'The failure rate without customers’ invalid requests (4xx): what the service itself failed.'
+                  ),
+                  delta: {
+                    current: serviceRate,
+                    previous: previousServiceRate ?? undefined,
+                    better: 'down' as const,
+                    points: true,
+                  },
+                  tone: judged ? failureTone(serviceRate) : 'default',
+                },
+              ]),
           {
             label: t('TTFT p50'),
             value: fmt.measuredMs(data?.ttft_p50_ms ?? 0),
@@ -358,9 +420,57 @@ export function QualityTab(props: {
               points: true,
             },
           },
+          ...(streams == null
+            ? []
+            : [
+                {
+                  label: t('Streams cut short'),
+                  value: fmt.pct(streams.share),
+                  help: t(
+                    'Streamed requests that did not end normally, over every model. The client leaving counts here too.'
+                  ),
+                  hint: t(
+                    '{{count}} of {{total}}, {{gone}} left by the client',
+                    {
+                      count: fmt.num(streams.count),
+                      total: fmt.num(streams.total),
+                      gone: fmt.num(streams.clientGone),
+                    }
+                  ),
+                  delta: {
+                    current: streams.share,
+                    previous: previousStreams?.share,
+                    better: 'down' as const,
+                    points: true,
+                  },
+                },
+              ]),
         ]}
       />
       <TruncatedNotice show={!!data?.truncated} />
+      {findings.length > 0 && (
+        <Panel title={t('Where to look')}>
+          <Findings items={findings} onOpen={props.onOpen} />
+        </Panel>
+      )}
+      {data && (
+        <div className='grid gap-4 lg:grid-cols-2'>
+          <FailureDriversPanel
+            data={data}
+            previous={previous}
+            selected={props.models.selected}
+          />
+          <FailureOwnersPanel data={data} onOpen={props.onOpen} />
+        </div>
+      )}
+      {data && hourly && range && (
+        <QualityHourlyPanels
+          rows={hourly}
+          previous={previous}
+          range={range}
+          rate={data.error_rate}
+        />
+      )}
       <Panel
         title={t('Model map')}
         help={t(
@@ -381,18 +491,24 @@ export function QualityTab(props: {
         title={t('By model')}
         description={
           worstModel && worstModel.error_rate > 0
-            ? t('Highest failure rate: {{model}} at {{rate}}.', {
-                model: worstModel.model,
-                rate: fmt.pct(worstModel.error_rate),
-              })
+            ? t(
+                'Most failures beyond the site’s rate: {{model}}, {{rate}} with {{excess}} extra failures.',
+                {
+                  model: worstModel.model,
+                  rate: fmt.pct(worstModel.error_rate),
+                  excess: fmt.num(
+                    Math.round(excessFailures(worstModel, siteRate))
+                  ),
+                }
+              )
             : undefined
         }
         help={t(
-          'Models with under 100 requests are faded: their rates and percentiles rest on too few requests to compare. With a model filter, models outside it are faded too. A dash means nothing was measured.'
+          'Ranked by failures beyond what the site’s rate would give the model’s requests. A rate is colored only when it is above the site’s beyond chance. Models with under 100 requests are faded, and so are models outside a filter. The change columns compare with the previous period when both rest on 100 requests. A dash means nothing was measured.'
         )}
       >
         <SimpleTable
-          rows={data?.models}
+          rows={ranked}
           rowKey={(row) => row.model}
           empty={t('No requests in this range')}
           faded={(row) =>
@@ -422,12 +538,33 @@ export function QualityTab(props: {
                 <span
                   className={cn(
                     row.requests >= SMALL_SAMPLE &&
+                      failsAboveSite(row, siteRate) &&
                       RATE_TONES[failureTone(row.error_rate)]
                   )}
                 >
                   {fmt.pct(row.error_rate)}
                 </span>
               ),
+            },
+            {
+              key: 'err-change',
+              label: t('Change'),
+              hint: t('Failure rate against the previous period, in points.'),
+              align: 'right',
+              render: (row) => {
+                const change = modelChange(row, previous?.models)
+                if (!change || Math.abs(change.points) < 0.05) return '—'
+                return (
+                  <span
+                    className={TONES[change.points > 0 ? 'danger' : 'good']}
+                  >
+                    {t('{{sign}}{{value}} pt', {
+                      sign: change.points > 0 ? '+' : '−',
+                      value: Math.abs(change.points).toFixed(1),
+                    })}
+                  </span>
+                )
+              },
             },
             {
               key: 'ttft',
@@ -437,6 +574,21 @@ export function QualityTab(props: {
                 row.ttft_p50_ms || row.ttft_p95_ms
                   ? `${fmt.measuredMs(row.ttft_p50_ms)} / ${fmt.measuredMs(row.ttft_p95_ms)}`
                   : '—',
+            },
+            {
+              key: 'ttft-change',
+              label: t('p95 change'),
+              hint: t('First-token p95 against the previous period.'),
+              align: 'right',
+              render: (row) => {
+                const change = modelChange(row, previous?.models)?.ttftP95
+                if (change == null || Math.abs(change) < 100) return '—'
+                return (
+                  <span className={TONES[change > 0 ? 'warning' : 'good']}>
+                    {`${change > 0 ? '+' : '−'}${fmt.ms(Math.abs(change))}`}
+                  </span>
+                )
+              },
             },
             {
               key: 'lat',
@@ -479,32 +631,34 @@ export function QualityTab(props: {
             }))}
           />
         </Panel>
-        <Panel
-          title={t('Daily failure rate')}
-          description={
-            worstDay && worstDay.error_rate > 0
-              ? t('Worst day {{day}}: {{rate}} of {{count}} requests.', {
-                  day: fmt.day(worstDay.day),
-                  rate: fmt.pct(worstDay.error_rate),
-                  count: fmt.num(worstDay.requests),
-                })
-              : undefined
-          }
-        >
-          <BarSeries
-            ariaLabel={t('Daily failure rate')}
-            series={[{ label: t('Failure rate'), format: fmt.pct }]}
-            points={(data?.daily ?? []).map((day) => ({
-              key: day.day,
-              title: fmt.day(day.day),
-              values: [day.error_rate],
-              extra: [
-                { label: t('Failed'), value: fmt.num(day.errors) },
-                { label: t('Requests'), value: fmt.num(day.requests) },
-              ],
-            }))}
-          />
-        </Panel>
+        {!hourly && (
+          <Panel
+            title={t('Daily failure rate')}
+            description={
+              worstDay && worstDay.error_rate > 0
+                ? t('Worst day {{day}}: {{rate}} of {{count}} requests.', {
+                    day: fmt.day(worstDay.day),
+                    rate: fmt.pct(worstDay.error_rate),
+                    count: fmt.num(worstDay.requests),
+                  })
+                : undefined
+            }
+          >
+            <BarSeries
+              ariaLabel={t('Daily failure rate')}
+              series={[{ label: t('Failure rate'), format: fmt.pct }]}
+              points={(data?.daily ?? []).map((day) => ({
+                key: day.day,
+                title: fmt.day(day.day),
+                values: [day.error_rate],
+                extra: [
+                  { label: t('Failed'), value: fmt.num(day.errors) },
+                  { label: t('Requests'), value: fmt.num(day.requests) },
+                ],
+              }))}
+            />
+          </Panel>
+        )}
       </div>
       <div className='grid gap-4 lg:grid-cols-3'>
         <Panel title={t('Failures by status code')}>
@@ -529,4 +683,87 @@ export function QualityTab(props: {
       <ClientsPanel data={props.business} />
     </div>
   )
+}
+
+/**
+ * What to look at, worst and largest first: vendors and models failing
+ * beyond chance above the site, and the hours failures ran high in.
+ */
+function useQualityFindings(
+  data: QualityInsights | undefined,
+  previous: QualityInsights | undefined,
+  siteRate: number,
+  end: number | undefined
+): Finding[] {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const vendorName = useVendorName()
+  if (!data) return []
+  const findings: Finding[] = []
+  for (const vendor of data.vendors ?? []) {
+    if (vendor.vendor === 'other' || !failsAboveSite(vendor, siteRate)) continue
+    if (failureTone(vendor.error_rate) === 'default') continue
+    findings.push({
+      key: `vendor-${vendor.vendor}`,
+      tone: failureTone(vendor.error_rate) === 'danger' ? 'danger' : 'warning',
+      title: t('{{vendor}} fails {{rate}} of requests.', {
+        vendor: vendorName(vendor.vendor),
+        rate: fmt.pct(vendor.error_rate),
+      }),
+      detail: t(
+        'Above the site’s {{site}} beyond chance. Check its pool’s concurrency and accounts.',
+        { site: fmt.pct(siteRate) }
+      ),
+      tab: 'capacity',
+      impact: excessFailures(vendor, siteRate),
+    })
+  }
+  for (const row of rankByExcess(data.models, siteRate).slice(0, 3)) {
+    if (!failsAboveSite(row, siteRate)) continue
+    if (failureTone(row.error_rate) === 'default') continue
+    findings.push({
+      key: `model-${row.model}`,
+      tone: 'warning',
+      title: t(
+        '{{model}} fails {{rate}}: {{excess}} failures beyond the site’s rate.',
+        {
+          model: row.model,
+          rate: fmt.pct(row.error_rate),
+          excess: fmt.num(Math.round(excessFailures(row, siteRate))),
+        }
+      ),
+      detail: t('Check the channels that serve it.'),
+      tab: 'upstream',
+      impact: excessFailures(row, siteRate),
+    })
+  }
+  const hourly = data.hourly ?? []
+  const window =
+    hourly.length > 0 && end != null
+      ? failingWindow(hourFlags(hourly, previous?.hourly, end))
+      : undefined
+  if (window) {
+    findings.push({
+      key: 'hours',
+      tone: 'warning',
+      title:
+        window.from.hour === window.to.hour
+          ? t('Failures peaked at {{time}}: {{rate}} of {{count}} requests.', {
+              time: fmt.time(window.worst.hour),
+              rate: fmt.pct(window.worst.error_rate),
+              count: fmt.num(window.worst.requests),
+            })
+          : t(
+              'Failures ran high from {{from}} to {{to}}, peaking at {{rate}}.',
+              {
+                from: fmt.time(window.from.hour),
+                to: fmt.clock(window.to.hour + 3600),
+                rate: fmt.pct(window.worst.error_rate),
+              }
+            ),
+      detail: t('See the failure rate by hour below.'),
+      impact: window.worst.errors,
+    })
+  }
+  return findings
 }

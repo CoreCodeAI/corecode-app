@@ -83,13 +83,13 @@ function rowOf(table: HTMLElement, name: string) {
   return row
 }
 
-function renderPanel() {
+function renderPanel(onOpen?: (tab: string) => void) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   render(
     <QueryClientProvider client={client}>
-      <UserSpendPanel />
+      <UserSpendPanel onOpen={onOpen} />
     </QueryClientProvider>
   )
 }
@@ -166,11 +166,42 @@ describe('consumption by user', () => {
     vi.mocked(getUserSpend).mockImplementation(async (hours) => spend(hours))
     renderPanel()
 
-    const cards = await screen.findAllByRole('listitem')
+    // The flags below the table are list items too; a card names its user id.
+    const cards = (await screen.findAllByRole('listitem')).filter((item) =>
+      within(item).queryByText(/^#\d+$/)
+    )
     expect(cards).toHaveLength(2)
     expect(within(cards[0]).getByText('alice@example.com')).toBeInTheDocument()
     expect(within(cards[0]).getByText('$16.50')).toBeInTheDocument()
     expect(within(cards[0]).getByText('¥300')).toBeInTheDocument()
     expect(within(cards[1]).getByText('-¥2')).toBeInTheDocument()
+  })
+
+  it('flags who is charged below cost, in debt or holds the window', async () => {
+    vi.mocked(getUserSpend).mockImplementation(async (hours) => spend(hours))
+    const onOpen = vi.fn()
+    renderPanel(onOpen)
+
+    const table = await screen.findByRole('table')
+    // Alice: ¥50 is $10 at ¥5, under her $16.50, and 83% of the ¥60.
+    expect(
+      within(rowOf(table, 'alice')).getByText(
+        'Below official cost · Large share'
+      )
+    ).toBeInTheDocument()
+    expect(
+      within(rowOf(table, 'bob')).getByText('Below official cost · In debt')
+    ).toBeInTheDocument()
+    // $6.50 short on Alice and $1.50 on Bob.
+    expect(
+      screen.getByText(
+        '2 customers were charged $8.00 less than gpt-load’s official cost.'
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('alice used 83.3% of the window’s consumption.')
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Risk →' }))
+    expect(onOpen).toHaveBeenCalledWith('risk')
   })
 })

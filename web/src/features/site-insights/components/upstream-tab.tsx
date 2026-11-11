@@ -27,16 +27,29 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
 import { saveUpstreamFees } from '../api'
-import { failureTone, useInsightsFormat } from '../lib'
+import {
+  SMALL_SAMPLE,
+  TONES,
+  failureTone,
+  useInsightsFormat,
+  type InsightsRangeInfo,
+  type InsightsTab,
+} from '../lib'
 import type { UpstreamChannel, UpstreamInsights } from '../types'
 import {
   attemptsOf,
+  channelNamer,
+  channelTokens,
+  rescuedFrom,
+  staleCosts,
+  unrescuedOf,
   upstreamDailySeries,
   upstreamMargin,
   upstreamModelComparison,
   upstreamTotals,
   type UpstreamModelRow,
 } from '../upstream'
+import { useUpstreamVerdict } from '../verdicts'
 import {
   BarSeries,
   Breakdown,
@@ -46,61 +59,47 @@ import {
   SimpleTable,
   TruncatedNotice,
   Verdict,
+  type MetricDelta,
   type Tone,
 } from './shared'
+import {
+  UpstreamChanges,
+  UpstreamHourlyCharts,
+  UpstreamIncidents,
+  UpstreamRoutingNotes,
+  UpstreamRunRate,
+} from './upstream-insights'
 
 const BEST = 'font-semibold text-emerald-600 dark:text-emerald-400'
 
-function useChannelName(data: UpstreamInsights | undefined) {
-  const names = new Map((data?.channels ?? []).map((row) => [row.id, row.name]))
-  return (id: number) => names.get(id) ?? `#${id}`
+/** A failure rate over too few attempts stays uncolored. */
+function rateTone(
+  row: { requests: number; errors: number },
+  rate: number
+): Tone {
+  return attemptsOf(row) >= SMALL_SAMPLE ? failureTone(rate) : 'default'
 }
 
-function useUpstreamVerdict(
-  data: UpstreamInsights | undefined
-): { tone: Tone; text: string } | undefined {
+function NewBadge() {
   const { t } = useTranslation()
-  const fmt = useInsightsFormat()
-  const name = useChannelName(data)
-  if (!data) return undefined
-  const busy = data.channels.filter((row) => attemptsOf(row) >= 20)
-  if (busy.length === 0) {
-    return {
-      tone: 'default',
-      text: t('No channel served enough requests to compare.'),
-    }
-  }
-  const worst = busy.reduce((top, row) =>
-    row.failure_rate > top.failure_rate ? row : top
+  return (
+    <span className='text-muted-foreground text-xs font-normal whitespace-nowrap'>
+      {t('New this period')}
+    </span>
   )
-  const rescue = data.rescues[0]
-  const totals = upstreamTotals(data)
-  const parts = [
-    t('{{name}} fails most often: {{rate}} of its attempts.', {
-      name: worst.name,
-      rate: fmt.pct(worst.failure_rate),
-    }),
-  ]
-  if (rescue) {
-    parts.push(
-      t('{{count}} requests that failed on {{from}} were served by {{to}}.', {
-        count: rescue.count,
-        from: name(rescue.from),
-        to: name(rescue.to),
-      })
-    )
-  }
-  if (totals.cost > 0) {
-    parts.push(
-      t('Gross margin on channels with a known cost: {{rate}}.', {
-        rate: fmt.pct(totals.marginRate),
-      })
-    )
-  }
-  return { tone: failureTone(worst.failure_rate), text: parts.join(' ') }
 }
 
-function CostSourceLabel(props: { row: UpstreamChannel }) {
+/**
+ * A row's change against the previous period: none without one, new for a
+ * channel it did not list, else the badge.
+ */
+function RowDelta(props: { listed: boolean | undefined; delta: MetricDelta }) {
+  if (props.listed === undefined) return null
+  if (!props.listed) return <NewBadge />
+  return <DeltaBadge delta={props.delta} />
+}
+
+function CostSourceLabel(props: { row: UpstreamChannel; stale: boolean }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const row = props.row
@@ -115,8 +114,10 @@ function CostSourceLabel(props: { row: UpstreamChannel }) {
               })
             : t('Upstream bill')}
         </span>
-        <span className='block'>
-          {t('read {{time}}', { time: fmt.time(row.latest_cost_at) })}
+        <span className={cn('block', props.stale && TONES.warning)}>
+          {props.stale
+            ? t('read {{time}}, behind', { time: fmt.time(row.latest_cost_at) })
+            : t('read {{time}}', { time: fmt.time(row.latest_cost_at) })}
         </span>
       </span>
     )
@@ -158,6 +159,7 @@ function ChannelName(props: { row: UpstreamChannel }) {
 function ChannelTable(props: {
   data: UpstreamInsights | undefined
   previous: UpstreamInsights | undefined
+  range?: InsightsRangeInfo
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -165,24 +167,80 @@ function ChannelTable(props: {
   const before = new Map(
     (props.previous?.channels ?? []).map((row) => [row.id, row])
   )
+  const listed = (row: UpstreamChannel) =>
+    props.previous ? before.has(row.id) : undefined
+  const rescued = rescuedFrom(props.data?.rescues)
+  const stale = new Set(
+    staleCosts(props.data, props.range?.end).map((item) => item.channel.id)
+  )
   const served = channels.reduce((sum, row) => sum + row.requests, 0)
   const margin = (row: UpstreamChannel) => {
     const value = upstreamMargin(row)
     if (value.margin === null) {
       return <span className='text-muted-foreground'>—</span>
     }
+    const behind = stale.has(row.id)
+    let tone: Tone = 'default'
+    if (value.margin < 0) {
+      tone = 'danger'
+    } else if (behind) {
+      tone = 'warning'
+    }
     return (
       <span className='block'>
-        <span
-          className={cn('tabular-nums', value.margin < 0 && 'text-destructive')}
-        >
+        <span className={cn('tabular-nums', TONES[tone])}>
           {fmt.usd(value.margin)}
         </span>
-        {value.rate !== null && (
+        {behind && (
+          <span className='text-muted-foreground block text-[11px]'>
+            {t('Overstated: recent revenue has no cost yet')}
+          </span>
+        )}
+        {!behind && value.rate !== null && (
           <span className='text-muted-foreground block text-[11px] tabular-nums'>
             {fmt.pct(value.rate)}
           </span>
         )}
+      </span>
+    )
+  }
+  const failure = (row: UpstreamChannel) => {
+    const previous = before.get(row.id)
+    const enough = attemptsOf(row) >= SMALL_SAMPLE
+    const comparable =
+      enough && previous !== undefined && attemptsOf(previous) >= SMALL_SAMPLE
+    let change: ReactNode = null
+    if (listed(row) === false) {
+      change = <NewBadge />
+    } else if (comparable) {
+      change = (
+        <DeltaBadge
+          delta={{
+            current: row.failure_rate,
+            previous: previous.failure_rate,
+            better: 'down',
+            points: true,
+          }}
+        />
+      )
+    }
+    return (
+      <span className='block tabular-nums'>
+        <span
+          className={TONES[rateTone(row, row.failure_rate)]}
+          title={
+            enough || attemptsOf(row) === 0
+              ? undefined
+              : t('Fewer than {{count}} attempts: too few to judge', {
+                  count: SMALL_SAMPLE,
+                })
+          }
+        >
+          {fmt.pct(row.failure_rate)}
+        </span>
+        <span className='text-muted-foreground block text-[11px]'>
+          {t('{{count}} failed', { count: row.errors })} {change}
+        </span>
       </span>
     )
   }
@@ -210,12 +268,11 @@ function ChannelTable(props: {
               {fmt.num(row.requests)}
               <span className='text-muted-foreground block text-[11px]'>
                 {fmt.pct(served ? row.requests / served : 0)}{' '}
-                <DeltaBadge
+                <RowDelta
+                  listed={listed(row)}
                   delta={{
                     current: row.requests,
-                    previous: props.previous
-                      ? (before.get(row.id)?.requests ?? 0)
-                      : undefined,
+                    previous: before.get(row.id)?.requests ?? 0,
                     better: 'neutral',
                   }}
                 />
@@ -227,36 +284,34 @@ function ChannelTable(props: {
           key: 'failure',
           label: t('Failure rate'),
           hint: t(
-            'Failed attempts over all attempts on the channel. A request retried on another channel counts as a failure here and a success there.'
+            'Failed attempts over all attempts on the channel. A request retried on another channel counts as a failure here and a success there. Under {{count}} attempts the rate is not colored or compared.',
+            { count: SMALL_SAMPLE }
           ),
           align: 'right',
-          render: (row) => (
-            <span className='block tabular-nums'>
-              <span
-                className={cn(
-                  failureTone(row.failure_rate) === 'danger' &&
-                    'text-destructive',
-                  failureTone(row.failure_rate) === 'warning' &&
-                    'text-amber-600 dark:text-amber-400'
-                )}
-              >
-                {fmt.pct(row.failure_rate)}
-              </span>
-              <span className='text-muted-foreground block text-[11px]'>
-                {t('{{count}} failed', { count: row.errors })}{' '}
-                <DeltaBadge
-                  delta={{
-                    current: row.failure_rate,
-                    previous: props.previous
-                      ? (before.get(row.id)?.failure_rate ?? 0)
-                      : undefined,
-                    better: 'down',
-                    points: true,
-                  }}
-                />
-              </span>
-            </span>
+          render: failure,
+        },
+        {
+          key: 'unrescued',
+          label: t('Unrescued'),
+          hint: t(
+            'Failed attempts less the requests another channel then served, which customers likely saw. Attempt based: retries on the same channel count each time, so it can run high.'
           ),
+          align: 'right',
+          render: (row) => {
+            const count = unrescuedOf(row, rescued)
+            return (
+              <span className='block tabular-nums'>
+                {fmt.num(count)}
+                {row.errors > 0 && (
+                  <span className='text-muted-foreground block text-[11px]'>
+                    {t('{{rate}} rescued', {
+                      rate: fmt.pct(1 - count / row.errors),
+                    })}
+                  </span>
+                )}
+              </span>
+            )
+          },
         },
         {
           key: 'ttft',
@@ -286,6 +341,29 @@ function ChannelTable(props: {
           ),
         },
         {
+          key: 'tokens',
+          label: t('Cache hit'),
+          hint: t(
+            'Cache reads over input tokens, and the cost of a million input and output tokens. Prompt tokens include cache reads in OpenAI usage and leave them out in Anthropic usage; a channel serving only Claude models is read the Anthropic way. Cache writes are not counted.'
+          ),
+          align: 'right',
+          render: (row) => {
+            const tokens = channelTokens(row, props.data?.models)
+            return (
+              <span className='block tabular-nums'>
+                {tokens.cacheRate === null ? '—' : fmt.pct(tokens.cacheRate)}
+                {tokens.costPerMillion !== null && (
+                  <span className='text-muted-foreground block text-[11px] whitespace-nowrap'>
+                    {t('{{cost}} per 1M tokens', {
+                      cost: fmt.usdFine(tokens.costPerMillion),
+                    })}
+                  </span>
+                )}
+              </span>
+            )
+          },
+        },
+        {
           key: 'revenue',
           label: t('Revenue'),
           hint: t(
@@ -308,7 +386,7 @@ function ChannelTable(props: {
               <span className='tabular-nums'>
                 {row.cost_source === 'none' ? '—' : fmt.usd(row.cost_usd)}
               </span>
-              <CostSourceLabel row={row} />
+              <CostSourceLabel row={row} stale={stale.has(row.id)} />
             </span>
           ),
         },
@@ -327,7 +405,7 @@ function ChannelTable(props: {
 function DailyCharts(props: { data: UpstreamInsights | undefined }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
-  const name = useChannelName(props.data)
+  const name = channelNamer(props.data)
   const series = upstreamDailySeries(
     props.data?.channels ?? [],
     props.data?.daily ?? []
@@ -409,7 +487,7 @@ function DailyCharts(props: { data: UpstreamInsights | undefined }) {
 function ModelComparison(props: { data: UpstreamInsights | undefined }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
-  const name = useChannelName(props.data)
+  const name = channelNamer(props.data)
   const rows = upstreamModelComparison(
     props.data?.models ?? [],
     props.data?.channels ?? []
@@ -516,6 +594,7 @@ function ModelComparison(props: { data: UpstreamInsights | undefined }) {
           },
         ]}
       />
+      <UpstreamRoutingNotes data={props.data} rows={rows} />
     </Panel>
   )
 }
@@ -523,8 +602,11 @@ function ModelComparison(props: { data: UpstreamInsights | undefined }) {
 function FailurePanels(props: { data: UpstreamInsights | undefined }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
-  const name = useChannelName(props.data)
+  const name = channelNamer(props.data)
   const failing = (props.data?.channels ?? []).filter((row) => row.errors > 0)
+  const errors = new Map(
+    (props.data?.channels ?? []).map((row) => [row.id, row.errors])
+  )
   return (
     <div className='grid gap-4 lg:grid-cols-2'>
       <Panel
@@ -580,6 +662,24 @@ function FailurePanels(props: { data: UpstreamInsights | undefined }) {
               render: (row) => (
                 <span className='tabular-nums'>{fmt.num(row.count)}</span>
               ),
+            },
+            {
+              key: 'share',
+              label: t('Of its failures'),
+              hint: t(
+                'These requests over the failed attempts on the channel they failed on: how much of its failures this route rescued.'
+              ),
+              align: 'right',
+              render: (row) => {
+                const failed = errors.get(row.from) ?? 0
+                return (
+                  <span className='tabular-nums'>
+                    {failed > 0
+                      ? fmt.pct(Math.min(1, row.count / failed))
+                      : '—'}
+                  </span>
+                )
+              },
             },
           ]}
         />
@@ -668,12 +768,47 @@ function FeeEditor(props: { channels: UpstreamChannel[] }) {
 export function UpstreamTab(props: {
   data: UpstreamInsights | undefined
   previous?: UpstreamInsights
+  range?: InsightsRangeInfo
+  onOpen?: (tab: InsightsTab) => void
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
-  const verdict = useUpstreamVerdict(props.data)
+  const verdict = useUpstreamVerdict(props.data, props.previous, props.range)
   const totals = upstreamTotals(props.data)
   const before = props.previous ? upstreamTotals(props.previous) : undefined
+  const stale = staleCosts(props.data, props.range?.end)
+  const staleRevenue = stale.every((item) => item.revenue !== null)
+    ? stale.reduce((sum, item) => sum + (item.revenue ?? 0), 0)
+    : null
+  const hourly = props.data?.hourly != null && (props.range?.hourly ?? true)
+  let costHint: string | undefined
+  if (stale.length > 0) {
+    const readUpTo = fmt.time(
+      Math.min(...stale.map((item) => item.channel.latest_cost_at))
+    )
+    costHint =
+      staleRevenue === null
+        ? t('Read up to {{time}}; later revenue has no cost yet', {
+            time: readUpTo,
+          })
+        : t(
+            'Read up to {{time}}; {{revenue}} of later revenue has no cost yet',
+            {
+              time: readUpTo,
+              revenue: fmt.usd(staleRevenue),
+            }
+          )
+  } else if (totals.uncostedRevenue > 0) {
+    costHint = t('{{revenue}} of revenue has no known cost', {
+      revenue: fmt.usd(totals.uncostedRevenue),
+    })
+  }
+  let marginTone: Tone = 'default'
+  if (totals.margin < 0) {
+    marginTone = 'danger'
+  } else if (stale.length > 0) {
+    marginTone = 'warning'
+  }
   return (
     <div className='grid gap-4'>
       <Verdict
@@ -699,10 +834,13 @@ export function UpstreamTab(props: {
             label: t('Failure rate'),
             value: fmt.pct(totals.failureRate),
             help: t('Failed attempts over all attempts, across channels.'),
-            tone: failureTone(totals.failureRate),
+            tone: rateTone(totals, totals.failureRate),
             delta: {
               current: totals.failureRate,
-              previous: before?.failureRate,
+              previous:
+                before && before.attempts >= SMALL_SAMPLE
+                  ? before.failureRate
+                  : undefined,
               better: 'down',
               points: true,
             },
@@ -718,6 +856,18 @@ export function UpstreamTab(props: {
             },
           },
           {
+            label: t('Failures customers saw'),
+            value: `≈ ${fmt.num(totals.unrescued)}`,
+            help: t(
+              'Failed attempts less the requests another channel then served. Attempt based: retries on the same channel count each time, so it can run high.'
+            ),
+            delta: {
+              current: totals.unrescued,
+              previous: before?.unrescued,
+              better: 'down',
+            },
+          },
+          {
             label: t('Revenue'),
             value: fmt.usd(totals.revenue),
             delta: {
@@ -729,12 +879,8 @@ export function UpstreamTab(props: {
           {
             label: t('Cost'),
             value: fmt.usd(totals.cost),
-            hint:
-              totals.uncostedRevenue > 0
-                ? t('{{revenue}} of revenue has no known cost', {
-                    revenue: fmt.usd(totals.uncostedRevenue),
-                  })
-                : undefined,
+            hint: costHint,
+            tone: stale.length > 0 ? 'warning' : 'default',
             delta: {
               current: totals.cost,
               previous: before?.cost,
@@ -744,9 +890,14 @@ export function UpstreamTab(props: {
           {
             label: t('Gross margin'),
             value: fmt.usd(totals.margin),
-            hint: fmt.pct(totals.marginRate),
+            hint:
+              stale.length > 0
+                ? t('{{rate}}, overstated: recent revenue has no cost yet', {
+                    rate: fmt.pct(totals.marginRate),
+                  })
+                : fmt.pct(totals.marginRate),
             help: t('Revenue less cost over the channels whose cost is known.'),
-            tone: totals.margin < 0 ? 'danger' : 'default',
+            tone: marginTone,
             delta: {
               current: totals.margin,
               previous: before?.margin,
@@ -761,9 +912,20 @@ export function UpstreamTab(props: {
           'Every enabled channel, and any other with traffic in the range, busiest first.'
         )}
       >
-        <ChannelTable data={props.data} previous={props.previous} />
+        <ChannelTable
+          data={props.data}
+          previous={props.previous}
+          range={props.range}
+        />
       </Panel>
-      <DailyCharts data={props.data} />
+      <UpstreamChanges data={props.data} previous={props.previous} />
+      {hourly && <UpstreamIncidents data={props.data} range={props.range} />}
+      {hourly ? (
+        <UpstreamHourlyCharts data={props.data} range={props.range} />
+      ) : (
+        <DailyCharts data={props.data} />
+      )}
+      <UpstreamRunRate data={props.data} range={props.range} />
       <ModelComparison data={props.data} />
       <FailurePanels data={props.data} />
       <FeeEditor channels={props.data?.channels ?? []} />

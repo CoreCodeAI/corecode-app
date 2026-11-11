@@ -44,7 +44,15 @@ type DomainCount struct {
 	Whitelisted bool   `json:"whitelisted"`
 }
 
+// riskMatureAge is how old a sign-up must be at the range's end to count
+// toward the never-used share: a younger one has had little time to send a
+// request.
+const riskMatureAge = 6 * 3600
+
 // RiskInsights collects the signals of abusive sign-ups and shared accounts.
+// SignupsMature counts the sign-ups created at least riskMatureAge before
+// the range's end, and ZeroUseMature those of them that never sent a
+// request, so the never-used share compares cohorts of a fair age.
 type RiskInsights struct {
 	Signups         int64         `json:"signups"`
 	SignupSeries    []CountPoint  `json:"signup_series"`
@@ -57,6 +65,8 @@ type RiskInsights struct {
 	SharedIPs       []SharedIP    `json:"shared_ips"`
 	Debtors         []BalanceUser `json:"debtors"`
 	ZeroUseAccounts int64         `json:"zero_use_accounts"`
+	SignupsMature   int64         `json:"signups_mature"`
+	ZeroUseMature   int64         `json:"zero_use_mature"`
 }
 
 type riskUserRow struct {
@@ -162,6 +172,12 @@ func GetRiskInsights(r InsightsRange) (*RiskInsights, error) {
 		}
 		if user.RequestCount == 0 {
 			result.ZeroUseAccounts++
+		}
+		if user.CreatedAt < r.End-riskMatureAge {
+			result.SignupsMature++
+			if user.RequestCount == 0 {
+				result.ZeroUseMature++
+			}
 		}
 	}
 	for at, count := range series {
