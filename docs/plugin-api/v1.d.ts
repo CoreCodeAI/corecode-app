@@ -26,7 +26,7 @@ export interface FetchRequest {url: string; method?: "GET" | "HEAD"; headers?: R
 export interface FetchResponse {status: number; headers: Record<string, string>; body: JSONValue | string | ArrayBuffer}
 declare global {const utils: HostUtils;}
 export type FileReference = Readonly<{ref: string; field: string; filename: string; mimeType: string; size: number}>;
-export type FilePlaceholder = Readonly<{__fileRef: string; encoding: "base64" | "dataUrl"; mimeType?: string; maxBytes?: number}>;
+export type FilePlaceholder = Readonly<{__fileRef: string; encoding: "base64" | "dataUrl" | "url"; mimeType?: string; maxBytes?: number}>;
 export type DecodedBody =
   | Readonly<{kind: "json"; value: JSONValue}>
   | Readonly<{kind: "form"; fields: Readonly<Record<string, readonly string[]>>}>

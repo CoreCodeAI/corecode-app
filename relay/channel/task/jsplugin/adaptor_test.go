@@ -2959,3 +2959,70 @@ export function buildContentRequest(ctx) {
 		})
 	}
 }
+
+type recordingFileURLStore struct {
+	data, mimeTypes []string
+}
+
+func (s *recordingFileURLStore) Put(_ context.Context, data []byte, mimeType string) (string, error) {
+	s.data = append(s.data, string(data))
+	s.mimeTypes = append(s.mimeTypes, mimeType)
+	return "https://files.example/" + string(data), nil
+}
+
+func useFileURLStore(t *testing.T, store fileURLStore) {
+	t.Helper()
+	fileURLStoreOnce.Do(func() {})
+	previous := fileURLStoreInstance
+	fileURLStoreInstance = store
+	t.Cleanup(func() { fileURLStoreInstance = previous })
+}
+
+func TestTaskAdaptorUploadsURLFilePlaceholders(t *testing.T) {
+	source := `
+export const meta = {apiVersion:1,key:"json-url",name:"JSON URL",version:"1.0.0",author:{name:"Test"},models:["m"],fetchMode:"per_task"};
+export function buildSubmitRequest(ctx) {
+  return {url:ctx.baseUrl+"/submit",body:{
+    first_frame:{__fileRef:ctx.files[0].ref,encoding:"url",mimeType:"image/png",maxBytes:1024},
+    inline:{__fileRef:ctx.files[0].ref,encoding:"base64"}
+  }};
+}
+export function parseSubmitResponse(){return {taskId:"1"}} export function buildQueryRequest(){return {url:"https://example.com"}} export function parseTaskResult(){return {status:"SUCCESS"}}
+`
+	plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
+	require.NoError(t, err)
+	build := func() (map[string]any, error) {
+		adaptor := New(plugin)
+		info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: "https://provider.example"}, TaskRelayInfo: &relaycommon.TaskRelayInfo{}}
+		adaptor.Init(info)
+		c := newMultipartFileContext(t, "first_frame", "f.jpg", "image/jpeg", []byte("frame-bytes"))
+		c.Set("task_request", map[string]any{})
+		body, err := adaptor.BuildRequestBody(c, info)
+		if err != nil {
+			return nil, err
+		}
+		raw, err := io.ReadAll(body)
+		require.NoError(t, err)
+		var decoded map[string]any
+		require.NoError(t, common.Unmarshal(raw, &decoded))
+		return decoded, nil
+	}
+
+	t.Run("uploads the file and sends its URL", func(t *testing.T) {
+		store := &recordingFileURLStore{}
+		useFileURLStore(t, store)
+		decoded, err := build()
+		require.NoError(t, err)
+		assert.Equal(t, "https://files.example/frame-bytes", decoded["first_frame"])
+		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte("frame-bytes")), decoded["inline"])
+		assert.Equal(t, []string{"frame-bytes"}, store.data)
+		assert.Equal(t, []string{"image/png"}, store.mimeTypes, "the placeholder's mimeType overrides the part header")
+	})
+
+	t.Run("refuses a url placeholder without a bucket", func(t *testing.T) {
+		useFileURLStore(t, nil)
+		_, err := build()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "TASK_PLUGIN_FILE_URL_BUCKET")
+	})
+}
