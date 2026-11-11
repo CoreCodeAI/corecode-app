@@ -19,8 +19,23 @@ type OpenAIError struct {
 }
 
 type ClaudeError struct {
-	Type    string `json:"type,omitempty"`
-	Message string `json:"message,omitempty"`
+	Type    string              `json:"type,omitempty"`
+	Message string              `json:"message,omitempty"`
+	Details *ClaudeErrorDetails `json:"details,omitempty"`
+}
+
+// ClaudeErrorDetails carries Anthropic's error.details.error_code. Only a
+// message-thread code (thread_*) reaches the client: Claude Code replays
+// the whole conversation when it reads one, and shows a bare 404 as a
+// missing model.
+type ClaudeErrorDetails struct {
+	ErrorCode string `json:"error_code,omitempty"`
+}
+
+// IsClaudeThreadErrorCode reports whether code is one of Anthropic's
+// message-thread error codes.
+func IsClaudeThreadErrorCode(code string) bool {
+	return strings.HasPrefix(code, "thread_")
 }
 
 type ErrorType string
@@ -102,6 +117,17 @@ type NewAPIError struct {
 	errorCode      ErrorCode
 	StatusCode     int
 	Metadata       json.RawMessage
+	// claudeThreadCode is an upstream thread_* code that ToClaudeError
+	// returns in error.details.
+	claudeThreadCode string
+}
+
+// SetClaudeThreadCode keeps an upstream message-thread error code for a
+// Claude client; any other code is ignored.
+func (e *NewAPIError) SetClaudeThreadCode(code string) {
+	if e != nil && IsClaudeThreadErrorCode(code) {
+		e.claudeThreadCode = code
+	}
 }
 
 // Unwrap enables errors.Is / errors.As to work with NewAPIError by exposing the underlying error.
@@ -246,6 +272,13 @@ func (e *NewAPIError) ToClaudeError(upstreamURLs ...string) ClaudeError {
 	}
 	if result.Message == "" {
 		result.Message = string(e.errorType)
+	}
+	result.Details = nil
+	if code := e.claudeThreadCode; code != "" {
+		result.Details = &ClaudeErrorDetails{ErrorCode: code}
+	} else if claudeError, ok := e.RelayError.(ClaudeError); ok && claudeError.Details != nil &&
+		IsClaudeThreadErrorCode(claudeError.Details.ErrorCode) {
+		result.Details = &ClaudeErrorDetails{ErrorCode: claudeError.Details.ErrorCode}
 	}
 	return result
 }
