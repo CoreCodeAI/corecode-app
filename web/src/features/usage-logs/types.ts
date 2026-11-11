@@ -443,8 +443,6 @@ export interface GetLogsParams {
   group?: string
   request_id?: string
   upstream_request_id?: string
-  /** 1 asks the server to skip counting total; older servers ignore it. */
-  skip_count?: 1
 }
 
 export interface GetLogsResponse {
