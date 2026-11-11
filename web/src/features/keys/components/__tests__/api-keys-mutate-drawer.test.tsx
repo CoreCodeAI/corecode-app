@@ -37,6 +37,9 @@ const { api } = await import('@/lib/api')
 const { useAuthStore } = await import('@/stores/auth-store')
 const { ApiKeysProvider, useApiKeys } = await import('../api-keys-provider')
 const { ApiKeysMutateDrawer } = await import('../api-keys-mutate-drawer')
+// The drawer lazy-loads the Auto order editor. Loading the module here keeps
+// its first transform out of each test's wait under a busy full run.
+await import('../auto-group-order-editor')
 
 const i18n = createInstance()
 await i18n.use(initReactI18next).init({
@@ -161,6 +164,16 @@ async function renderCreateDrawer(
   )
 }
 
+async function waitForAutoOrderEditor(): Promise<void> {
+  await waitFor(
+    () =>
+      expect(document.body).toHaveTextContent(
+        'Using the complete global Auto order (2 groups)'
+      ),
+    { timeout: 5000 }
+  )
+}
+
 function DialogProbe() {
   const keys = useApiKeys()
   return (
@@ -257,14 +270,7 @@ describe('API keys mutate drawer Auto group integration', () => {
 
     const groupTrigger = getControlByLabel('Group')
     expect(groupTrigger.textContent?.includes('auto')).toBe(true)
-    // The editor is lazy-loaded, so wait for it to render.
-    await waitFor(() =>
-      expect(
-        document.body.textContent?.includes(
-          'Using the complete global Auto order (2 groups)'
-        )
-      ).toBe(true)
-    )
+    await waitForAutoOrderEditor()
     expect(
       [
         ...document.querySelectorAll('[data-slot="global-auto-order-name"]'),
@@ -548,12 +554,8 @@ describe('API key drawer unsaved changes', () => {
     installApiFixtures([])
     const close = vi.fn()
     await renderCreateDrawer(ALL_GROUPS, close)
-    // The lazily loaded Auto order editor must be in place before closing.
-    await waitFor(() =>
-      expect(document.body).toHaveTextContent(
-        'Using the complete global Auto order (2 groups)'
-      )
-    )
+    // The Auto order editor must be in place before closing.
+    await waitForAutoOrderEditor()
     return close
   }
 
