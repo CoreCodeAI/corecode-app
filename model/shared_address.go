@@ -59,6 +59,101 @@ func sharedExit(ip string, now int64, parties ...int) (bool, error) {
 	return len(others)-len(buyers) >= sharedExitBystanders, err
 }
 
+// sharedAddressChunk bounds the IN lists of the batched address queries.
+const sharedAddressChunk = 500
+
+// sharedExits applies sharedExit with no parties to many addresses as of at,
+// with a few grouped queries in place of several per address, and returns the
+// addresses that are shared exits.
+func sharedExits(ips []string, at int64) (map[string]bool, error) {
+	exits := make(map[string]bool)
+	since := at - sharedAddressWindowSeconds
+	users := make(map[string]map[int]bool, len(ips))
+	type pair struct {
+		UserId int
+		Ip     string
+	}
+	for chunk := range slices.Chunk(ips, sharedAddressChunk) {
+		var requesters []struct {
+			Ip         string
+			Requesters int64
+		}
+		if err := LOG_DB.Model(&Log{}).Select("ip, COUNT(DISTINCT user_id) AS requesters").
+			Where("ip IN ? AND created_at > ? AND created_at <= ?", chunk, at-sharedExitWindowSeconds, at).
+			Group("ip").Find(&requesters).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range requesters {
+			if row.Requesters >= sharedExitUsers {
+				exits[row.Ip] = true
+			}
+		}
+		var pairs, found []pair
+		if err := DB.Model(&UserSession{}).Select("user_id, ip").
+			Where("ip IN ? AND created_at > ? AND created_at <= ?", chunk, since, at).Group("user_id, ip").Find(&found).Error; err != nil {
+			return nil, err
+		}
+		pairs = append(pairs, found...)
+		found = nil
+		if err := DB.Model(&SubscriptionOrder{}).Select("user_id, ip").
+			Where("ip IN ? AND create_time > ? AND create_time <= ?", chunk, since, at).Group("user_id, ip").Find(&found).Error; err != nil {
+			return nil, err
+		}
+		pairs = append(pairs, found...)
+		found = nil
+		if err := LOG_DB.Model(&Log{}).Select("user_id, ip").
+			Where("ip IN ? AND created_at > ? AND created_at <= ? AND type IN ?", chunk, since, at, []int{LogTypeConsume, LogTypeError}).
+			Group("user_id, ip").Find(&found).Error; err != nil {
+			return nil, err
+		}
+		pairs = append(pairs, found...)
+		for _, use := range pairs {
+			if users[use.Ip] == nil {
+				users[use.Ip] = make(map[int]bool)
+			}
+			users[use.Ip][use.UserId] = true
+		}
+	}
+	var candidates []int
+	seen := make(map[int]bool)
+	for ip, members := range users {
+		if exits[ip] || len(members) < sharedExitBystanders {
+			continue
+		}
+		for id := range members {
+			if !seen[id] {
+				seen[id] = true
+				candidates = append(candidates, id)
+			}
+		}
+	}
+	buyers := make(map[int]bool)
+	for chunk := range slices.Chunk(candidates, sharedAddressChunk) {
+		found, err := limitedPlanBuyers(chunk, since)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range found {
+			buyers[id] = true
+		}
+	}
+	for ip, members := range users {
+		if exits[ip] {
+			continue
+		}
+		bystanders := 0
+		for id := range members {
+			if !buyers[id] {
+				bystanders++
+			}
+		}
+		if bystanders >= sharedExitBystanders {
+			exits[ip] = true
+		}
+	}
+	return exits, nil
+}
+
 // limitedPlanBuyers returns the users among userIds that bought a plan limited
 // per user since since.
 func limitedPlanBuyers(userIds []int, since int64) ([]int, error) {

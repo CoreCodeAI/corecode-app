@@ -14,7 +14,7 @@ import (
 func useInsightsTestDB(t *testing.T, dialect string) {
 	t.Helper()
 	useAffiliateTestDB(t, dialect)
-	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &UpstreamCost{}, &UserConcurrencyRejection{}}
+	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &UpstreamCost{}, &UserConcurrencyRejection{}, &Task{}, &Checkin{}, &RiskGateEvent{}, &Option{}, &Channel{}}
 	require.NoError(t, DB.AutoMigrate(extra...))
 	t.Cleanup(func() { require.NoError(t, DB.Migrator().DropTable(extra...)) })
 }
@@ -140,16 +140,24 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 			require.NoError(t, err)
 			assert.EqualValues(t, 3, risk.Signups, "root is outside the range")
 			assert.Equal(t, "hour", risk.SeriesUnit)
-			assert.EqualValues(t, 1, risk.AliasEmails, "dots in a Gmail address")
-			assert.EqualValues(t, 1, risk.OffWhitelist)
+			assert.Zero(t, risk.AliasEmails, "dots in a Gmail address alone share no inbox with another account")
+			assert.EqualValues(t, 1, risk.AliasPatternEmails)
+			assert.Zero(t, risk.OffWhitelist, "the domain restriction is off")
 			assert.ElementsMatch(t, []NamedCount{{"oidc", 1}, {"email", 1}, {"linuxdo", 1}}, risk.SignupMethods)
 			require.Len(t, risk.SharedIPs, 1)
 			assert.Equal(t, "1.1.1.1", risk.SharedIPs[0].IP)
-			assert.Len(t, risk.SharedIPs[0].Users, 2)
-			assert.Equal(t, 1, risk.SharedIPs[0].SubscriptionBuyers)
+			assert.Equal(t, 1, risk.SharedIPTotal)
+			assert.False(t, risk.SharedIPs[0].SharedExit)
+			assert.Equal(t, 2, risk.SharedIPs[0].NewMembers)
+			assert.Zero(t, risk.SharedIPs[0].SubscriptionBuyers, "bob's plan is limited per user but no subscription was opened from it")
+			assert.ElementsMatch(t, []RiskUser{
+				{UserRef: UserRef{alice.Id, "alice"}, Requests: 2, Paid: true, CreatedAt: day1 + 60, BalanceUSD: 30},
+				{UserRef: UserRef{bob.Id, "bob"}, Requests: 1, Subscription: true, CreatedAt: day1 + 3600, BalanceUSD: -2},
+			}, risk.SharedIPs[0].Users, "bob's plan order wrote a top-up row with no credit: not a top-up")
 			assert.Equal(t, []BalanceUser{{UserRef{bob.Id, "bob"}, -2}}, risk.Debtors)
 			assert.EqualValues(t, 3, risk.SignupsMature, "every sign-up is older than six hours at the end")
-			assert.EqualValues(t, 1, risk.ZeroUseMature, "carol never sent a request")
+			assert.EqualValues(t, 1, risk.ZeroUseMature, "carol never had a request succeed")
+			assert.EqualValues(t, 1, risk.ZeroUseFailedMature, "carol's only request failed")
 
 			growth, err := GetGrowthInsights(r)
 			require.NoError(t, err)
@@ -172,7 +180,7 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 			assert.EqualValues(t, activity.Requests, sumOf(activity.Hourly, func(h ActivityHour) float64 { return float64(h.Requests) }))
 			assert.InDelta(t, activity.QuotaUSD, sumOf(activity.Hourly, func(h ActivityHour) float64 { return h.QuotaUSD }), 1e-9)
 			require.Len(t, activity.Daily, 2)
-			assert.Equal(t, ActivityDay{Day: day1, DAU: 2, WAU: 2, Requests: 3, QuotaUSD: 3}, activity.Daily[0])
+			assert.Equal(t, ActivityDay{Day: day1, DAU: 2, WAU: 2, Requests: 3, QuotaUSD: 3, ClaudeQuotaUSD: 1}, activity.Daily[0])
 			assert.Equal(t, ActivityDay{Day: day1 + 86400, DAU: 1, WAU: 2, Requests: 1, QuotaUSD: 1}, activity.Daily[1])
 			assert.Equal(t, 0.75, activity.Top1Share)
 			require.Len(t, activity.Retention, 2)
@@ -223,6 +231,144 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 			assert.Equal(t, 0.75, business.Models[0].Share)
 			assert.Equal(t, 59.93, business.Models[0].RevenueEstimate)
 		})
+	}
+}
+
+// The risk view reads sign-ins and plan orders as shared addresses, ranks a
+// proxy exit after a farm, finds gift spenders that share no address, and
+// counts the invite gift's refusals.
+func TestRiskSignalsDatabaseMatrix(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			const day1 = int64(1759248000)
+			dollar := int64(common.QuotaPerUnit)
+			r := InsightsRange{Start: day1, End: day1 + 2*86400}
+			previousRestriction, previousWhitelist := common.EmailDomainRestrictionEnabled, common.EmailDomainWhitelist
+			common.EmailDomainRestrictionEnabled, common.EmailDomainWhitelist = true, []string{"gmail.com", " googlemail.com", ""}
+			t.Cleanup(func() {
+				common.EmailDomainRestrictionEnabled, common.EmailDomainWhitelist = previousRestriction, previousWhitelist
+			})
+
+			user := func(name string, inviterCode string, created int64, fields map[string]any) *User {
+				t.Helper()
+				account := registerAffiliateTestUser(t, name, inviterCode)
+				updates := map[string]any{"created_at": created}
+				for key, value := range fields {
+					updates[key] = value
+				}
+				require.NoError(t, DB.Model(&User{}).Where("id = ?", account.Id).Updates(updates).Error)
+				return account
+			}
+			old := day1 - 86400
+			inviter := user("inviter", "", old, nil)
+			farm1 := user("farm1", inviter.AffCode, day1+100, map[string]any{"request_count": 1})
+			farm2 := user("farm2", "", day1+200, map[string]any{"request_count": 1})
+			older1 := user("older1", "", old, nil)
+			older2 := user("older2", "", old, nil)
+			user("inbox", "", old, map[string]any{"email": "john.smith@gmail.com"})
+			alias := user("alias", "", day1+300, map[string]any{"email": "JohnSmith+x@googlemail.com"})
+			dotted := user("dotted", "", day1+400, map[string]any{"email": "first.last@gmail.com"})
+			corp := user("corp", "", day1+500, map[string]any{"email": "x@corp.example"})
+			user("oauth", "", day1+600, map[string]any{"email": "y@corp.example", "linux_do_id": "ld-9"})
+			require.NoError(t, DB.Delete(&User{}, dotted.Id).Error)
+
+			// Both farm accounts signed in from one home address and bought
+			// the plan limited per user; five accounts that bought nothing
+			// signed in from a proxy node.
+			limited := SubscriptionPlan{Title: "newcomer", PriceAmount: 29.9, MaxPurchasePerUser: 1, Enabled: true}
+			require.NoError(t, DB.Create(&limited).Error)
+			for _, farm := range []*User{farm1, farm2} {
+				addressTestSession(t, farm.Id, "10.0.0.1", day1+1000)
+				require.NoError(t, DB.Create(&UserSubscription{UserId: farm.Id, PlanId: limited.Id, Status: "active", Source: "order",
+					StartTime: day1 + 1000, EndTime: day1 + 8*86400, CreatedAt: day1 + 1000, UpdatedAt: day1 + 1000}).Error)
+			}
+			for i := range 5 {
+				bystander := user("bystander"+strconv.Itoa(i), "", old, nil)
+				addressTestSession(t, bystander.Id, "10.9.9.9", day1+2000)
+			}
+			// Two older accounts met on an address through a plan order and a
+			// console sign-in.
+			require.NoError(t, DB.Create(&SubscriptionOrder{UserId: older1.Id, PlanId: limited.Id, TradeNo: "O1", Status: "pending",
+				CreateTime: day1 + 3000, Ip: "10.0.0.2"}).Error)
+			require.NoError(t, LOG_DB.Create(&AuditLog{EventId: "login-1", UserId: older2.Id, Username: "older2", CreatedAt: day1 + 3000,
+				Action: "user.login", Success: true, Category: AuditCategoryLogin, Ip: "10.0.0.2"}).Error)
+
+			// farm1 spends its invite gift plan and never pays; farm2 spends
+			// from a wallet it topped up. corp's only request failed.
+			gift := UserSubscription{UserId: farm1.Id, PlanId: limited.Id, AmountTotal: 3 * dollar, StartTime: day1 + 100,
+				EndTime: day1 + 8*86400, Status: "active", Source: SubscriptionSourceAffiliateGift}
+			require.NoError(t, DB.Create(&gift).Error)
+			require.NoError(t, DB.Create(&TopUp{UserId: farm2.Id, Amount: 5, Money: 5, PaymentMethod: "alipay",
+				Status: common.TopUpStatusSuccess, TradeNo: "T1", CreateTime: day1 + 1500}).Error)
+			require.NoError(t, LOG_DB.Create(&[]Log{
+				{UserId: farm1.Id, Username: "farm1", Type: LogTypeConsume, CreatedAt: day1 + 4000, ModelName: "opus", Quota: int(2 * dollar),
+					Other: `{"billing_source":"subscription","subscription_id":` + strconv.Itoa(gift.Id) + `}`},
+				{UserId: farm2.Id, Username: "farm2", Type: LogTypeConsume, CreatedAt: day1 + 4000, ModelName: "opus", Quota: int(dollar), Other: `{}`},
+				{UserId: corp.Id, Username: "corp", Type: LogTypeError, CreatedAt: day1 + 4000, ModelName: "opus", Content: "status_code=500, boom"},
+			}).Error)
+
+			for i, outcome := range []AffiliateSignupGift{
+				{UserId: farm1.Id, Status: AffiliateSignupGiftGiven},
+				{UserId: 9001, Status: AffiliateSignupGiftIpUsed},
+				{UserId: 9002, Status: AffiliateSignupGiftIpUsed},
+				{UserId: 9003, Status: AffiliateSignupGiftEmailSignup},
+			} {
+				outcome.InviterId, outcome.PlanId, outcome.Ip = inviter.Id, limited.Id, "10.1.1."+strconv.Itoa(i)
+				require.NoError(t, DB.Create(&outcome).Error)
+				require.NoError(t, DB.Model(&AffiliateSignupGift{}).Where("id = ?", outcome.Id).Update("created_at", day1+100).Error)
+			}
+
+			risk, err := GetRiskInsights(r)
+			require.NoError(t, err)
+			assert.EqualValues(t, 6, risk.Signups, "the deleted sign-up still counts")
+			assert.EqualValues(t, 1, risk.DeletedSignups)
+			assert.EqualValues(t, 1, risk.AliasEmails, "only the sign-up whose inbox another account has")
+			assert.Equal(t, []AliasCluster{{Canonical: "johnsmith@gmail.com", Users: []UserRef{
+				{risk.AliasClusters[0].Users[0].UserID, "inbox"}, {alias.Id, "alias"},
+			}}}, risk.AliasClusters)
+			assert.EqualValues(t, 2, risk.AliasPatternEmails)
+			assert.True(t, risk.EmailRestriction)
+			assert.EqualValues(t, 1, risk.OffWhitelist, "the email sign-up off the list, not the third-party one")
+			assert.EqualValues(t, 4, risk.ZeroUseAccounts)
+			assert.EqualValues(t, 1, risk.ZeroUseFailed)
+
+			assert.Equal(t, 3, risk.SharedIPTotal)
+			assert.Equal(t, 1, risk.SharedExits)
+			require.Len(t, risk.SharedIPs, 3)
+			assert.Equal(t, []string{"10.0.0.1", "10.0.0.2", "10.9.9.9"},
+				[]string{risk.SharedIPs[0].IP, risk.SharedIPs[1].IP, risk.SharedIPs[2].IP}, "the farm first, the proxy exit last")
+			assert.Equal(t, 2, risk.SharedIPs[0].SubscriptionBuyers)
+			assert.Equal(t, 2, risk.SharedIPs[0].NewMembers)
+			assert.True(t, risk.SharedIPs[0].Users[0].LimitedPlan)
+			assert.True(t, risk.SharedIPs[2].SharedExit)
+			assert.Len(t, risk.SharedIPs[2].Users, 5)
+
+			assert.EqualValues(t, 2, risk.SignupSpenders)
+			assert.EqualValues(t, 1, risk.UnpaidSpenders)
+			assert.Equal(t, 2.0, risk.UnpaidSpendUSD)
+			assert.Equal(t, []UnpaidSpender{{
+				UserRef: UserRef{farm1.Id, "farm1"}, ConsumptionUSD: 2, GiftPlanUSD: 2, SignupMethod: "password",
+				Inviter: UserRef{inviter.Id, "inviter"}, CreatedAt: day1 + 100,
+			}}, risk.UnpaidSpenderTop)
+			assert.Equal(t, []InviterSpenders{{UserRef: UserRef{inviter.Id, "inviter"}, Accounts: 1, ConsumptionUSD: 2}}, risk.UnpaidInviters)
+
+			assert.Equal(t, []NamedCount{{AffiliateSignupGiftIpUsed, 2}, {AffiliateSignupGiftEmailSignup, 1}, {AffiliateSignupGiftGiven, 1}}, risk.SignupGifts)
+			assert.Equal(t, []GiftBlockInviter{{UserRef: UserRef{inviter.Id, "inviter"}, Blocked: 2, Gifted: 1}}, risk.GiftBlockInviters,
+				"an email sign-up is not a block")
+		})
+	}
+}
+
+func TestCanonicalEmail(t *testing.T) {
+	for email, canonical := range map[string]string{
+		"First.Last@Gmail.com":   "firstlast@gmail.com",
+		"a.b+tag@googlemail.com": "ab@gmail.com",
+		"a.b+tag@corp.example":   "a.b@corp.example",
+		"+only@corp.example":     "",
+		"no-at-sign":             "",
+	} {
+		assert.Equal(t, canonical, canonicalEmail(email), email)
 	}
 }
 
@@ -452,8 +598,116 @@ func TestClassifyErrorLog(t *testing.T) {
 		"status_code=502, bad gateway":                            ErrorUpstream,
 		"status_code=400, invalid request":                        ErrorClient,
 		"something else":                                          ErrorOther,
+		NoChannelErrorContent(503, "vip"):                         ErrorNoChannel,
+		"status_code=503, upstream said no_channel: x":            ErrorUpstream,
 	} {
 		assert.Equal(t, want, classifyErrorLog(content), content)
+	}
+}
+
+// Requests refused before any channel, the risk gate's blocks and the async
+// tasks' outcomes reach the quality view.
+func TestQualityRefusalsAndTasks(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			const hour1 = int64(1759248000)
+			r := InsightsRange{Start: hour1, End: hour1 + 3*3600}
+			alice := registerAffiliateTestUser(t, "alice", "")
+			require.NoError(t, LOG_DB.Create(&[]Log{
+				{UserId: alice.Id, Username: "alice", Type: LogTypeConsume, CreatedAt: hour1 + 100, UseTime: 10, ChannelId: 3, ModelName: "gpt-6", Other: `{}`},
+				{UserId: alice.Id, Username: "alice", Type: LogTypeError, CreatedAt: hour1 + 200, ChannelId: 0, ModelName: "gpt-6",
+					Content: NoChannelErrorContent(503, "vip")},
+			}).Error)
+			require.NoError(t, DB.Create(&[]RiskGateEvent{
+				{CreatedAt: hour1 + 10, Stage: RiskGateStageHardRegex, Action: RiskGateActionBlocked},
+				{CreatedAt: hour1 + 20, Stage: RiskGateStageHardRegex, Action: RiskGateActionBlocked},
+				{CreatedAt: hour1 + 30, Stage: RiskGateStageDecision, Action: RiskGateActionBlocked},
+				{CreatedAt: hour1 + 40, Stage: RiskGateStageDecision, Action: RiskGateActionObserved},
+				{CreatedAt: hour1 - 10, Stage: RiskGateStageDecision, Action: RiskGateActionBlocked},
+			}).Error)
+			require.NoError(t, DB.Create(&[]Task{
+				{TaskID: "q1", ChannelId: 9, Status: TaskStatusFailure, FailReason: "status_code=500, upstream died. Try later", SubmitTime: hour1 + 50,
+					Properties: Properties{OriginModelName: "seedance"}},
+				{TaskID: "q2", ChannelId: 9, Status: TaskStatusSuccess, SubmitTime: hour1 - 50, FinishTime: hour1 + 50,
+					Properties: Properties{OriginModelName: "seedance"}},
+			}).Error)
+
+			quality, err := GetQualityInsights(r, []string{"seedance"})
+			require.NoError(t, err)
+			assert.Equal(t, &QualityRefusals{NoChannel: 1, RiskGate: 3, RiskGateStages: []NamedCount{
+				{Name: RiskGateStageHardRegex, Count: 2}, {Name: RiskGateStageDecision, Count: 1},
+			}}, quality.Refusals, "observe-mode hits and events outside the range are left out; the model filter does not narrow it")
+
+			all, err := GetQualityInsights(r, nil)
+			require.NoError(t, err)
+			assert.EqualValues(t, 2, all.Requests)
+			assert.EqualValues(t, 1, all.Errors, "a refusal is a failure the customer saw")
+			assert.Equal(t, []NamedCount{{Name: ErrorNoChannel, Count: 1}}, all.ErrorCategories)
+			assert.Equal(t, []NamedCount{{Name: "no_channel: no available channel in group vip", Count: 1}}, all.ErrorReasons)
+
+			upstream, err := GetUpstreamInsights(r)
+			require.NoError(t, err)
+			for _, row := range upstream.Daily {
+				assert.NotZero(t, row.ChannelID, "a refusal is in no channel's figures")
+			}
+			for _, row := range upstream.Models {
+				assert.NotZero(t, row.ChannelID)
+			}
+
+			seedance := TaskOutcome{Model: "seedance", Submitted: 1, Failed: 1, FailureRate: 1, Reasons: []NamedCount{{Name: "upstream died", Count: 1}}}
+			require.NotNil(t, all.Tasks)
+			assert.Equal(t, []TaskOutcome{seedance}, all.Tasks.Models, "a task submitted before the range is left out")
+			channel := seedance
+			channel.Model, channel.ChannelID = "", 9
+			assert.Equal(t, []TaskOutcome{channel}, all.Tasks.Channels)
+			total := seedance
+			total.Model = ""
+			assert.Equal(t, total, all.Tasks.Total)
+			assert.False(t, all.Tasks.Truncated)
+		})
+	}
+}
+
+// The activity view counts customers only, active on usage, and splits
+// Claude's charge out.
+func TestActivityLeavesRootOut(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			const day1 = int64(1759248000)
+			dollar := int(common.QuotaPerUnit)
+			alice := registerAffiliateTestUser(t, "alice", "")
+			bob := registerAffiliateTestUser(t, "bob", "")
+			carol := registerAffiliateTestUser(t, "carol", "")
+			root := &User{Username: "root", DisplayName: "root", Role: common.RoleRootUser, Status: common.UserStatusEnabled}
+			require.NoError(t, root.Insert(0))
+			require.NoError(t, DB.Create(&[]QuotaData{
+				{UserID: alice.Id, Username: "alice", ModelName: "claude-opus-5", CreatedAt: day1, Count: 2, Quota: 2 * dollar, TokenUsed: 20},
+				{UserID: alice.Id, Username: "alice", ModelName: "gpt-6", CreatedAt: day1, Count: 1},
+				// bob's only request came back with no usage.
+				{UserID: bob.Id, Username: "bob", ModelName: "gpt-6", CreatedAt: day1, Count: 1},
+				{UserID: carol.Id, Username: "carol", ModelName: "gpt-6", CreatedAt: day1 + 3600, Count: 1, Quota: dollar, TokenUsed: 10},
+				{UserID: root.Id, Username: "root", ModelName: "claude-opus-5", CreatedAt: day1, Count: 9, Quota: 5 * dollar, TokenUsed: 90},
+			}).Error)
+
+			activity, err := GetActivityInsights(InsightsRange{Start: day1, End: day1 + 86400, Offset: 8 * 3600})
+			require.NoError(t, err)
+			assert.EqualValues(t, 2, activity.ActiveUsers, "bob had no usage, root is not a customer")
+			assert.EqualValues(t, 5, activity.Requests)
+			assert.Equal(t, 3.0, activity.QuotaUSD)
+			assert.Equal(t, 2.0, activity.ClaudeQuotaUSD)
+			assert.Equal(t, 5.0, activity.RootQuotaUSD)
+			require.Len(t, activity.Daily, 1)
+			assert.Equal(t, ActivityDay{Day: day1, DAU: 2, WAU: 2, Requests: 5, QuotaUSD: 3, ClaudeQuotaUSD: 2}, activity.Daily[0])
+			assert.Equal(t, ActivityHour{Hour: day1, ActiveUsers: 1, Requests: 4, QuotaUSD: 2}, activity.Hourly[0])
+			require.NotEmpty(t, activity.TopUsers)
+			assert.Equal(t, alice.Id, activity.TopUsers[0].UserID)
+			assert.Equal(t, 0.6667, activity.Top1Share)
+			for _, user := range activity.TopUsers {
+				assert.NotEqual(t, root.Id, user.UserID)
+			}
+		})
 	}
 }
 
@@ -633,4 +887,148 @@ func TestModelVendor(t *testing.T) {
 	} {
 		assert.Equal(t, vendor, ModelVendor(model), model)
 	}
+}
+
+// The funds view states what running plans owe, each plan's movement, the
+// checkouts by method, use by billing group and credit given outside
+// top-ups; it counts an order when it was paid and a top-up's bonus as
+// unpaid credit.
+func TestFinancePlansOrdersAndGroups(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			const day1 = int64(1759248000)
+			const day = int64(86400)
+			dollar := int64(common.QuotaPerUnit)
+			r := InsightsRange{Start: day1, End: day1 + 2*day}
+			now := r.End
+			previousSignup := common.QuotaForNewUser
+			common.QuotaForNewUser = int(dollar / 2)
+			t.Cleanup(func() { common.QuotaForNewUser = previousSignup })
+
+			payer := registerAffiliateTestUser(t, "payer", "")
+			renewer := registerAffiliateTestUser(t, "renewer", "")
+			guest := registerAffiliateTestUser(t, "guest", "")
+			root := &User{Username: "root", DisplayName: "root", Role: common.RoleRootUser, Status: common.UserStatusEnabled}
+			require.NoError(t, root.Insert(0))
+
+			monthly := SubscriptionPlan{Title: "monthly", PriceAmount: 30, Enabled: true, QuotaResetPeriod: SubscriptionResetNever}
+			daily := SubscriptionPlan{Title: "daily", PriceAmount: 10, Enabled: true, MaxPurchasePerUser: 1, QuotaResetPeriod: SubscriptionResetDaily}
+			require.NoError(t, DB.Create(&monthly).Error)
+			require.NoError(t, DB.Create(&daily).Error)
+
+			// The payer paid 20 for $20 and a $5 bonus, so each wallet dollar
+			// carries 0.8 and a fifth of it is unpaid. The guest's top-up was
+			// opened before the range and paid in it; another was paid after it.
+			require.NoError(t, DB.Create(&[]TopUp{
+				{UserId: payer.Id, Amount: 20, Money: 20, BonusQuota: 5 * dollar, PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, TradeNo: "T1", CreateTime: day1 + 100, CompleteTime: day1 + 200},
+				{UserId: guest.Id, Amount: 10, Money: 10, PaymentMethod: "alipay", Status: common.TopUpStatusPending, TradeNo: "T2", CreateTime: day1 + 200},
+				{UserId: guest.Id, Amount: 10, Money: 10, PaymentMethod: "stripe", Status: common.TopUpStatusExpired, TradeNo: "T3", CreateTime: day1 + 300},
+				{UserId: guest.Id, Amount: 10, Money: 10, PaymentMethod: "alipay", Status: common.TopUpStatusPending, TradeNo: "T4", CreateTime: now - 60},
+				{UserId: guest.Id, Amount: 5, Money: 5, PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, TradeNo: "T5", CreateTime: day1 - 100, CompleteTime: day1 + 50},
+				{UserId: guest.Id, Amount: 7, Money: 7, PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, TradeNo: "T6", CreateTime: day1 + 500, CompleteTime: now + 100},
+				{UserId: renewer.Id, Money: 30, PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, TradeNo: "S1", CreateTime: day1 + 3600, CompleteTime: day1 + 3600},
+			}).Error)
+			require.NoError(t, DB.Create(&[]SubscriptionOrder{
+				{UserId: renewer.Id, PlanId: monthly.Id, Money: 30, TradeNo: "S0", PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, CreateTime: day1 - 29*day, CompleteTime: day1 - 29*day},
+				{UserId: renewer.Id, PlanId: monthly.Id, Money: 30, TradeNo: "S1", PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, CreateTime: day1 + 3600, CompleteTime: day1 + 3600},
+				{UserId: payer.Id, PlanId: daily.Id, Money: 10, TradeNo: "SB", PaymentMethod: PaymentMethodBalance, PaymentProvider: PaymentProviderBalance, Status: common.TopUpStatusSuccess,
+					CreateTime: day1, CompleteTime: day1, ProviderPayload: "charged_quota=" + strconv.FormatInt(10*dollar, 10)},
+				{UserId: guest.Id, PlanId: monthly.Id, Money: 30, TradeNo: "S2", PaymentMethod: "wxpay", Status: common.TopUpStatusPending, CreateTime: day1 + 400},
+				{UserId: root.Id, PlanId: monthly.Id, Money: 30, TradeNo: "SR", PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, CreateTime: day1 - day, CompleteTime: day1 - day},
+			}).Error)
+			for _, subscription := range []UserSubscription{
+				// The renewer's first month ended in the range, half used; the
+				// second was bought an hour into it.
+				{UserId: renewer.Id, PlanId: monthly.Id, AmountTotal: 30 * dollar, AmountUsed: 15 * dollar, StartTime: day1 - 29*day, EndTime: day1 + day, Status: "expired", Source: "order"},
+				{UserId: renewer.Id, PlanId: monthly.Id, AmountTotal: 30 * dollar, AmountUsed: 3 * dollar, StartTime: day1 + 3600, EndTime: day1 + 3600 + 30*day, Status: "active", Source: "order"},
+				// The payer's plan runs five days and resets daily.
+				{UserId: payer.Id, PlanId: daily.Id, AmountTotal: 10 * dollar, AmountUsed: 4 * dollar, StartTime: day1, EndTime: day1 + 5*day, Status: "active", Source: PaymentMethodBalance},
+				{UserId: guest.Id, PlanId: monthly.Id, AmountTotal: 30 * dollar, AmountUsed: 10 * dollar, StartTime: day1, EndTime: day1 + 10*day, Status: "active", Source: "admin"},
+				{UserId: root.Id, PlanId: monthly.Id, AmountTotal: 30 * dollar, StartTime: day1 - day, EndTime: day1 + 29*day, Status: "active", Source: "order"},
+			} {
+				require.NoError(t, DB.Create(&subscription).Error)
+			}
+			require.NoError(t, LOG_DB.Create(&[]Log{
+				{UserId: payer.Id, Username: "payer", Type: LogTypeConsume, CreatedAt: day1 + 1000, ModelName: "opus", Quota: int(5 * dollar), Other: `{"billing_source":"wallet"}`},
+				{UserId: guest.Id, Username: "guest", Type: LogTypeSystem, CreatedAt: day1 + 20, Content: "New user sign-up bonus ¥0.500000"},
+			}).Error)
+			require.NoError(t, DB.Create(&Checkin{UserId: payer.Id, CheckinDate: "2025-10-01", QuotaAwarded: int(dollar), CreatedAt: day1 + 10}).Error)
+			require.NoError(t, DB.Create(&[]QuotaData{
+				{UserID: payer.Id, Username: "payer", ModelName: "opus", UseGroup: "default", CreatedAt: day1, Count: 2, Quota: int(3 * dollar), TokenUsed: 10},
+				{UserID: renewer.Id, Username: "renewer", ModelName: "gpt-6-sol", UseGroup: "codex-only", CreatedAt: day1, Count: 1, Quota: int(2 * dollar), TokenUsed: 5, CacheReadTokens: 5},
+				{UserID: root.Id, Username: "root", ModelName: "opus", UseGroup: "default", CreatedAt: day1, Count: 9, Quota: int(9 * dollar)},
+			}).Error)
+
+			finance, err := financeInsightsAt(r, now)
+			require.NoError(t, err)
+			assert.Equal(t, 25.0, finance.TopupRevenue, "T1, and T5 paid in the range; T6 was paid after it")
+			assert.Equal(t, 30.0, finance.SubscriptionRevenue)
+			assert.Equal(t, 5.0, finance.BonusUSD)
+			assert.Equal(t, 1.0, finance.GiftConsumptionUSD, "the bonus fifth of the payer's 5 is unpaid")
+			assert.Equal(t, 4.0, finance.RecognizedWalletRevenue, "the bonus still lowers the price: 5 at 0.8")
+
+			// 30 over 30 days with 28 days and an hour left; 8 of balance over
+			// five days with three left. Root's plan is not owed to a customer.
+			assert.Equal(t, PlanLiability{
+				At: now, DeferredValue: 32.84, PaidPlans: 2, PaidUsers: 2, GiftPlans: 1,
+				PaidQuotaLeftUSD: 27, GiftQuotaLeftUSD: 20, PaidPeriodLeftUSD: 6,
+			}, finance.PlanLiability)
+			assert.Equal(t, []PlanBookRow{
+				{PlanID: monthly.Id, Title: "monthly", Price: 30, RunningPaid: 1, RunningGifted: 1, Sold: 1, SoldValue: 30, Renewed: 1, Gifted: 1,
+					Expired: 1, DeferredValue: 28.04, FinishedPlans: 1, FinishedUsedShare: 0.5},
+				{PlanID: daily.Id, Title: "daily", Price: 10, OnePerUser: true, RunningPaid: 1, Sold: 1, SoldValue: 8,
+					ExpiringSoon: 1, ExpiringValue: 4.8, DeferredValue: 4.8},
+			}, finance.PlanBook, "running plans first")
+
+			assert.Equal(t, []OrderMethodFunnel{
+				{PaymentMethod: "alipay", Created: 5, Paid: 3, Pending: 2, PendingStale: 1, PlanOrders: 1, PaidMoney: 57, CompletionRate: 0.6},
+				{PaymentMethod: "stripe", Created: 1, Expired: 1},
+				{PaymentMethod: "wxpay", Created: 1, Pending: 1, PendingStale: 1, PlanOrders: 1},
+			}, finance.OrderMethods, "a paid plan order counts once though top_ups holds it too; wallet-paid and earlier ones are left out")
+
+			revenue := finance.RecognizedRevenue
+			require.Len(t, finance.Groups, 2)
+			assert.InDelta(t, 0.6*revenue, finance.Groups[0].RevenueEstimate, 0.011, "recognized revenue shared by consumption")
+			assert.InDelta(t, 0.4*revenue, finance.Groups[1].RevenueEstimate, 0.011)
+			finance.Groups[0].RevenueEstimate, finance.Groups[1].RevenueEstimate = 0, 0
+			assert.Equal(t, []GroupConsumption{
+				{Group: "default", Requests: 2, Users: 1, Tokens: 10, ConsumptionUSD: 3, Share: 0.6, Ratio: 1, ListUSD: 3},
+				{Group: "codex-only", Requests: 1, Users: 1, Tokens: 10, ConsumptionUSD: 2, Share: 0.4},
+			}, finance.Groups, "root's use is left out; a group without a ratio has no list price")
+
+			assert.Equal(t, 1.0, finance.CheckinCreditUSD)
+			assert.EqualValues(t, 1, finance.SignupBonuses)
+			assert.Equal(t, 0.5, finance.SignupCreditEstimateUSD)
+			assert.Zero(t, finance.InviteeBonuses)
+		})
+	}
+}
+
+// A bill splits by the model it names and its remainder by revenue; a fee
+// by revenue; a channel with neither leaves its revenue uncosted.
+func TestVendorUpstreamCosts(t *testing.T) {
+	upstream := &UpstreamInsights{
+		Channels: []UpstreamChannel{
+			{ID: 1, CostSource: UpstreamCostSourceUpstream, CostUSD: 10, LatestCostAt: 100},
+			{ID: 2, CostSource: UpstreamCostSourceFee, CostUSD: 4},
+			{ID: 3, CostSource: UpstreamCostSourceNone},
+			{ID: 4, CostSource: UpstreamCostSourceFee, CostUSD: 2},
+		},
+		Models: []UpstreamModel{
+			{Model: "gpt-a", ChannelID: 1, RevenueUSD: 6, CostUSD: 7},
+			{Model: "claude-x", ChannelID: 1, RevenueUSD: 2},
+			{Model: "gpt-b", ChannelID: 2, RevenueUSD: 1},
+			{Model: "grok-c", ChannelID: 2, RevenueUSD: 3},
+			{Model: "claude-y", ChannelID: 3, RevenueUSD: 5},
+		},
+	}
+	rows, bill, fee := vendorUpstreamCosts(upstream)
+	assert.Equal(t, []VendorUpstreamCost{
+		{Vendor: VendorCodex, BillUSD: 9.25, FeeUSD: 1, CostedRevenueUSD: 7, OldestBillAt: 100, Channels: []int{1, 2}},
+		{Vendor: VendorGrok, FeeUSD: 3, CostedRevenueUSD: 3, Channels: []int{2}},
+		{Vendor: VendorClaude, BillUSD: 0.75, CostedRevenueUSD: 2, UncostedRevenueUSD: 5, OldestBillAt: 100, Channels: []int{1}},
+	}, rows, "7 named, 3 left shared 6 to 2; the fee 1 to 3")
+	assert.Zero(t, bill)
+	assert.Equal(t, 2.0, fee, "a fee on a channel that served nothing")
 }

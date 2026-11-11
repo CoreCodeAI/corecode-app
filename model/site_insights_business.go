@@ -100,7 +100,7 @@ func GetBusinessInsights(r InsightsRange) (*BusinessInsights, error) {
 			}
 		}
 	}
-	orders, err := readPaidOrders(r.Start, r.End)
+	orders, err := readOrdersPaidIn(r.Start, r.End)
 	if err != nil {
 		return nil, err
 	}

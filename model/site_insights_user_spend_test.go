@@ -24,10 +24,12 @@ func TestUserSpendDatabaseMatrix(t *testing.T) {
 			require.NoError(t, DB.Model(&User{}).Where("id = ?", bob.Id).Updates(map[string]any{"quota": -2 * dollar}).Error)
 
 			require.NoError(t, LOG_DB.Create(&[]Log{
-				{UserId: alice.Id, Type: LogTypeConsume, CreatedAt: start + 10, ModelName: "claude-opus", Group: "vip", Quota: int(3 * dollar)},
-				{UserId: alice.Id, Type: LogTypeConsume, CreatedAt: start + 20, ModelName: "claude-opus", Group: "vip", Quota: int(dollar)},
-				{UserId: alice.Id, Type: LogTypeConsume, CreatedAt: start + 30, ModelName: "claude-opus", Group: "plain", Quota: int(dollar)},
-				{UserId: bob.Id, Type: LogTypeConsume, CreatedAt: start + 40, ModelName: "claude-sonnet", Group: "vip", Quota: int(dollar)},
+				{UserId: alice.Id, Type: LogTypeConsume, CreatedAt: start + 10, ModelName: "claude-opus", Group: "vip", ChannelId: 2, Quota: int(3 * dollar)},
+				{UserId: alice.Id, Type: LogTypeConsume, CreatedAt: start + 20, ModelName: "claude-opus", Group: "vip", ChannelId: 2, Quota: int(dollar)},
+				{UserId: alice.Id, Type: LogTypeConsume, CreatedAt: start + 30, ModelName: "claude-opus", Group: "plain", ChannelId: 2, Quota: int(dollar)},
+				{UserId: bob.Id, Type: LogTypeConsume, CreatedAt: start + 40, ModelName: "claude-sonnet", Group: "vip", ChannelId: 2, Quota: int(dollar)},
+				// The same model served by another channel is its own row.
+				{UserId: bob.Id, Type: LogTypeConsume, CreatedAt: start + 45, ModelName: "claude-sonnet", Group: "vip", ChannelId: 7, Quota: int(dollar)},
 				// An error, a log before the window and one at its end are
 				// not counted.
 				{UserId: bob.Id, Type: LogTypeError, CreatedAt: start + 50, ModelName: "claude-sonnet", Group: "vip"},
@@ -39,20 +41,35 @@ func TestUserSpendDatabaseMatrix(t *testing.T) {
 			rows, err := ReadUserModelSpend(start, start+3600)
 			require.NoError(t, err)
 			type key struct {
-				user  int
-				model string
-				group string
+				user    int
+				model   string
+				group   string
+				channel int
 			}
 			got := map[key][2]int64{}
 			for _, row := range rows {
-				got[key{row.UserId, row.ModelName, row.LogGroup}] = [2]int64{row.Requests, row.Quota}
+				got[key{row.UserId, row.ModelName, row.LogGroup, row.ChannelId}] = [2]int64{row.Requests, row.Quota}
 			}
 			assert.Equal(t, map[key][2]int64{
-				{alice.Id, "claude-opus", "vip"}:   {2, 4 * dollar},
-				{alice.Id, "claude-opus", "plain"}: {1, dollar},
-				{bob.Id, "claude-sonnet", "vip"}:   {1, dollar},
-				{root.Id, "claude-opus", "root"}:   {1, dollar},
+				{alice.Id, "claude-opus", "vip", 2}:   {2, 4 * dollar},
+				{alice.Id, "claude-opus", "plain", 2}: {1, dollar},
+				{bob.Id, "claude-sonnet", "vip", 2}:   {1, dollar},
+				{bob.Id, "claude-sonnet", "vip", 7}:   {1, dollar},
+				{root.Id, "claude-opus", "root", 0}:   {1, dollar},
 			}, got)
+
+			require.NoError(t, DB.AutoMigrate(&Channel{}))
+			t.Cleanup(func() { require.NoError(t, DB.Migrator().DropTable(&Channel{})) })
+			inside, sameHost, public := "http://gpt-load:3001", "https://engine.example.com/v1", "https://api.example.com"
+			require.NoError(t, DB.Create(&[]Channel{
+				{Id: 2, Name: "engine", Key: "k2", BaseURL: &inside},
+				{Id: 3, Name: "engine by name", Key: "k3", BaseURL: &sameHost},
+				{Id: 7, Name: "relay", Key: "k7", BaseURL: &public},
+				{Id: 8, Name: "official", Key: "k8"},
+			}).Error)
+			engineChannels, err := EngineChannelIDs("https://engine.example.com")
+			require.NoError(t, err)
+			assert.Equal(t, map[int]bool{2: true, 3: true}, engineChannels)
 
 			roots, err := RootUserIDs()
 			require.NoError(t, err)

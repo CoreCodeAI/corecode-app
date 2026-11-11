@@ -242,14 +242,27 @@ const (
 	ErrorUpstream          = "upstream_error"
 	ErrorClient            = "client_error"
 	ErrorOther             = "other"
+	// ErrorNoChannel is a request no channel could take, recorded on
+	// channel 0 before any attempt (NoChannelErrorContent).
+	ErrorNoChannel = "no_channel"
 )
+
+// NoChannelErrorContent is the content of the error log that records a
+// request no channel could take. The model is the log's own column; the
+// group goes last so the failure reason groups by it.
+func NoChannelErrorContent(statusCode int, group string) string {
+	return "status_code=" + strconv.Itoa(statusCode) + ", " + ErrorNoChannel + ": no available channel in group " + group
+}
 
 // classifyErrorLog sorts an error log by where the request was turned away.
 // The engine's own admission rejection is told apart from Claude's rate
 // limit by its message, because both answer 429.
 func classifyErrorLog(content string) string {
 	code := logStatusCode(content)
+	_, rest, _ := strings.Cut(content, ", ")
 	switch {
+	case strings.HasPrefix(rest, ErrorNoChannel+": "):
+		return ErrorNoChannel
 	case strings.Contains(content, "Credential concurrency limit exceeded"):
 		return ErrorEngineConcurrency
 	case code == 429:

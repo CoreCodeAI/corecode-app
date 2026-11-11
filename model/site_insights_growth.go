@@ -166,13 +166,15 @@ func GetGrowthInsights(r InsightsRange) (*GrowthInsights, error) {
 	return result, nil
 }
 
-// ActivityDay is one day of active users and consumption.
+// ActivityDay is one day of active users and consumption. ClaudeQuotaUSD is
+// the part of QuotaUSD charged for Claude models (VendorClaude).
 type ActivityDay struct {
-	Day      int64   `json:"day"`
-	DAU      int64   `json:"dau"`
-	WAU      int64   `json:"wau"`
-	Requests int64   `json:"requests"`
-	QuotaUSD float64 `json:"quota_usd"`
+	Day            int64   `json:"day"`
+	DAU            int64   `json:"dau"`
+	WAU            int64   `json:"wau"`
+	Requests       int64   `json:"requests"`
+	QuotaUSD       float64 `json:"quota_usd"`
+	ClaudeQuotaUSD float64 `json:"claude_quota_usd"`
 }
 
 // ActivityHour is one hour of customers' activity: who sent requests, how
@@ -200,19 +202,26 @@ type UserSpend struct {
 	Share    float64 `json:"share"`
 }
 
-// ActivityInsights reads the hourly quota_data aggregates. Hourly is every
-// UTC hour of a range up to insightsHourlySpan.
+// ActivityInsights reads the hourly quota_data aggregates, customers only:
+// root's rows are left out of every figure, as on the capacity and funds
+// views, and its consumption is RootQuotaUSD. A user is active in a span when
+// a request of theirs came back with usage (tokens or a charge); Requests
+// counts every logged request, those without usage included.
+// ClaudeQuotaUSD is the part of QuotaUSD charged for Claude models. Hourly is
+// every UTC hour of a range up to insightsHourlySpan.
 type ActivityInsights struct {
-	ActiveUsers int64             `json:"active_users"`
-	QuotaUSD    float64           `json:"quota_usd"`
-	Requests    int64             `json:"requests"`
-	Daily       []ActivityDay     `json:"daily"`
-	Hourly      []ActivityHour    `json:"hourly,omitempty"`
-	Retention   []RetentionCohort `json:"retention"`
-	TopUsers    []UserSpend       `json:"top_users"`
-	Top1Share   float64           `json:"top1_share"`
-	Top3Share   float64           `json:"top3_share"`
-	Top10Share  float64           `json:"top10_share"`
+	ActiveUsers    int64             `json:"active_users"`
+	QuotaUSD       float64           `json:"quota_usd"`
+	ClaudeQuotaUSD float64           `json:"claude_quota_usd"`
+	RootQuotaUSD   float64           `json:"root_quota_usd"`
+	Requests       int64             `json:"requests"`
+	Daily          []ActivityDay     `json:"daily"`
+	Hourly         []ActivityHour    `json:"hourly,omitempty"`
+	Retention      []RetentionCohort `json:"retention"`
+	TopUsers       []UserSpend       `json:"top_users"`
+	Top1Share      float64           `json:"top1_share"`
+	Top3Share      float64           `json:"top3_share"`
+	Top10Share     float64           `json:"top10_share"`
 }
 
 const retentionDays = 14
@@ -236,27 +245,51 @@ func GetActivityInsights(r InsightsRange) (*ActivityInsights, error) {
 		hourly[start] = &ActivityHour{Hour: start}
 		activeByHour[start] = make(map[int]bool)
 	}
+	roots, err := RootUserIDs()
+	if err != nil {
+		return nil, err
+	}
 	spend := make(map[int]*UserSpend)
 	active := make(map[int]bool)
-	var total int64
+	var total, claude, rootQuota int64
 	for _, row := range rows {
-		day := r.DayStart(row.CreatedAt)
-		if activeByDay[day] == nil {
-			activeByDay[day] = make(map[int]bool)
+		if slices.Contains(roots, row.UserID) {
+			if row.CreatedAt >= r.Start {
+				rootQuota += int64(row.Quota)
+			}
+			continue
 		}
-		activeByDay[day][row.UserID] = true
+		used := row.Quota > 0 || row.TokenUsed > 0
+		day := r.DayStart(row.CreatedAt)
+		if used {
+			if activeByDay[day] == nil {
+				activeByDay[day] = make(map[int]bool)
+			}
+			activeByDay[day][row.UserID] = true
+		}
 		if row.CreatedAt < r.Start {
 			continue
 		}
-		active[row.UserID] = true
+		if used {
+			active[row.UserID] = true
+		}
+		isClaude := ModelVendor(row.ModelName) == VendorClaude
 		total += int64(row.Quota)
+		if isClaude {
+			claude += int64(row.Quota)
+		}
 		result.Requests += int64(row.Count)
 		if bucket := days[day]; bucket != nil {
 			bucket.Requests += int64(row.Count)
 			bucket.QuotaUSD += float64(row.Quota)
+			if isClaude {
+				bucket.ClaudeQuotaUSD += float64(row.Quota)
+			}
 		}
 		if hour := hourly[insightHourKey(row.CreatedAt)]; hour != nil {
-			activeByHour[hour.Hour][row.UserID] = true
+			if used {
+				activeByHour[hour.Hour][row.UserID] = true
+			}
 			hour.Requests += int64(row.Count)
 			hour.QuotaUSD += float64(row.Quota)
 		}
@@ -270,6 +303,8 @@ func GetActivityInsights(r InsightsRange) (*ActivityInsights, error) {
 	}
 	result.ActiveUsers = int64(len(active))
 	result.QuotaUSD = quotaUSD(total)
+	result.ClaudeQuotaUSD = quotaUSD(claude)
+	result.RootQuotaUSD = quotaUSD(rootQuota)
 	for day, bucket := range days {
 		bucket.DAU = int64(len(activeByDay[day]))
 		week := make(map[int]bool)
@@ -280,6 +315,7 @@ func GetActivityInsights(r InsightsRange) (*ActivityInsights, error) {
 		}
 		bucket.WAU = int64(len(week))
 		bucket.QuotaUSD = quotaUSD(int64(bucket.QuotaUSD))
+		bucket.ClaudeQuotaUSD = quotaUSD(int64(bucket.ClaudeQuotaUSD))
 		result.Daily = append(result.Daily, *bucket)
 	}
 	slices.SortFunc(result.Daily, func(a, b ActivityDay) int { return cmp.Compare(a.Day, b.Day) })

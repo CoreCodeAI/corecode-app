@@ -90,6 +90,43 @@ type QualityInsights struct {
 	ErrorReasons    []NamedCount  `json:"error_reasons"`
 	ErrorCategories []NamedCount  `json:"error_categories"`
 	Truncated       bool          `json:"truncated"`
+	// Tasks is how the async tasks submitted in the range ended; their
+	// submissions are also requests above, counted as served.
+	Tasks *TaskOutcomes `json:"tasks,omitempty"`
+	// Refusals is what was turned away before any channel was tried.
+	Refusals *QualityRefusals `json:"refusals,omitempty"`
+}
+
+// QualityRefusals counts requests turned away before any channel was tried,
+// whatever the model filter. NoChannel is customers' requests no channel of
+// their group could take; they are also in Requests, Errors and the
+// no_channel error category. RiskGate is the requests the risk gate blocked,
+// read from its own events (observe-mode hits left out), by stage in
+// RiskGateStages; they are not in Requests.
+type QualityRefusals struct {
+	NoChannel      int64        `json:"no_channel"`
+	RiskGate       int64        `json:"risk_gate"`
+	RiskGateStages []NamedCount `json:"risk_gate_stages"`
+}
+
+// readRiskGateBlocks counts the requests the risk gate blocked in the range,
+// by stage.
+func readRiskGateBlocks(r InsightsRange) ([]NamedCount, int64, error) {
+	stages := []NamedCount{}
+	err := DB.Model(&RiskGateEvent{}).Select("stage AS name, COUNT(*) AS count").
+		Where("created_at >= ? AND created_at < ? AND action = ?", r.Start, r.End, RiskGateActionBlocked).
+		Group("stage").Scan(&stages).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	slices.SortFunc(stages, func(a, b NamedCount) int {
+		return cmp.Or(cmp.Compare(b.Count, a.Count), cmp.Compare(a.Name, b.Name))
+	})
+	var total int64
+	for _, stage := range stages {
+		total += stage.Count
+	}
+	return stages, total, nil
 }
 
 // logOtherFields is the part of a log's other column the quality, business
@@ -194,6 +231,7 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 		hourly[start] = &hourBucket{hour: QualityHour{Hour: start}, ttft: histogram{}}
 	}
 	vendor := filterVendor(only)
+	refusals := &QualityRefusals{}
 	streamEnds := make(map[string]int64)
 	statusCodes := make(map[string]int64)
 	reasons := make(map[string]int64)
@@ -205,6 +243,7 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 		mergeCounts(streamEnds, hour.summary.StreamEnds)
 		mergeCounts(statusCodes, hour.summary.StatusCodes)
 		mergeCounts(reasons, hour.summary.ErrorReasons)
+		refusals.NoChannel += hour.summary.Categories[ErrorNoChannel]
 		// An hour without customers' requests holds no vendor split and no
 		// categories either.
 		if vendor != "" && hour.summary.Vendors != nil {
@@ -316,6 +355,13 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	result.ErrorReasons = sortedCounts(reasons)
 	if len(result.ErrorReasons) > 15 {
 		result.ErrorReasons = result.ErrorReasons[:15]
+	}
+	if refusals.RiskGateStages, refusals.RiskGate, err = readRiskGateBlocks(r); err != nil {
+		return nil, err
+	}
+	result.Refusals = refusals
+	if result.Tasks, err = GetTaskOutcomes(r); err != nil {
+		return nil, err
 	}
 	return result, nil
 }

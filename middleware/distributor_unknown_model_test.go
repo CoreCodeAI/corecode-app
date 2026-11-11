@@ -27,9 +27,12 @@ func TestDistributeAnswersUnlistedClaudeModelWithNotFound(t *testing.T) {
 	t.Setenv("SQL_DSN", "")
 	require.NoError(t, model.InitDB())
 	database := model.DB
-	require.NoError(t, database.AutoMigrate(&model.Channel{}, &model.Ability{}))
+	require.NoError(t, database.AutoMigrate(&model.Channel{}, &model.Ability{}, &model.Log{}, &model.User{}))
+	previousLogDB, previousErrorLog := model.LOG_DB, constant.ErrorLogEnabled
+	model.LOG_DB, constant.ErrorLogEnabled = database, true
 	t.Cleanup(func() {
 		model.DB = previousDB
+		model.LOG_DB, constant.ErrorLogEnabled = previousLogDB, previousErrorLog
 		common.SetDatabaseTypes(previousMain, previousLog)
 		common.SQLitePath, common.IsMasterNode = previousPath, previousMaster
 		common.MemoryCacheEnabled, common.RedisEnabled = previousCache, previousRedis
@@ -56,14 +59,19 @@ func TestDistributeAnswersUnlistedClaudeModelWithNotFound(t *testing.T) {
 			name, path, model string
 			wantStatus        int
 			wantBody          string
+			// recorded is whether the refusal is written as a no_channel
+			// error log. A model no channel lists is the customer's mistake,
+			// told apart only through the channel cache.
+			recorded bool
 		}{
 			{name: "unlisted model on messages", path: "/v1/messages", model: "claude-sonnet-5", wantStatus: http.StatusNotFound,
 				wantBody: `{"type":"error","error":{"type":"not_found_error","message":"model: claude-sonnet-5 (request id: %s)"}}`},
-			{name: "listed model with every channel down", path: "/v1/messages", model: "claude-haiku-5-5", wantStatus: http.StatusServiceUnavailable},
-			{name: "unlisted model on chat completions", path: "/v1/chat/completions", model: "claude-sonnet-5", wantStatus: http.StatusServiceUnavailable},
+			{name: "listed model with every channel down", path: "/v1/messages", model: "claude-haiku-5-5", wantStatus: http.StatusServiceUnavailable, recorded: true},
+			{name: "unlisted model on chat completions", path: "/v1/chat/completions", model: "claude-sonnet-5", wantStatus: http.StatusServiceUnavailable, recorded: !memoryCache},
 			{name: "served model", path: "/v1/messages", model: "claude-opus-5-5", wantStatus: http.StatusNoContent},
 		} {
 			t.Run(fmt.Sprintf("memory_cache=%t/%s", memoryCache, tc.name), func(t *testing.T) {
+				require.NoError(t, database.Where("1 = 1").Delete(&model.Log{}).Error)
 				router := gin.New()
 				router.POST(tc.path, RequestId(), func(c *gin.Context) {
 					common.SetContextKey(c, constant.ContextKeyUsingGroup, group)
@@ -83,7 +91,37 @@ func TestDistributeAnswersUnlistedClaudeModelWithNotFound(t *testing.T) {
 				case http.StatusServiceUnavailable:
 					assert.Contains(t, recorder.Body.String(), `"code":"model_not_found"`)
 				}
+
+				var logs []model.Log
+				require.NoError(t, database.Find(&logs).Error)
+				if !tc.recorded {
+					assert.Empty(t, logs)
+					return
+				}
+				require.Len(t, logs, 1)
+				assert.Equal(t, model.LogTypeError, logs[0].Type)
+				assert.Zero(t, logs[0].ChannelId, "no channel was tried")
+				assert.Equal(t, tc.model, logs[0].ModelName)
+				assert.Equal(t, group, logs[0].Group)
+				assert.Equal(t, model.NoChannelErrorContent(http.StatusServiceUnavailable, group), logs[0].Content)
+				assert.Equal(t, recorder.Header().Get(common.RequestIdKey), logs[0].RequestId)
+				assert.Contains(t, logs[0].Other, `"error_code":"no_channel"`)
 			})
 		}
 	}
+
+	constant.ErrorLogEnabled = false
+	require.NoError(t, database.Where("1 = 1").Delete(&model.Log{}).Error)
+	router := gin.New()
+	router.POST("/v1/messages", RequestId(), func(c *gin.Context) {
+		common.SetContextKey(c, constant.ContextKeyUsingGroup, group)
+	}, Distribute())
+	request := httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader([]byte(`{"model":"claude-haiku-5-5","max_tokens":16,"messages":[]}`)))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	var count int64
+	require.NoError(t, database.Model(&model.Log{}).Count(&count).Error)
+	assert.Zero(t, count, "the switch that gates error logs gates the refusal too")
 }

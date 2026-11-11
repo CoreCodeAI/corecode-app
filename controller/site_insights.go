@@ -188,7 +188,12 @@ type FinanceResponse struct {
 	Plans              []service.EnginePlanValue `json:"plans"`
 	PlansError         string                    `json:"plans_error,omitempty"`
 	// PlanAccounts counts every pool account by plan, for what the pool costs.
-	PlanAccounts []service.EnginePlanCount `json:"plan_accounts"`
+	// It is the pool as the engine reported it at PlanAccountsObservedAt (unix
+	// ms, 0 without a report): the engine keeps no history of accounts added
+	// or removed, so what the pool cost earlier in the range is not known.
+	// Accounts outside every group have an empty vendor.
+	PlanAccounts           []service.EnginePlanCount `json:"plan_accounts"`
+	PlanAccountsObservedAt int64                     `json:"plan_accounts_observed_at_ms"`
 	// StartTime and EndTime are the range; MatchedSince is where the days the
 	// engine reported begin, so a cost over time covers the same span.
 	StartTime    int64 `json:"start_time"`
@@ -224,6 +229,7 @@ func GetFinanceInsights(c *gin.Context) {
 		pool := <-poolDone
 		response.Plans = service.EnginePlanValues(pool.Accounts)
 		response.PlanAccounts = service.EnginePlanCounts(pool)
+		response.PlanAccountsObservedAt = pool.ObservedAt
 		response.PlansError = cmp.Or(pool.Error, pool.EstimateError)
 		return response, nil
 	})
