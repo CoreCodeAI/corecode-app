@@ -54,6 +54,30 @@ describe('authentication redirect validation', () => {
     }
   })
 
+  test('rejects targets that normalize or decode into another host', () => {
+    const unsafeTargets = [
+      '/.//attacker.example/path',
+      '/%2e//attacker.example/path',
+      '/%2E%2E//attacker.example/path',
+      '/a/..//attacker.example/path',
+      '/\t/attacker.example/path',
+      'https://dashboard.example.com//attacker.example/path',
+    ]
+
+    for (const target of unsafeTargets) {
+      expect(sanitizeAuthRedirect(target, origin)).toBe(null)
+    }
+  })
+
+  test('keeps encoded slashes and backslashes as an ordinary same-origin path', () => {
+    expect(sanitizeAuthRedirect('/%2F%2Fattacker.example', origin)).toBe(
+      '/%2F%2Fattacker.example'
+    )
+    expect(sanitizeAuthRedirect('/%5C%5Cattacker.example', origin)).toBe(
+      '/%5C%5Cattacker.example'
+    )
+  })
+
   test('rejects invalid or non-HTTP application origins', () => {
     expect(sanitizeAuthRedirect('/dashboard', 'not-an-origin')).toBe(null)
     expect(sanitizeAuthRedirect('/dashboard', 'file:///tmp/app')).toBe(null)

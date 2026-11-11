@@ -69,9 +69,12 @@ export function sanitizeAuthRedirect(
     return null
   }
 
+  // Dot segments normalize too: /.//host becomes the path //host, which a
+  // caller would read as another host.
   if (
     !allowedRedirectProtocols.has(redirectURL.protocol) ||
-    redirectURL.origin !== trustedOrigin.origin
+    redirectURL.origin !== trustedOrigin.origin ||
+    redirectURL.pathname.startsWith('//')
   ) {
     return null
   }
