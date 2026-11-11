@@ -40,7 +40,7 @@ function renderChart(overrides: Partial<ComponentProps<typeof OutlookChart>>) {
   )
 }
 
-describe('the quota curve', () => {
+describe('the supply and demand curves', () => {
   it('names what it shows and marks the stretch with nothing to spend', () => {
     renderChart({})
 
@@ -92,6 +92,31 @@ describe('the quota curve', () => {
     // The range is the drawn series', so it reads right under it.
     expect(screen.getByRole('status')).toHaveTextContent(
       'Spendable at once$200Usual range$50 – $300Weekly quota left'
+    )
+  })
+
+  it('draws the demand in its own panel, apart from the supply', async () => {
+    const user = userEvent.setup()
+    renderChart({
+      demandBand: { upper: [360, 372, 384, 396], lower: [240, 248, 256, 264] },
+    })
+
+    // Each panel names its series: supply in dollars, demand in dollars an
+    // hour, so neither is read on the other's scale.
+    expect(screen.getByText('Supply')).toBeInTheDocument()
+    expect(screen.getByText('Demand')).toBeInTheDocument()
+    expect(screen.getByText('Dollars per hour')).toBeInTheDocument()
+    expect(
+      screen.getByRole('img', {
+        name: /; demand \$300\/h now, peak \$330\/h$/,
+      })
+    ).toBeInTheDocument()
+    expect(screen.getByText('Usual range')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('img'))
+    await user.keyboard('{ArrowRight}')
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Demand$310/hUsual range$248/h – $372/h'
     )
   })
 

@@ -8195,6 +8195,8 @@
     "{{title}}: {{now}} spendable now, least {{lowest}} around {{time}}": "{{title}}：現在すぐ使える額 {{now}}、最小 {{lowest}}（{{time}} 頃）",
     "Nothing": "なし",
     "Demand": "需要",
+    "Dollars per hour": "1時間あたりのドル",
+    "; demand {{now}}/h now, peak {{peak}}/h": "。現在の需要 {{now}}/時間、ピーク {{peak}}/時間",
     "Same hours, last 7 days": "過去 7 日間の同じ時間帯",
     "Smart forecast": "スマート予測",
     "Linear · last hour": "線形 · 過去 1 時間",

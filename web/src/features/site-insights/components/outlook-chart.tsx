@@ -36,12 +36,16 @@ export type OutlookChartReset = {
 }
 
 /**
- * The pool's quota over one window of a forecast: the line is the series the
- * window is read by, with the forecast's usual range as a band behind it,
- * the stretches with nothing to spend shaded, and each reset marked on the
- * time axis. Hovering, dragging a finger across, or focusing and pressing the
- * arrow keys reads out the moment under the pointer: both quota figures, the
- * demand, and the resets landing there.
+ * Supply against demand over one window of a forecast, in two panels on one
+ * time axis. Supply is a stock and demand a rate, so each has its own panel
+ * and scale rather than a second axis on one plot. The upper panel is the
+ * quota the window is read by, in the brand color with a solid line and fill;
+ * the lower is the demand in ink with a dashed line. Each carries the
+ * forecast's usual range as a band, the stretches with nothing to spend are
+ * shaded across both, and each reset is marked on the supply's time axis.
+ * Hovering, dragging a finger across, or focusing and pressing the arrow keys
+ * reads out the moment under the pointer: both quota figures, the demand, and
+ * the resets landing there.
  */
 export function OutlookChart(props: {
   /** Hours from now of each point, ascending from 0. */
@@ -54,6 +58,8 @@ export function OutlookChart(props: {
   demand: number[]
   /** The drawn series under low and high demand; low demand leaves more. */
   band?: { upper: number[]; lower: number[] } | null
+  /** The demand at its low and high scale, for the demand panel's band. */
+  demandBand?: { upper: number[]; lower: number[] } | null
   resets: OutlookChartReset[]
   /**
    * The least the pool can spend at once in the window and when, as the
@@ -78,28 +84,47 @@ export function OutlookChart(props: {
     props.band.lower.length === hours.length
       ? props.band
       : null
+  const demandBand =
+    props.demandBand &&
+    props.demandBand.upper.length === hours.length &&
+    props.demandBand.lower.length === hours.length
+      ? props.demandBand
+      : null
   const top = niceTop(Math.max(...values, ...(band?.upper ?? [])))
+  const demandTop = niceTop(
+    Math.max(...props.demand, ...(demandBand?.upper ?? []))
+  )
   const xOf = (at: number) => (at / span) * 100
-  const yOf = (usd: number) => 100 - (Math.max(usd, 0) / top) * 100
+  const scaleOf = (ceiling: number) => (usd: number) =>
+    100 - (Math.max(usd, 0) / ceiling) * 100
+  const yOf = scaleOf(top)
+  const yDemand = scaleOf(demandTop)
   const unix = (at: number) =>
     Math.floor((props.observedAt + at * HOUR_MS) / 1000)
-  const line = (series: number[]) =>
+  const line = (series: number[], y: (usd: number) => number) =>
     series
       .map(
         (usd, index) =>
-          `${index === 0 ? 'M' : 'L'}${xOf(hours[index]).toFixed(2)},${yOf(usd).toFixed(2)}`
+          `${index === 0 ? 'M' : 'L'}${xOf(hours[index]).toFixed(2)},${y(usd).toFixed(2)}`
       )
       .join(' ')
-  const path = line(values)
-  const bandPath = band
-    ? `${line(band.upper)} ${band.lower
-        .map(
-          (usd, index) =>
-            `L${xOf(hours[index]).toFixed(2)},${yOf(usd).toFixed(2)}`
-        )
-        .reverse()
-        .join(' ')} Z`
-    : null
+  const area = (
+    range: { upper: number[]; lower: number[] } | null,
+    y: (usd: number) => number
+  ) =>
+    range
+      ? `${line(range.upper, y)} ${range.lower
+          .map(
+            (usd, index) =>
+              `L${xOf(hours[index]).toFixed(2)},${y(usd).toFixed(2)}`
+          )
+          .reverse()
+          .join(' ')} Z`
+      : null
+  const path = line(values, yOf)
+  const bandPath = area(band, yOf)
+  const demandPath = line(props.demand, yDemand)
+  const demandBandPath = area(demandBand, yDemand)
 
   // Runs of samples with nothing to spend, each reaching halfway to the
   // sample before and after: a gap starts and ends between two samples.
@@ -167,26 +192,90 @@ export function OutlookChart(props: {
     props.series === 'drawable'
       ? t('Spendable at once')
       : t('Weekly quota left')
-  // The band belongs to the series drawn, so it is read out under it.
-  const range = band && active !== null && (
+  const peakDemand = Math.max(...props.demand, 0)
+  // Each band belongs to its series, so it is read out under it.
+  const rangeRow = (
+    range: { upper: number[]; lower: number[] } | null,
+    format: (usd: number) => string
+  ) =>
+    range &&
+    active !== null && (
+      <>
+        <dt className='text-muted-foreground pl-3 whitespace-nowrap'>
+          {t('Usual range')}
+        </dt>
+        <dd className='text-muted-foreground text-right'>
+          {format(range.lower[active])} – {format(range.upper[active])}
+        </dd>
+      </>
+    )
+  const range = rangeRow(band, fmt.usdWhole)
+  const perHour = (usd: number) =>
+    t('{{amount}}/h', { amount: fmt.usdWhole(usd) })
+  const demandRange = rangeRow(demandBand, perHour)
+  const gapRects = gaps.map((gap) => {
+    const from = xOf(edge(gap.from, -1))
+    const to = xOf(edge(gap.to, 1))
+    return (
+      <rect
+        key={gap.from}
+        x={from}
+        // A gap shorter than the spacing still shows.
+        width={Math.max(to - from, 0.4)}
+        y={0}
+        height={100}
+        className='fill-destructive/20'
+      />
+    )
+  })
+  const grid = (
     <>
-      <dt className='text-muted-foreground pl-3 whitespace-nowrap'>
-        {t('Usual range')}
-      </dt>
-      <dd className='text-muted-foreground text-right'>
-        {fmt.usdWhole(band.lower[active])} – {fmt.usdWhole(band.upper[active])}
-      </dd>
+      {[0, 50, 100].map((y) => (
+        <line
+          key={y}
+          x1={0}
+          x2={100}
+          y1={y}
+          y2={y}
+          className='stroke-border'
+          vectorEffect='non-scaling-stroke'
+        />
+      ))}
+      {ticks.map((tick) => (
+        <line
+          key={tick.hours}
+          x1={xOf(tick.hours)}
+          x2={xOf(tick.hours)}
+          y1={0}
+          y2={100}
+          className='stroke-border'
+          strokeDasharray='2 3'
+          vectorEffect='non-scaling-stroke'
+        />
+      ))}
     </>
   )
 
   return (
     <figure>
       <figcaption className='mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs'>
-        <span className='text-muted-foreground'>{seriesLabel}</span>
+        <span className='flex items-center gap-1.5'>
+          <SupplySwatch />
+          <span className='font-medium'>{t('Supply')}</span>
+          <span aria-hidden className='text-muted-foreground'>
+            ·
+          </span>
+          <span className='text-muted-foreground'>{seriesLabel}</span>
+        </span>
         <span className='text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1'>
-          {band && (
+          {(band || demandBand) && (
             <span className='flex items-center gap-1.5'>
-              <span aria-hidden className='bg-primary/20 size-2.5 rounded-sm' />
+              <span aria-hidden className='flex'>
+                {band && <span className='bg-primary/20 size-2.5 rounded-sm' />}
+                {demandBand && (
+                  <span className='bg-foreground/15 size-2.5 rounded-sm' />
+                )}
+              </span>
               {t('Usual range')}
             </span>
           )}
@@ -220,19 +309,29 @@ export function OutlookChart(props: {
         </span>
       </figcaption>
       <div className='flex gap-2'>
+        {/* One scale per panel: dollars for the supply, dollars an hour
+            for the demand, which its panel's title names. */}
         <div
           aria-hidden
-          className='text-muted-foreground flex h-48 flex-col justify-between text-right text-[10px] leading-none tabular-nums'
+          className='text-muted-foreground flex flex-col text-right text-[10px] leading-none tabular-nums'
         >
-          <span>{fmt.usdCompact(top)}</span>
-          <span>{fmt.usdCompact(top / 2)}</span>
-          <span>{fmt.usdCompact(0)}</span>
+          <div className='flex h-40 flex-col justify-between'>
+            <span>{fmt.usdCompact(top)}</span>
+            <span>{fmt.usdCompact(top / 2)}</span>
+            <span>{fmt.usdCompact(0)}</span>
+          </div>
+          <div className='h-7' />
+          <div className='flex h-24 flex-col justify-between'>
+            <span>{fmt.usdCompact(demandTop)}</span>
+            <span>{fmt.usdCompact(demandTop / 2)}</span>
+            <span>{fmt.usdCompact(0)}</span>
+          </div>
         </div>
         <div className='min-w-0 flex-1'>
           <div
             tabIndex={0}
             role='img'
-            aria-label={t(
+            aria-label={`${t(
               '{{title}}: {{now}} spendable now, least {{lowest}} around {{time}}',
               {
                 title: props.title,
@@ -240,10 +339,13 @@ export function OutlookChart(props: {
                 lowest: fmt.usdWhole(lowest.usd),
                 time: fmt.time(unix(lowest.hours)),
               }
-            )}
+            )}${t('; demand {{now}}/h now, peak {{peak}}/h', {
+              now: fmt.usdWhole(props.demand[0] ?? 0),
+              peak: fmt.usdWhole(peakDemand),
+            })}`}
             // A finger dragging across reads point after point; a vertical
             // drag still scrolls the page.
-            className='focus-visible:ring-ring/50 relative h-48 cursor-crosshair touch-pan-y rounded-sm outline-none focus-visible:ring-2'
+            className='focus-visible:ring-ring/50 relative cursor-crosshair touch-pan-y rounded-sm outline-none focus-visible:ring-2'
             onPointerDown={(event) => setActive(nearest(event))}
             onPointerMove={(event) => setActive(nearest(event))}
             onPointerLeave={(event) => {
@@ -261,94 +363,108 @@ export function OutlookChart(props: {
               }
             }}
           >
-            <svg
-              aria-hidden
-              viewBox='0 0 100 100'
-              preserveAspectRatio='none'
-              className='text-primary block size-full overflow-visible'
-            >
-              {[0, 50, 100].map((y) => (
-                <line
-                  key={y}
-                  x1={0}
-                  x2={100}
-                  y1={y}
-                  y2={y}
-                  className='stroke-border'
-                  vectorEffect='non-scaling-stroke'
-                />
-              ))}
-              {ticks.map((tick) => (
-                <line
-                  key={tick.hours}
-                  x1={xOf(tick.hours)}
-                  x2={xOf(tick.hours)}
-                  y1={0}
-                  y2={100}
-                  className='stroke-border'
-                  strokeDasharray='2 3'
-                  vectorEffect='non-scaling-stroke'
-                />
-              ))}
-              {gaps.map((gap) => {
-                const from = xOf(edge(gap.from, -1))
-                const to = xOf(edge(gap.to, 1))
-                return (
-                  <rect
-                    key={gap.from}
-                    x={from}
-                    // A gap shorter than the spacing still shows.
-                    width={Math.max(to - from, 0.4)}
-                    y={0}
-                    height={100}
-                    className='fill-destructive/20'
-                  />
-                )
-              })}
-              {bandPath && (
-                <path d={bandPath} className='fill-current opacity-20' />
-              )}
-              {/* The band is the fill when there is one: two fills of one
-                  color would hide where it ends. */}
-              {!bandPath && (
-                <path
-                  d={`${path} L100,100 L0,100 Z`}
-                  className='fill-current opacity-10'
-                />
-              )}
-              <path
-                d={path}
-                fill='none'
-                stroke='currentColor'
-                strokeWidth={2}
-                vectorEffect='non-scaling-stroke'
-                strokeLinejoin='round'
-              />
-            </svg>
-            {props.resets.map((reset) => (
-              <span
-                key={reset.key}
+            <div className='relative h-40'>
+              <svg
                 aria-hidden
-                className={cn(
-                  'ring-background pointer-events-none absolute bottom-0 size-1.5 -translate-x-1/2 translate-y-1/2 rounded-full ring-1',
-                  reset.window === 'five_hour'
-                    ? QUOTA_PART_COLORS.five
-                    : QUOTA_PART_COLORS.week
+                viewBox='0 0 100 100'
+                preserveAspectRatio='none'
+                className='text-primary block size-full overflow-visible'
+              >
+                {grid}
+                {gapRects}
+                {bandPath && (
+                  <path d={bandPath} className='fill-current opacity-20' />
                 )}
-                style={{ left: `${xOf(reset.hours)}%` }}
-              />
-            ))}
+                {/* The band is the fill when there is one: two fills of one
+                    color would hide where it ends. */}
+                {!bandPath && (
+                  <path
+                    d={`${path} L100,100 L0,100 Z`}
+                    className='fill-current opacity-10'
+                  />
+                )}
+                <path
+                  d={path}
+                  fill='none'
+                  stroke='currentColor'
+                  strokeWidth={2}
+                  vectorEffect='non-scaling-stroke'
+                  strokeLinejoin='round'
+                />
+              </svg>
+              {props.resets.map((reset) => (
+                <span
+                  key={reset.key}
+                  aria-hidden
+                  className={cn(
+                    'ring-background pointer-events-none absolute bottom-0 size-1.5 -translate-x-1/2 translate-y-1/2 rounded-full ring-1',
+                    reset.window === 'five_hour'
+                      ? QUOTA_PART_COLORS.five
+                      : QUOTA_PART_COLORS.week
+                  )}
+                  style={{ left: `${xOf(reset.hours)}%` }}
+                />
+              ))}
+              {active !== null && (
+                <span
+                  aria-hidden
+                  className='bg-primary ring-background pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2'
+                  style={{ left: `${x}%`, top: `${yOf(values[active])}%` }}
+                />
+              )}
+            </div>
+            <p className='flex h-7 items-end gap-1.5 pb-1 text-xs'>
+              <DemandSwatch />
+              <span className='font-medium'>{t('Demand')}</span>
+              <span aria-hidden className='text-muted-foreground'>
+                ·
+              </span>
+              <span className='text-muted-foreground'>
+                {t('Dollars per hour')}
+              </span>
+            </p>
+            <div className='relative h-24'>
+              <svg
+                aria-hidden
+                viewBox='0 0 100 100'
+                preserveAspectRatio='none'
+                className='text-foreground block size-full overflow-visible'
+              >
+                {grid}
+                {gapRects}
+                {demandBandPath && (
+                  <path
+                    d={demandBandPath}
+                    className='fill-current opacity-10'
+                  />
+                )}
+                <path
+                  d={demandPath}
+                  fill='none'
+                  stroke='currentColor'
+                  strokeWidth={2}
+                  strokeDasharray='5 3'
+                  vectorEffect='non-scaling-stroke'
+                  strokeLinejoin='round'
+                />
+              </svg>
+              {active !== null && (
+                <span
+                  aria-hidden
+                  className='bg-foreground ring-background pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2'
+                  style={{
+                    left: `${x}%`,
+                    top: `${yDemand(props.demand[active])}%`,
+                  }}
+                />
+              )}
+            </div>
             {active !== null && (
               <>
                 <span
                   aria-hidden
                   className='border-foreground/30 pointer-events-none absolute inset-y-0 border-l border-dashed'
                   style={{ left: `${x}%` }}
-                />
-                <span
-                  aria-hidden
-                  className='bg-primary ring-background pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2'
-                  style={{ left: `${x}%`, top: `${yOf(values[active])}%` }}
                 />
                 <div
                   role='status'
@@ -362,7 +478,8 @@ export function OutlookChart(props: {
                 >
                   <p className='font-medium'>{fmt.time(unix(hours[active]))}</p>
                   <dl className='grid grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 tabular-nums'>
-                    <dt className='text-muted-foreground whitespace-nowrap'>
+                    <dt className='text-muted-foreground flex items-center gap-1.5 whitespace-nowrap'>
+                      {props.series === 'drawable' && <SupplySwatch />}
                       {t('Spendable at once')}
                     </dt>
                     <dd
@@ -376,21 +493,22 @@ export function OutlookChart(props: {
                         : t('Nothing')}
                     </dd>
                     {props.series === 'drawable' && range}
-                    <dt className='text-muted-foreground whitespace-nowrap'>
+                    <dt className='text-muted-foreground flex items-center gap-1.5 whitespace-nowrap'>
+                      {props.series === 'weekLeft' && <SupplySwatch />}
                       {t('Weekly quota left')}
                     </dt>
                     <dd className='text-right'>
                       {fmt.usdWhole(props.weekLeft[active])}
                     </dd>
                     {props.series === 'weekLeft' && range}
-                    <dt className='text-muted-foreground whitespace-nowrap'>
+                    <dt className='text-muted-foreground flex items-center gap-1.5 whitespace-nowrap'>
+                      <DemandSwatch />
                       {t('Demand')}
                     </dt>
-                    <dd className='text-right'>
-                      {t('{{amount}}/h', {
-                        amount: fmt.usdWhole(props.demand[active]),
-                      })}
+                    <dd className='text-right font-medium'>
+                      {perHour(props.demand[active])}
                     </dd>
+                    {demandRange}
                   </dl>
                   {landing.map((reset) => (
                     <p key={reset.key} className='flex items-center gap-1.5'>
@@ -430,6 +548,54 @@ export function OutlookChart(props: {
         </div>
       </div>
     </figure>
+  )
+}
+
+// The legend marks: the supply is a solid line over its fill, the demand a
+// dashed line in ink, so the two differ in color and in stroke.
+function SupplySwatch() {
+  return (
+    <svg
+      aria-hidden
+      viewBox='0 0 14 10'
+      className='text-primary h-2.5 w-3.5 shrink-0'
+    >
+      <rect
+        x={0}
+        y={5}
+        width={14}
+        height={5}
+        className='fill-current opacity-20'
+      />
+      <line
+        x1={0}
+        x2={14}
+        y1={5}
+        y2={5}
+        stroke='currentColor'
+        strokeWidth={2}
+      />
+    </svg>
+  )
+}
+
+function DemandSwatch() {
+  return (
+    <svg
+      aria-hidden
+      viewBox='0 0 14 10'
+      className='text-foreground h-2.5 w-3.5 shrink-0'
+    >
+      <line
+        x1={0}
+        x2={14}
+        y1={5}
+        y2={5}
+        stroke='currentColor'
+        strokeWidth={2}
+        strokeDasharray='4 2'
+      />
+    </svg>
   )
 }
 

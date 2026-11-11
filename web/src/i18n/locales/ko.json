@@ -8195,6 +8195,8 @@
     "{{title}}: {{now}} spendable now, least {{lowest}} around {{time}}": "{{title}}: 현재 즉시 사용 가능 {{now}}, 최저 {{lowest}} ({{time}}경)",
     "Nothing": "없음",
     "Demand": "수요",
+    "Dollars per hour": "시간당 달러",
+    "; demand {{now}}/h now, peak {{peak}}/h": "; 현재 수요 {{now}}/시간, 최고 {{peak}}/시간",
     "Same hours, last 7 days": "지난 7일 같은 시간대",
     "Smart forecast": "스마트 예측",
     "Linear · last hour": "선형 · 지난 1시간",
