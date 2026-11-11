@@ -60,7 +60,7 @@ describe('the locale split for the boot and core pages', () => {
   test('reads keys after and inside template literals with substitutions', () => {
     // The pool tab names this after several `${...}` templates; their closing
     // backticks once opened matches that swallowed it, so it went to core.
-    expect(parts.get('Peak throughput')).toBe('rest')
+    expect(parts.get('Left before the line')).toBe('rest')
     // The error page names this inside one: `${t('...')} ...`.
     expect(parts.get('Oops! Something went wrong')).toBe('boot')
   })

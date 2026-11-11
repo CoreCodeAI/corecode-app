@@ -252,6 +252,122 @@ export type EngineRunwayAddition = {
 }
 
 /** The vendors the pool tab switches between, Claude first. */
+/** The windows the outlook reports, in hours. */
+export const OUTLOOK_WINDOWS = [5, 24, 168] as const
+export type OutlookWindowHours = (typeof OUTLOOK_WINDOWS)[number]
+
+/** The demand forecasts the outlook runs the pool under. */
+export const OUTLOOK_MODELS = [
+  'linear_1h',
+  'linear_12h',
+  'linear_24h',
+  'history',
+  'smart',
+] as const
+export type OutlookModelId = (typeof OUTLOOK_MODELS)[number]
+
+/**
+ * The Claude pool's quota over the next 5 hours, 24 hours and 7 days: what
+ * the accounts hold, what their resets bring back, and whether that meets
+ * demand under each forecast. Dollars are the pool estimate's.
+ */
+export type EngineOutlook = {
+  configured: boolean
+  error?: string
+  channel: string
+  observed_at_ms: number
+  counted: number
+  unknown: number
+  week_capacity_usd: number
+  five_hour_capacity_usd: number
+  /** What the weekly resets bring back per hour. */
+  sustainable_usd_per_hour: number
+  /** The most fresh 5-hour windows serve in an hour. */
+  peak_usd_per_hour: number
+  /** One entry per window, shortest first. */
+  remaining: EngineOutlookRemaining[]
+  resets: EngineOutlookReset[]
+  /** Hours from now of each curve point. */
+  sample_hours: number[]
+  models: EngineOutlookModel[]
+  growth_per_day: number
+  /** The multiple the latest hours put on the smart model's level now. */
+  momentum: number
+  band_forecasts: number
+  history_hours: number
+  /** Set when gpt-load's recent spend could not be read. */
+  usage_error?: string
+}
+
+/** The most the pool can spend within a window, whatever the demand. */
+export type EngineOutlookRemaining = {
+  hours: number
+  /** Counting no reset of a window as long as this one or longer. */
+  on_hand_usd: number
+  five_hour_refill_usd: number
+  week_refill_usd: number
+  with_resets_usd: number
+}
+
+export type EngineOutlookReset = {
+  credential_id: number
+  email_mask: string
+  window: 'five_hour' | 'seven_day'
+  at_ms: number
+  /** What the reset adds if the account spends nothing more before it. */
+  adds_usd: number
+}
+
+export type EngineOutlookWindow = {
+  hours: number
+  demand_usd: number
+  served_usd: number
+  short_usd: number
+  short_hours: number
+  first_short_hours: number | null
+  /** The least the pool could spend at once in the window, and when. */
+  lowest_usd: number
+  lowest_hours: number
+}
+
+export type EngineOutlookBand = {
+  scale: number
+  windows: EngineOutlookWindow[]
+  drawable: number[]
+  week_left: number[]
+}
+
+export type EngineOutlookAddition = {
+  plan: string
+  tier: string
+  week_usd: number
+  five_hour_usd: number
+  measured: number
+  /** Accounts for a weekly load of 100% at the model's average demand. */
+  keep_up: number
+  /** Accounts for no unserved demand in 7 days; null above the search. */
+  cover_week: number | null
+}
+
+/** One demand forecast and the pool run forward under it. */
+export type EngineOutlookModel = {
+  id: OutlookModelId
+  /** False when the model's input could not be read. */
+  available: boolean
+  rate_usd_per_hour: number
+  average_usd_per_hour: number
+  peak_usd_per_hour: number
+  week_load: number
+  windows: EngineOutlookWindow[]
+  /** One value per sample: spendable at once, weekly quota left, $/h. */
+  drawable: number[]
+  week_left: number[]
+  demand: number[]
+  low: EngineOutlookBand | null
+  high: EngineOutlookBand | null
+  additions: EngineOutlookAddition[]
+}
+
 export const POOL_PROVIDERS = ['claude', 'codex', 'grok', 'gemini'] as const
 export type PoolProvider = (typeof POOL_PROVIDERS)[number]
 

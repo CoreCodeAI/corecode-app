@@ -266,6 +266,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/site-insights/quality":                                                         accessTokenScopeRule("ops:read"),
 	"GET /api/site-insights/pool":                                                            accessTokenScopeRule("ops:read"),
 	"GET /api/site-insights/pool-usage":                                                      accessTokenScopeRule("ops:read"),
+	"GET /api/site-insights/pool-outlook":                                                    accessTokenScopeRule("ops:read"),
 	"PUT /api/site-insights/pool/subscription-renewals/:organization_uuid":                   accessTokenScopeRule("ops:write"),
 	"POST /api/site-insights/pool/groups/:group_id/credentials/:credential_id/reset-credits": accessTokenScopeRule("ops:write"),
 	"GET /api/site-insights/finance":                                                         accessTokenScopeRule("billing:read"),

@@ -32,6 +32,16 @@ const (
 	// so the trend levels off after about five days instead of compounding.
 	demandGrowthDamping = 0.8
 	demandProfileTTL    = 10 * time.Minute
+	// demandMomentumHours is the latest whole hours the momentum is read
+	// from, demandMomentumHalfLife how fast it fades from the forecast, in
+	// hours, and demandMomentumBound the most it moves the level either way.
+	// Backtested on the Claude models over the ten days to 2026-11-11, a
+	// forecast carrying it missed the next 5 hours by a mean absolute log
+	// error of 0.257 against 0.278 without, and the next 24 by 0.208 against
+	// 0.211; over a week it has faded and changes nothing.
+	demandMomentumHours    = 2
+	demandMomentumHalfLife = 2.0
+	demandMomentumBound    = 1.5
 )
 
 // demandProfile is how the pool's demand moves around its 24-hour average.
@@ -58,6 +68,10 @@ type demandProfile struct {
 	// level by the growth read at its own origin.
 	low, high float64
 	origins   int
+	// momentum is the latest demandMomentumHours' use over what the level
+	// and the shape expect of those hours, bounded by demandMomentumBound:
+	// above 1 when use is running ahead of its level right now. 0 reads as 1.
+	momentum float64
 }
 
 func flatDemand() demandProfile {
@@ -107,9 +121,11 @@ func buildDemandProfile(series []float64, firstHour int64) demandProfile {
 	}
 	profile.shape, profile.hours = shape, hours
 	profile.growth = demandGrowth(series)
+	level := demandLevel(series, len(series), shape, utcHour)
 	if day := mean(series[len(series)-24:]); day > 0 {
-		profile.recent = demandLevel(series, len(series), shape, utcHour) / day
+		profile.recent = level / day
 	}
+	profile.momentum = demandMomentum(series, level, shape, utcHour)
 
 	var ratios []float64
 	// Only the last week's forecasts: older ones score a younger pool.
@@ -158,6 +174,30 @@ func demandLevel(series []float64, end int, shape [24]float64, utcHour func(int)
 		return mean(series[max(0, end-24):end])
 	}
 	return used / expected
+}
+
+// demandMomentum is the use of the last demandMomentumHours over what level
+// and shape expect of them, kept within demandMomentumBound; 1 without a
+// level to compare with.
+func demandMomentum(series []float64, level float64, shape [24]float64, utcHour func(int) int) float64 {
+	used, expected := 0.0, 0.0
+	for k := max(0, len(series)-demandMomentumHours); k < len(series); k++ {
+		used += series[k]
+		expected += level * shape[utcHour(k)]
+	}
+	if expected <= 0 {
+		return 1
+	}
+	return math.Max(1/demandMomentumBound, math.Min(demandMomentumBound, used/expected))
+}
+
+// momentumAt is the multiple the momentum puts on demand hours after now:
+// all of it at once, halving every demandMomentumHalfLife.
+func (profile demandProfile) momentumAt(hours float64) float64 {
+	if profile.momentum <= 0 {
+		return 1
+	}
+	return 1 + (profile.momentum-1)*math.Exp2(-hours/demandMomentumHalfLife)
 }
 
 // levelScale is the multiple of the last 24 hours' mean the level stands at.
@@ -245,8 +285,12 @@ func mean(values []float64) float64 {
 
 type demandCacheEntry struct {
 	profile demandProfile
-	hour    int64
-	readAt  time.Time
+	// series is the hourly use the profile was built from, oldest first,
+	// and first the hour its first entry starts at, unix seconds.
+	series []float64
+	first  int64
+	hour   int64
+	readAt time.Time
 }
 
 var demandCache struct {
@@ -264,6 +308,15 @@ func claudeDemandProfile(now time.Time) demandProfile {
 // for demandProfileTTL within the same hour. A failed read gives a flat
 // shape, which is the projection the pool had before.
 func vendorDemandProfile(vendor string, now time.Time) demandProfile {
+	profile, _, _ := vendorDemandHistory(vendor, now)
+	return profile
+}
+
+// vendorDemandHistory is vendorDemandProfile with the hourly use it was
+// built from: demandHistory whole hours, oldest first, the first starting at
+// the returned unix second. A failed read gives a flat shape and no hours.
+// The slice is shared between callers and must not be modified.
+func vendorDemandHistory(vendor string, now time.Time) (demandProfile, []float64, int64) {
 	hour := now.Unix() - now.Unix()%3600
 	demandCache.mu.Lock()
 	defer demandCache.mu.Unlock()
@@ -271,7 +324,7 @@ func vendorDemandProfile(vendor string, now time.Time) demandProfile {
 		demandCache.entries = make(map[string]demandCacheEntry)
 	}
 	if entry, ok := demandCache.entries[vendor]; ok && entry.hour == hour && time.Since(entry.readAt) < demandProfileTTL {
-		return entry.profile
+		return entry.profile, entry.series, entry.first
 	}
 	from := hour - demandHistory*3600
 	quota, err := vendorHourlyQuota(vendor, from, hour)
@@ -281,15 +334,15 @@ func vendorDemandProfile(vendor string, now time.Time) demandProfile {
 		demandCache.entries[vendor] = demandCacheEntry{
 			profile: flatDemand(), hour: hour, readAt: time.Now().Add(time.Minute - demandProfileTTL),
 		}
-		return flatDemand()
+		return flatDemand(), nil, 0
 	}
 	series := make([]float64, demandHistory)
 	for i := range series {
 		series[i] = float64(quota[from+int64(i)*3600])
 	}
 	profile := buildDemandProfile(series, from)
-	demandCache.entries[vendor] = demandCacheEntry{profile: profile, hour: hour, readAt: time.Now()}
-	return profile
+	demandCache.entries[vendor] = demandCacheEntry{profile: profile, series: series, first: from, hour: hour, readAt: time.Now()}
+	return profile, series, from
 }
 
 // vendorHourlyQuota sums quota_data per hour over every model prefix the

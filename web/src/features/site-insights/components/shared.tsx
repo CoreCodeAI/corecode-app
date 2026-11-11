@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { ChevronLeft, ChevronRight, CircleHelp } from 'lucide-react'
 import {
+  Fragment,
   useState,
   type PointerEvent,
   type ReactElement,
@@ -326,6 +327,56 @@ export function HelpLabel(props: { label: ReactNode; help?: string }) {
   )
 }
 
+/**
+ * A bar or meter that reads out what it is made of on hover, keyboard focus
+ * or a tap. The target is taller than the bar, so a finger finds it.
+ */
+export function ReadoutTip(props: {
+  title: ReactNode
+  rows: {
+    key: string
+    label: ReactNode
+    value: ReactNode
+    /** The color class of the mark the row stands for. */
+    swatch?: string
+  }[]
+  children: ReactNode
+}) {
+  return (
+    <TapTooltip>
+      <TapTooltipTrigger
+        render={
+          <span
+            tabIndex={0}
+            className='focus-visible:ring-ring/50 -my-2 block cursor-default rounded-sm py-2 outline-none focus-visible:ring-2'
+          />
+        }
+      >
+        {props.children}
+      </TapTooltipTrigger>
+      <TooltipContent className='block min-w-48 py-2'>
+        <p className='mb-1.5 font-semibold'>{props.title}</p>
+        <dl className='grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 tabular-nums'>
+          {props.rows.map((row) => (
+            <Fragment key={row.key}>
+              <dt className='flex items-center gap-1.5 opacity-80'>
+                {row.swatch && (
+                  <span
+                    aria-hidden
+                    className={cn('size-2 shrink-0 rounded-sm', row.swatch)}
+                  />
+                )}
+                {row.label}
+              </dt>
+              <dd className='text-right'>{row.value}</dd>
+            </Fragment>
+          ))}
+        </dl>
+      </TooltipContent>
+    </TapTooltip>
+  )
+}
+
 // Tooltips in cards and tables open quickly, so a reader scanning across
 // them is not left waiting on each one.
 const HELP_DELAY = 150
@@ -554,11 +605,21 @@ export function Sparkline(props: {
   )
 }
 
-export function MetricGrid(props: { items: MetricItem[]; loading?: boolean }) {
+export function MetricGrid(props: {
+  items: MetricItem[]
+  loading?: boolean
+  /** Replaces the column counts, for a row of fewer than six figures. */
+  className?: string
+}) {
   const fmt = useInsightsFormat()
   return (
     <TooltipProvider delay={HELP_DELAY}>
-      <dl className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6'>
+      <dl
+        className={cn(
+          'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6',
+          props.className
+        )}
+      >
         {props.items.map((item) => (
           <Card
             key={item.label}
