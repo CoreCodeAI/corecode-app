@@ -8045,6 +8045,8 @@
     "Priced by usage": "Priced by usage",
     "{{price}} / second": "{{price}} / second",
     "Billed per second of generated video.": "Billed per second of generated video.",
-    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K."
+    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.",
+    "Service Status": "Service Status",
+    "Live availability of each group, served at /status/.": "Live availability of each group, served at /status/."
   }
 }

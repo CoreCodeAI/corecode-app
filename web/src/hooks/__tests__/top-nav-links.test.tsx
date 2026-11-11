@@ -77,6 +77,18 @@ describe('rankings nav link', () => {
   })
 })
 
+describe('status nav link', () => {
+  it('is shown to visitors by default and opens outside the router', () => {
+    expect(linkHrefsFor()).toContain('/status/')
+  })
+
+  it('is hidden when the module is disabled', () => {
+    expect(
+      linkHrefsFor(undefined, JSON.stringify({ status: false }))
+    ).not.toContain('/status/')
+  })
+})
+
 describe('enterprise nav link', () => {
   it('is shown to visitors by default', () => {
     expect(linkHrefsFor()).toContain('/enterprise')

@@ -8045,6 +8045,8 @@
     "Priced by usage": "使用量に応じた料金",
     "{{price}} / second": "{{price}} / 秒",
     "Billed per second of generated video.": "生成した動画の秒数に応じて課金されます。",
-    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "1 枚ごとの課金で、出力サイズによって価格が変わります。1024x1024 などの小さいサイズは 1K、3840x2160 などの大きいサイズは 4K です。それ以外のサイズ、およびサイズ未指定のリクエストは 2K で課金されます。"
+    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "1 枚ごとの課金で、出力サイズによって価格が変わります。1024x1024 などの小さいサイズは 1K、3840x2160 などの大きいサイズは 4K です。それ以外のサイズ、およびサイズ未指定のリクエストは 2K で課金されます。",
+    "Service Status": "稼働状況",
+    "Live availability of each group, served at /status/.": "各グループの稼働状況。/status/ で公開。"
   }
 }

@@ -58,6 +58,7 @@ const headerNavSchema = z.object({
   docs: z.boolean(),
   about: z.boolean(),
   enterprise: z.boolean(),
+  status: z.boolean(),
 })
 
 type HeaderNavFormValues = z.infer<typeof headerNavSchema>
@@ -100,6 +101,10 @@ const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
     config.enterprise === undefined
       ? HEADER_NAV_DEFAULT.enterprise
       : Boolean(config.enterprise),
+  status:
+    config.status === undefined
+      ? HEADER_NAV_DEFAULT.status
+      : Boolean(config.status),
 })
 
 export function HeaderNavigationSection({
@@ -127,6 +132,7 @@ export function HeaderNavigationSection({
       docs: values.docs,
       about: values.about,
       enterprise: values.enterprise,
+      status: values.status,
       pricing: {
         ...(config.pricing ?? HEADER_NAV_DEFAULT.pricing),
         enabled: values.pricingEnabled,
@@ -183,6 +189,11 @@ export function HeaderNavigationSection({
       key: 'enterprise',
       title: t('Enterprise'),
       description: t('Public page where teams apply for enterprise pricing.'),
+    },
+    {
+      key: 'status',
+      title: t('Service Status'),
+      description: t('Live availability of each group, served at /status/.'),
     },
   ]
 

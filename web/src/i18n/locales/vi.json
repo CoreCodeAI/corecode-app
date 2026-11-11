@@ -8045,6 +8045,8 @@
     "Priced by usage": "Giá theo mức dùng",
     "{{price}} / second": "{{price}} / giây",
     "Billed per second of generated video.": "Tính phí theo từng giây video được tạo.",
-    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "Tính theo từng ảnh, tùy kích thước đầu ra. Kích thước nhỏ như 1024x1024 là 1K, kích thước lớn như 3840x2160 là 4K; mọi kích thước khác và yêu cầu không nêu kích thước đều tính ở mức 2K."
+    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "Tính theo từng ảnh, tùy kích thước đầu ra. Kích thước nhỏ như 1024x1024 là 1K, kích thước lớn như 3840x2160 là 4K; mọi kích thước khác và yêu cầu không nêu kích thước đều tính ở mức 2K.",
+    "Service Status": "Trạng thái dịch vụ",
+    "Live availability of each group, served at /status/.": "Tình trạng hoạt động của từng nhóm, tại /status/."
   }
 }

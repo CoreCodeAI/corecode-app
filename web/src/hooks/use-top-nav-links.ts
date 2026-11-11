@@ -82,6 +82,12 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Model Pricing'), href: '/pricing', requiresAuth })
   }
 
+  // Service status. /status/ is a static page beside the console, not a route
+  // in it, so it opens like the external docs link does.
+  if (modules?.status !== false) {
+    links.push({ title: t('Service Status'), href: '/status/', external: true })
+  }
+
   // Rankings (administrators only; the backend enforces the same rule)
   const rankings = modules?.rankings
   if (rankings && typeof rankings === 'object' && rankings.enabled && isAdmin) {
