@@ -55,6 +55,12 @@ func ServeFrontendFiles(frontendFS static.ServeFileSystem) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		urlPath := c.Request.URL.Path
 		if !frontendFS.Exists("/", urlPath) {
+			if strings.HasPrefix(urlPath, "/static/") {
+				// A hashed file no build has: index.html in its place would
+				// fail to load as a chunk, and must not be cached as one.
+				c.Header("Cache-Control", "no-store")
+				c.AbortWithStatus(http.StatusNotFound)
+			}
 			return
 		}
 		c.Abort()
