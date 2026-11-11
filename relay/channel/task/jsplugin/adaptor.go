@@ -455,22 +455,49 @@ func inlineJSONFilePlaceholders(c *gin.Context, body any) (any, error) {
 		defer form.RemoveAll()
 	}
 	limit := maxInlineFileBytes()
-	var total int64
-	ctx := context.Background()
+	files := &filePlaceholderState{limit: limit, ctx: context.Background()}
 	if c != nil && c.Request != nil {
-		ctx = c.Request.Context()
+		files.ctx = c.Request.Context()
 	}
-	return replaceJSONFilePlaceholders(ctx, cloned, form, limit, &total)
+	if c != nil {
+		files.urls = requestFileURLs(c)
+	}
+	return replaceJSONFilePlaceholders(cloned, form, files)
 }
 
-func replaceJSONFilePlaceholders(ctx context.Context, value any, form *multipart.Form, limit int64, total *int64) (any, error) {
+// filePlaceholderState carries one request attempt's file budget, and the
+// URLs uploaded for the request so far.
+type filePlaceholderState struct {
+	ctx   context.Context
+	limit int64
+	total int64
+	// urls maps a file reference and media type to the URL its upload
+	// returned. It lives on the request, so a retry that rebuilds the body
+	// reuses the upload instead of storing the same file again.
+	urls map[string]string
+}
+
+const contextKeyTaskPluginFileURLs = "task_plugin_file_urls"
+
+func requestFileURLs(c *gin.Context) map[string]string {
+	if existing, ok := c.Get(contextKeyTaskPluginFileURLs); ok {
+		if urls, ok := existing.(map[string]string); ok {
+			return urls
+		}
+	}
+	urls := map[string]string{}
+	c.Set(contextKeyTaskPluginFileURLs, urls)
+	return urls
+}
+
+func replaceJSONFilePlaceholders(value any, form *multipart.Form, files *filePlaceholderState) (any, error) {
 	switch typed := value.(type) {
 	case map[string]any:
 		if _, isPlaceholder := typed["__fileRef"]; isPlaceholder {
-			return encodeFilePlaceholder(ctx, typed, form, limit, total)
+			return encodeFilePlaceholder(typed, form, files)
 		}
 		for key, item := range typed {
-			replaced, err := replaceJSONFilePlaceholders(ctx, item, form, limit, total)
+			replaced, err := replaceJSONFilePlaceholders(item, form, files)
 			if err != nil {
 				return nil, err
 			}
@@ -479,7 +506,7 @@ func replaceJSONFilePlaceholders(ctx context.Context, value any, form *multipart
 		return typed, nil
 	case []any:
 		for index, item := range typed {
-			replaced, err := replaceJSONFilePlaceholders(ctx, item, form, limit, total)
+			replaced, err := replaceJSONFilePlaceholders(item, form, files)
 			if err != nil {
 				return nil, err
 			}
@@ -491,7 +518,8 @@ func replaceJSONFilePlaceholders(ctx context.Context, value any, form *multipart
 	}
 }
 
-func encodeFilePlaceholder(ctx context.Context, placeholder map[string]any, form *multipart.Form, limit int64, total *int64) (string, error) {
+func encodeFilePlaceholder(placeholder map[string]any, form *multipart.Form, files *filePlaceholderState) (string, error) {
+	limit := files.limit
 	for key := range placeholder {
 		switch key {
 		case "__fileRef", "encoding", "mimeType", "maxBytes":
@@ -515,11 +543,11 @@ func encodeFilePlaceholder(ctx context.Context, placeholder map[string]any, form
 		return "", fmt.Errorf("unknown file reference %q", ref)
 	}
 	field, index, validRef := pluginruntime.ParseFileReference(ref)
-	files := form.File[field]
-	if !validRef || index >= len(files) {
+	uploads := form.File[field]
+	if !validRef || index >= len(uploads) {
 		return "", fmt.Errorf("unknown file reference %q", ref)
 	}
-	header := files[index]
+	header := uploads[index]
 	maxBytes := limit
 	if raw, exists := placeholder["maxBytes"]; exists {
 		n, ok := usageNumber(raw)
@@ -545,10 +573,10 @@ func encodeFilePlaceholder(ctx context.Context, placeholder map[string]any, form
 	if int64(len(data)) > maxBytes {
 		return "", fmt.Errorf("file %q exceeds the %d byte limit", ref, maxBytes)
 	}
-	if *total+int64(len(data)) > limit {
+	if files.total+int64(len(data)) > limit {
 		return "", fmt.Errorf("inlined files exceed the %d byte limit", limit)
 	}
-	*total += int64(len(data))
+	files.total += int64(len(data))
 	if encoding == "base64" {
 		return base64.StdEncoding.EncodeToString(data), nil
 	}
@@ -559,9 +587,16 @@ func encodeFilePlaceholder(ctx context.Context, placeholder map[string]any, form
 		mimeType = contentType
 	}
 	if encoding == "url" {
-		fileURL, err := store.Put(ctx, data, mimeType)
+		key := ref + "\x00" + mimeType
+		if fileURL, uploaded := files.urls[key]; uploaded {
+			return fileURL, nil
+		}
+		fileURL, err := store.Put(files.ctx, data, mimeType)
 		if err != nil {
 			return "", fmt.Errorf("file %q: %w", ref, err)
+		}
+		if files.urls != nil {
+			files.urls[key] = fileURL
 		}
 		return fileURL, nil
 	}

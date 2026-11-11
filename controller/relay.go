@@ -575,7 +575,12 @@ func executeTaskSubmissionWith(
 			channel, channelErr = getChannel(c, relayInfo, retryParam)
 			if channelErr != nil {
 				logger.LogError(c, channelErr.Error())
-				taskErr = service.TaskErrorWrapperLocal(channelErr.Err, "get_channel_failed", channelErr.StatusCode)
+				// A retry that finds no further channel keeps the failure that
+				// caused it: "no available channel" would hide why the
+				// submission failed.
+				if taskErr == nil {
+					taskErr = service.TaskErrorWrapperLocal(channelErr.Err, "get_channel_failed", channelErr.StatusCode)
+				}
 				break
 			}
 		}
@@ -837,6 +842,7 @@ func presentTaskSubmission(c *gin.Context, outcome *taskSubmissionOutcome) {
 func respondTaskSubmissionError(c *gin.Context, taskErr *taskdto.TaskError) {
 	service.RecordRequestPolicyTermination(c, taskSubmissionAPIError(taskErr))
 	newTaskPluginSubmitDiagnostics(c).presentError(taskErr)
+	explainUpstreamUnavailable(c, taskErr)
 	// The client of a relayed event stream already has the vendor's events,
 	// including any error event; nothing can follow them.
 	if c.Writer.Written() {
@@ -846,6 +852,44 @@ func respondTaskSubmissionError(c *gin.Context, taskErr *taskdto.TaskError) {
 		return
 	}
 	respondTaskError(c, taskErr)
+}
+
+// explainUpstreamUnavailable rewrites an upstream 5xx on submission into a
+// message a person can act on: the service is busy, nothing was charged (the
+// submission refunds before it answers), try again later. The vendor's own
+// message follows in parentheses, without its JSON wrapping.
+func explainUpstreamUnavailable(c *gin.Context, taskErr *taskdto.TaskError) {
+	if taskErr == nil || taskErr.LocalError || taskErr.StatusCode/100 != 5 {
+		return
+	}
+	message := i18n.T(c, i18n.MsgRelayTaskUpstreamUnavailable)
+	if detail := upstreamErrorDetail(taskErr.Message); detail != "" {
+		message += " (" + detail + ")"
+	}
+	taskErr.Message = message
+}
+
+// upstreamErrorDetail returns error.message (or message) from a JSON error
+// body, or the trimmed text itself, capped at 200 characters.
+func upstreamErrorDetail(body string) string {
+	body = strings.TrimSpace(body)
+	var decoded struct {
+		Message string `json:"message"`
+		Error   struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if common.UnmarshalJsonStr(body, &decoded) == nil {
+		if decoded.Error.Message != "" {
+			body = decoded.Error.Message
+		} else if decoded.Message != "" {
+			body = decoded.Message
+		}
+	}
+	if runes := []rune(body); len(runes) > 200 {
+		body = string(runes[:200]) + "…"
+	}
+	return body
 }
 
 // respondTaskError 统一输出 Task 错误响应（含 429 限流提示改写）

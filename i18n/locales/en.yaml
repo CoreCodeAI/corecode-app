@@ -51,6 +51,7 @@ relay.shared_task_price_needs_override: "Model {{.Model}} shares its billing exp
 relay.task_channel_disabled: "The channel of this task has been disabled"
 relay.group_saturated: "The current group is at capacity. Please try again later, or upgrade your account for better service."
 relay.group_upstream_saturated: "The upstream of the current group is at capacity. Please try again later"
+relay.task_upstream_unavailable: "The generation service is temporarily unavailable. Nothing was charged; please try again later"
 relay.retry_get_channel_failed: "Failed to get available channel for model {{.Model}} under group {{.Group}} (retry): {{.Error}}"
 relay.retry_no_available_channel: "No available channel for model {{.Model}} under group {{.Group}} (retry)"
 relay.access_token_unsupported: "Access tokens are not supported here"

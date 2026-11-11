@@ -2991,11 +2991,10 @@ export function parseSubmitResponse(){return {taskId:"1"}} export function build
 `
 	plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
 	require.NoError(t, err)
-	build := func() (map[string]any, error) {
+	buildIn := func(c *gin.Context) (map[string]any, error) {
 		adaptor := New(plugin)
 		info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: "https://provider.example"}, TaskRelayInfo: &relaycommon.TaskRelayInfo{}}
 		adaptor.Init(info)
-		c := newMultipartFileContext(t, "first_frame", "f.jpg", "image/jpeg", []byte("frame-bytes"))
 		c.Set("task_request", map[string]any{})
 		body, err := adaptor.BuildRequestBody(c, info)
 		if err != nil {
@@ -3007,6 +3006,9 @@ export function parseSubmitResponse(){return {taskId:"1"}} export function build
 		require.NoError(t, common.Unmarshal(raw, &decoded))
 		return decoded, nil
 	}
+	build := func() (map[string]any, error) {
+		return buildIn(newMultipartFileContext(t, "first_frame", "f.jpg", "image/jpeg", []byte("frame-bytes")))
+	}
 
 	t.Run("uploads the file and sends its URL", func(t *testing.T) {
 		store := &recordingFileURLStore{}
@@ -3017,6 +3019,23 @@ export function parseSubmitResponse(){return {taskId:"1"}} export function build
 		assert.Equal(t, base64.StdEncoding.EncodeToString([]byte("frame-bytes")), decoded["inline"])
 		assert.Equal(t, []string{"frame-bytes"}, store.data)
 		assert.Equal(t, []string{"image/png"}, store.mimeTypes, "the placeholder's mimeType overrides the part header")
+	})
+
+	t.Run("a retry of the same request reuses the upload", func(t *testing.T) {
+		store := &recordingFileURLStore{}
+		useFileURLStore(t, store)
+		c := newMultipartFileContext(t, "first_frame", "f.jpg", "image/jpeg", []byte("frame-bytes"))
+		first, err := buildIn(c)
+		require.NoError(t, err)
+		// The relay rebuilds the body for each attempt on the same request.
+		second, err := buildIn(c)
+		require.NoError(t, err)
+		assert.Equal(t, first["first_frame"], second["first_frame"])
+		assert.Equal(t, []string{"frame-bytes"}, store.data, "the file is stored once")
+		// Another request uploads again.
+		_, err = build()
+		require.NoError(t, err)
+		assert.Len(t, store.data, 2)
 	})
 
 	t.Run("refuses a url placeholder without a bucket", func(t *testing.T) {
