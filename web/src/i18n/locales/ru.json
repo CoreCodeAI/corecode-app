@@ -8195,6 +8195,8 @@
     "{{title}}: {{now}} spendable now, least {{lowest}} around {{time}}": "{{title}}: сейчас доступно сразу {{now}}, минимум {{lowest}} около {{time}}",
     "Nothing": "Ничего",
     "Demand": "Спрос",
+    "Dollars per hour": "Долларов в час",
+    "; demand {{now}}/h now, peak {{peak}}/h": "; спрос сейчас {{now}}/ч, пик {{peak}}/ч",
     "Same hours, last 7 days": "Те же часы за последние 7 дней",
     "Smart forecast": "Умный прогноз",
     "Linear · last hour": "Линейный · последний час",

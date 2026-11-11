@@ -8195,6 +8195,8 @@
     "{{title}}: {{now}} spendable now, least {{lowest}} around {{time}}": "{{title}}：目前即時可用 {{now}}，最低 {{lowest}}，約在 {{time}}",
     "Nothing": "無",
     "Demand": "需求",
+    "Dollars per hour": "美元/小時",
+    "; demand {{now}}/h now, peak {{peak}}/h": "；目前需求 {{now}}/小時，峰值 {{peak}}/小時",
     "Same hours, last 7 days": "歷史同期（近 7 天）",
     "Smart forecast": "智慧預估",
     "Linear · last hour": "線性 · 過去 1 小時",
