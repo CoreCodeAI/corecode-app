@@ -42,6 +42,7 @@ import {
   type PoolUsage,
 } from '../types'
 import { CapacityVerdict, PoolUsagePanel } from './pool-usage'
+import { ResetCreditsCell } from './reset-credits-cell'
 import {
   MetricGrid,
   Meter,
@@ -588,6 +589,21 @@ export function PoolTab(props: {
                     ),
                   },
                 ]),
+            ...(accounts.some((account) => account.reset_credits?.length)
+              ? [
+                  {
+                    key: 'reset',
+                    label: t('Reset credits'),
+                    hint: t(
+                      'Quota reset credits the account holds. A full reset clears the 5-hour and weekly limits; a partial reset clears the 5-hour and a model weekly limit only.'
+                    ),
+                    align: 'right' as const,
+                    render: (row: EngineAccount) => (
+                      <ResetCreditsCell row={row} at={at} />
+                    ),
+                  },
+                ]
+              : []),
             {
               key: 'burn',
               label: t('Spend / hour'),

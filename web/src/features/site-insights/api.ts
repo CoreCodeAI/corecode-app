@@ -27,6 +27,7 @@ import type {
   ChannelCost,
   ChannelInsights,
   EnginePool,
+  EngineResetResult,
   FinanceInsights,
   GrowthInsights,
   InsightsRange,
@@ -198,6 +199,27 @@ export async function saveSubscriptionRenewal(params: {
   if (!res.data.success) {
     throw createServerError(res.data, 'Failed to save the renewal date')
   }
+}
+
+/**
+ * Redeems one quota reset credit of an engine account: of the kind given, or
+ * the one the provider picks without a kind. A retry after an unknown outcome
+ * must reuse the idempotency key so the engine answers for the same redemption.
+ */
+export async function consumeResetCredit(params: {
+  groupId: number
+  credentialId: number
+  kind: 'full' | 'partial' | ''
+  idempotencyKey: string
+}): Promise<EngineResetResult> {
+  const res = await api.post<ApiResponse<EngineResetResult>>(
+    `/api/site-insights/pool/groups/${params.groupId}/credentials/${params.credentialId}/reset-credits`,
+    { kind: params.kind, idempotency_key: params.idempotencyKey }
+  )
+  if (!res.data.success || res.data.data === undefined) {
+    throw createServerError(res.data, 'The reset failed.')
+  }
+  return res.data.data
 }
 
 /**

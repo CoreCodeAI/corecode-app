@@ -8047,6 +8047,27 @@
     "Billed per second of generated video.": "按生成视频的秒数计费。",
     "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "按张计费，价格随输出尺寸而定。1024x1024 等小尺寸为 1K，3840x2160 等大尺寸为 4K；其他尺寸以及未指定尺寸的请求按 2K 计费。",
     "Service Status": "服务状态",
-    "Live availability of each group, served at /status/.": "各分组的实时可用性，页面在 /status/。"
+    "Live availability of each group, served at /status/.": "各分组的实时可用性，页面在 /status/。",
+    "Reset credits": "重置券",
+    "Quota reset credits the account holds. A full reset clears the 5-hour and weekly limits; a partial reset clears the 5-hour and a model weekly limit only.": "账号持有的额度重置券。全额重置清空 5 小时额度和每周额度；部分重置只清空 5 小时额度和模型周额度。",
+    "Full reset": "全额重置",
+    "Partial reset": "部分重置",
+    "Clears the 5-hour and weekly limits.": "清空 5 小时额度和每周额度。",
+    "Clears the 5-hour and model weekly limits, not the overall weekly limit.": "清空 5 小时额度和模型周额度，不清每周总额度。",
+    "The provider does not say which limits it clears.": "上游未说明会清空哪些额度。",
+    "No expiry": "无到期时间",
+    "{{kind}} for #{{id}} {{email}}": "{{kind}}：#{{id}} {{email}}",
+    "Uses the account's earliest-expiring full reset credit, which clears its 5-hour and weekly limits. This cannot be undone.": "将使用该账号最早到期的一张全额重置券，清空 5 小时额度和每周额度。此操作无法撤销。",
+    "Uses the account's earliest-expiring partial reset credit, which clears its 5-hour and model weekly limits; the overall weekly limit stays. This cannot be undone.": "将使用该账号最早到期的一张部分重置券，清空 5 小时额度和模型周额度，每周总额度不变。此操作无法撤销。",
+    "Uses one of the account's reset credits. This cannot be undone.": "将使用该账号的一张重置券。此操作无法撤销。",
+    "Use reset credit": "使用重置券",
+    "Quota reset": "额度已重置",
+    "Quota reset; the new reading follows shortly.": "额度已重置，新的用量稍后更新。",
+    "The reset failed.": "重置失败。",
+    "No reset credit of this kind is available.": "没有这一类可用的重置券。",
+    "The reset could not be prepared; no credit was used. Try again later.": "重置准备失败，没有使用重置券。请稍后再试。",
+    "The provider rejected the reset credit.": "上游拒绝了这张重置券。",
+    "The reset outcome is unknown. Try again to check the same redemption.": "重置结果暂未确认。再次确认会查询同一次兑换，不会重复使用重置券。",
+    "The account is suspended.": "该账号已暂停。"
   }
 }

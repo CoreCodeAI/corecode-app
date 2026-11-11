@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -94,6 +95,18 @@ type EngineAccount struct {
 	// subscription start, as it does for Claude.
 	SubscriptionState     string `json:"subscription_state"`
 	SubscriptionPeriodEnd int64  `json:"subscription_period_end_ms"`
+	// ResetCredits are the account's usable quota reset credits, one entry per
+	// credit; empty when it has none or the engine does not report them.
+	ResetCredits []EngineResetCredit `json:"reset_credits"`
+}
+
+// EngineResetCredit is one quota reset credit. Kind is full for a Claude
+// credit that also clears the overall weekly limit, partial for one that
+// clears the 5-hour and a model's weekly limit only, and empty when the
+// provider does not say.
+type EngineResetCredit struct {
+	ExpiresAtMS *int64 `json:"expires_at_ms"`
+	Kind        string `json:"kind"`
 }
 
 // EngineGroup is one engine group with its accounts counted by status.
@@ -225,6 +238,8 @@ type engineGroup struct {
 			SubscriptionState       string              `json:"subscription_state"`
 			SubscriptionPeriodEndMS *int64              `json:"subscription_period_end_ms"`
 			Windows                 []EngineQuotaWindow `json:"windows"`
+			// An engine before reset credits in the pool view sends none.
+			ResetCredits []EngineResetCredit `json:"reset_credits"`
 		} `json:"account"`
 	} `json:"credentials"`
 }
@@ -304,6 +319,22 @@ func engineGet[T any](ctx context.Context, base string, key string, path string)
 }
 
 func engineRequest[T any](ctx context.Context, method string, base string, key string, path string, body any) (T, error) {
+	return engineRequestWithHeaders[T](ctx, method, base, key, path, body, nil)
+}
+
+// EngineHTTPError is a non-200 answer from the engine's control API; Code is
+// the engine's stable error code when its body carried one.
+type EngineHTTPError struct {
+	Path   string
+	Status int
+	Code   string
+}
+
+func (err *EngineHTTPError) Error() string {
+	return fmt.Sprintf("engine %s returned HTTP %d", err.Path, err.Status)
+}
+
+func engineRequestWithHeaders[T any](ctx context.Context, method string, base string, key string, path string, body any, headers map[string]string) (T, error) {
 	var zero T
 	var payload io.Reader
 	if body != nil {
@@ -321,6 +352,9 @@ func engineRequest[T any](ctx context.Context, method string, base string, key s
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
+	for name, value := range headers {
+		request.Header.Set(name, value)
+	}
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		return zero, err
@@ -331,7 +365,14 @@ func engineRequest[T any](ctx context.Context, method string, base string, key s
 		return zero, err
 	}
 	if response.StatusCode != http.StatusOK {
-		return zero, fmt.Errorf("engine %s returned HTTP %d", path, response.StatusCode)
+		failure := &EngineHTTPError{Path: path, Status: response.StatusCode}
+		var reason struct {
+			Code string `json:"code"`
+		}
+		if common.Unmarshal(read, &reason) == nil {
+			failure.Code = reason.Code
+		}
+		return zero, failure
 	}
 	var envelope engineEnvelope[T]
 	if err := common.Unmarshal(read, &envelope); err != nil {
@@ -363,6 +404,42 @@ func SetEngineSubscriptionRenewal(ctx context.Context, organizationUUID, renewsO
 	enginePoolCache.readAt = time.Time{}
 	enginePoolCache.mu.Unlock()
 	return nil
+}
+
+// ErrEngineControlNotConfigured means EngineControlURL or EngineControlKey is
+// empty, so nothing was sent to the engine.
+var ErrEngineControlNotConfigured = errors.New("engine control is not configured")
+
+// EngineResetResult is the engine's answer to one reset credit redemption.
+type EngineResetResult struct {
+	Status             string `json:"status"`
+	WindowsReset       int    `json:"windows_reset"`
+	ObservationPending bool   `json:"observation_pending"`
+	Replayed           bool   `json:"replayed"`
+}
+
+// ConsumeEngineResetCredit redeems one reset credit of an engine account,
+// of the given kind or, with an empty kind, the one the provider picks. The
+// idempotency key is the caller's: the engine replays the same redemption
+// for it, so a retry after an unknown outcome must reuse it. It drops the
+// cached pool so the next read shows the credits left.
+func ConsumeEngineResetCredit(ctx context.Context, groupID, credentialID int, kind, idempotencyKey string) (EngineResetResult, error) {
+	base := strings.TrimRight(strings.TrimSpace(operation_setting.EngineControlURL), "/")
+	key := strings.TrimSpace(operation_setting.EngineControlKey)
+	if base == "" || key == "" {
+		return EngineResetResult{}, ErrEngineControlNotConfigured
+	}
+	body := map[string]string{}
+	if kind != "" {
+		body["kind"] = kind
+	}
+	path := fmt.Sprintf("/groups/%d/credentials/%d/reset-credits/consume", groupID, credentialID)
+	result, err := engineRequestWithHeaders[EngineResetResult](ctx, http.MethodPost, base, key, path, body,
+		map[string]string{"Idempotency-Key": idempotencyKey})
+	enginePoolCache.mu.Lock()
+	enginePoolCache.readAt = time.Time{}
+	enginePoolCache.mu.Unlock()
+	return result, err
 }
 
 // enginePoolTTL is how long one complete read of the pool is shared. The
@@ -499,6 +576,7 @@ func readEnginePool(base, key string) EnginePool {
 				Sessions:      credential.Sessions,
 			}
 			account.QuotaWindows = []EngineQuotaWindow{}
+			account.ResetCredits = []EngineResetCredit{}
 			if observed := credential.Account; observed != nil {
 				if observed.Email != "" {
 					account.EmailMask = maskEmail(observed.Email)
@@ -516,6 +594,9 @@ func readEnginePool(base, key string) EnginePool {
 				account.Observation, account.ObservedAt = observed.State, deref(observed.ObservedAt)
 				if observed.Windows != nil {
 					account.QuotaWindows = observed.Windows
+				}
+				if observed.ResetCredits != nil {
+					account.ResetCredits = observed.ResetCredits
 				}
 			}
 			if activity := credential.Activity; activity != nil {

@@ -8047,6 +8047,27 @@
     "Billed per second of generated video.": "Billed per second of generated video.",
     "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.",
     "Service Status": "Service Status",
-    "Live availability of each group, served at /status/.": "Live availability of each group, served at /status/."
+    "Live availability of each group, served at /status/.": "Live availability of each group, served at /status/.",
+    "Reset credits": "Reset credits",
+    "Quota reset credits the account holds. A full reset clears the 5-hour and weekly limits; a partial reset clears the 5-hour and a model weekly limit only.": "Quota reset credits the account holds. A full reset clears the 5-hour and weekly limits; a partial reset clears the 5-hour and a model weekly limit only.",
+    "Full reset": "Full reset",
+    "Partial reset": "Partial reset",
+    "Clears the 5-hour and weekly limits.": "Clears the 5-hour and weekly limits.",
+    "Clears the 5-hour and model weekly limits, not the overall weekly limit.": "Clears the 5-hour and model weekly limits, not the overall weekly limit.",
+    "The provider does not say which limits it clears.": "The provider does not say which limits it clears.",
+    "No expiry": "No expiry",
+    "{{kind}} for #{{id}} {{email}}": "{{kind}} for #{{id}} {{email}}",
+    "Uses the account's earliest-expiring full reset credit, which clears its 5-hour and weekly limits. This cannot be undone.": "Uses the account's earliest-expiring full reset credit, which clears its 5-hour and weekly limits. This cannot be undone.",
+    "Uses the account's earliest-expiring partial reset credit, which clears its 5-hour and model weekly limits; the overall weekly limit stays. This cannot be undone.": "Uses the account's earliest-expiring partial reset credit, which clears its 5-hour and model weekly limits; the overall weekly limit stays. This cannot be undone.",
+    "Uses one of the account's reset credits. This cannot be undone.": "Uses one of the account's reset credits. This cannot be undone.",
+    "Use reset credit": "Use reset credit",
+    "Quota reset": "Quota reset",
+    "Quota reset; the new reading follows shortly.": "Quota reset; the new reading follows shortly.",
+    "The reset failed.": "The reset failed.",
+    "No reset credit of this kind is available.": "No reset credit of this kind is available.",
+    "The reset could not be prepared; no credit was used. Try again later.": "The reset could not be prepared; no credit was used. Try again later.",
+    "The provider rejected the reset credit.": "The provider rejected the reset credit.",
+    "The reset outcome is unknown. Try again to check the same redemption.": "The reset outcome is unknown. Try again to check the same redemption.",
+    "The account is suspended.": "The account is suspended."
   }
 }

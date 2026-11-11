@@ -8047,6 +8047,27 @@
     "Billed per second of generated video.": "Оплата за каждую секунду сгенерированного видео.",
     "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "Оплата за изображение, цена зависит от размера. Малые размеры вроде 1024x1024 — это 1K, большие вроде 3840x2160 — 4K; все остальные размеры и запросы без размера оплачиваются как 2K.",
     "Service Status": "Статус сервиса",
-    "Live availability of each group, served at /status/.": "Доступность каждой группы в реальном времени, страница /status/."
+    "Live availability of each group, served at /status/.": "Доступность каждой группы в реальном времени, страница /status/.",
+    "Reset credits": "Сбросы лимитов",
+    "Quota reset credits the account holds. A full reset clears the 5-hour and weekly limits; a partial reset clears the 5-hour and a model weekly limit only.": "Сбросы лимитов на аккаунте. Полный сброс обнуляет 5-часовой и недельный лимиты, частичный — только 5-часовой и недельный лимит модели.",
+    "Full reset": "Полный сброс",
+    "Partial reset": "Частичный сброс",
+    "Clears the 5-hour and weekly limits.": "Обнуляет 5-часовой и недельный лимиты.",
+    "Clears the 5-hour and model weekly limits, not the overall weekly limit.": "Обнуляет 5-часовой и недельный лимит модели, общий недельный лимит не трогает.",
+    "The provider does not say which limits it clears.": "Провайдер не сообщает, какие лимиты обнуляются.",
+    "No expiry": "Без срока",
+    "{{kind}} for #{{id}} {{email}}": "{{kind}}: #{{id}} {{email}}",
+    "Uses the account's earliest-expiring full reset credit, which clears its 5-hour and weekly limits. This cannot be undone.": "Будет использован полный сброс с ближайшим сроком: обнулятся 5-часовой и недельный лимиты. Отменить нельзя.",
+    "Uses the account's earliest-expiring partial reset credit, which clears its 5-hour and model weekly limits; the overall weekly limit stays. This cannot be undone.": "Будет использован частичный сброс с ближайшим сроком: обнулятся 5-часовой и недельный лимит модели, общий недельный лимит останется. Отменить нельзя.",
+    "Uses one of the account's reset credits. This cannot be undone.": "Будет использован один сброс аккаунта. Отменить нельзя.",
+    "Use reset credit": "Использовать сброс",
+    "Quota reset": "Лимиты сброшены",
+    "Quota reset; the new reading follows shortly.": "Лимиты сброшены; новые показания появятся вскоре.",
+    "The reset failed.": "Сброс не удался.",
+    "No reset credit of this kind is available.": "Нет доступных сбросов этого типа.",
+    "The reset could not be prepared; no credit was used. Try again later.": "Не удалось подготовить сброс; он не израсходован. Повторите позже.",
+    "The provider rejected the reset credit.": "Провайдер отклонил сброс.",
+    "The reset outcome is unknown. Try again to check the same redemption.": "Результат сброса неизвестен. Повторите, чтобы проверить ту же операцию; повторного списания не будет.",
+    "The account is suspended.": "Аккаунт приостановлен."
   }
 }
