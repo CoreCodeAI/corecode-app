@@ -24,6 +24,7 @@ import { IconAlipay, IconWeChat, IconStripe } from '@/assets/brand-icons'
 import { ReactIconByName } from '@/components/react-icon-by-name'
 
 import { PAYMENT_TYPES, PAYMENT_ICON_COLORS } from '../constants'
+import { BUNDLED_PAYMENT_ICONS } from './payment-icon-glyphs'
 
 // ============================================================================
 // UI Helper Functions
@@ -89,6 +90,18 @@ export function getPaymentIcon(
     // brand's own glyph (SiAlipay for alipay) does not render it in black.
     const brandColor =
       PAYMENT_ICON_COLORS[paymentType as keyof typeof PAYMENT_ICON_COLORS]
+    const BundledIcon = Object.hasOwn(BUNDLED_PAYMENT_ICONS, iconValue)
+      ? BUNDLED_PAYMENT_ICONS[iconValue]
+      : undefined
+    if (BundledIcon) {
+      return (
+        <BundledIcon
+          className={className}
+          title={altName || paymentType || iconValue}
+          style={brandColor ? { color: brandColor } : undefined}
+        />
+      )
+    }
     return (
       <ReactIconByName
         name={iconValue}

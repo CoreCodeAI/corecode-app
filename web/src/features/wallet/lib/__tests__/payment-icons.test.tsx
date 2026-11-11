@@ -17,6 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { render, screen } from '@testing-library/react'
+import { LuCreditCard } from 'react-icons/lu'
+import { SiAlipay, SiWechat } from 'react-icons/si'
 import { expect, test } from 'vitest'
 
 import { PAYMENT_ICON_COLORS, PAYMENT_TYPES } from '../../constants'
@@ -36,7 +38,35 @@ test.each([
   }
 )
 
-test('an admin-configured Simple Icon still resolves through the lazy icon loader', async () => {
+test.each([
+  [PAYMENT_TYPES.ALIPAY, 'SiAlipay', SiAlipay],
+  [PAYMENT_TYPES.WECHAT, 'SiWechat', SiWechat],
+  ['custom1', 'LuCreditCard', LuCreditCard],
+])(
+  'the default PayMethods icon %s/%s renders on first paint, identical to the react-icons glyph',
+  (type, name, PackIcon) => {
+    const brandColor =
+      PAYMENT_ICON_COLORS[type as keyof typeof PAYMENT_ICON_COLORS]
+    const { container } = render(
+      getPaymentIcon(type, 'h-4 w-4', name, 'Configured')
+    )
+    // Synchronous: no icon pack is loaded before the glyph appears.
+    const svg = container.querySelector('svg')
+    expect(svg).not.toBeNull()
+    expect(svg).toHaveClass('h-4', 'w-4')
+
+    const { container: expected } = render(
+      <PackIcon
+        className='h-4 w-4'
+        title='Configured'
+        style={brandColor ? { color: brandColor } : undefined}
+      />
+    )
+    expect(svg?.outerHTML).toBe(expected.querySelector('svg')?.outerHTML)
+  }
+)
+
+test('the bundled Alipay glyph keeps the brand color', () => {
   render(
     getPaymentIcon(
       PAYMENT_TYPES.ALIPAY,
@@ -45,17 +75,39 @@ test('an admin-configured Simple Icon still resolves through the lazy icon loade
       'Configured Alipay'
     )
   )
-  const title = await screen.findByTitle('Configured Alipay')
-  expect(title.closest('svg')).toHaveClass('h-4', 'w-4')
-  expect(title.closest('svg')).toHaveStyle({
+  expect(screen.getByTitle('Configured Alipay').closest('svg')).toHaveStyle({
     color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.ALIPAY],
   })
 })
 
+test('an icon name outside the bundled set still resolves through the lazy icon loader', async () => {
+  const { container } = render(
+    getPaymentIcon(
+      PAYMENT_TYPES.STRIPE,
+      'h-4 w-4',
+      'SiStripe',
+      'Configured Stripe'
+    )
+  )
+  expect(container.querySelector('svg')).toBeNull()
+  const title = await screen.findByTitle('Configured Stripe')
+  expect(title.closest('svg')).toHaveClass('h-4', 'w-4')
+  expect(title.closest('svg')).toHaveStyle({
+    color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.STRIPE],
+  })
+})
+
 test('a configured icon for a method without a brand color keeps the text color', async () => {
-  render(getPaymentIcon('custom_pay', 'h-4 w-4', 'SiAlipay', 'Custom'))
+  render(getPaymentIcon('custom_pay', 'h-4 w-4', 'SiStripe', 'Custom'))
   const title = await screen.findByTitle('Custom')
   expect(title.closest('svg')?.getAttribute('style') ?? '').not.toContain(
     'color'
   )
+})
+
+test('a bundled icon for a method without a brand color keeps the text color', () => {
+  render(getPaymentIcon('custom_pay', 'h-4 w-4', 'SiAlipay', 'Custom'))
+  expect(
+    screen.getByTitle('Custom').closest('svg')?.getAttribute('style') ?? ''
+  ).not.toContain('color')
 })
