@@ -101,11 +101,12 @@ appear in the profile. The base64 decode in the token estimate was also small
   was given, where the round trip returned copies. Strings are immutable.
 - A body that is not valid JSON, or has an unterminated string, is parsed
   as before (`Slim` returns it unchanged).
-- Not changed, and still on the path: `GetAndValidateClaudeRequest` decodes
-  the whole body (about 40 ms at 25 MB locally; `ClaudeRequest.UnmarshalJSON`
-  reads it twice), `clientCheck` and `detectClaudeCodeClient` each decode it
-  in a Claude-Code-only group, and the body read allocates twice the body.
-  The `pre_channel_ms` field shows whether they matter in production.
+- Still on the path: `GetAndValidateClaudeRequest` decodes the whole body
+  (about 40 ms at 25 MB locally; `ClaudeRequest.UnmarshalJSON` reads it twice),
+  and the body read allocates twice the body. The later
+  [client-check decision](2026-11-11-skip-impossible-client-checks.md) avoids
+  copying the full probe map for ordinary in-memory Claude CLI requests.
+  The `pre_channel_ms` field shows whether these costs matter in production.
 
 ## Verification
 
