@@ -370,6 +370,13 @@ export type BillingSettings = {
   'checkin_setting.enabled': boolean
   'checkin_setting.min_quota': number
   'checkin_setting.max_quota': number
+  'invoice_setting.enabled': boolean
+  'invoice_setting.tax_rate': number
+  'invoice_setting.categories': string
+  'invoice_setting.order_days': number
+  'invoice_setting.max_orders': number
+  'invoice_setting.payment_timeout_minutes': number
+  'invoice_setting.file_max_kb': number
 }
 
 export type OperationsSettings = {

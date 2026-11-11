@@ -204,6 +204,8 @@ export interface SystemStatus {
   password_register_enabled?: boolean
   custom_oauth_providers?: CustomOAuthProviderInfo[]
   log_export_enabled?: boolean
+  /** Whether customers can request invoices in the invoice center. */
+  invoice_enabled?: boolean
   log_max_range_days?: number
   quota_remind_enabled?: boolean
   /** Site default low balance reminder threshold, in quota units */

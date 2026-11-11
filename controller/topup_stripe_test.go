@@ -238,7 +238,7 @@ func TestStripeWebhookCreditsAmountAndBonusOnce(t *testing.T) {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.TopUp{}, &model.SubscriptionOrder{}, &model.Log{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.TopUp{}, &model.SubscriptionOrder{}, &model.Log{}, &model.InvoiceOrderAmount{}))
 	model.DB, model.LOG_DB = db, db
 	common.RedisEnabled = false
 	common.QuotaPerUnit = 500000
@@ -257,16 +257,17 @@ func TestStripeWebhookCreditsAmountAndBonusOnce(t *testing.T) {
 
 	user := &model.User{Username: "stripe_customer", Status: common.UserStatusEnabled}
 	require.NoError(t, db.Create(user).Error)
-	for _, tradeNo := range []string{"ref_paid", "ref_late"} {
+	for _, tradeNo := range []string{"ref_paid", "ref_late", "ref_promo", "ref_untracked"} {
 		require.NoError(t, db.Create(&model.TopUp{UserId: user.Id, Amount: 100, Money: 100, TradeNo: tradeNo,
 			PaymentMethod: model.PaymentMethodStripe, PaymentProvider: model.PaymentProviderStripe,
 			BonusQuota: 11 * 500000, Status: common.TopUpStatusPending}).Error)
 	}
 
 	gin.SetMode(gin.TestMode)
+	subtotal, total := 11748, 11748
 	deliver := func(eventType string, tradeNo string, status string, paymentStatus string, signWith string) int {
-		payload := fmt.Sprintf(`{"id":"evt_1","object":"event","api_version":"2026-10-28","type":%q,"data":{"object":{"object":"checkout.session","client_reference_id":%q,"customer":"cus_1","status":%q,"payment_status":%q,"amount_total":11748,"currency":"hkd"}}}`,
-			eventType, tradeNo, status, paymentStatus)
+		payload := fmt.Sprintf(`{"id":"evt_1","object":"event","api_version":"2026-10-28","type":%q,"data":{"object":{"object":"checkout.session","mode":"payment","client_reference_id":%q,"customer":"cus_1","status":%q,"payment_status":%q,"amount_subtotal":%d,"amount_total":%d,"currency":"hkd"}}}`,
+			eventType, tradeNo, status, paymentStatus, subtotal, total)
 		signed := webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{Payload: []byte(payload), Secret: signWith, Timestamp: time.Now()})
 		recorder := httptest.NewRecorder()
 		ctx, _ := gin.CreateTestContext(recorder)
@@ -300,4 +301,24 @@ func TestStripeWebhookCreditsAmountAndBonusOnce(t *testing.T) {
 	assert.Equal(t, http.StatusOK, deliver("checkout.session.expired", "ref_late", "expired", "unpaid", secret))
 	_, _, status = state("ref_late")
 	assert.Equal(t, common.TopUpStatusExpired, status)
+
+	// A full-price payment leaves no invoice amount; a promotion code
+	// records what was collected, ¥100 scaled by 8810/11748.
+	var recorded []model.InvoiceOrderAmount
+	require.NoError(t, db.Find(&recorded).Error)
+	assert.Empty(t, recorded)
+	subtotal, total = 11748, 8810
+	assert.Equal(t, http.StatusOK, deliver("checkout.session.completed", "ref_promo", "complete", "paid", secret))
+	_, _, status = state("ref_promo")
+	assert.Equal(t, common.TopUpStatusSuccess, status)
+	require.NoError(t, db.Find(&recorded).Error)
+	require.Len(t, recorded, 1)
+	assert.Equal(t, "discount", recorded[0].Reason)
+	assert.Equal(t, int64(7499), recorded[0].AmountCents)
+
+	// Failing to record the amount never holds back the credit.
+	require.NoError(t, db.Migrator().DropTable(&model.InvoiceOrderAmount{}))
+	assert.Equal(t, http.StatusOK, deliver("checkout.session.completed", "ref_untracked", "complete", "paid", secret))
+	_, _, status = state("ref_untracked")
+	assert.Equal(t, common.TopUpStatusSuccess, status)
 }

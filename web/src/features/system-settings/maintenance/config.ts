@@ -81,6 +81,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     personal: true,
     security: true,
     feedback: true,
+    invoice: true,
   },
   admin: {
     enabled: true,
@@ -93,6 +94,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     topup_records: true,
     enterprise_application: true,
     feedback: true,
+    invoice: true,
   },
 }
 
