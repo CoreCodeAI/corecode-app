@@ -95,7 +95,6 @@ import {
   type ApiKeyGroupOption,
 } from './api-key-group-combobox'
 import { useApiKeys } from './api-keys-provider'
-import { AutoGroupOrderEditor } from './auto-group-order-editor'
 
 // The calendar (react-day-picker with every locale, about 23 KB brotli) is not
 // part of the keys page's first load. It downloads once the page is idle, so
@@ -105,6 +104,14 @@ const loadDateTimePicker = () =>
     default: m.DateTimePicker,
   }))
 const DateTimePicker = lazy(loadDateTimePicker)
+
+// The Auto order editor (with motion's Reorder) is loaded the same way, so
+// the keys page's first load stays within its budget.
+const loadAutoGroupOrderEditor = () =>
+  import('./auto-group-order-editor').then((m) => ({
+    default: m.AutoGroupOrderEditor,
+  }))
+const AutoGroupOrderEditor = lazy(loadAutoGroupOrderEditor)
 
 type ApiKeyMutateDrawerProps = {
   open: boolean
@@ -131,7 +138,10 @@ export function ApiKeysMutateDrawer({
   useEffect(() => {
     const idle =
       window.requestIdleCallback ?? ((run) => window.setTimeout(run, 1))
-    idle(() => void loadDateTimePicker())
+    idle(() => {
+      void loadDateTimePicker()
+      void loadAutoGroupOrderEditor()
+    })
   }, [])
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [initializedTarget, setInitializedTarget] = useState<string | null>(
@@ -511,27 +521,31 @@ export function ApiKeysMutateDrawer({
                         )}
                       </FormDescription>
                       <FormControl>
-                        <AutoGroupOrderEditor
-                          value={field.value}
-                          mode={autoGroupsMode}
-                          options={groups}
-                          globalOptions={globalAutoGroupOptions}
-                          maxCount={maxAutoGroups}
-                          onChange={(value) => {
-                            form.setValue('auto_groups_mode', value.mode, {
-                              shouldDirty: true,
-                              shouldValidate: false,
-                            })
-                            form.setValue(
-                              'auto_groups',
-                              value.groups.slice(0, maxAutoGroups),
-                              {
+                        <Suspense
+                          fallback={<Skeleton className='h-24 w-full' />}
+                        >
+                          <AutoGroupOrderEditor
+                            value={field.value}
+                            mode={autoGroupsMode}
+                            options={groups}
+                            globalOptions={globalAutoGroupOptions}
+                            maxCount={maxAutoGroups}
+                            onChange={(value) => {
+                              form.setValue('auto_groups_mode', value.mode, {
                                 shouldDirty: true,
-                                shouldValidate: true,
-                              }
-                            )
-                          }}
-                        />
+                                shouldValidate: false,
+                              })
+                              form.setValue(
+                                'auto_groups',
+                                value.groups.slice(0, maxAutoGroups),
+                                {
+                                  shouldDirty: true,
+                                  shouldValidate: true,
+                                }
+                              )
+                            }}
+                          />
+                        </Suspense>
                       </FormControl>
                       <FormMessage />
                     </FormItem>

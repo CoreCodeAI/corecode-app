@@ -249,11 +249,14 @@ describe('API keys mutate drawer Auto group integration', () => {
 
     const groupTrigger = getControlByLabel('Group')
     expect(groupTrigger.textContent?.includes('auto')).toBe(true)
-    expect(
-      document.body.textContent?.includes(
-        'Using the complete global Auto order (2 groups)'
-      )
-    ).toBe(true)
+    // The editor is lazy-loaded, so wait for it to render.
+    await waitFor(() =>
+      expect(
+        document.body.textContent?.includes(
+          'Using the complete global Auto order (2 groups)'
+        )
+      ).toBe(true)
+    )
     expect(
       [
         ...document.querySelectorAll('[data-slot="global-auto-order-name"]'),
@@ -296,6 +299,13 @@ describe('API keys mutate drawer Auto group integration', () => {
     installApiFixtures(createdPayloads)
     await renderCreateDrawer()
 
+    await waitFor(() =>
+      expect(
+        getControlByLabel('Auto group order').querySelector(
+          'button[role="combobox"]'
+        )
+      ).toBeTruthy()
+    )
     const autoOrderControl = getControlByLabel('Auto group order')
     const addGroupTrigger = autoOrderControl.querySelector<HTMLButtonElement>(
       'button[role="combobox"]'

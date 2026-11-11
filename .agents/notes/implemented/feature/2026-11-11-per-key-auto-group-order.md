@@ -18,6 +18,11 @@ reorder the groups each key tries, with the site order as the default.
   `AutoGroupOrderEditor`.
 - An empty list still means "follow `AutoGroups`", so existing keys and new
   keys created without touching the editor route as before.
+- The editor is lazy-loaded and prefetched when the page is idle, like the
+  expiry calendar, so its code stays out of `/keys`'s first load. Its strings
+  and the server's validation messages still land in the core locale part,
+  which `/keys` loads first; that adds 0.5 KB, and the `/keys` budget in
+  `first-load-budget.json` goes from 606 to 607 KB.
 - `ko.json`, added after the revert's target, gets the editor's strings and
   loses the two read-only ones.
 
@@ -47,5 +52,6 @@ reorder the groups each key tries, with the site order as the default.
   pass, except `TestUpstreamAddressesMaskOnlyConfiguredAddresses`, which fails
   only with the local shell's proxy variables set and passes without them.
 - From `web/`: `bunx tsc -b`, `bun run lint:check`, `oxfmt --check` on the
-  changed files, and `bunx vitest run src/features/keys` (10 files, 132 tests):
+  changed files, `bunx vitest run src/features/keys` (10 files, 132 tests), and
+  `bun run build` then `bun run first-load:check` (`/keys` 606.5 of 607 KB):
   pass.
