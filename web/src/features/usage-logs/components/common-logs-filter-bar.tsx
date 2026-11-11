@@ -91,6 +91,7 @@ function buildSearchSourceKey(values: {
   model?: unknown
   token?: unknown
   group?: unknown
+  userId?: unknown
   username?: unknown
   requestId?: unknown
   upstreamRequestId?: unknown
@@ -103,6 +104,7 @@ function buildSearchSourceKey(values: {
     values.model,
     values.token,
     values.group,
+    values.userId,
     values.username,
     values.requestId,
     values.upstreamRequestId,
@@ -155,6 +157,7 @@ export function CommonLogsFilterBar<TData>(
       model: searchParams.model,
       token: searchParams.token,
       group: searchParams.group,
+      userId: searchParams.userId,
       username: searchParams.username,
       requestId: searchParams.requestId,
       upstreamRequestId: searchParams.upstreamRequestId,
@@ -169,6 +172,7 @@ export function CommonLogsFilterBar<TData>(
       model: searchParams.model || undefined,
       token: searchParams.token || undefined,
       group: searchParams.group || undefined,
+      userId: searchParams.userId || undefined,
       username: searchParams.username || undefined,
       requestId: searchParams.requestId || undefined,
       upstreamRequestId: searchParams.upstreamRequestId || undefined,
@@ -185,6 +189,7 @@ export function CommonLogsFilterBar<TData>(
     searchParams.model,
     searchParams.token,
     searchParams.group,
+    searchParams.userId,
     searchParams.username,
     searchParams.requestId,
     searchParams.upstreamRequestId,
@@ -264,6 +269,7 @@ export function CommonLogsFilterBar<TData>(
 
   const hasExpandedFilters =
     !!filters.token ||
+    !!filters.userId ||
     !!filters.username ||
     !!filters.channel ||
     !!filters.requestId ||
@@ -275,6 +281,7 @@ export function CommonLogsFilterBar<TData>(
 
   const expandedFilterCount = [
     filters.token,
+    isAdmin ? filters.userId : undefined,
     isAdmin ? filters.username : undefined,
     isAdmin ? filters.channel : undefined,
     filters.requestId,
@@ -444,6 +451,19 @@ export function CommonLogsFilterBar<TData>(
           onKeyDown={handleKeyDown}
         />
       </LogsFilterField>
+      {isAdmin && (
+        <LogsFilterField>
+          <LogsFilterInput
+            placeholder={t('User ID')}
+            inputMode='numeric'
+            value={filters.userId || ''}
+            onChange={(e) =>
+              handleChange('userId', e.target.value.replaceAll(/\D/g, ''))
+            }
+            onKeyDown={handleKeyDown}
+          />
+        </LogsFilterField>
+      )}
       {isAdmin && (
         <LogsFilterField>
           <LogsFilterInput

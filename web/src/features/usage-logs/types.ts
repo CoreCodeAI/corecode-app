@@ -52,6 +52,7 @@ export interface CommonLogFilters extends CommonFilters {
   model?: string
   token?: string
   group?: string
+  userId?: string
   username?: string
   requestId?: string
   upstreamRequestId?: string
@@ -432,6 +433,7 @@ export interface GetLogsParams {
   p?: number
   page_size?: number
   type?: number
+  user_id?: number
   username?: string
   token_name?: string
   model_name?: string
@@ -456,6 +458,7 @@ export interface GetLogsResponse {
 
 export interface GetLogStatsParams {
   type?: number
+  user_id?: number
   username?: string
   token_name?: string
   model_name?: string

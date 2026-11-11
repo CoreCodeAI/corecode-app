@@ -190,6 +190,9 @@ export function buildApiParams(config: {
     ...(isAdmin && searchParams.channel
       ? { channel: Number(searchParams.channel) || 0 }
       : {}),
+    ...(isAdmin && Number(searchParams.userId) > 0
+      ? { user_id: Number(searchParams.userId) }
+      : {}),
     ...(isAdmin && searchParams.username
       ? { username: String(searchParams.username) }
       : {}),
