@@ -54,6 +54,7 @@ import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
 import { Route as AuthenticatedRiskControlIndexRouteImport } from './routes/_authenticated/risk-control/index'
 import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security/index'
+import { Route as AuthenticatedServiceStatusIndexRouteImport } from './routes/_authenticated/service-status/index'
 import { Route as AuthenticatedSiteInsightsIndexRouteImport } from './routes/_authenticated/site-insights/index'
 import { Route as AuthenticatedSubscriptionsIndexRouteImport } from './routes/_authenticated/subscriptions/index'
 import { Route as AuthenticatedSystemInfoIndexRouteImport } from './routes/_authenticated/system-info/index'
@@ -323,6 +324,12 @@ const AuthenticatedSecurityIndexRoute =
     path: '/security/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedServiceStatusIndexRoute =
+  AuthenticatedServiceStatusIndexRouteImport.update({
+    id: '/service-status/',
+    path: '/service-status/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSiteInsightsIndexRoute =
   AuthenticatedSiteInsightsIndexRouteImport.update({
     id: '/site-insights/',
@@ -536,6 +543,7 @@ export interface FileRoutesByFullPath {
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/risk-control/': typeof AuthenticatedRiskControlIndexRoute
   '/security/': typeof AuthenticatedSecurityIndexRoute
+  '/service-status/': typeof AuthenticatedServiceStatusIndexRoute
   '/site-insights/': typeof AuthenticatedSiteInsightsIndexRoute
   '/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info/': typeof AuthenticatedSystemInfoIndexRoute
@@ -608,6 +616,7 @@ export interface FileRoutesByTo {
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
   '/risk-control': typeof AuthenticatedRiskControlIndexRoute
   '/security': typeof AuthenticatedSecurityIndexRoute
+  '/service-status': typeof AuthenticatedServiceStatusIndexRoute
   '/site-insights': typeof AuthenticatedSiteInsightsIndexRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info': typeof AuthenticatedSystemInfoIndexRoute
@@ -684,6 +693,7 @@ export interface FileRoutesById {
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/_authenticated/risk-control/': typeof AuthenticatedRiskControlIndexRoute
   '/_authenticated/security/': typeof AuthenticatedSecurityIndexRoute
+  '/_authenticated/service-status/': typeof AuthenticatedServiceStatusIndexRoute
   '/_authenticated/site-insights/': typeof AuthenticatedSiteInsightsIndexRoute
   '/_authenticated/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/_authenticated/system-info/': typeof AuthenticatedSystemInfoIndexRoute
@@ -759,6 +769,7 @@ export interface FileRouteTypes {
     | '/redemption-codes/'
     | '/risk-control/'
     | '/security/'
+    | '/service-status/'
     | '/site-insights/'
     | '/subscriptions/'
     | '/system-info/'
@@ -831,6 +842,7 @@ export interface FileRouteTypes {
     | '/redemption-codes'
     | '/risk-control'
     | '/security'
+    | '/service-status'
     | '/site-insights'
     | '/subscriptions'
     | '/system-info'
@@ -906,6 +918,7 @@ export interface FileRouteTypes {
     | '/_authenticated/redemption-codes/'
     | '/_authenticated/risk-control/'
     | '/_authenticated/security/'
+    | '/_authenticated/service-status/'
     | '/_authenticated/site-insights/'
     | '/_authenticated/subscriptions/'
     | '/_authenticated/system-info/'
@@ -1271,6 +1284,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSecurityIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/service-status/': {
+      id: '/_authenticated/service-status/'
+      path: '/service-status'
+      fullPath: '/service-status/'
+      preLoaderRoute: typeof AuthenticatedServiceStatusIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/site-insights/': {
       id: '/_authenticated/site-insights/'
       path: '/site-insights'
@@ -1584,6 +1604,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedRedemptionCodesIndexRoute: typeof AuthenticatedRedemptionCodesIndexRoute
   AuthenticatedRiskControlIndexRoute: typeof AuthenticatedRiskControlIndexRoute
   AuthenticatedSecurityIndexRoute: typeof AuthenticatedSecurityIndexRoute
+  AuthenticatedServiceStatusIndexRoute: typeof AuthenticatedServiceStatusIndexRoute
   AuthenticatedSiteInsightsIndexRoute: typeof AuthenticatedSiteInsightsIndexRoute
   AuthenticatedSubscriptionsIndexRoute: typeof AuthenticatedSubscriptionsIndexRoute
   AuthenticatedSystemInfoIndexRoute: typeof AuthenticatedSystemInfoIndexRoute
@@ -1620,6 +1641,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedRedemptionCodesIndexRoute,
   AuthenticatedRiskControlIndexRoute: AuthenticatedRiskControlIndexRoute,
   AuthenticatedSecurityIndexRoute: AuthenticatedSecurityIndexRoute,
+  AuthenticatedServiceStatusIndexRoute: AuthenticatedServiceStatusIndexRoute,
   AuthenticatedSiteInsightsIndexRoute: AuthenticatedSiteInsightsIndexRoute,
   AuthenticatedSubscriptionsIndexRoute: AuthenticatedSubscriptionsIndexRoute,
   AuthenticatedSystemInfoIndexRoute: AuthenticatedSystemInfoIndexRoute,

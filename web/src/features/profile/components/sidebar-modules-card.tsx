@@ -117,6 +117,11 @@ export function SidebarModulesCard() {
           title: t('Task Logs'),
           description: t('System task records'),
         },
+        {
+          key: 'status',
+          title: t('Service Status'),
+          description: t('Live success rate and latency of each group'),
+        },
       ],
     },
     {

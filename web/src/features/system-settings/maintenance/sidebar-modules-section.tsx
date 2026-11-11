@@ -126,6 +126,10 @@ export function SidebarModulesSection({
         title: t('Task logs'),
         description: t('Background job tracker for queued work.'),
       },
+      status: {
+        title: t('Service Status'),
+        description: t('Live success rate and latency of each group.'),
+      },
     },
     personal: {
       topup: {

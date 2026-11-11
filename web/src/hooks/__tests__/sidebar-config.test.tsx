@@ -252,6 +252,22 @@ describe('customer sidebar defaults', () => {
     expect(titlesOf(result)).not.toContain('Task Logs')
   })
 
+  it('shows Service Status to a customer under an admin layout saved before it existed', () => {
+    const { result } = sidebarFor({
+      console: { enabled: true, detail: true, token: true, log: true },
+    })
+    expect(titlesOf(result)).toContain('Service Status')
+  })
+
+  it('hides Service Status when the administrator or the customer turns it off', () => {
+    const adminOff = sidebarFor({ console: { enabled: true, status: false } })
+    expect(titlesOf(adminOff.result)).not.toContain('Service Status')
+    const userOff = sidebarFor(undefined, {
+      console: { enabled: true, status: false },
+    })
+    expect(titlesOf(userOff.result)).not.toContain('Service Status')
+  })
+
   it('leaves an administrator the full view with Task Logs and Dashboard', () => {
     const { result } = sidebarFor(undefined, undefined, true, ROLE.ADMIN)
     expect(titlesOf(result)).toEqual(

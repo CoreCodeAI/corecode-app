@@ -1,0 +1,195 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+
+import { ServiceStatus } from '..'
+import type { ServiceStatusData } from '../types'
+
+vi.mock('@/components/layout', () => ({
+  SectionPageLayout: Object.assign(
+    (props: { children: ReactNode }) => <div>{props.children}</div>,
+    {
+      Title: (props: { children: ReactNode }) => <h1>{props.children}</h1>,
+      Actions: (props: { children: ReactNode }) => <div>{props.children}</div>,
+      Content: (props: { children: ReactNode }) => <div>{props.children}</div>,
+    }
+  ),
+}))
+
+const NOW = Date.UTC(2026, 10, 11, 8) / 1000
+
+function statusData(
+  overrides: Partial<ServiceStatusData> = {}
+): ServiceStatusData {
+  const hours = Array.from(
+    { length: 24 },
+    (_, index) => NOW - (24 - index) * 3600
+  )
+  return {
+    version: 1,
+    generated_at: NOW - 60,
+    status: 'operational',
+    maintenance: false,
+    current: {
+      window_s: 600,
+      requests: 486,
+      success_rate: 0.9979,
+      p50_ms: 963,
+    },
+    day: {
+      bucket_s: 3600,
+      buckets: hours.map((t) => ({
+        t,
+        requests: 100,
+        success_rate: 1,
+        p50_ms: 1200,
+        state: 'ok',
+      })),
+    },
+    week: { bucket_s: 21600, buckets: [] },
+    groups: [
+      {
+        name: 'Claude 满血（仅限CC）',
+        ratio: 1.9,
+        model: 'claude-opus-5-5',
+        state: 'ok',
+        success_rate: 0.9995,
+        p50_ms: 1359,
+        latency: 'ttft',
+        cache_hit_rate: 0.9693,
+        buckets: hours.map((t, index) =>
+          index === 23
+            ? { t, state: 'none', success_rate: null, p50_ms: null }
+            : {
+                t,
+                state: 'ok',
+                success_rate: 0.98,
+                p50_ms: 1500,
+                cache_hit_rate: 0.97,
+              }
+        ),
+      },
+    ],
+    ...overrides,
+  }
+}
+
+function respond(data: unknown, serverNow = NOW, status = 200) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify(data), {
+          status,
+          headers: { date: new Date(serverNow * 1000).toUTCString() },
+        })
+    )
+  )
+}
+
+function renderPage() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  return render(
+    <QueryClientProvider client={client}>
+      <ServiceStatus />
+    </QueryClientProvider>
+  )
+}
+
+beforeEach(() => vi.useRealTimers())
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
+
+it('reads the status page data and shows the overall state and each group', async () => {
+  respond(statusData())
+  renderPage()
+  expect(await screen.findByText('All systems operational')).toBeTruthy()
+  expect(screen.getByText('Claude 满血（仅限CC）')).toBeTruthy()
+  expect(screen.getByText('claude-opus-5-5')).toBeTruthy()
+  expect(screen.getByText('99.79%')).toBeTruthy()
+  const fetchMock = vi.mocked(fetch)
+  expect(String(fetchMock.mock.calls[0][0])).toMatch(
+    /^\/status\/status\.json\?t=/
+  )
+})
+
+it('says an update is rolling out during maintenance', async () => {
+  respond(statusData({ maintenance: true }))
+  renderPage()
+  expect(
+    await screen.findByText(
+      'An update is rolling out; a few requests may need a retry.'
+    )
+  ).toBeTruthy()
+})
+
+it('shows the status as unknown once the data is older than 10 minutes by the server clock', async () => {
+  respond(statusData(), NOW + 15 * 60)
+  renderPage()
+  expect(await screen.findByText('Status unknown')).toBeTruthy()
+  expect(screen.queryByText('All systems operational')).toBeNull()
+  // The history still shows.
+  expect(screen.getByText('Claude 满血（仅限CC）')).toBeTruthy()
+})
+
+it('shows the status as unknown when the data cannot be read', async () => {
+  respond({}, NOW, 502)
+  renderPage()
+  expect(await screen.findByText('Status unknown')).toBeTruthy()
+  expect(
+    screen.getByText(
+      'Monitoring data cannot be read right now, so the current status cannot be confirmed. Refresh later to retry.'
+    )
+  ).toBeTruthy()
+})
+
+it('reads out the hour under the pointer, and the last active hour otherwise', async () => {
+  respond(statusData())
+  renderPage()
+  const strip = await screen.findByRole('img', {
+    name: 'Claude 满血（仅限CC）: success rate each hour over the last 24 hours',
+  })
+  expect(strip.parentElement?.textContent).toMatch(/Last requests/)
+  vi.spyOn(strip, 'getBoundingClientRect').mockReturnValue({
+    left: 0,
+    width: 240,
+  } as DOMRect)
+  // x = 5 lands in the first hour; x = 239 in the last, which had no requests.
+  fireEvent.pointerMove(strip, { clientX: 5, pointerType: 'mouse' })
+  await waitFor(() =>
+    expect(strip.parentElement?.textContent).toMatch(/Success rate 98\.0%/)
+  )
+  fireEvent.pointerMove(strip, { clientX: 239, pointerType: 'mouse' })
+  await waitFor(() =>
+    expect(strip.parentElement?.textContent).toMatch(/No requests/)
+  )
+})
