@@ -249,7 +249,7 @@ export function ServiceStatus() {
           {data && (
             <Section title={t('Group status')}>
               {groups && groups.length > 0 ? (
-                <div className='grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3'>
+                <div className='grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3'>
                   {groups.map((group) => (
                     <GroupCard key={group.name} group={group} />
                   ))}
@@ -270,32 +270,26 @@ export function ServiceStatus() {
             <Section title={t('Overall trend')}>
               <Card>
                 <CardContent className='flex flex-col gap-6'>
-                  <div className='flex flex-col gap-2'>
-                    <h3 className='text-sm font-medium'>
-                      {t('Last 24 hours')}
-                    </h3>
-                    <StatusStrip
-                      cells={stripCells(data.day, false)}
-                      label={t(
-                        'Request success rate each hour over the last 24 hours'
-                      )}
-                      startLabel={t('24 hours ago')}
-                      endLabel={t('Now')}
-                      summary={stripText(data.day)}
-                    />
-                  </div>
-                  <div className='flex flex-col gap-2'>
-                    <h3 className='text-sm font-medium'>{t('Last 7 days')}</h3>
-                    <StatusStrip
-                      cells={stripCells(data.week, true)}
-                      label={t(
-                        'Request success rate every 6 hours over the last 7 days'
-                      )}
-                      startLabel={t('7 days ago')}
-                      endLabel={t('Now')}
-                      summary={stripText(data.week)}
-                    />
-                  </div>
+                  <StatusStrip
+                    cells={stripCells(data.day, false)}
+                    title={t('Last 24 hours')}
+                    label={t(
+                      'Request success rate each hour over the last 24 hours'
+                    )}
+                    startLabel={t('24 hours ago')}
+                    endLabel={t('Now')}
+                    summary={stripText(data.day)}
+                  />
+                  <StatusStrip
+                    cells={stripCells(data.week, true)}
+                    title={t('Last 7 days')}
+                    label={t(
+                      'Request success rate every 6 hours over the last 7 days'
+                    )}
+                    startLabel={t('7 days ago')}
+                    endLabel={t('Now')}
+                    summary={stripText(data.week)}
+                  />
                   <div className='text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs'>
                     {(
                       [
@@ -309,7 +303,7 @@ export function ServiceStatus() {
                         <span
                           aria-hidden
                           className={cn(
-                            'size-2.5 rounded-[2px]',
+                            'size-2.5 rounded-full',
                             BUCKET_CLASS[state]
                           )}
                         />

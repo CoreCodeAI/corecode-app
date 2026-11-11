@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState, type PointerEvent } from 'react'
+import { useState, type PointerEvent, type ReactNode } from 'react'
 
 import { cn } from '@/lib/utils'
 
@@ -35,15 +35,19 @@ export interface StripCell {
 /**
  * A row of periods coloured by their state. Every position across the row,
  * gaps included, belongs to one period, so a pointer or a finger dragged
- * along it reads one period after another in the line below; arrow keys do
- * the same. With nothing picked, the line shows `summary`.
+ * along it reads one period after another in the line above it, where a
+ * finger does not cover it; arrow keys do the same. With nothing picked,
+ * the line shows `summary`.
  */
 export function StatusStrip(props: {
   cells: StripCell[]
   label: string
+  title: string
   startLabel: string
   endLabel: string
   summary: string
+  /** Shown at the right of the title, such as an action. */
+  aside?: ReactNode
   className?: string
 }) {
   const [active, setActive] = useState<number | null>(null)
@@ -58,12 +62,34 @@ export function StatusStrip(props: {
   const cell = active === null ? null : cells[active]
 
   return (
-    <div className={cn('flex flex-col gap-1.5', props.className)}>
+    <div className={cn('flex flex-col gap-2', props.className)}>
+      <div className='flex items-end justify-between gap-3'>
+        <div className='flex min-w-0 flex-col gap-0.5'>
+          <span className='text-sm font-medium'>{props.title}</span>
+          <p
+            aria-live='polite'
+            className='text-muted-foreground min-h-4 truncate text-xs tabular-nums'
+          >
+            {cell ? (
+              <>
+                <span className='text-foreground font-medium'>
+                  {cell.title}
+                </span>
+                {' · '}
+                {cell.detail}
+              </>
+            ) : (
+              props.summary
+            )}
+          </p>
+        </div>
+        {props.aside}
+      </div>
       <div
         tabIndex={0}
         role='img'
         aria-label={props.label}
-        className='focus-visible:ring-ring/50 flex h-8 cursor-crosshair touch-pan-y gap-[2px] rounded-sm outline-none focus-visible:ring-2'
+        className='focus-visible:ring-ring/50 flex h-8 cursor-crosshair touch-pan-y gap-[3px] rounded-full outline-none focus-visible:ring-2'
         onPointerDown={(event) => setActive(nearest(event))}
         onPointerMove={(event) => setActive(nearest(event))}
         // A lifted finger leaves too; its period stays read until a tap
@@ -88,7 +114,7 @@ export function StatusStrip(props: {
             key={item.key}
             aria-hidden
             className={cn(
-              'min-w-0 flex-1 rounded-[2px] transition-opacity',
+              'min-w-0 flex-1 rounded-full transition-opacity',
               BUCKET_CLASS[item.state],
               active !== null && active !== index && 'opacity-40'
             )}
@@ -99,20 +125,6 @@ export function StatusStrip(props: {
         <span>{props.startLabel}</span>
         <span>{props.endLabel}</span>
       </div>
-      <p
-        aria-live='polite'
-        className='text-muted-foreground min-h-5 text-xs tabular-nums'
-      >
-        {cell ? (
-          <>
-            <span className='text-foreground font-medium'>{cell.title}</span>
-            {' · '}
-            {cell.detail}
-          </>
-        ) : (
-          props.summary
-        )}
-      </p>
     </div>
   )
 }

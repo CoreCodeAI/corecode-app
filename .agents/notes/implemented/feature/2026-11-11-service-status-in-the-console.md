@@ -36,6 +36,15 @@ that opens a page inside the console.
   along the strip, and arrow keys step through it. The readout is a line under the
   strip, not a floating tooltip, so a tap shows the same text as a hover.
 
+- **Each group card leads with its vendor.** It shows the vendor's logo and a
+  vendor tag. The ratio and model are tags, the three figures sit in bordered tiles,
+  and a 创建 API 密钥 button links to `/keys`. The vendor comes from
+  `resolveModelProvider` on the group's busiest model, or from the group name when
+  the group has no traffic. The logo comes from `getLobeIcon`, the source the
+  pricing and log pages use. The owner preferred this layout, which other new-api
+  relays use, to the first plain card. The strip's title and readout sit above the
+  cells so that a finger on the strip does not cover them.
+
 ## Alternatives considered
 
 - **Embed `/status/` in an iframe.** That is the least code, but it nests the public
