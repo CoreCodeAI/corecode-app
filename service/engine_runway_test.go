@@ -135,6 +135,38 @@ func TestPoolRunwayMeasuresEachGapUntilTheNextReset(t *testing.T) {
 	}
 }
 
+func TestPoolRunwaySuppliesEachWindowWithItsResets(t *testing.T) {
+	// $10 an hour against $150 left and a reset at hour 10 that brings the
+	// account back to its $200 budget line, dropping the $50 it still held.
+	runway := poolRunway(runwayPool(runwayAccountAt(1, 150, 400, 10, 10)), "claude", 0, flatDemand())
+	require.Len(t, runway.SupplyWindows, 2)
+
+	five := runway.SupplyWindows[0]
+	assert.Equal(t, 5.0, five.Hours)
+	assert.InDelta(t, 50, five.DemandUSD, 1e-9)
+	assert.Zero(t, five.RefillUSD, "no weekly reset falls inside the next 5 hours")
+	assert.InDelta(t, 150, five.SupplyUSD, 1e-9)
+	assert.Zero(t, five.ShortUSD)
+
+	day := runway.SupplyWindows[1]
+	assert.Equal(t, 24.0, day.Hours)
+	assert.InDelta(t, 240, day.DemandUSD, 1e-9)
+	assert.InDelta(t, 150, day.RefillUSD, 1e-9, "the reset brings back $200 over the $50 left")
+	assert.InDelta(t, 300, day.SupplyUSD, 1e-9, "$150 left now and $150 brought back")
+	assert.Zero(t, day.ShortUSD, "$300 covers the day's $240")
+}
+
+func TestPoolRunwayShowsAWindowShortWhoseRefillLandsTooLate(t *testing.T) {
+	// $50 lasts 5 hours at $10 an hour and the reset only lands at hour 20,
+	// so the day's supply covers its demand while 15 hours serve nothing.
+	runway := poolRunway(runwayPool(runwayAccountAt(1, 50, 400, 10, 20)), "claude", 0, flatDemand())
+	require.Len(t, runway.SupplyWindows, 2)
+	day := runway.SupplyWindows[1]
+	assert.InDelta(t, 240, day.DemandUSD, 1e-9)
+	assert.InDelta(t, 250, day.SupplyUSD, 1e-9)
+	assert.InDelta(t, 150, day.ShortUSD, 1e-9, "15 hours at $10 go unserved before the reset")
+}
+
 func TestPoolRunwayReportsAGrazingGapAsShort(t *testing.T) {
 	// $100 lasts 10 hours, and a reset at hour 10.1 brings $2000: a six-minute
 	// gap, not a pool that has run out.

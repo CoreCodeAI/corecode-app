@@ -55,6 +55,10 @@ type EngineRunway struct {
 	// WeekLoad is demand over sustainable supply. Under 1 the pool refills
 	// faster than it is spent.
 	WeekLoad float64 `json:"week_load"`
+	// SupplyWindows is demand against quota over each of runwaySupplyWindows,
+	// so a window's demand is read against what the pool can actually draw on
+	// inside it rather than against the remainder alone.
+	SupplyWindows []EngineRunwaySupply `json:"supply_windows"`
 	// Over HorizonHours at the last day's demand: the hours with no weekly
 	// quota left anywhere, and the share of demand served.
 	ShortHours   float64 `json:"short_hours"`
@@ -138,6 +142,27 @@ type EngineRunwayAddition struct {
 	ForWeek *int `json:"for_week"`
 }
 
+// EngineRunwaySupply is one window of the base projection: the demand over
+// it, the quota the pool can draw on inside it, and the demand it leaves
+// unserved.
+type EngineRunwaySupply struct {
+	Hours float64 `json:"hours"`
+	// DemandUSD is demand over the window at its current level, shaped
+	// through the day by the profile; the trend is not carried into it.
+	DemandUSD float64 `json:"demand_usd"`
+	// RefillUSD is what the weekly resets inside the window bring back,
+	// beyond what their accounts still held when they reset. A reset at the
+	// window's last moment is left out: quota arriving then serves nothing
+	// inside it. 5-hour windows are not modelled here, so a window shorter
+	// than the gap to the next weekly reset refills nothing.
+	RefillUSD float64 `json:"refill_usd"`
+	// SupplyUSD is WeekRemainingUSD plus RefillUSD.
+	SupplyUSD float64 `json:"supply_usd"`
+	// ShortUSD is the demand the window leaves unserved. It can be above 0
+	// while SupplyUSD covers DemandUSD, when the refill lands too late.
+	ShortUSD float64 `json:"short_usd"`
+}
+
 // EngineRunwayScenario is the projection under another demand.
 type EngineRunwayScenario struct {
 	// DemandScale is the scenario's demand over the base demand; for the
@@ -168,6 +193,10 @@ var runwayAddPlans = []struct{ plan, tier string }{
 }
 
 const runwayMaxAddition = 30
+
+// runwaySupplyWindows are the windows SupplyWindows covers, in hours, shortest
+// first. They are whole hours, so the projection samples each of them.
+var runwaySupplyWindows = []float64{5, 24}
 
 // poolRunway sets the channel's demand against its quota supply. Over the next
 // runwayHorizon, demand runs at the last 24 hours' spend, moved through the
@@ -252,6 +281,17 @@ func poolRunway(pool EnginePool, channel string, nowMS int64, profile demandProf
 	runway.ShortHours, runway.ServedShare = base.ShortHours, base.ServedShare
 	runway.LowestUSD, runway.LowestHours = base.lowestUSD, base.lowestHours
 	runway.WeekHours, runway.FirstShortHours, runway.Curve = base.WeekHours, base.FirstShortHours, base.Curve
+	runway.SupplyWindows = make([]EngineRunwaySupply, 0, len(runwaySupplyWindows))
+	for i, hours := range runwaySupplyWindows {
+		totals := base.windows[i]
+		runway.SupplyWindows = append(runway.SupplyWindows, EngineRunwaySupply{
+			Hours:     hours,
+			DemandUSD: totals.demanded,
+			RefillUSD: totals.refilled,
+			SupplyUSD: runway.WeekRemainingUSD + totals.refilled,
+			ShortUSD:  totals.unserved,
+		})
+	}
 
 	// trending is the trend scenario's demand, scaled; without growth it is
 	// demand as now.
@@ -371,6 +411,16 @@ type runwayProjection struct {
 	EngineRunwayScenario
 	lowestUSD   float64
 	lowestHours float64
+	// windows holds the running totals at the end of each of
+	// runwaySupplyWindows, in the same order.
+	windows []runwayWindowTotals
+}
+
+// runwayWindowTotals is what the projection had done by the end of a window.
+type runwayWindowTotals struct {
+	demanded float64
+	refilled float64
+	unserved float64
 }
 
 // projectRunway runs the accounts forward over runwayHorizon from nowMS at
@@ -391,16 +441,31 @@ func projectRunway(start []runwayAccount, nowMS int64, rate func(ms int64) float
 		left += account.remaining
 	}
 	result.lowestUSD = left
-	served, demanded := 0.0, 0.0
+	served, demanded, refilled := 0.0, 0.0, 0.0
 	firstOpen := false
 	sample := func(ms int64) {
 		for len(result.Curve) <= int(runwayHorizon.Hours()) && nowMS+int64(len(result.Curve))*hour <= ms {
 			result.Curve = append(result.Curve, math.Round(left*100)/100)
 		}
 	}
+	// A window closes before the resets due at the moment it closes, so its
+	// totals cover the quota a reader could spend inside it.
+	result.windows = make([]runwayWindowTotals, len(runwaySupplyWindows))
+	closed := 0
+	closeWindows := func(ms int64) {
+		hours := float64(ms-nowMS) / hourMS
+		for closed < len(runwaySupplyWindows) && runwaySupplyWindows[closed] <= hours {
+			result.windows[closed] = runwayWindowTotals{
+				demanded: demanded, refilled: refilled, unserved: demanded - served,
+			}
+			closed++
+		}
+	}
 	for atMS := nowMS; atMS < endMS; {
+		closeWindows(atMS)
 		for i := range accounts {
 			if accounts[i].resetMS <= atMS {
+				refilled += accounts[i].full - accounts[i].remaining
 				left += accounts[i].full - accounts[i].remaining
 				accounts[i].remaining = accounts[i].full
 				accounts[i].resetMS += runwayWeek.Milliseconds()
@@ -461,6 +526,7 @@ func projectRunway(start []runwayAccount, nowMS int64, rate func(ms int64) float
 		atMS = untilMS
 	}
 	sample(endMS)
+	closeWindows(endMS)
 	result.ServedShare = 1
 	if demanded > 0 {
 		result.ServedShare = served / demanded
