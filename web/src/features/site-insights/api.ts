@@ -26,6 +26,7 @@ import type {
   CapacityInsights,
   ChannelCost,
   ChannelInsights,
+  EngineOutlook,
   EnginePool,
   EngineResetResult,
   FinanceInsights,
@@ -120,6 +121,20 @@ export async function getPoolUsage(provider: PoolProvider): Promise<PoolUsage> {
   const res = await api.get<ApiResponse<PoolUsage>>(
     '/api/site-insights/pool-usage',
     { params: { provider } }
+  )
+  if (!res.data.success || res.data.data === undefined) {
+    throw createServerError(res.data, 'Failed to load site insights')
+  }
+  return res.data.data
+}
+
+/**
+ * The Claude pool's quota over the next 5 hours, 24 hours and 7 days against
+ * each demand forecast. The server shares one computation for 5 seconds.
+ */
+export async function getPoolOutlook(): Promise<EngineOutlook> {
+  const res = await api.get<ApiResponse<EngineOutlook>>(
+    '/api/site-insights/pool-outlook'
   )
   if (!res.data.success || res.data.data === undefined) {
     throw createServerError(res.data, 'Failed to load site insights')

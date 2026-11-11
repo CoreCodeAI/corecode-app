@@ -240,6 +240,10 @@ export function useInsightsFormat() {
     hour: '2-digit',
     minute: '2-digit',
   })
+  const clock = new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
   return {
     num: (value: number) => number.format(value),
     usd: (value: number) => usdFormat.format(value),
@@ -259,6 +263,8 @@ export function useInsightsFormat() {
     multiple: (value: number) => `${multipleFormat.format(value)}×`,
     day: (unix: number) => day.format(new Date(unix * 1000)),
     time: (unix: number) => (unix ? hour.format(new Date(unix * 1000)) : '-'),
+    /** The time of day alone, for an axis within one day. */
+    clock: (unix: number) => clock.format(new Date(unix * 1000)),
     ms: (value: number) =>
       value >= 1000 ? `${(value / 1000).toFixed(1)}s` : `${value}ms`,
     /** A duration that is 0 only when nothing was measured. */

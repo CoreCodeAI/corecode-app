@@ -29,6 +29,7 @@ import type {
 } from '../../types'
 import { PoolTab } from '../pool-tab'
 import { Breakdown } from '../shared'
+import { outlook, outlookModel } from './outlook-fixture'
 
 function group(overrides: Partial<EngineGroup>): EngineGroup {
   return {
@@ -234,6 +235,7 @@ describe('pool account quota meters', () => {
   })
 })
 
+// The engine's runway as a server before the outlook sends it.
 function runway(overrides: Partial<EngineRunway>): EngineRunway {
   return {
     channel: 'claude',
@@ -243,7 +245,7 @@ function runway(overrides: Partial<EngineRunway>): EngineRunway {
     peak_usd_per_hour: 120,
     week_remaining_usd: 2000,
     week_capacity_usd: 5376,
-    week_load: 1.25,
+    week_load: 0.7,
     short_hours: 0,
     served_share: 1,
     horizon_hours: 168,
@@ -257,236 +259,117 @@ function runway(overrides: Partial<EngineRunway>): EngineRunway {
   }
 }
 
-function renderRunway(overrides: Partial<EngineRunway>) {
-  render(
-    <PoolTab
-      data={{
-        ...pool([group({})], [account({})]),
-        runway: runway(overrides),
-      }}
-    />
-  )
-}
+// An account the engine projects to leave $683 of its week unspent.
+const idle = account({
+  email_mask: 'idle@x',
+  seven_day_remaining_usd: 1113,
+  seven_day_capacity_usd: 1223,
+  seven_day_unused_usd: 683,
+})
 
-describe('pool supply', () => {
-  it('sets demand against what the resets bring back', () => {
-    renderRunway({})
-
-    expect(screen.getByText('125%')).toBeInTheDocument()
-    expect(screen.getByRole('meter', { name: 'Weekly load' })).toHaveAttribute(
-      'aria-valuenow',
-      '100'
+describe('the Claude pool’s quota ahead', () => {
+  it('shows what is left, then whether it meets demand', () => {
+    render(
+      <PoolTab data={pool([group({})], [account({})])} outlook={outlook()} />
     )
-    // $8/h short for a week.
+
+    expect(screen.getByText('Quota left')).toBeInTheDocument()
+    expect(screen.getByText('Supply and demand')).toBeInTheDocument()
     expect(
-      screen.getByText(/about \$1,344 more weekly capacity/)
+      screen.getByRole('switch', { name: 'Count resets' })
     ).toBeInTheDocument()
-    expect(screen.getByText('None')).toBeInTheDocument()
-    expect(screen.getByText('$120/h')).toBeInTheDocument()
-    expect(screen.getByText('3.00× the demand')).toBeInTheDocument()
+    // The stock figures the panels replace are gone from the summary.
+    expect(screen.queryByText('5-hour left')).not.toBeInTheDocument()
+    expect(screen.queryByText('Unused at reset')).not.toBeInTheDocument()
+    expect(screen.queryByText('Is capacity enough?')).not.toBeInTheDocument()
+    expect(screen.queryByText('Claude pool supply')).not.toBeInTheDocument()
   })
 
-  it('sets the day’s demand against the quota its resets bring back', () => {
-    renderRunway({
-      supply_windows: [
-        {
-          hours: 5,
-          demand_usd: 200,
-          refill_usd: 0,
-          supply_usd: 2000,
-          short_usd: 0,
-        },
-        {
-          hours: 24,
-          demand_usd: 960,
-          refill_usd: 1100,
-          supply_usd: 3100,
-          short_usd: 0,
-        },
-      ],
-    })
+  it('holds the place while the outlook loads', () => {
+    render(<PoolTab data={pool([group({})], [account({})])} />)
 
-    expect(screen.getByText('≈ $3,100')).toBeInTheDocument()
-    expect(
-      screen.getByText('Demand $960 · $2,000 left now + $1,100 from resets')
-    ).toBeInTheDocument()
+    expect(screen.getByText('Quota left')).toBeInTheDocument()
+    expect(screen.getByLabelText('Loading')).toHaveAttribute(
+      'aria-busy',
+      'true'
+    )
+    expect(screen.queryByText('Supply and demand')).not.toBeInTheDocument()
   })
 
-  it('names the day’s unserved demand when its refill lands too late', () => {
-    renderRunway({
-      supply_windows: [
-        {
-          hours: 5,
-          demand_usd: 200,
-          refill_usd: 0,
-          supply_usd: 2000,
-          short_usd: 0,
-        },
-        {
-          hours: 24,
-          demand_usd: 960,
-          refill_usd: 1100,
-          supply_usd: 3100,
-          short_usd: 150,
-        },
-      ],
-    })
-
-    expect(screen.getByText(/\$150 unserved$/)).toBeInTheDocument()
-  })
-
-  it('leaves the day out for a server that sends no supply windows', () => {
-    renderRunway({})
-
-    expect(screen.queryByText(/from resets/)).not.toBeInTheDocument()
-  })
-
-  it('reads a near miss as the tightest point, not as running out', () => {
-    renderRunway({})
-
-    expect(screen.getByText('$50')).toBeInTheDocument()
-    expect(screen.getByText(/· 1.3 hours of demand$/)).toBeInTheDocument()
-    expect(
-      screen.getByText(/tightest around .* with \$50 left/)
-    ).toBeInTheDocument()
-  })
-
-  it('reports a gap with its start, length and total', () => {
-    renderRunway({
-      week_hours: 30,
-      first_short_hours: 0.25,
-      short_hours: 20,
-      served_share: 0.88,
-      lowest_usd: 0,
-      lowest_hours: 30,
-    })
-
-    expect(screen.getByText('≈ 20.0 hours')).toBeInTheDocument()
-    expect(screen.getByText(/· 88% of demand served$/)).toBeInTheDocument()
+  it('says why when the outlook cannot be read, as before the server sends one', () => {
+    render(
+      <PoolTab
+        data={pool([group({})], [account({})])}
+        outlookError='Request failed with status code 404'
+      />
+    )
     expect(
       screen.getByText(
-        /first runs out around .* for 15 minutes; 20.0 hours without quota in all/
+        'The pool’s quota ahead could not be read: Request failed with status code 404'
       )
     ).toBeInTheDocument()
   })
 
-  it('reads one gap once', () => {
-    renderRunway({
-      week_hours: 30,
-      first_short_hours: 6,
-      short_hours: 6,
-      served_share: 0.96,
-      lowest_usd: 0,
-      lowest_hours: 30,
-    })
-
-    expect(
-      screen.getByText(/the quota runs out around .* for 6.0 hours\.$/)
-    ).toBeInTheDocument()
-    expect(screen.queryByText(/without quota in all/)).toBeNull()
-  })
-
-  it('draws the quota left hour by hour and reads out each hour', async () => {
-    const user = userEvent.setup()
-    renderRunway({ curve: [400, 0, 0, 200, 100] })
-
-    const chart = screen.getByRole('img', {
-      name: /\$400 now, least \$0 around/,
-    })
-    expect(screen.getByText('No quota left')).toBeInTheDocument()
-
-    await user.click(chart)
-    expect(screen.getByRole('status')).toHaveTextContent('$400')
-    await user.keyboard('{ArrowRight}')
-    expect(screen.getByRole('status')).toHaveTextContent('No quota left')
-    await user.keyboard('{ArrowRight}{ArrowRight}')
-    expect(screen.getByRole('status')).toHaveTextContent('$200')
-  })
-
-  it('reads how far demand can move and the busiest hour', () => {
-    renderRunway({ headroom_scale: 0.9, peak_hour_usd_per_hour: 80 })
-
-    expect(screen.getByText('−10%')).toBeInTheDocument()
-    expect(
-      screen.getByText('Lasts 7 days at $36.00/h or less')
-    ).toBeInTheDocument()
-    expect(screen.getByText('Busiest hour $80/h · 66.7%')).toBeInTheDocument()
-  })
-
-  it('reads headroom above the search as plenty', () => {
-    renderRunway({ headroom_scale: null })
-    expect(screen.getByText('Over 4.00×')).toBeInTheDocument()
-  })
-
-  it('says when growing use runs out sooner', () => {
-    const scenario = {
-      demand_scale: 1.4,
-      short_hours: 20,
-      served_share: 0.9,
-      week_hours: 30,
-      first_short_hours: 20,
-      curve: [400, 100, 0, 200, 50],
-    }
-    renderRunway({
-      growth_per_day: 0.08,
-      trend: scenario,
-      curve: [400, 300, 200, 350, 250],
-      low: { ...scenario, curve: [400, 350, 300, 420, 380] },
-      high: { ...scenario, curve: [400, 200, 0, 150, 0] },
-    })
-
-    expect(
-      screen.getByText(/If use keeps growing 8% a day, it runs out around/)
-    ).toBeInTheDocument()
-    expect(
-      screen.getByText(/Week to date \$44.00\/h · \+8% a day/)
-    ).toBeInTheDocument()
-    expect(screen.getByText('Usual range')).toBeInTheDocument()
-    expect(screen.getByText('Growing as this week')).toBeInTheDocument()
-  })
-
-  it('reads the range and the growing projection at each hour', async () => {
-    const user = userEvent.setup()
-    const scenario = {
-      demand_scale: 1,
-      short_hours: 0,
-      served_share: 1,
-      week_hours: null,
-      first_short_hours: null,
-    }
-    renderRunway({
-      growth_per_day: 0.08,
-      curve: [400, 300, 200],
-      trend: { ...scenario, curve: [400, 250, 0] },
-      low: { ...scenario, curve: [400, 350, 300] },
-      high: { ...scenario, curve: [400, 200, 50] },
-    })
-
-    await user.click(screen.getByRole('img', { name: /quota left over/ }))
-    await user.keyboard('{ArrowRight}{ArrowRight}')
-    const status = screen.getByRole('status')
-    expect(status).toHaveTextContent('$200')
-    expect(status).toHaveTextContent('Usual range $50 – $300')
-    expect(status).toHaveTextContent('Growing: No quota left')
-  })
-
-  it('leaves the curve out for a server that sends none', () => {
-    renderRunway({})
-    expect(screen.queryByRole('img', { name: /quota left over/ })).toBeNull()
-  })
-
-  it('stays hidden for a server that sends the first runway', () => {
-    const first = { ...runway({}) } as Partial<EngineRunway>
-    delete first.sustainable_usd_per_hour
+  it('reports the engine’s own failure', () => {
     render(
       <PoolTab
-        data={{
-          ...pool([group({})], [account({})]),
-          runway: first as EngineRunway,
-        }}
+        data={pool([group({})], [account({})])}
+        outlook={outlook({ error: 'pool estimate timed out', models: [] })}
       />
     )
-    expect(screen.queryByText('Claude pool supply')).toBeNull()
+    expect(
+      screen.getByText(
+        'The pool’s quota ahead could not be read: pool estimate timed out'
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Supply and demand')).not.toBeInTheDocument()
+  })
+
+  it('keeps the last figures through a failed refresh', () => {
+    render(
+      <PoolTab
+        data={pool([group({})], [account({})])}
+        outlook={outlook()}
+        outlookError='Network Error'
+      />
+    )
+    expect(screen.getByText('Supply and demand')).toBeInTheDocument()
+    expect(screen.queryByText(/could not be read/)).not.toBeInTheDocument()
+  })
+
+  it('lists quota about to expire only while the forecast is served', () => {
+    const data = pool([group({})], [idle])
+    const { rerender } = render(<PoolTab data={data} outlook={outlook()} />)
+
+    // The smart forecast runs short: the pool spends what one account leaves.
+    expect(
+      screen.queryByText('Quota that will expire unused')
+    ).not.toBeInTheDocument()
+
+    rerender(
+      <PoolTab
+        data={data}
+        outlook={outlook({ models: [outlookModel('smart')] })}
+      />
+    )
+    expect(
+      screen.getByText('Quota that will expire unused')
+    ).toBeInTheDocument()
+  })
+
+  it('reads the engine’s runway for that until the outlook arrives', () => {
+    const data = pool([group({})], [idle])
+    const { rerender } = render(
+      <PoolTab data={{ ...data, runway: runway({ week_hours: 84 }) }} />
+    )
+    expect(
+      screen.queryByText('Quota that will expire unused')
+    ).not.toBeInTheDocument()
+
+    rerender(<PoolTab data={{ ...data, runway: runway({}) }} />)
+    expect(
+      screen.getByText('Quota that will expire unused')
+    ).toBeInTheDocument()
   })
 })
 
@@ -586,7 +469,7 @@ describe('providers', () => {
     expect(screen.queryByText(/claude@x/)).not.toBeInTheDocument()
     expect(screen.queryByText('Team')).not.toBeInTheDocument()
     // Dollar capacity is estimated for Claude only.
-    expect(screen.queryByText('5-hour left')).not.toBeInTheDocument()
+    expect(screen.queryByText('Quota left')).not.toBeInTheDocument()
     expect(
       screen.getByText(/whether the Codex pool keeps up is not judged here/)
     ).toBeInTheDocument()
@@ -611,185 +494,6 @@ describe('providers', () => {
   })
 })
 
-describe('capacity verdict', () => {
-  it('sizes the Team Tier 1 accounts to add, with Team Standard beside them', () => {
-    render(
-      <PoolTab
-        data={{
-          ...pool([group({})], [account({})]),
-          five_hour_estimate: {
-            remaining_usd: 200,
-            remaining_low_usd: 190,
-            remaining_high_usd: 210,
-            capacity_usd: 400,
-            counted: 1,
-            unknown: 0,
-          },
-          runway: runway({
-            additions: [
-              {
-                plan: 'Team',
-                tier: 'team_tier_1',
-                week_usd: 1458,
-                budget_percent: 98,
-                measured: 4,
-                for_load: 2,
-                for_trend: 3,
-                for_week: 1,
-              },
-              {
-                plan: 'Team',
-                tier: 'team_standard',
-                week_usd: 290,
-                budget_percent: 98,
-                measured: 6,
-                for_load: 10,
-                for_trend: 14,
-                for_week: 5,
-              },
-            ],
-          }),
-        }}
-        usage={usage()}
-      />
-    )
-
-    expect(
-      screen.getByText(
-        /Not enough capacity\. To keep up with demand now, add 2 × Team Tier 1; each brings about \$1,458 a week\. If use keeps growing, 3 × Team Tier 1 by the end of the week\./
-      )
-    ).toBeInTheDocument()
-    expect(screen.getByText('Team Tier 1 to add')).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        'Keep up 2 · 7 days 1 · with growth 3 · or 10 × Team Standard'
-      )
-    ).toBeInTheDocument()
-    // $230 forecast against $200 left in the 5-hour windows.
-    expect(screen.getByText('≈ $230')).toHaveClass('text-destructive')
-    expect(screen.getByText('Range $800 – $1,200')).toBeInTheDocument()
-    // new-api's ¥460 is $57.50 at ¥8 a dollar, and $230 of gpt-load at $0.50 a yuan.
-    expect(screen.getByText('≈ $58')).toBeInTheDocument()
-    expect(screen.getByText('¥460 · ≈ $230 in gpt-load')).toBeInTheDocument()
-    expect(screen.getByText('≈ $240')).toBeInTheDocument()
-    expect(screen.getByText('¥1,920 · ≈ $960 in gpt-load')).toBeInTheDocument()
-  })
-
-  it('sets the 24-hour forecast against the quota the day can draw on', () => {
-    render(
-      <PoolTab
-        data={{
-          ...pool([group({})], [account({})]),
-          runway: runway({
-            supply_windows: [
-              {
-                hours: 5,
-                demand_usd: 200,
-                refill_usd: 0,
-                supply_usd: 2000,
-                short_usd: 0,
-              },
-              {
-                hours: 24,
-                demand_usd: 960,
-                refill_usd: 1100,
-                supply_usd: 3100,
-                short_usd: 0,
-              },
-            ],
-          }),
-        }}
-        usage={usage()}
-      />
-    )
-
-    expect(
-      screen.getByText('Range $800 – $1,200 · Against ≈ $3,100 of quota')
-    ).toBeInTheDocument()
-    // $960 forecast against $3,100: the day is not tight.
-    expect(screen.getByText('≈ $960')).not.toHaveClass('text-destructive')
-  })
-
-  it('sizes the accounts by the demand expected over the next week', () => {
-    render(
-      <PoolTab
-        data={{
-          ...pool([group({})], [account({})]),
-          runway: runway({
-            growth_per_day: 0.086,
-            expected_usd_per_hour: 81.6,
-            additions: [
-              {
-                plan: 'Team',
-                tier: 'team_tier_1',
-                week_usd: 1392,
-                budget_percent: 98,
-                measured: 5,
-                for_expected: 4,
-                for_low: 2,
-                for_high: 7,
-                for_load: 3,
-                for_trend: 6,
-                for_week: 2,
-              },
-              {
-                plan: 'Team',
-                tier: 'team_standard',
-                week_usd: 278,
-                budget_percent: 98,
-                measured: 5,
-                for_expected: 20,
-                for_low: 7,
-                for_high: 34,
-                for_load: 11,
-                for_trend: 26,
-                for_week: 6,
-              },
-            ],
-          }),
-        }}
-      />
-    )
-
-    expect(
-      screen.getByText(
-        /Use grows 8\.6% a day, so demand over the next week averages about \$82\/h: add 4 × Team Tier 1 to keep up; each brings about \$1,392 a week\. Past forecasts put it between 2 and 7\./
-      )
-    ).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        'Range 2 – 7 · 7 days 2 · at today’s demand 3 · or 20 × Team Standard'
-      )
-    ).toBeInTheDocument()
-  })
-
-  it('says when no account is needed', () => {
-    render(
-      <PoolTab
-        data={{
-          ...pool([group({})], [account({})]),
-          runway: runway({
-            week_load: 0.5,
-            addition: {
-              plan: 'Max',
-              tier: 'default_claude_max_5x',
-              week_usd: 1458,
-              budget_percent: 98,
-              measured: 1,
-              for_load: 0,
-              for_trend: 0,
-              for_week: 0,
-            },
-          }),
-        }}
-      />
-    )
-    expect(
-      screen.getByText(/^Enough capacity\. No account needed/)
-    ).toBeInTheDocument()
-  })
-})
-
 describe('provider usage', () => {
   it('converts new-api’s charge to gpt-load spend at the week’s rate', () => {
     render(<PoolTab data={pool([group({})], [account({})])} usage={usage()} />)
@@ -801,15 +505,27 @@ describe('provider usage', () => {
     expect(row).toHaveTextContent('$40.00')
     expect(row).toHaveTextContent('$44.00')
     expect(row).toHaveTextContent('1.10×')
-    const forecast = screen
-      .getByText('Next 24 hours (forecast)')
-      .closest('tr') as HTMLElement
-    expect(forecast).toHaveTextContent('$960.00')
+    // Claude's forecast is the supply and demand panel's.
+    expect(screen.queryByText(/\(forecast\)$/)).not.toBeInTheDocument()
     expect(
       screen.getByText(
         /each ¥1 new-api charged for Claude cost gpt-load \$0\.50/
       )
     ).toBeInTheDocument()
+  })
+
+  it('forecasts the next hours for a provider without a quota forecast', () => {
+    render(
+      <PoolTab
+        data={pool([group({ channel: 'codex' })], [account({})])}
+        provider='codex'
+        usage={usage({ provider: 'codex', channels: ['codex'] })}
+      />
+    )
+    const forecast = screen
+      .getByText('Next 24 hours (forecast)')
+      .closest('tr') as HTMLElement
+    expect(forecast).toHaveTextContent('$960.00')
   })
 
   it('ignores another provider’s figures while the new ones load', () => {

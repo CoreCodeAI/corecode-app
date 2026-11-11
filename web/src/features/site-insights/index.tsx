@@ -38,6 +38,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 import {
   getInsights,
+  getPoolOutlook,
   getPoolUsage,
   VIEW_MAX_DAYS,
   type InsightsView,
@@ -60,7 +61,7 @@ import {
   writePoolRefresh,
   type InsightsTab,
 } from './lib'
-import type { PoolProvider, PoolUsage } from './types'
+import type { EngineOutlook, PoolProvider, PoolUsage } from './types'
 
 const route = getRouteApi('/_authenticated/site-insights/')
 
@@ -169,6 +170,15 @@ export function SiteInsights() {
     enabled: tab === 'pool',
     refetchInterval: poolRefresh ? 60_000 : false,
     staleTime: 30_000,
+  })
+  // The Claude pool's quota ahead moves with the pool, so it refreshes with
+  // it. Its failure is shown in its own panel, not as a toast on every poll.
+  const outlook = useQuery({
+    queryKey: ['site-insights', 'pool-outlook'],
+    queryFn: getPoolOutlook,
+    enabled: tab === 'pool' && provider === 'claude',
+    refetchInterval: poolRefresh * 1000 || false,
+    meta: { errorToast: false },
   })
   // The finance, growth and quality tabs each show part of the business
   // view, which has no tab of its own.
@@ -390,6 +400,11 @@ export function SiteInsights() {
                   usage.error instanceof Error
                     ? usage.error.message
                     : undefined,
+                outlook: outlook.data,
+                outlookError:
+                  outlook.error instanceof Error
+                    ? outlook.error.message
+                    : undefined,
               }}
               capacity={{
                 vendor: search.vendor ?? 'all',
@@ -429,6 +444,8 @@ function InsightsView(props: {
     onProvider: (provider: PoolProvider) => void
     usage: PoolUsage | undefined
     usageError: string | undefined
+    outlook: EngineOutlook | undefined
+    outlookError: string | undefined
   }
   capacity: {
     vendor: CapacityVendor

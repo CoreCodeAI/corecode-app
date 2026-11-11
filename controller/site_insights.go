@@ -432,6 +432,13 @@ func ConsumeEngineResetCredit(c *gin.Context) {
 	common.ApiErrorStatus(c, http.StatusOK, common.NewMessage(message), gin.H{"code": engineErr.Code})
 }
 
+// GetPoolOutlook returns the Claude pool's quota over the next 5 hours, 24
+// hours and 7 days, with and without its resets, against each demand
+// forecast. It takes no range: the engine reports its current state.
+func GetPoolOutlook(c *gin.Context) {
+	common.ApiSuccess(c, service.FetchPoolOutlook())
+}
+
 // GetPoolUsage returns one provider's use on new-api and gpt-load over the
 // last hour to the last week, with a forecast. It takes no range.
 func GetPoolUsage(c *gin.Context) {
