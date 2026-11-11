@@ -72,6 +72,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     audit: true,
     midjourney: true,
     task: true,
+    status: true,
   },
   personal: {
     enabled: true,
