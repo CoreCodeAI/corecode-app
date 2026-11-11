@@ -135,13 +135,13 @@ const providers = [
       's2v-01',
     ],
   },
+  { category: 'ByteDance', models: ['seedance-1', 'seedance-2.5-480p'] },
   {
     category: 'Doubao',
     models: [
       'doubao-pro',
       'doubao',
       'volcengine/custom',
-      'seedance-1',
       'seedream-4',
       'seed-1-6',
     ],

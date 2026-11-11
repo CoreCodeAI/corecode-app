@@ -30,6 +30,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ServiceStatus } from '..'
 import type { ServiceStatusData } from '../types'
 
+vi.mock('@tanstack/react-router', () => ({
+  Link: (props: { to: string; children?: ReactNode }) => (
+    <a href={props.to}>{props.children}</a>
+  ),
+}))
+
 vi.mock('@/components/layout', () => ({
   SectionPageLayout: Object.assign(
     (props: { children: ReactNode }) => <div>{props.children}</div>,
@@ -135,6 +141,11 @@ it('reads the status page data and shows the overall state and each group', asyn
   expect(await screen.findByText('All systems operational')).toBeTruthy()
   expect(screen.getByText('Claude 满血（仅限CC）')).toBeTruthy()
   expect(screen.getByText('claude-opus-5-5')).toBeTruthy()
+  // The busiest model names the vendor.
+  expect(screen.getByText('Anthropic')).toBeTruthy()
+  expect(
+    screen.getByRole('link', { name: 'Create API Key' }).getAttribute('href')
+  ).toBe('/keys')
   expect(screen.getByText('99.79%')).toBeTruthy()
   const fetchMock = vi.mocked(fetch)
   expect(String(fetchMock.mock.calls[0][0])).toMatch(

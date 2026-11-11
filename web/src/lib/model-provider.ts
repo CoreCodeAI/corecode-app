@@ -133,10 +133,13 @@ const MODEL_PROVIDER_RULES: readonly ModelProviderRule[] = [
     keywords: ['minimax', 'abab', 'hailuo'],
     pattern: /^(?:t2v|i2v|s2v)-01(?:-|$)/,
   },
+  // Seedance is ByteDance's video model; CoreCode shows it under ByteDance
+  // rather than the Doubao chat brand.
+  { name: 'ByteDance', icon: 'ByteDance.Color', keywords: ['seedance'] },
   {
     name: 'Doubao',
     icon: 'Doubao.Color',
-    keywords: ['doubao', 'volcengine', 'seedance', 'seedream', 'seed-1-'],
+    keywords: ['doubao', 'volcengine', 'seedream', 'seed-1-'],
   },
   {
     name: 'Zhipu',
