@@ -26,12 +26,13 @@ import {
 } from '@tanstack/react-router'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { logStatsSearch, spendBreakdownRange } from '../../lib/query-ranges'
+import { spendBreakdownRange } from '../../lib/query-ranges'
 import { CommonLogsStats } from '../common-logs-stats'
 import { UsageLogsProvider } from '../usage-logs-provider'
 
@@ -39,6 +40,18 @@ function callsTo(path: string) {
   return vi
     .mocked(api.get)
     .mock.calls.filter(([url]) => String(url).startsWith(path))
+}
+
+function StatsPage() {
+  const [renders, setRenders] = useState(0)
+  return (
+    <UsageLogsProvider>
+      <button type='button' onClick={() => setRenders(renders + 1)}>
+        Re-render
+      </button>
+      <CommonLogsStats />
+    </UsageLogsProvider>
+  )
 }
 
 async function renderStats() {
@@ -67,11 +80,7 @@ async function renderStats() {
   const logs = createRoute({
     getParentRoute: () => auth,
     path: '/usage-logs/$section',
-    component: () => (
-      <UsageLogsProvider>
-        <CommonLogsStats />
-      </UsageLogsProvider>
-    ),
+    component: StatsPage,
     validateSearch: (search: Record<string, unknown>) => search,
   })
   const router = createRouter({
@@ -87,7 +96,18 @@ async function renderStats() {
     </QueryClientProvider>
   )
   await screen.findByRole('button', { name: 'Spend by key' })
-  return router
+  return { router, client }
+}
+
+function fakeClock() {
+  // Only Date is faked, so each step lands seconds later in the same hour.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  let now = new Date(2026, 10, 11, 9, 0, 10).getTime()
+  vi.setSystemTime(now)
+  return () => {
+    now += 2_000
+    vi.setSystemTime(now)
+  }
 }
 
 afterEach(() => {
@@ -97,18 +117,28 @@ afterEach(() => {
   useAuthStore.getState().auth.setUser(null)
 })
 
-it('paging the logs reruns neither the stats nor the spend breakdown', async () => {
-  // Only Date is faked, so each page turn lands seconds later in the same hour.
-  vi.useFakeTimers({ toFake: ['Date'] })
-  let now = new Date(2026, 10, 11, 9, 0, 10).getTime()
-  vi.setSystemTime(now)
-  const router = await renderStats()
+it('a re-render with the same URL does not rerun the spend breakdown', async () => {
+  const tick = fakeClock()
+  await renderStats()
+  await waitFor(() => expect(callsTo('/api/data/flow/self')).toHaveLength(1))
+
+  for (let i = 0; i < 3; i++) {
+    tick()
+    await userEvent.click(screen.getByRole('button', { name: 'Re-render' }))
+  }
+
+  expect(callsTo('/api/data/flow/self')).toHaveLength(1)
+  expect(callsTo('/api/log/self/stat')).toHaveLength(1)
+})
+
+it('paging refreshes the stats and the spend breakdown as before', async () => {
+  const tick = fakeClock()
+  const { router } = await renderStats()
   await waitFor(() => expect(callsTo('/api/log/self/stat')).toHaveLength(1))
   await waitFor(() => expect(callsTo('/api/data/flow/self')).toHaveLength(1))
 
   for (const page of [2, 3, 4]) {
-    now += 2_000
-    vi.setSystemTime(now)
+    tick()
     await act(() =>
       router.navigate({
         to: '/usage-logs/$section',
@@ -118,12 +148,19 @@ it('paging the logs reruns neither the stats nor the spend breakdown', async () 
     )
   }
 
-  expect(callsTo('/api/log/self/stat')).toHaveLength(1)
-  expect(callsTo('/api/data/flow/self')).toHaveLength(1)
+  await waitFor(() => expect(callsTo('/api/log/self/stat')).toHaveLength(4))
+  await waitFor(() => expect(callsTo('/api/data/flow/self')).toHaveLength(4))
+})
+
+it("the filter bar's refresh also refreshes the spend breakdown", async () => {
+  const { client } = await renderStats()
+  await waitFor(() => expect(callsTo('/api/data/flow/self')).toHaveLength(1))
+  await act(() => client.invalidateQueries({ queryKey: ['usage-logs-stats'] }))
+  await waitFor(() => expect(callsTo('/api/data/flow/self')).toHaveLength(2))
 })
 
 it('changing a filter still refreshes the stats', async () => {
-  const router = await renderStats()
+  const { router } = await renderStats()
   await waitFor(() => expect(callsTo('/api/log/self/stat')).toHaveLength(1))
   await act(() =>
     router.navigate({
@@ -162,10 +199,4 @@ it('an end time in the URL is used as given', () => {
   expect(
     spendBreakdownRange({ startTime: 1_000_000, endTime: 5_000_500 }, 0)
   ).toEqual({ start: 1000, end: 5000 })
-})
-
-it('the stats key ignores paging but keeps every filter', () => {
-  expect(
-    logStatsSearch({ page: 3, pageSize: 50, model: 'm', token: 'k', type: [2] })
-  ).toEqual({ model: 'm', token: 'k', type: [2] })
 })

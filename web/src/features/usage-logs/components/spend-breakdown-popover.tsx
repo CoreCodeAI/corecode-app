@@ -104,7 +104,8 @@ export function SpendBreakdownPopover() {
   const { start, end } = spendBreakdownRange(searchParams, Date.now())
 
   const query = useQuery({
-    queryKey: ['usage-logs', 'spend-breakdown', start, end],
+    // Under the stats prefix so the filter bar's refresh also refreshes it.
+    queryKey: ['usage-logs-stats', 'spend-breakdown', start, end, searchParams],
     queryFn: async () => {
       const data = requireServerSuccess(
         await getFlowQuotaDates({ start_timestamp: start, end_timestamp: end })

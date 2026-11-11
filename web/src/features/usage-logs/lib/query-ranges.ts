@@ -17,25 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 /**
- * CoreCode fork: stable query inputs for the log page's aggregate requests,
- * so re-rendering or paging the table does not rerun them.
+ * CoreCode fork: a stable range for "Spend by key", so re-rendering the log
+ * page does not rerun it.
  */
 import { buildApiParams } from './utils'
 
 const HOUR_SECONDS = 3600
-
-/**
- * The search fields the log stats depend on. The stats request always asks
- * for page 1 of size 1, so paging the table must not change its query key.
- */
-export function logStatsSearch(
-  searchParams: Record<string, unknown>
-): Record<string, unknown> {
-  const statsSearch = { ...searchParams }
-  delete statsSearch.page
-  delete statsSearch.pageSize
-  return statsSearch
-}
 
 /**
  * The range "Spend by key" reads from the hourly quota_data rollup. Rows are
