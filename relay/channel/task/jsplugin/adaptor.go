@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/gcsupload"
 	pluginruntime "github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
@@ -454,17 +456,21 @@ func inlineJSONFilePlaceholders(c *gin.Context, body any) (any, error) {
 	}
 	limit := maxInlineFileBytes()
 	var total int64
-	return replaceJSONFilePlaceholders(cloned, form, limit, &total)
+	ctx := context.Background()
+	if c != nil && c.Request != nil {
+		ctx = c.Request.Context()
+	}
+	return replaceJSONFilePlaceholders(ctx, cloned, form, limit, &total)
 }
 
-func replaceJSONFilePlaceholders(value any, form *multipart.Form, limit int64, total *int64) (any, error) {
+func replaceJSONFilePlaceholders(ctx context.Context, value any, form *multipart.Form, limit int64, total *int64) (any, error) {
 	switch typed := value.(type) {
 	case map[string]any:
 		if _, isPlaceholder := typed["__fileRef"]; isPlaceholder {
-			return encodeFilePlaceholder(typed, form, limit, total)
+			return encodeFilePlaceholder(ctx, typed, form, limit, total)
 		}
 		for key, item := range typed {
-			replaced, err := replaceJSONFilePlaceholders(item, form, limit, total)
+			replaced, err := replaceJSONFilePlaceholders(ctx, item, form, limit, total)
 			if err != nil {
 				return nil, err
 			}
@@ -473,7 +479,7 @@ func replaceJSONFilePlaceholders(value any, form *multipart.Form, limit int64, t
 		return typed, nil
 	case []any:
 		for index, item := range typed {
-			replaced, err := replaceJSONFilePlaceholders(item, form, limit, total)
+			replaced, err := replaceJSONFilePlaceholders(ctx, item, form, limit, total)
 			if err != nil {
 				return nil, err
 			}
@@ -485,7 +491,7 @@ func replaceJSONFilePlaceholders(value any, form *multipart.Form, limit int64, t
 	}
 }
 
-func encodeFilePlaceholder(placeholder map[string]any, form *multipart.Form, limit int64, total *int64) (string, error) {
+func encodeFilePlaceholder(ctx context.Context, placeholder map[string]any, form *multipart.Form, limit int64, total *int64) (string, error) {
 	for key := range placeholder {
 		switch key {
 		case "__fileRef", "encoding", "mimeType", "maxBytes":
@@ -498,8 +504,12 @@ func encodeFilePlaceholder(placeholder map[string]any, form *multipart.Form, lim
 		return "", fmt.Errorf("unknown file reference %q", ref)
 	}
 	encoding, _ := placeholder["encoding"].(string)
-	if encoding != "base64" && encoding != "dataUrl" {
-		return "", fmt.Errorf("file placeholder encoding must be \"base64\" or \"dataUrl\"")
+	if encoding != "base64" && encoding != "dataUrl" && encoding != "url" {
+		return "", fmt.Errorf("file placeholder encoding must be \"base64\", \"dataUrl\" or \"url\"")
+	}
+	store := taskFileURLStore()
+	if encoding == "url" && store == nil {
+		return "", fmt.Errorf("file placeholder encoding \"url\" needs TASK_PLUGIN_FILE_URL_BUCKET")
 	}
 	if form == nil {
 		return "", fmt.Errorf("unknown file reference %q", ref)
@@ -548,7 +558,35 @@ func encodeFilePlaceholder(placeholder map[string]any, form *multipart.Form, lim
 	} else if contentType := header.Header.Get("Content-Type"); contentType != "" {
 		mimeType = contentType
 	}
+	if encoding == "url" {
+		fileURL, err := store.Put(ctx, data, mimeType)
+		if err != nil {
+			return "", fmt.Errorf("file %q: %w", ref, err)
+		}
+		return fileURL, nil
+	}
 	return base64.EncodeDataURL(mimeType, data), nil
+}
+
+// fileURLStore uploads a file and returns a URL an upstream can read it from.
+type fileURLStore interface {
+	Put(ctx context.Context, data []byte, mimeType string) (string, error)
+}
+
+var (
+	fileURLStoreOnce     sync.Once
+	fileURLStoreInstance fileURLStore
+)
+
+// taskFileURLStore is the store "url" placeholders upload to, or nil when
+// TASK_PLUGIN_FILE_URL_BUCKET is unset. Tests replace fileURLStoreInstance.
+func taskFileURLStore() fileURLStore {
+	fileURLStoreOnce.Do(func() {
+		if constant.TaskPluginFileURLBucket != "" {
+			fileURLStoreInstance = gcsupload.New(constant.TaskPluginFileURLBucket, time.Duration(constant.TaskPluginFileURLTTLSeconds)*time.Second)
+		}
+	})
+	return fileURLStoreInstance
 }
 
 func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io.Reader) (*http.Response, error) {

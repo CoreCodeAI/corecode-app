@@ -99,7 +99,7 @@
       "required": ["__fileRef", "encoding"],
       "properties": {
         "__fileRef": {"type": "string", "minLength": 1},
-        "encoding": {"enum": ["base64", "dataUrl"]},
+        "encoding": {"enum": ["base64", "dataUrl", "url"]},
         "mimeType": {"type": "string", "minLength": 1},
         "maxBytes": {"type": "integer", "exclusiveMinimum": 0}
       }

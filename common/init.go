@@ -221,6 +221,10 @@ func initConstantEnv() {
 	constant.TaskPluginProtocolTickMilliseconds = GetEnvOrDefault("TASK_PLUGIN_PROTOCOL_TICK_MILLISECONDS", 2000)
 	constant.TaskPluginProtocolTickJitterMilliseconds = GetEnvOrDefault("TASK_PLUGIN_PROTOCOL_TICK_JITTER_MILLISECONDS", 500)
 	constant.TaskPluginProtocolHeartbeatSeconds = GetEnvOrDefault("TASK_PLUGIN_PROTOCOL_HEARTBEAT_SECONDS", 15)
+	// Upstreams that read media only from HTTPS URLs get uploaded files from this
+	// bucket, as signed URLs valid long enough to cover their queue and download.
+	constant.TaskPluginFileURLBucket = strings.TrimSpace(GetEnvOrDefaultString("TASK_PLUGIN_FILE_URL_BUCKET", ""))
+	constant.TaskPluginFileURLTTLSeconds = GetEnvOrDefault("TASK_PLUGIN_FILE_URL_TTL_SECONDS", 86400)
 
 	soraPatchStr := GetEnvOrDefaultString("TASK_PRICE_PATCH", "")
 	if soraPatchStr != "" {

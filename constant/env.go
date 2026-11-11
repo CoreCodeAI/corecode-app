@@ -24,6 +24,13 @@ var TaskPluginProtocolTickMilliseconds int
 var TaskPluginProtocolTickJitterMilliseconds int
 var TaskPluginProtocolHeartbeatSeconds int
 
+// TaskPluginFileURLBucket is the Google Cloud Storage bucket where a task
+// plugin's "url" file placeholders are uploaded; empty refuses them.
+var TaskPluginFileURLBucket string
+
+// TaskPluginFileURLTTLSeconds is how long such a file's signed URL stays valid.
+var TaskPluginFileURLTTLSeconds int
+
 // temporary variable for sora patch, will be removed in future
 var TaskPricePatches []string
 
