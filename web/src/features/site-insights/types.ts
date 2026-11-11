@@ -173,6 +173,8 @@ export type EngineRunway = {
   week_capacity_usd: number
   /** Demand over sustainable supply; under 1 the pool keeps up. */
   week_load: number
+  /** Demand against drawable quota over a window; absent before the server's release. */
+  supply_windows?: EngineRunwaySupply[] | null
   /** Over horizon_hours: hours with no quota, and the share served. */
   short_hours: number
   served_share: number
@@ -204,6 +206,17 @@ export type EngineRunway = {
   addition?: EngineRunwayAddition | null
   /** Each Team tier sized the same way, Team Tier 1 first; absent before the server's release. */
   additions?: EngineRunwayAddition[] | null
+}
+
+/** One window of the projection: its demand, what it can draw on, and what
+ * it leaves unserved. supply_usd is week_remaining_usd plus the quota the
+ * weekly resets inside the window bring back. */
+export type EngineRunwaySupply = {
+  hours: number
+  demand_usd: number
+  refill_usd: number
+  supply_usd: number
+  short_usd: number
 }
 
 export type EngineRunwayScenario = {

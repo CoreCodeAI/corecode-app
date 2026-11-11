@@ -286,6 +286,61 @@ describe('pool supply', () => {
     expect(screen.getByText('3.00× the demand')).toBeInTheDocument()
   })
 
+  it('sets the day’s demand against the quota its resets bring back', () => {
+    renderRunway({
+      supply_windows: [
+        {
+          hours: 5,
+          demand_usd: 200,
+          refill_usd: 0,
+          supply_usd: 2000,
+          short_usd: 0,
+        },
+        {
+          hours: 24,
+          demand_usd: 960,
+          refill_usd: 1100,
+          supply_usd: 3100,
+          short_usd: 0,
+        },
+      ],
+    })
+
+    expect(screen.getByText('≈ $3,100')).toBeInTheDocument()
+    expect(
+      screen.getByText('Demand $960 · $2,000 left now + $1,100 from resets')
+    ).toBeInTheDocument()
+  })
+
+  it('names the day’s unserved demand when its refill lands too late', () => {
+    renderRunway({
+      supply_windows: [
+        {
+          hours: 5,
+          demand_usd: 200,
+          refill_usd: 0,
+          supply_usd: 2000,
+          short_usd: 0,
+        },
+        {
+          hours: 24,
+          demand_usd: 960,
+          refill_usd: 1100,
+          supply_usd: 3100,
+          short_usd: 150,
+        },
+      ],
+    })
+
+    expect(screen.getByText(/\$150 unserved$/)).toBeInTheDocument()
+  })
+
+  it('leaves the day out for a server that sends no supply windows', () => {
+    renderRunway({})
+
+    expect(screen.queryByText(/from resets/)).not.toBeInTheDocument()
+  })
+
   it('reads a near miss as the tightest point, not as running out', () => {
     renderRunway({})
 
@@ -618,6 +673,41 @@ describe('capacity verdict', () => {
     expect(screen.getByText('¥460 · ≈ $230 in gpt-load')).toBeInTheDocument()
     expect(screen.getByText('≈ $240')).toBeInTheDocument()
     expect(screen.getByText('¥1,920 · ≈ $960 in gpt-load')).toBeInTheDocument()
+  })
+
+  it('sets the 24-hour forecast against the quota the day can draw on', () => {
+    render(
+      <PoolTab
+        data={{
+          ...pool([group({})], [account({})]),
+          runway: runway({
+            supply_windows: [
+              {
+                hours: 5,
+                demand_usd: 200,
+                refill_usd: 0,
+                supply_usd: 2000,
+                short_usd: 0,
+              },
+              {
+                hours: 24,
+                demand_usd: 960,
+                refill_usd: 1100,
+                supply_usd: 3100,
+                short_usd: 0,
+              },
+            ],
+          }),
+        }}
+        usage={usage()}
+      />
+    )
+
+    expect(
+      screen.getByText('Range $800 – $1,200 · Against ≈ $3,100 of quota')
+    ).toBeInTheDocument()
+    // $960 forecast against $3,100: the day is not tight.
+    expect(screen.getByText('≈ $960')).not.toHaveClass('text-destructive')
   })
 
   it('sizes the accounts by the demand expected over the next week', () => {

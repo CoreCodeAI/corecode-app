@@ -221,9 +221,14 @@ export function PoolTab(props: {
       {
         label: t('7-day left'),
         value: week ? `≈ ${usd(week.remaining_usd)}` : '-',
-        help: t(
-          'Dollars schedulable accounts can still spend before their 7-day budget line, estimated from their usage and calibrated capacity.'
-        ),
+        help: [
+          t(
+            'Dollars schedulable accounts can still spend before their 7-day budget line, estimated from their usage and calibrated capacity.'
+          ),
+          t(
+            'It is what the pool holds now; the weekly resets ahead are not in it, so it is not a day of demand to compare against.'
+          ),
+        ].join(' '),
         meter: week
           ? {
               value: share(week),
@@ -651,6 +656,15 @@ function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
   const gapStart = runway.week_hours
   const gapLength = runway.first_short_hours
   const lowestCovers = burn > 0 ? runway.lowest_usd / burn : null
+  // The next 24 hours against the quota they can draw on: what is left now
+  // plus what the weekly resets inside the day bring back. The remainder
+  // alone reads short of a day's demand whenever a reset is due.
+  const day = runway.supply_windows?.find((window) => window.hours === 24)
+  let dayTone: Tone = 'default'
+  if (day) {
+    if (day.short_usd > 0) dayTone = 'danger'
+    else if (day.demand_usd > day.supply_usd * 0.8) dayTone = 'warning'
+  }
 
   if (burn <= 0) {
     return (
@@ -769,6 +783,33 @@ function RunwayPanel(props: { runway: EngineRunway; observedAt: number }) {
               supply: fmt.usd(runway.sustainable_usd_per_hour),
             }),
           },
+          ...(day
+            ? [
+                {
+                  label: t('Next 24 hours · quota'),
+                  help: t(
+                    'Quota the next 24 hours can draw on: what the counted accounts have left now plus what their weekly resets bring back inside the day, against the day’s demand at its current level. An account drops what it still held at its reset, so the refill is what the reset adds, not a whole week. Unserved demand can be above zero while the supply covers the demand, when the refill lands too late.'
+                  ),
+                  value: `≈ ${fmt.usdWhole(day.supply_usd)}`,
+                  tone: dayTone,
+                  hint: [
+                    t('Demand {{amount}}', {
+                      amount: fmt.usdWhole(day.demand_usd),
+                    }),
+                    t('{{left}} left now + {{refill}} from resets', {
+                      left: fmt.usdWhole(runway.week_remaining_usd),
+                      refill: fmt.usdWhole(day.refill_usd),
+                    }),
+                    day.short_usd > 0 &&
+                      t('{{amount}} unserved', {
+                        amount: fmt.usdWhole(day.short_usd),
+                      }),
+                  ]
+                    .filter(Boolean)
+                    .join(' · '),
+                },
+              ]
+            : []),
           {
             label: t('Without quota, 7 days'),
             help: t(

@@ -164,6 +164,14 @@ export function CapacityVerdict(props: {
   }
   const low = forecast?.next_24h_low_usd
   const high = forecast?.next_24h_high_usd
+  // The quota the next 24 hours can draw on, resets inside the day included:
+  // the figure the 24-hour forecast is short of, or not.
+  const day = runway.supply_windows?.find((window) => window.hours === 24)
+  let dayTone: Tone = 'default'
+  if (forecast && day) {
+    if (forecast.next_24h_usd > day.supply_usd) dayTone = 'danger'
+    else if (forecast.next_24h_usd > day.supply_usd * 0.8) dayTone = 'warning'
+  }
   const rate = props.usage?.official_per_quota ?? 0
   // A forecast new-api charge in yuan: dollars at the site's rate, then
   // the yuan and, once there is a rate, the gpt-load spend it converts to.
@@ -264,20 +272,33 @@ export function CapacityVerdict(props: {
           },
           {
             label: t('Next 24 hours · gpt-load'),
-            help: t(
-              'Forecast gpt-load spend over the next 24 hours: the current level of spend moved through the day by the last week’s hourly use and grown by the trend. The range spans the 10th to 90th percentile of how past forecasts compared with the use that followed.'
-            ),
+            help: [
+              t(
+                'Forecast gpt-load spend over the next 24 hours: the current level of spend moved through the day by the last week’s hourly use and grown by the trend. The range spans the 10th to 90th percentile of how past forecasts compared with the use that followed.'
+              ),
+              t(
+                'Below it, the quota the day can draw on: what the pool has left now plus what its weekly resets bring back inside the day.'
+              ),
+            ].join(' '),
             value:
               forecast == null
                 ? '-'
                 : `≈ ${fmt.usdWhole(forecast.next_24h_usd)}`,
-            hint:
-              low != null && high != null
-                ? t('Range {{low}} – {{high}}', {
-                    low: fmt.usdWhole(low),
-                    high: fmt.usdWhole(high),
-                  })
-                : undefined,
+            tone: dayTone,
+            hint: [
+              low != null &&
+                high != null &&
+                t('Range {{low}} – {{high}}', {
+                  low: fmt.usdWhole(low),
+                  high: fmt.usdWhole(high),
+                }),
+              day &&
+                t('Against {{amount}} of quota', {
+                  amount: `≈ ${fmt.usdWhole(day.supply_usd)}`,
+                }),
+            ]
+              .filter(Boolean)
+              .join(' · '),
           },
           {
             label: t('Next 24 hours · new-api'),
