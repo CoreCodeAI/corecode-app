@@ -747,8 +747,16 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 	if token.UpstreamKey != "" {
 		common.SetContextKey(c, constant.ContextKeyTokenUpstreamKey, token.UpstreamKey)
 	}
-	// A token's stored Auto groups are not read: every Auto token follows the
-	// operator's AutoGroups order (controller.setTokenAutoGroups).
+	if token.AutoGroups != "" {
+		autoGroups, err := token.GetAutoGroups()
+		if err != nil {
+			common.SysError(common.LogText("failed to parse auto groups for token %d: %v", token.Id, err))
+			autoGroups = []string{}
+			common.SetContextKey(c, constant.ContextKeyTokenAutoGroups, autoGroups)
+		} else if len(autoGroups) > 0 {
+			common.SetContextKey(c, constant.ContextKeyTokenAutoGroups, autoGroups)
+		}
+	}
 	if len(parts) > 1 {
 		if model.IsAdmin(token.UserId) {
 			id, err := strconv.Atoi(parts[1])

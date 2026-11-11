@@ -216,6 +216,20 @@ beforeEach(() => {
   useAuthStore.getState().auth.setUser({ id: 1, username: 'customer', role: 1 })
 })
 
+function selectComboboxOption(
+  trigger: HTMLButtonElement,
+  optionDescription: string
+): void {
+  fireEvent.click(trigger)
+  const option = [
+    ...document.querySelectorAll<HTMLElement>('[data-slot="command-item"]'),
+  ].find((candidate) => candidate.textContent?.includes(optionDescription))
+  if (!option) {
+    throw new Error(`Expected option containing "${optionDescription}"`)
+  }
+  fireEvent.click(option)
+}
+
 afterEach(() => {
   useAuthStore.getState().auth.setUser(null)
   apiClient.get = originalGet
@@ -228,20 +242,27 @@ afterEach(() => {
 })
 
 describe('API keys mutate drawer Auto group integration', () => {
-  test('shows the fixed Auto order and sends an empty override for every batch-created key', async () => {
+  test('inherits the root Auto order and sends an empty override for every batch-created key', async () => {
     const createdPayloads: Array<Record<string, unknown>> = []
     installApiFixtures(createdPayloads)
     await renderCreateDrawer()
 
     const groupTrigger = getControlByLabel('Group')
     expect(groupTrigger.textContent?.includes('auto')).toBe(true)
-    const order = document.querySelector(
-      'ol[aria-labelledby="auto-group-order-label"]'
+    // The editor is lazy-loaded, so wait for it to render.
+    await waitFor(() =>
+      expect(
+        document.body.textContent?.includes(
+          'Using the complete global Auto order (2 groups)'
+        )
+      ).toBe(true)
     )
     expect(
-      [...(order?.querySelectorAll('li') ?? [])].map((item) => item.textContent)
+      [
+        ...document.querySelectorAll('[data-slot="global-auto-order-name"]'),
+      ].map((item) => item.textContent)
     ).toEqual(['vip', 'default'])
-    expect(order?.querySelector('button')).toBe(null)
+    expect(findButton('Restore global Auto', true).disabled).toBe(true)
 
     useAuthStore.getState().auth.setUser({ id: 1, username: 'root', role: 10 })
     await waitFor(() => expect(getControlByLabel('Quantity')).toBeTruthy())
@@ -271,6 +292,54 @@ describe('API keys mutate drawer Auto group integration', () => {
     fireEvent.click(findButton('Create key', true))
     await waitFor(() => expect(createdPayloads).toHaveLength(1))
     expect(createdPayloads[0]?.group).toBe('vip')
+  })
+
+  test('preserves an unsaved custom order and mode after Auto to ordinary to Auto changes', async () => {
+    const createdPayloads: Array<Record<string, unknown>> = []
+    installApiFixtures(createdPayloads)
+    await renderCreateDrawer()
+
+    await waitFor(() =>
+      expect(
+        getControlByLabel('Auto group order').querySelector(
+          'button[role="combobox"]'
+        )
+      ).toBeTruthy()
+    )
+    const autoOrderControl = getControlByLabel('Auto group order')
+    const addGroupTrigger = autoOrderControl.querySelector<HTMLButtonElement>(
+      'button[role="combobox"]'
+    )
+    if (!addGroupTrigger) {
+      throw new Error('Expected Auto group order combobox')
+    }
+    selectComboboxOption(addGroupTrigger, 'Priority access')
+
+    expect(
+      document.querySelector('button[aria-label="Remove vip"]')
+    ).toBeTruthy()
+    expect(document.body.textContent?.includes('1 / 3 groups selected')).toBe(
+      true
+    )
+    expect(findButton('Restore global Auto', true).disabled).toBe(false)
+
+    const groupTrigger = getControlByLabel('Group')
+    selectComboboxOption(groupTrigger, 'Standard access')
+    expect(document.querySelector('button[aria-label="Remove vip"]')).toBe(null)
+    selectComboboxOption(groupTrigger, 'Automatic routing')
+
+    expect(
+      document.querySelector('button[aria-label="Remove vip"]')
+    ).toBeTruthy()
+    expect(document.body.textContent?.includes('1 / 3 groups selected')).toBe(
+      true
+    )
+    expect(findButton('Restore global Auto', true).disabled).toBe(false)
+
+    changeInput(getControlByLabel('Name'), 'custom')
+    fireEvent.click(findButton('Create key', true))
+    await waitFor(() => expect(createdPayloads).toHaveLength(1))
+    expect(createdPayloads[0]?.auto_groups).toEqual(['vip'])
   })
 })
 

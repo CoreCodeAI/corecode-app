@@ -2,6 +2,9 @@
 
 Status: implemented
 
+Superseded on 2026-11-11 by `2026-11-11-per-key-auto-group-order.md`: a key
+may set its own Auto order again; an empty order follows `AutoGroups`.
+
 ## Problem
 
 Upstream new-api lets each API key on the `auto` group pick and reorder its own
