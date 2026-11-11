@@ -41,6 +41,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
   chat: {
     enabled: true,
     playground: true,
+    canvas: true,
     chat: true,
   },
   console: {
@@ -243,16 +244,20 @@ function isNavItemVisible(
   adminConfig: SidebarModulesAdminConfig,
   userConfig: SidebarModulesUserConfig
 ): boolean {
-  // Handle dynamic chat presets type — also runs the admin × user AND gate
-  if ('type' in item && item.type === 'chat-presets') {
+  // Dynamic items map to one chat-section module each, with the same
+  // admin × user AND gate.
+  if ('type' in item && item.type) {
+    const module = item.type === 'canvas-studio' ? 'canvas' : 'chat'
     const adminChat = adminConfig.chat
-    const adminAllowed = Boolean(adminChat?.enabled && adminChat.chat === true)
+    const adminAllowed = Boolean(
+      adminChat?.enabled && adminChat[module] === true
+    )
     if (!adminAllowed) return false
     if (!userConfig) return true
     const userChat = userConfig.chat
     if (!userChat) return true
     if (userChat.enabled === false) return false
-    return userChat.chat !== false
+    return userChat[module] !== false
   }
 
   // Handle direct link type

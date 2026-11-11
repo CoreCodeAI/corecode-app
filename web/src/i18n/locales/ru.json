@@ -8068,6 +8068,14 @@
     "The reset could not be prepared; no credit was used. Try again later.": "Не удалось подготовить сброс; он не израсходован. Повторите позже.",
     "The provider rejected the reset credit.": "Провайдер отклонил сброс.",
     "The reset outcome is unknown. Try again to check the same redemption.": "Результат сброса неизвестен. Повторите, чтобы проверить ту же операцию; повторного списания не будет.",
-    "The account is suspended.": "Аккаунт приостановлен."
+    "The account is suspended.": "Аккаунт приостановлен.",
+    "Creation Studio": "Студия творчества",
+    "Unable to open the Creation Studio.": "Не удалось открыть Студию творчества.",
+    "The Creation Studio needs an auto-group key": "Для Студии творчества нужен ключ группы auto",
+    "The Creation Studio draws images and videos as well as text, and only a key in the auto group reaches all of those models. You have no enabled key in that group.": "Студия творчества создаёт не только текст, но и изображения и видео, а все эти модели доступны только ключу группы auto. У вас нет включённого ключа этой группы.",
+    "Create Creation Studio key": "Создать ключ для Студии творчества",
+    "This creates a key named \"{{name}}\" in the \"{{group}}\" group with unlimited quota that never expires. You can edit or delete it on the API Keys page.": "Будет создан ключ «{{name}}» в группе «{{group}}» с безлимитной квотой и без срока действия. Его можно изменить или удалить на странице «API-ключи».",
+    "Open the AI canvas app with one of your API keys.": "Открыть приложение AI-холст с одним из ваших API-ключей.",
+    "Open in Creation Studio": "Открыть в Студии творчества"
   }
 }
