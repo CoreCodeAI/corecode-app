@@ -1,10 +1,14 @@
 package model
 
 import (
+	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func seedFlowQuotaData(t *testing.T, quotaData QuotaData) {
@@ -190,4 +194,130 @@ func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 	require.Equal(t, 60, rows[0].TokenUsed)
 	require.Equal(t, "default", rows[1].UseGroup)
 	require.Equal(t, 25, rows[1].Quota)
+}
+
+// quotaDataCallback runs fn before every query or create on quota_data until
+// the test ends.
+func quotaDataCallback(t *testing.T, name string, fn func(tx *gorm.DB)) {
+	t.Helper()
+	onQuotaData := func(tx *gorm.DB) {
+		if tx.Statement.Table == "quota_data" {
+			fn(tx)
+		}
+	}
+	require.NoError(t, DB.Callback().Query().Before("gorm:query").Register(name, onQuotaData))
+	require.NoError(t, DB.Callback().Create().Before("gorm:create").Register(name, onQuotaData))
+	t.Cleanup(func() {
+		require.NoError(t, DB.Callback().Query().Remove(name))
+		require.NoError(t, DB.Callback().Create().Remove(name))
+	})
+}
+
+func resetQuotaDataCache() {
+	CacheQuotaDataLock.Lock()
+	CacheQuotaData = make(map[string]*QuotaData)
+	CacheQuotaDataLock.Unlock()
+}
+
+func TestSaveQuotaDataCacheLetsAccountingContinueDuringTheWrite(t *testing.T) {
+	truncateTables(t)
+	resetQuotaDataCache()
+	t.Cleanup(resetQuotaDataCache)
+	usage := QuotaDataLogParams{UserID: 1, Username: "alice", ModelName: "gpt-a", CreatedAt: common.GetTimestamp(), Quota: 100, TokenUsed: 10}
+	LogQuotaData(usage)
+
+	writing := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	quotaDataCallback(t, "test:hold_quota_data_write", func(*gorm.DB) {
+		once.Do(func() {
+			close(writing)
+			<-release
+		})
+	})
+	flushed := make(chan struct{})
+	go func() {
+		SaveQuotaDataCache()
+		close(flushed)
+	}()
+	<-writing
+
+	logged := make(chan struct{})
+	go func() {
+		LogQuotaData(usage)
+		close(logged)
+	}()
+	select {
+	case <-logged:
+	case <-time.After(5 * time.Second):
+		close(release)
+		<-flushed
+		<-logged
+		t.Fatal("LogQuotaData waited for the database write")
+	}
+	close(release)
+	<-flushed
+
+	SaveQuotaDataCache()
+	var rows []QuotaData
+	require.NoError(t, DB.Find(&rows).Error)
+	require.Len(t, rows, 1)
+	require.Equal(t, 2, rows[0].Count)
+	require.Equal(t, 200, rows[0].Quota)
+}
+
+func TestSaveQuotaDataCacheKeepsARowThatFailedToWrite(t *testing.T) {
+	truncateTables(t)
+	resetQuotaDataCache()
+	t.Cleanup(resetQuotaDataCache)
+	usage := QuotaDataLogParams{UserID: 1, Username: "alice", ModelName: "gpt-a", CreatedAt: common.GetTimestamp(), Quota: 100, TokenUsed: 10, CacheReadTokens: 5}
+	LogQuotaData(usage)
+
+	failing := true
+	quotaDataCallback(t, "test:fail_quota_data_write", func(tx *gorm.DB) {
+		if failing {
+			_ = tx.AddError(errors.New("database unavailable"))
+		}
+	})
+	SaveQuotaDataCache()
+	failing = false
+	var count int64
+	require.NoError(t, DB.Table("quota_data").Count(&count).Error)
+	require.Zero(t, count)
+
+	// Usage that arrives before the next flush adds to the kept row.
+	LogQuotaData(usage)
+	SaveQuotaDataCache()
+
+	var rows []QuotaData
+	require.NoError(t, DB.Find(&rows).Error)
+	require.Len(t, rows, 1)
+	require.Equal(t, 2, rows[0].Count)
+	require.Equal(t, 200, rows[0].Quota)
+	require.Equal(t, 20, rows[0].TokenUsed)
+	require.EqualValues(t, 10, rows[0].CacheReadTokens)
+	CacheQuotaDataLock.Lock()
+	defer CacheQuotaDataLock.Unlock()
+	require.Empty(t, CacheQuotaData)
+}
+
+func TestSaveQuotaDataCacheDropsAFailedRowOlderThanADay(t *testing.T) {
+	truncateTables(t)
+	resetQuotaDataCache()
+	t.Cleanup(resetQuotaDataCache)
+	now := common.GetTimestamp()
+	LogQuotaData(QuotaDataLogParams{UserID: 1, Username: "alice", ModelName: "gpt-a", CreatedAt: now, Quota: 100})
+	LogQuotaData(QuotaDataLogParams{UserID: 1, Username: "alice", ModelName: "gpt-a", CreatedAt: now - 2*24*60*60, Quota: 50})
+
+	quotaDataCallback(t, "test:fail_quota_data_write", func(tx *gorm.DB) {
+		_ = tx.AddError(errors.New("database unavailable"))
+	})
+	SaveQuotaDataCache()
+
+	CacheQuotaDataLock.Lock()
+	defer CacheQuotaDataLock.Unlock()
+	require.Len(t, CacheQuotaData, 1)
+	for _, row := range CacheQuotaData {
+		require.Equal(t, 100, row.Quota)
+	}
 }

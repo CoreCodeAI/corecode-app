@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/internal/claudebody"
 
 	"github.com/gin-gonic/gin"
@@ -48,5 +49,25 @@ func BenchmarkRelayBodyChecks(b *testing.B) {
 				}
 			})
 		}
+	}
+}
+
+// BenchmarkClaudeCodeAdmission exercises the complete restricted-group check on
+// messages-first conversations with screenshots and tool results.
+func BenchmarkClaudeCodeAdmission(b *testing.B) {
+	gin.SetMode(gin.TestMode)
+	for _, size := range []int{1_000_000, 4_000_000, 12_000_000, 25_000_000} {
+		body := claudebody.Claude(claudebody.Options{TargetBytes: size})
+		b.Run(fmt.Sprintf("%.1fMB", float64(len(body))/1e6), func(b *testing.B) {
+			b.ReportAllocs()
+			b.SetBytes(int64(len(body)))
+			for range b.N {
+				c := benchRelayContext(body)
+				if !admitClaudeCode(c, "benchmark", true) {
+					b.Fatal("synthetic Claude Code request was not admitted")
+				}
+				common.CleanupBodyStorage(c)
+			}
+		})
 	}
 }

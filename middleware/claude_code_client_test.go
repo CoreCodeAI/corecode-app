@@ -75,6 +75,7 @@ func runClaudeCodeGateWithBody(t *testing.T, group string, autoGroups []string, 
 	for name, value := range headers {
 		c.Request.Header.Set(name, value)
 	}
+	t.Cleanup(func() { common.CleanupBodyStorage(c) })
 	common.SetContextKey(c, constant.ContextKeyUsingGroup, group)
 	if autoGroups != nil {
 		common.SetContextKey(c, constant.ContextKeyTokenAutoGroups, autoGroups)
@@ -189,6 +190,95 @@ func TestClaudeCodeOnlyGroupGate(t *testing.T) {
 	}
 }
 
+func TestClaudeCodeAdmissionPreservesClientCheckSemantics(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	setClaudeCodeClientSetting(t, operation_setting.ClaudeCodeClientSetting{Groups: []string{"cc"}})
+	const probe = `{"model":"test","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`
+	largeProbe := `{"model":"` + strings.Repeat("m", 128*1024) + `","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`
+	ordinaryWithExtra := strings.Replace(claudeCodeCLIBody, `"model":`, `"unused":"value","model":`, 1)
+	invalidAfterExtraField := `{"model":"test","system":"x","messages":[}`
+	validExtras := strings.Replace(probe, `"model":`, `"tools":[],"model":`, 1)
+
+	tests := []struct {
+		name    string
+		body    string
+		headers map[string]string
+		status  int
+	}{
+		{"large probe from non-CLI", largeProbe, map[string]string{"User-Agent": "other"}, http.StatusOK},
+		{"large probe from CLI", largeProbe, claudeCodeCLIHeaders, http.StatusOK},
+		{"escaped probe keys and content", `{"mo\u0064el":"test","max_tokens":16,"messages":[{"role":"user","content":"\u0068i"}]}`, claudeCodeCLIHeaders, http.StatusOK},
+		{"nested unrecognized keys in an overwritten message", `{"messages":[{"system":"ignored","role":"user","content":"work"}],"messages":[{"role":"user","content":"hi"}],"max_tokens":16}`, claudeCodeCLIHeaders, http.StatusOK},
+		{"escaped quote before overwritten message", `{"messages":[{"role":"user","content":"\" , \"system\": x \\"}],"messages":[{"role":"user","content":"hi"}],"max_tokens":16}`, claudeCodeCLIHeaders, http.StatusOK},
+		{"large overwritten messages", `{"model":"test","max_tokens":16,"messages":[{"role":"user","content":"` + strings.Repeat("x", 128*1024) + `"}],"messages":[{"role":"user","content":"hi"}]}`, claudeCodeCLIHeaders, http.StatusOK},
+		{"invalid earlier typed max tokens in a probe", `{"max_tokens":"bad","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`, claudeCodeCLIHeaders, http.StatusOK},
+		{"duplicate final forbidden max tokens", `{"max_tokens":16,"max_tokens":17,"messages":[{"role":"user","content":"hi"}]}`, map[string]string{"User-Agent": "other"}, http.StatusForbidden},
+		{"duplicate final forbidden content", `{"max_tokens":16,"messages":[{"role":"user","content":"hi"}],"messages":[{"role":"user","content":"work"}]}`, map[string]string{"User-Agent": "other"}, http.StatusForbidden},
+		{"duplicate final permitted content", `{"max_tokens":16,"messages":[{"role":"user","content":"work"}],"messages":[{"role":"user","content":"hi"}]}`, map[string]string{"User-Agent": "other"}, http.StatusOK},
+		{"forbidden escaped system field", `{"max_tokens":16,"messages":[{"role":"user","content":"hi"}],"syst\u0065m":"x"}`, map[string]string{"User-Agent": "other"}, http.StatusForbidden},
+		{"forbidden escaped system field from CLI", `{"max_tokens":16,"messages":[{"role":"user","content":"hi"}],"syst\u0065m":"x"}`, claudeCodeCLIHeaders, http.StatusForbidden},
+		{"tools do not admit arbitrary clients", validExtras, map[string]string{"User-Agent": "other"}, http.StatusForbidden},
+		{"CLI agent does not admit work without its prompt", validExtras, claudeCodeCLIHeaders, http.StatusForbidden},
+		{"ordinary CLI with extra fields", ordinaryWithExtra, claudeCodeCLIHeaders, http.StatusOK},
+		{"max tokens one remains admitted with extra fields", `{"max_tokens":1,"system":"foreign","messages":[{"role":"user","content":"work"}]}`, claudeCodeCLIHeaders, http.StatusOK},
+		{"unknown escaped top-level field with normal CLI", strings.Replace(claudeCodeCLIBody, `"model":`, `"t\u006fols":[],"model":`, 1), claudeCodeCLIHeaders, http.StatusOK},
+		{"malformed CLI after extra field", invalidAfterExtraField, claudeCodeCLIHeaders, http.StatusBadRequest},
+		{"malformed no extra field", `{"max_tokens":16,"messages":[}`, claudeCodeCLIHeaders, http.StatusBadRequest},
+		{"trailing second JSON value", probe + ` {"system":"x"}`, claudeCodeCLIHeaders, http.StatusBadRequest},
+		{"malformed non-CLI after extra field", invalidAfterExtraField, map[string]string{"User-Agent": "other"}, http.StatusForbidden},
+		{"duplicate typed field error still rejected", strings.Replace(claudeCodeCLIBody, `"max_tokens": 128000`, `"max_tokens":"bad","max_tokens":128000`, 1), claudeCodeCLIHeaders, http.StatusBadRequest},
+		{"duplicate metadata retains prior user ID", strings.Replace(claudeCodeCLIBody, `"system": [`, `"metadata":{},"system": [`, 1), claudeCodeCLIHeaders, http.StatusOK},
+		{"duplicate system uses last value", strings.Replace(claudeCodeCLIBody, `"messages": [`, `"system":[],"messages": [`, 1), claudeCodeCLIHeaders, http.StatusForbidden},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			recorder, allowed := runClaudeCodeGate(t, "cc", nil, "/v1/messages", test.headers, test.body)
+			assert.Equal(t, test.status == http.StatusOK, allowed)
+			assert.Equal(t, test.status, recorder.Code)
+		})
+	}
+}
+
+func TestClaudeCodeAdmissionBodyRemainsReusable(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	setClaudeCodeClientSetting(t, operation_setting.ClaudeCodeClientSetting{Groups: []string{"cc"}})
+	previous := common.GetDiskCacheConfig()
+	t.Cleanup(func() { common.SetDiskCacheConfig(previous) })
+	diskDir := t.TempDir()
+
+	for _, disk := range []bool{false, true} {
+		name := "memory"
+		if disk {
+			name = "disk"
+		}
+		t.Run(name, func(t *testing.T) {
+			common.SetDiskCacheConfig(common.DiskCacheConfig{Enabled: disk, ThresholdMB: 0, MaxSizeMB: 64, Path: diskDir})
+			for _, body := range []string{
+				claudeCodeCLIBody,
+				`{"model":"test","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`,
+			} {
+				gin.SetMode(gin.TestMode)
+				c, _ := gin.CreateTestContext(httptest.NewRecorder())
+				t.Cleanup(func() { common.CleanupBodyStorage(c) })
+				c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(body))
+				c.Request.Header.Set("Content-Type", "application/json")
+				for header, value := range claudeCodeCLIHeaders {
+					c.Request.Header.Set(header, value)
+				}
+				common.SetContextKey(c, constant.ContextKeyUsingGroup, "cc")
+				require.True(t, enforceClientOnlyGroups(c, "default"))
+				storage, err := common.GetBodyStorage(c)
+				require.NoError(t, err)
+				assert.Equal(t, disk, storage.IsDisk())
+				replayed, err := io.ReadAll(c.Request.Body)
+				require.NoError(t, err)
+				assert.Equal(t, body, string(replayed))
+				common.CleanupBodyStorage(c)
+			}
+		})
+	}
+}
+
 // An auto token keeps the Claude Code only candidates for Claude Code and drops
 // them for any other client, so channel selection picks among the rest.
 func TestClaudeCodeOnlyGroupAutoCandidates(t *testing.T) {
@@ -216,6 +306,10 @@ func TestClaudeCodeOnlyGroupAutoCandidates(t *testing.T) {
 		require.True(t, enforceClientOnlyGroups(c, "default"))
 		return service.GetRequestAutoGroups(c, "default")
 	}
+	malformed := `{"model":"test","system":"x","messages":[}`
+	recorder, allowed := runClaudeCodeGate(t, "auto", []string{"cc", "default"}, "/v1/messages", claudeCodeCLIHeaders, malformed)
+	assert.False(t, allowed)
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
 
 	assert.Equal(t, []string{"cc", "default", "gpt"}, candidates(claudeCodeCLIHeaders, claudeCodeCLIBody))
 	assert.Equal(t, []string{"default", "gpt"}, candidates(withHeader("User-Agent", "curl/8.7.1"), claudeCodeCLIBody))
@@ -244,7 +338,9 @@ func TestClaudeCodeOnlyGroupUnreadableBody(t *testing.T) {
 		message string
 	}{
 		{"aborted upload from Claude Code", claudeCodeCLIHeaders, abortedUpload(), http.StatusBadRequest, "Invalid request: unexpected EOF"},
+		{"aborted upload after extra field", claudeCodeCLIHeaders, io.MultiReader(strings.NewReader(`{"system":"x",`), iotest.ErrReader(io.ErrUnexpectedEOF)), http.StatusBadRequest, "Invalid request: unexpected EOF"},
 		{"oversized body from Claude Code", claudeCodeCLIHeaders, strings.NewReader(oversized), http.StatusRequestEntityTooLarge, "Invalid request: request body exceeds 1 MB"},
+		{"oversized body from another client", withHeader("User-Agent", "curl/8.7.1"), strings.NewReader(oversized), http.StatusForbidden, "Group cc only accepts requests from Claude Code"},
 		{"malformed JSON from Claude Code", claudeCodeCLIHeaders, strings.NewReader(`{"model":"claude-sonnet-5-5",`), http.StatusBadRequest, "Invalid request: "},
 		{"aborted upload from another client", withHeader("User-Agent", "curl/8.7.1"), abortedUpload(), http.StatusForbidden, "Group cc only accepts requests from Claude Code"},
 	}

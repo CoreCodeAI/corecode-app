@@ -52,6 +52,7 @@ type DiskFrontend struct {
 	disk     http.FileSystem
 	fallback static.ServeFileSystem
 	dir      string
+	kept     keptReleases
 }
 
 func DiskFolder(dir string, fallback static.ServeFileSystem) *DiskFrontend {
@@ -69,7 +70,12 @@ func (d *DiskFrontend) Open(name string) (http.File, error) {
 	}
 	file, err := d.disk.Open(name)
 	if errors.Is(err, fs.ErrNotExist) {
-		return d.fallback.Open(name)
+		file, err = d.fallback.Open(name)
+		if err != nil {
+			if kept, keptErr := d.openKeptStatic(name); keptErr == nil {
+				return kept, nil
+			}
+		}
 	}
 	return file, err
 }

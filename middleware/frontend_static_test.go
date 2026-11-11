@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -105,8 +106,60 @@ func TestServeFrontendFilesCompressesEachFileOnce(t *testing.T) {
 	assert.Equal(t, "./", index.Header().Get("Location"))
 
 	missing := performFrontendRequest(router, http.MethodGet, "/static/js/missing.js", "gzip")
-	assert.Equal(t, http.StatusTeapot, missing.Code)
-	assert.Equal(t, "fallback", missing.Body.String())
+	assert.Equal(t, http.StatusNotFound, missing.Code)
+	assert.Equal(t, "no-store", missing.Header().Get("Cache-Control"))
+	assert.Empty(t, missing.Body.String())
+
+	route := performFrontendRequest(router, http.MethodGet, "/dashboard/overview", "gzip")
+	assert.Equal(t, http.StatusTeapot, route.Code)
+	assert.Equal(t, "fallback", route.Body.String())
+}
+
+// A tab still running the previous console release gets that release's chunk
+// after the current link has moved, cached as immutable like any hashed file.
+func TestServeFrontendFilesServesChunksOfKeptReleases(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	root := t.TempDir()
+	for tag, files := range map[string]map[string]string{
+		"previous": {"static/js/lazy.1a2b.js": "previous lazy"},
+		"new":      {"static/js/app.3c4d.js": "new app"},
+	} {
+		files["index.html"] = "<html>" + tag + "</html>"
+		for name, content := range files {
+			path := filepath.Join(root, tag, name)
+			require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+			require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+		}
+	}
+	require.NoError(t, os.Symlink("new", filepath.Join(root, "current")))
+	frontendFS := common.DiskFolder(filepath.Join(root, "current"), common.EmbedFolder(os.DirFS(t.TempDir()), "."))
+	router := gin.New()
+	router.NoRoute(Cache(), ServeFrontendFiles(frontendFS), func(c *gin.Context) {
+		c.Header("Cache-Control", "no-cache")
+		c.String(http.StatusOK, "index")
+	})
+
+	for _, encoding := range []string{"", "gzip", "gzip, br"} {
+		kept := performFrontendRequest(router, http.MethodGet, "/static/js/lazy.1a2b.js", encoding)
+		require.Equal(t, http.StatusOK, kept.Code, encoding)
+		assert.Equal(t, "public, max-age=31536000, immutable", kept.Header().Get("Cache-Control"), encoding)
+		body := kept.Body.Bytes()
+		if kept.Header().Get("Content-Encoding") == "gzip" {
+			reader, err := gzip.NewReader(bytes.NewReader(body))
+			require.NoError(t, err)
+			body, err = io.ReadAll(reader)
+			require.NoError(t, err)
+		}
+		assert.Equal(t, "previous lazy", string(body), encoding)
+	}
+
+	gone := performFrontendRequest(router, http.MethodGet, "/static/js/gone.9e8f.js", "gzip")
+	assert.Equal(t, http.StatusNotFound, gone.Code)
+	assert.Equal(t, "no-store", gone.Header().Get("Cache-Control"))
+
+	page := performFrontendRequest(router, http.MethodGet, "/keys", "gzip")
+	assert.Equal(t, http.StatusOK, page.Code)
+	assert.Equal(t, "index", page.Body.String())
 }
 
 func TestServeFrontendFilesSendsPrecompressedBrotli(t *testing.T) {

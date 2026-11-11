@@ -287,6 +287,22 @@ func clientCheck(c *gin.Context) (string, bool) {
 	if !strings.HasSuffix(c.Request.URL.Path, "/messages") {
 		return "", false
 	}
+	// For a Claude CLI request the ordinary detector reads and validates the
+	// same body next. An extra top-level field makes the small check impossible,
+	// so avoid copying every message into the probe map in that case.
+	if claudeCliUserAgentPattern.MatchString(c.GetHeader("User-Agent")) &&
+		strings.HasPrefix(c.Request.Header.Get("Content-Type"), "application/json") {
+		storage, err := common.GetBodyStorage(c)
+		if err != nil {
+			return "", false
+		}
+		if !storage.IsDisk() {
+			body, err := storage.Bytes()
+			if err == nil && hasNonClientCheckField(body) {
+				return "", false
+			}
+		}
+	}
 	var fields map[string]json.RawMessage
 	if common.UnmarshalBodyReusable(c, &fields) != nil {
 		return "", false
@@ -309,6 +325,52 @@ func clientCheck(c *gin.Context) (string, bool) {
 	}
 	prompt := messages[0].Content
 	return prompt, clientCheckPrompts[prompt]
+}
+
+// hasNonClientCheckField only rejects the check; the ordinary detector remains
+// responsible for validating the whole body. Stop at the first JSON value so
+// text in a later value cannot change the check's result.
+func hasNonClientCheckField(body []byte) bool {
+	depth := 0
+	expectingKey := false
+	for index := 0; index < len(body); index++ {
+		switch body[index] {
+		case '"':
+			end := jsonStringEnd(body, index+1)
+			if end < 0 {
+				return false
+			}
+			if depth == 1 && expectingKey {
+				cursor := end + 1
+				for cursor < len(body) && (body[cursor] == ' ' || body[cursor] == '\t' || body[cursor] == '\r' || body[cursor] == '\n') {
+					cursor++
+				}
+				if cursor < len(body) && body[cursor] == ':' {
+					var key string
+					if common.Unmarshal(body[index:end+1], &key) == nil && !clientCheckFields[key] {
+						return true
+					}
+				}
+				expectingKey = false
+			}
+			index = end
+		case '{', '[':
+			depth++
+			if depth == 1 && body[index] == '{' {
+				expectingKey = true
+			}
+		case '}', ']':
+			depth--
+			if depth == 0 {
+				return false
+			}
+		case ',':
+			if depth == 1 {
+				expectingKey = true
+			}
+		}
+	}
+	return false
 }
 
 // requestShape describes a refused request's body without any of its text:
