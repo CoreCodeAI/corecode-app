@@ -241,7 +241,8 @@ it('reports a server refusal and keeps the dialog open without a download', asyn
 
   await waitFor(() =>
     expect(error).toHaveBeenCalledWith(
-      'Another log export is running. Try again after it finishes.'
+      'Another log export is running. Try again after it finishes.',
+      { id: 'Another log export is running. Try again after it finishes.' }
     )
   )
   expect(createObjectURL).not.toHaveBeenCalled()
@@ -271,7 +272,9 @@ it('treats a stream that ends without the success line as a failed export', asyn
   )
 
   await waitFor(() =>
-    expect(error).toHaveBeenCalledWith('Failed to export logs')
+    expect(error).toHaveBeenCalledWith('Failed to export logs', {
+      id: 'Failed to export logs',
+    })
   )
   expect(createObjectURL).not.toHaveBeenCalled()
 })

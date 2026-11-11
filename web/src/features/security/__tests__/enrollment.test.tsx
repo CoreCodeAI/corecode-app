@@ -495,7 +495,9 @@ it('reports registration failure without treating a successful password check as
   )
   await user.click(screen.getByRole('button', { name: 'Verify' }))
   await waitFor(() =>
-    expect(failure).toHaveBeenCalledWith('Registration rejected')
+    expect(failure).toHaveBeenCalledWith('Registration rejected', {
+      id: 'Registration rejected',
+    })
   )
   expect(success).not.toHaveBeenCalled()
   expect(posts).toHaveBeenCalledWith(

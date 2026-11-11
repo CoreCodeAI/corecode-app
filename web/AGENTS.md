@@ -144,7 +144,7 @@
 
 ### 3.9 错误处理
 
-- **服务端错误**：统一使用 `handleServerError(error, fallbackMessage?)`，优先保留服务端具体原因。相同失败沿 `cause` 传播时只提示一次；不同操作即使文案相同也分别提示。禁止把完整 Axios 错误对象（可能包含凭据）直接写入控制台。
+- **服务端错误**：统一使用 `handleServerError(error, fallbackMessage?)`，优先保留服务端具体原因。相同失败沿 `cause` 传播时只提示一次；不同操作即使文案相同也分别提示，但同文案的 Toast 共用一个 id，后一次替换前一次并重新计时，不会叠成多条。禁止把完整 Axios 错误对象（可能包含凭据）直接写入控制台。
 - **提示归属**：普通请求拦截器不弹 Toast。使用共享 `createAppQueryClient` 在 Query/Mutation 最终失败时提示；Mutation 自定义 `onError` 负责自己的提示或表单错误。自动重试期间和主动取消时不报错。`meta.errorToast: false` 关闭自动提示，页面仍可主动调用错误处理函数。
 - **业务失败**：保留原始 API 响应契约；Query 使用 `requireServerSuccess` 检查 `success: false`，或在业务层用 `createServerError(response, fallbackMessage?)` 抛错并保留来源。直接请求须明确处理失败响应和 Promise 拒绝；需要展示失败状态的 Mutation 不得把失败结果当作保存成功。
 - **认证兼容**：保留稳定错误码映射及 `AuthOperationError` 的安全消息，不解开其来源来展示被屏蔽的细节。维护既有刷新、跳转和一次性授权不重放约束。
