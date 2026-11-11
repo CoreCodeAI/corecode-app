@@ -369,21 +369,25 @@ export function DataTableRowActions<TData>({
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          render={
-            <RouterLink
-              to='/usage-logs/$section'
-              params={{ section: 'common' }}
-              search={{ token: apiKey.name }}
-            />
-          }
-        >
-          {t('View logs')}
-          <DropdownMenuShortcut>
-            <ScrollText size={16} />
-          </DropdownMenuShortcut>
-        </DropdownMenuItem>
+        {apiKey.name && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              render={
+                <RouterLink
+                  to='/usage-logs/$section'
+                  params={{ section: 'common' }}
+                  search={{ token: apiKey.name }}
+                />
+              }
+            >
+              {t('View logs')}
+              <DropdownMenuShortcut>
+                <ScrollText size={16} />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => {

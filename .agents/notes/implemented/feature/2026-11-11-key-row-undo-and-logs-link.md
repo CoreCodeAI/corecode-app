@@ -26,6 +26,9 @@ expanded the filters and typed the name in full, because the server matches
   label says "View logs", not "this key's logs", and nothing in the menu claims
   more. The applied name sits in the token-name filter, which the filter bar's
   Expand toggle counts, and the page opens on its usual range, today.
+- **A key without a name gets no "View logs".** The form requires a name, but
+  the server accepts an empty one, and an empty `token` filter means no filter:
+  the link would open every log of the account.
 
 ## Alternatives considered
 
@@ -46,7 +49,8 @@ expanded the filters and typed the name in full, because the server matches
 - `api-key-listing.test.tsx`: Undo in a disable's toast re-enables the key with
   a second status-only update; enabling offers no Undo; the menu item links to
   `/usage-logs/common` with the key's name, spaces and slash included, as
-  `token`. The Undo test failed before the change.
+  `token`. The Undo test failed before the change. A key with an empty name
+  shows no "View logs"; that case failed while the item was unconditional.
 - `bun run test` (309 files, 3156 tests), `bun run typecheck`,
   `bun run lint:check`, `bun run format:check`, `bun run build`,
   `bun run first-load:check` (`/keys` 607.0 of 607 KB), all with exit status 0.

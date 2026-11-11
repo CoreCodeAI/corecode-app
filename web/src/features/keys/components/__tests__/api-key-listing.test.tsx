@@ -357,7 +357,8 @@ async function renderKeysPage(
       </QueryClientProvider>
     </I18nextProvider>
   )
-  await screen.findByText(currentKey.name)
+  if (currentKey.name) await screen.findByText(currentKey.name)
+  else await screen.findByRole('button', { name: 'Open menu' })
   return { post, put, client }
 }
 
@@ -668,4 +669,13 @@ it('links a key to the usage logs filtered by its name', async () => {
   const url = new URL(href, 'http://localhost')
   expect(url.pathname).toBe('/usage-logs/common')
   expect(url.searchParams.get('token')).toBe('claude code/main')
+})
+
+it('offers no logs link for a key without a name', async () => {
+  await renderKeysPage(1, { name: '' })
+  await userEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+  await screen.findByRole('menuitem', { name: 'Delete' })
+  expect(
+    screen.queryByRole('menuitem', { name: 'View logs' })
+  ).not.toBeInTheDocument()
 })
