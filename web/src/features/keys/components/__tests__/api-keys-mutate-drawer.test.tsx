@@ -16,7 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { Toaster } from 'sonner'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
@@ -102,7 +109,8 @@ const ALL_GROUPS = {
 }
 
 async function renderCreateDrawer(
-  groups: Record<string, object> = ALL_GROUPS
+  groups: Record<string, object> = ALL_GROUPS,
+  onOpenChange: (open: boolean) => void = () => undefined
 ): Promise<void> {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -137,7 +145,7 @@ async function renderCreateDrawer(
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18n}>
         <ApiKeysProvider>
-          <ApiKeysMutateDrawer open onOpenChange={() => undefined} />
+          <ApiKeysMutateDrawer open onOpenChange={onOpenChange} />
           <DialogProbe />
           <Toaster />
         </ApiKeysProvider>
@@ -532,5 +540,60 @@ describe('API keys mutate drawer user quota query switch', () => {
         'setup:laptop'
       )
     )
+  })
+})
+
+describe('API key drawer unsaved changes', () => {
+  async function renderLoadedCreateDrawer() {
+    installApiFixtures([])
+    const close = vi.fn()
+    await renderCreateDrawer(ALL_GROUPS, close)
+    // The lazily loaded Auto order editor must be in place before closing.
+    await waitFor(() =>
+      expect(document.body).toHaveTextContent(
+        'Using the complete global Auto order (2 groups)'
+      )
+    )
+    return close
+  }
+
+  test('closes an untouched form on Escape without asking', async () => {
+    const close = await renderLoadedCreateDrawer()
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    })
+    await waitFor(() => expect(close.mock.calls[0]?.[0]).toBe(false))
+    expect(
+      screen.queryByRole('alertdialog', { name: 'Unsaved changes' })
+    ).not.toBeInTheDocument()
+  })
+
+  test('asks before Escape discards an edited form and keeps it open on Cancel', async () => {
+    const close = await renderLoadedCreateDrawer()
+    changeInput(getControlByLabel('Name'), 'laptop')
+    fireEvent.keyDown(getControlByLabel('Name'), { key: 'Escape' })
+    const confirm = await screen.findByRole('alertdialog', {
+      name: 'Unsaved changes',
+    })
+    expect(close).not.toHaveBeenCalled()
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('alertdialog', { name: 'Unsaved changes' })
+      ).not.toBeInTheDocument()
+    )
+    expect(close).not.toHaveBeenCalled()
+    expect(getControlByLabel('Name')).toHaveValue('laptop')
+  })
+
+  test('closes an edited form from the Close button once the discard is confirmed', async () => {
+    const close = await renderLoadedCreateDrawer()
+    changeInput(getControlByLabel('Name'), 'laptop')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close' })[0])
+    const confirm = await screen.findByRole('alertdialog', {
+      name: 'Unsaved changes',
+    })
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Leave' }))
+    await waitFor(() => expect(close.mock.calls[0]?.[0]).toBe(false))
   })
 })
