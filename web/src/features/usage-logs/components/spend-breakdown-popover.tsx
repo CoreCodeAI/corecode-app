@@ -41,8 +41,8 @@ import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber, formatQuota } from '@/lib/format'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
+import { spendBreakdownRange } from '../lib/query-ranges'
 import { summarizeSpend, type SpendRow } from '../lib/spend-breakdown'
-import { buildApiParams } from '../lib/utils'
 
 const route = getRouteApi('/_authenticated/usage-logs/$section')
 const VISIBLE_ROWS = 6
@@ -101,15 +101,7 @@ export function SpendBreakdownPopover() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const searchParams = route.useSearch()
-  const params = buildApiParams({
-    page: 1,
-    pageSize: 1,
-    searchParams,
-    columnFilters: [],
-    isAdmin: false,
-  })
-  const start = params.start_timestamp ?? 0
-  const end = params.end_timestamp ?? Math.floor(Date.now() / 1000)
+  const { start, end } = spendBreakdownRange(searchParams, Date.now())
 
   const query = useQuery({
     queryKey: ['usage-logs', 'spend-breakdown', start, end],

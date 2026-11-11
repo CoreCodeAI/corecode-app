@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils'
 
 import { getLogStats, getUserLogStats } from '../api'
 import { DEFAULT_LOG_STATS } from '../constants'
+import { logStatsSearch } from '../lib/query-ranges'
 import { buildApiParams } from '../lib/utils'
 import { SpendBreakdownPopover } from './spend-breakdown-popover'
 import { useLogsViewScope, useUsageLogsContext } from './usage-logs-provider'
@@ -54,14 +55,15 @@ export function CommonLogsStats() {
   const { isAdminView: isAdmin } = useLogsViewScope()
   const searchParams = route.useSearch()
   const { sensitiveVisible } = useUsageLogsContext()
+  const statsSearch = logStatsSearch(searchParams)
 
   const { data: stats, isLoading } = useQuery({
-    queryKey: ['usage-logs-stats', isAdmin, searchParams],
+    queryKey: ['usage-logs-stats', isAdmin, statsSearch],
     queryFn: async () => {
       const params = buildApiParams({
         page: 1,
         pageSize: 1,
-        searchParams,
+        searchParams: statsSearch,
         columnFilters: [],
         isAdmin,
       })
