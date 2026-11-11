@@ -249,8 +249,91 @@ export function contractRows(
 }
 
 /**
+ * The fee entries as the server counts them: one channel's entry ends where
+ * its next entry starts, so overlapping entries never add up.
+ */
+export function resolveFeeEntries(costs: ChannelCost[]): ChannelCost[] {
+  const byUser = new Map<number, ChannelCost[]>()
+  for (const cost of costs) {
+    byUser.set(cost.user_id, [...(byUser.get(cost.user_id) ?? []), cost])
+  }
+  const result: ChannelCost[] = []
+  for (const entries of byUser.values()) {
+    const sorted = [...entries].sort((a, b) => a.start - b.start)
+    sorted.forEach((cost, index) => {
+      const next = sorted[index + 1]
+      if (!next || (cost.end !== 0 && cost.end <= next.start)) {
+        result.push(cost)
+        return
+      }
+      result.push({ ...cost, end: Math.max(next.start, cost.start) })
+    })
+  }
+  return result
+}
+
+/**
+ * The stored entries with a new one added. The channel's earlier entries
+ * still running at the new start end there, so the new fee replaces the
+ * old one instead of adding to it; closed counts them.
+ */
+export function addFeeEntry(
+  costs: ChannelCost[],
+  entry: ChannelCost
+): { costs: ChannelCost[]; closed: number } {
+  let closed = 0
+  const kept = costs.map((cost) => {
+    if (
+      cost.user_id !== entry.user_id ||
+      cost.start >= entry.start ||
+      (cost.end !== 0 && cost.end <= entry.start)
+    ) {
+      return cost
+    }
+    closed++
+    return { ...cost, end: entry.start }
+  })
+  return { costs: [...kept, entry], closed }
+}
+
+/**
+ * Fee channels still credited commission while a fee entry was active,
+ * largest first. None before the server sends commission_accruing.
+ */
+export function accruingChannels(rows: ChannelRow[]): ChannelRow[] {
+  return rows
+    .filter(
+      (row) => row.segment === 'channel' && (row.commission_accruing ?? 0) > 0
+    )
+    .sort((a, b) => (b.commission_accruing ?? 0) - (a.commission_accruing ?? 0))
+}
+
+/**
+ * Paid channels whose fee began after the range started: their revenue
+ * covers days that carry no fee, so their ROI reads high.
+ */
+export function preFeeChannels(
+  rows: ChannelRow[],
+  rangeStart: number
+): ChannelRow[] {
+  return paidChannels(rows).filter((row) => (row.fee_start ?? 0) > rangeStart)
+}
+
+/**
+ * The share of a fee channel's revenue paid by accounts created since its
+ * fee began; null before the server sends it, without a fee or revenue.
+ */
+export function sinceFeeShare(row: ChannelRow): number | null {
+  if (row.revenue_since_fee == null || !row.fee_start || row.revenue <= 0) {
+    return null
+  }
+  return row.revenue_since_fee / row.revenue
+}
+
+/**
  * The fees accrued from monthStart to now and the monthly fees running
- * now, in US dollars. A fee accrues a thirtieth of its month a day.
+ * now, in US dollars. A fee accrues a thirtieth of its month a day; an
+ * entry ends where the channel's next entry starts.
  */
 export function monthFees(
   costs: ChannelCost[],
@@ -259,7 +342,7 @@ export function monthFees(
 ): { accrued: number; monthly: number } {
   let accrued = 0
   let monthly = 0
-  for (const cost of costs) {
+  for (const cost of resolveFeeEntries(costs)) {
     if (cost.monthly_usd <= 0) continue
     const from = Math.max(cost.start, monthStart)
     const to = Math.min(cost.end > 0 ? cost.end : now, now)

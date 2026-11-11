@@ -21,11 +21,17 @@ For commercial licensing, please contact support@quantumnous.com
 
 import { useTranslation } from 'react-i18next'
 
+import { cn } from '@/lib/utils'
+
 import { runRate, type Contribution } from '../analysis'
 import {
   HOUR_SAMPLE,
+  MIN_TASKS,
   SHORT_ROI_DAYS,
   SMALL_SAMPLE,
+  TONES,
+  failureTone,
+  joinSentences,
   useHourAxis,
   useInsightsFormat,
   type InsightsRangeInfo,
@@ -35,8 +41,11 @@ import {
   UPSTREAM_MIN_ATTEMPTS,
   attemptsOf,
   channelNamer,
+  channelTasks,
   feeBreakEven,
+  finishedTasks,
   routingHints,
+  splitsClientErrors,
   upstreamChanges,
   upstreamHourlySeries,
   upstreamIncidents,
@@ -50,7 +59,8 @@ import {
   type DriverRow,
   type Finding,
 } from './insight-kit'
-import { BarSeries, MetricGrid, Panel } from './shared'
+import { BarSeries, MetricGrid, Panel, SimpleTable, type Tone } from './shared'
+import { useRevenueBars, useUpstreamHelp } from './upstream-help'
 
 /**
  * The upstream charts by the hour, for a short range: attempts with the
@@ -82,12 +92,19 @@ export function UpstreamHourlyCharts(props: {
   ]
   const inIncident = (hour: number) =>
     incidents.some((item) => hour >= item.start && hour < item.end)
+  const muted = (at: number) => series.hasOther && at === series.named.length
+  const help = useUpstreamHelp()
+  const splits = splitsClientErrors(props.data)
+  const revenue = useRevenueBars(series.hours)
   return (
     <div className='grid gap-4 lg:grid-cols-2'>
       <Panel
         title={t('Attempts by channel')}
-        help={t(
-          'Each hour’s attempts on each channel, served and failed, stacked. Red marks an hour inside an incident.'
+        help={joinSentences(
+          t(
+            'Each hour’s attempts on each channel, stacked; the readout lists each channel’s failed attempts. Red marks an hour inside an incident.'
+          ),
+          splits && help.clientLeftOut
         )}
       >
         <BarSeries
@@ -100,14 +117,21 @@ export function UpstreamHourlyCharts(props: {
               value: fmt.num(hour.errors[at]),
             })),
           }))}
-          series={labels.map((label) => ({ label, compact: fmt.num }))}
+          series={labels.map((label, at) => ({
+            label,
+            compact: fmt.num,
+            muted: muted(at),
+          }))}
         />
       </Panel>
       <Panel
         title={t('Failure rate by channel')}
-        help={t(
-          'Each hour’s failed attempts over attempts, per channel, side by side. An hour with fewer than {{count}} attempts on a channel has no rate.',
-          { count: HOUR_SAMPLE }
+        help={joinSentences(
+          t(
+            'Each hour’s failed attempts over attempts, per channel, side by side. An hour with fewer than {{count}} attempts on a channel has no rate.',
+            { count: HOUR_SAMPLE }
+          ),
+          splits && help.clientLeftOut
         )}
       >
         <BarSeries
@@ -130,32 +154,31 @@ export function UpstreamHourlyCharts(props: {
                 : []
             ),
           }))}
-          series={labels.map((label) => ({ label, format: fmt.pct }))}
+          series={labels.map((label, at) => ({
+            label,
+            format: fmt.pct,
+            muted: muted(at),
+          }))}
         />
       </Panel>
       <Panel
         className='lg:col-span-2'
         title={t('Revenue and cost')}
-        help={t(
-          'Each hour’s revenue across channels beside what the channels cost. Revenue falls in the hour a request began and the upstream bill in the hour the upstream wrote it, so a single hour’s margin is rough.'
+        help={joinSentences(
+          t(
+            'Each hour’s revenue on the channels whose cost is known beside what they cost; revenue on channels with no known cost is drawn grey and left out of the margin. Revenue falls in the hour a request began and the upstream bill in the hour the upstream wrote it, so a single hour’s margin is rough.'
+          ),
+          help.units
         )}
       >
         <BarSeries
           grouped
           ariaLabel={t('Revenue and cost')}
           points={axis.bars(series.hours, end, (hour) => ({
-            values: [hour.revenue, hour.cost],
-            extra: [
-              {
-                label: t('Gross margin'),
-                value: fmt.usd(hour.revenue - hour.cost),
-              },
-            ],
+            values: revenue.values(hour),
+            extra: revenue.extra(hour),
           }))}
-          series={[
-            { label: t('Revenue'), format: fmt.usd, compact: fmt.usdCompact },
-            { label: t('Cost'), format: fmt.usd, compact: fmt.usdCompact },
-          ]}
+          series={revenue.series}
         />
       </Panel>
     </div>
@@ -172,6 +195,7 @@ export function UpstreamIncidents(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const help = useUpstreamHelp()
   const name = channelNamer(props.data)
   const incidents = upstreamIncidents(
     props.data?.hourly,
@@ -213,9 +237,12 @@ export function UpstreamIncidents(props: {
   return (
     <Panel
       title={t('Incidents')}
-      help={t(
-        'Runs of hours in which a channel failed more than 5% of its attempts, over at least {{count}} attempts in the run. Failover is counted over the whole range.',
-        { count: SMALL_SAMPLE }
+      help={joinSentences(
+        t(
+          'Runs of hours in which a channel failed more than 5% of its attempts, over at least {{count}} attempts in the run. Failover is counted over the whole range.',
+          { count: SMALL_SAMPLE }
+        ),
+        splitsClientErrors(props.data) && help.clientLeftOut
       )}
     >
       <Findings
@@ -324,6 +351,7 @@ export function UpstreamRunRate(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const help = useUpstreamHelp()
   const days = props.range
     ? Math.max(0, (props.range.end - props.range.start) / 86400)
     : 0
@@ -372,8 +400,11 @@ export function UpstreamRunRate(props: {
   return (
     <Panel
       title={t('Run-rate and fees')}
-      help={t(
-        'This range’s revenue, cost and margin scaled to 30 days: an extrapolation, not a forecast. A monthly-fee channel pays for itself when what it earns a day covers a thirtieth of its fee.'
+      help={joinSentences(
+        t(
+          'This range’s revenue, cost and margin scaled to 30 days: an extrapolation, not a forecast. A monthly-fee channel pays for itself when what it earns a day covers a thirtieth of its fee.'
+        ),
+        help.units
       )}
     >
       <div className='grid gap-4'>
@@ -461,5 +492,134 @@ export function UpstreamRoutingNotes(props: {
       )}
       <Findings items={hints} />
     </div>
+  )
+}
+
+/**
+ * How the async tasks (images, video) each channel took in the range stand
+ * now. A task failure rate over fewer than MIN_TASKS finished tasks is not
+ * coloured. Nothing when no channel ran a task, or on a server that does
+ * not send tasks.
+ */
+export function UpstreamTasks(props: { data: UpstreamInsights | undefined }) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const rows = channelTasks(props.data)
+  if (rows.length === 0) return null
+  const tone = (finished: number, rate: number): Tone =>
+    finished >= MIN_TASKS ? failureTone(rate) : 'default'
+  return (
+    <Panel
+      title={t('Tasks by channel')}
+      help={t(
+        'Async image and video tasks submitted to each channel in the range, as they stand now, everyone’s included. Failed includes timed out; the failure rate is failed over finished tasks, not coloured under {{count}} finished. Running tasks submitted 30 minutes ago or more are stalled. Finish times are over successes.',
+        { count: MIN_TASKS }
+      )}
+    >
+      <SimpleTable
+        rows={rows}
+        rowKey={(row) => row.channel.id}
+        empty={t('No channel ran a task in this range.')}
+        columns={[
+          {
+            key: 'channel',
+            label: t('Channel'),
+            render: (row) => (
+              <span className='font-medium'>{row.channel.name}</span>
+            ),
+          },
+          {
+            key: 'submitted',
+            label: t('Submitted'),
+            align: 'right',
+            render: (row) => (
+              <span className='tabular-nums'>
+                {fmt.num(row.tasks.submitted)}
+              </span>
+            ),
+          },
+          {
+            key: 'failure',
+            label: t('Failure rate'),
+            align: 'right',
+            render: (row) => {
+              const finished = finishedTasks(row.tasks)
+              return (
+                <span className='block tabular-nums'>
+                  <span
+                    className={TONES[tone(finished, row.tasks.failure_rate)]}
+                  >
+                    {finished > 0 ? fmt.pct(row.tasks.failure_rate) : '—'}
+                  </span>
+                  <span className='text-muted-foreground block text-[11px]'>
+                    {row.tasks.timed_out > 0
+                      ? t('{{failed}} failed, {{timedOut}} timed out', {
+                          failed: fmt.num(row.tasks.failed),
+                          timedOut: fmt.num(row.tasks.timed_out),
+                        })
+                      : t('{{failed}} of {{finished}} failed', {
+                          failed: fmt.num(row.tasks.failed),
+                          finished: fmt.num(finished),
+                        })}
+                  </span>
+                </span>
+              )
+            },
+          },
+          {
+            key: 'running',
+            label: t('Running'),
+            align: 'right',
+            render: (row) => (
+              <span className='block tabular-nums'>
+                {fmt.num(row.tasks.running)}
+                {row.tasks.stalled > 0 && (
+                  <span className={cn('block text-[11px]', TONES.warning)}>
+                    {t('{{count}} stalled', {
+                      count: fmt.num(row.tasks.stalled),
+                    })}
+                  </span>
+                )}
+              </span>
+            ),
+          },
+          {
+            key: 'finish',
+            label: t('Finish p50'),
+            align: 'right',
+            render: (row) => (
+              <span className='block tabular-nums'>
+                {row.tasks.succeeded > 0 ? `${row.tasks.finish_p50_s}s` : '—'}
+                {row.tasks.succeeded > 0 && (
+                  <span className='text-muted-foreground block text-[11px]'>
+                    p95 {row.tasks.finish_p95_s}s
+                  </span>
+                )}
+              </span>
+            ),
+          },
+          {
+            key: 'reason',
+            label: t('Top failure'),
+            render: (row) => {
+              const top = row.tasks.reasons?.[0]
+              return top ? (
+                <span
+                  className='text-muted-foreground line-clamp-2 text-xs'
+                  title={top.name}
+                >
+                  {t('{{reason}} ({{count}})', {
+                    reason: top.name,
+                    count: fmt.num(top.count),
+                  })}
+                </span>
+              ) : (
+                <span className='text-muted-foreground'>—</span>
+              )
+            },
+          },
+        ]}
+      />
+    </Panel>
   )
 }

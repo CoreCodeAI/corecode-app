@@ -25,14 +25,30 @@ import {
   financeDrivers,
   giftShareHigh,
   giftWatch,
+  groupRows,
+  orderFunnels,
   ordersComparable,
+  planBookTotals,
   signed,
   UNPAID_CREDIT_WARN,
+  type GroupRow,
+  type OrderFunnelRow,
 } from '../finance-analysis'
-import { GIFT_SHARE_WARN, useInsightsFormat, type InsightsTab } from '../lib'
-import type { FinanceInsights } from '../types'
+import {
+  GIFT_SHARE_WARN,
+  joinSentences,
+  MIN_CHECKOUTS,
+  tableState,
+  TONES,
+  useInsightsDefinitions,
+  useInsightsFormat,
+  type InsightsSources,
+  type InsightsTab,
+  type SourceState,
+} from '../lib'
+import type { FinanceInsights, PlanBookRow } from '../types'
 import { Drivers, Findings, type DriverRow } from './insight-kit'
-import { MetricGrid, Panel } from './shared'
+import { MetricGrid, Panel, SimpleTable } from './shared'
 
 const DRIVER_ROWS = 5
 
@@ -43,9 +59,30 @@ const DRIVER_ROWS = 5
 export function FinanceDriversPanel(props: {
   data: FinanceInsights | undefined
   previous?: FinanceInsights
+  /** The previous period's read: a failure is named, not left blank. */
+  previousSource?: SourceState
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  if (
+    props.data &&
+    !props.previous &&
+    props.previousSource?.status === 'error'
+  ) {
+    return (
+      <Panel
+        title={t('What moved')}
+        error={
+          props.previousSource.error ??
+          t('The previous period could not be read, so nothing is compared.')
+        }
+      >
+        <p className='text-muted-foreground text-xs'>
+          {t('The previous period could not be read, so nothing is compared.')}
+        </p>
+      </Panel>
+    )
+  }
   if (!props.data || !props.previous) return null
   const drivers = financeDrivers(props.data, props.previous)
   if (!drivers) return null
@@ -117,9 +154,12 @@ export function GiftWatchPanel(props: {
   data: FinanceInsights | undefined
   previous?: FinanceInsights
   onOpen?: (tab: InsightsTab) => void
+  source?: SourceState
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const failed = !props.data && props.source?.status === 'error'
+  const signupRead = props.data?.checkin_credit_usd != null
   const now = giftWatch(props.data)
   const before = props.previous ? giftWatch(props.previous) : undefined
   const ratioHigh =
@@ -156,15 +196,25 @@ export function GiftWatchPanel(props: {
   return (
     <Panel
       title={t('Gift watch')}
-      help={t(
-        'Gifted share is the gifted part of customers’ consumption (given plans and the unpaid share of each wallet) over all of it, root left out; under ¥100 of consumption it is not judged. Unpaid credit per paid is bonus, redemption codes, referral commission and net manual additions issued in the range, over the top-up credit customers paid for. Amber past 30% and 50%.'
-      )}
+      error={
+        failed ? (props.source?.error ?? t('Could not be read')) : undefined
+      }
+      help={
+        signupRead
+          ? t(
+              'Gifted share is the gifted part of customers’ consumption (given plans and the unpaid share of each wallet) over all of it, root left out; under ¥100 of consumption it is not judged. Unpaid credit per paid is top-up bonus, redemption codes, referral commission, net manual additions, check-in credit and sign-up and invitee bonuses (those two estimated at today’s settings) issued in the range, over the top-up credit customers paid for. Amber past 30% and 50%.'
+            )
+          : t(
+              'Gifted share is the gifted part of customers’ consumption (given plans and the unpaid share of each wallet) over all of it, root left out; under ¥100 of consumption it is not judged. Unpaid credit per paid is bonus, redemption codes, referral commission and net manual additions issued in the range, over the top-up credit customers paid for. Amber past 30% and 50%.'
+            )
+      }
     >
       <div className='grid gap-4'>
         <MetricGrid
-          loading={!props.data}
+          loading={!props.data && !failed}
           items={[
             {
+              missing: failed,
               label: t('Gifted share of consumption'),
               value: now.giftShare == null ? '-' : fmt.pct(now.giftShare),
               tone: giftShareHigh(now) ? 'warning' : 'default',
@@ -185,6 +235,7 @@ export function GiftWatchPanel(props: {
                     }),
             },
             {
+              missing: failed,
               label: t('Unpaid credit per ¥1 paid'),
               value:
                 now.unpaidPerPaid == null ? '-' : fmt.cny(now.unpaidPerPaid),
@@ -208,6 +259,372 @@ export function GiftWatchPanel(props: {
         />
         <Findings items={findings} onOpen={props.onOpen} />
       </div>
+    </Panel>
+  )
+}
+
+/** The error a panel shows when its source failed and there is nothing to draw. */
+function failedText(
+  source: SourceState | undefined,
+  data: unknown,
+  fallback: string
+): string | undefined {
+  if (data != null || source?.status !== 'error') return undefined
+  return source.error ?? fallback
+}
+
+/**
+ * Checkouts by payment method: how many were opened, paid, failed, expired
+ * and left pending past an hour, and the share completed, against the same
+ * method's previous period. Hidden on a server that does not send them.
+ */
+export function OrdersPanel(props: {
+  data: FinanceInsights | undefined
+  previous?: FinanceInsights
+  sources?: InsightsSources
+}) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const data = props.data
+  if (data && data.order_methods == null) return null
+  const rows = data
+    ? orderFunnels(data.order_methods, props.previous?.order_methods)
+    : undefined
+  const fell = (rows ?? []).filter((row) => row.fell)
+  const stale = (rows ?? []).reduce((sum, row) => sum + row.pending_stale, 0)
+  const method = (key: string) => getPaymentMethodName(key, t) || key
+  const description = joinSentences(
+    ...fell.map((row) =>
+      t(
+        'Checkouts by {{method}} completed {{now}}, down from {{before}}: check the payment page.',
+        {
+          method: method(row.payment_method),
+          now: fmt.pct(row.completion_rate),
+          before: fmt.pct(row.previousRate ?? 0),
+        }
+      )
+    ),
+    stale > 0 &&
+      t(
+        '{{count}} checkouts are still pending more than an hour after they opened.',
+        { count: fmt.num(stale) }
+      )
+  )
+  return (
+    <Panel
+      title={t('Checkouts by payment method')}
+      error={failedText(props.sources?.view, data, t('Could not be read'))}
+      description={description || undefined}
+      help={t(
+        'Checkouts opened in the range, top-ups and plan orders, by payment method; wallet-paid plans are left out. Completed is paid over opened. Most unpaid checkouts are abandoned, so a rate is judged only against the same method in the previous period: amber when it fell to half or less, over at least 5 checkouts in both. Under 10 checkouts a rate is not colored. Some gateways never close an unpaid checkout, so pending past an hour is their only failure signal.'
+      )}
+    >
+      <SimpleTable
+        rows={rows}
+        rowKey={(row) => row.payment_method}
+        empty={t('No checkouts in this range')}
+        state={tableState(props.sources?.view, rows)}
+        faded={(row) => !row.judged}
+        columns={[
+          {
+            key: 'method',
+            label: t('Payment Method'),
+            render: (row) => method(row.payment_method),
+          },
+          {
+            key: 'created',
+            label: t('Opened'),
+            align: 'right',
+            render: (row) => fmt.num(row.created),
+          },
+          {
+            key: 'paid',
+            label: t('Paid'),
+            align: 'right',
+            render: (row) =>
+              `${fmt.num(row.paid)} · ${fmt.cny(row.paid_money)}`,
+          },
+          {
+            key: 'failed',
+            label: t('Failed or expired'),
+            align: 'right',
+            render: (row) => fmt.num(row.failed + row.expired),
+          },
+          {
+            key: 'pending',
+            label: t('Pending past an hour'),
+            align: 'right',
+            render: (row) => (
+              <span
+                className={row.pending_stale > 0 ? TONES.warning : undefined}
+              >
+                {fmt.num(row.pending_stale)}
+              </span>
+            ),
+          },
+          {
+            key: 'rate',
+            label: t('Completed'),
+            hint: t('Paid over opened, with the previous period’s rate.'),
+            align: 'right',
+            render: (row: OrderFunnelRow) => (
+              <span
+                className={row.judged && row.fell ? TONES.warning : undefined}
+              >
+                {fmt.pct(row.completion_rate)}
+                {row.previousRate != null && (
+                  <span className='text-muted-foreground text-xs'>
+                    {' '}
+                    ({fmt.pct(row.previousRate)})
+                  </span>
+                )}
+              </span>
+            ),
+          },
+        ]}
+      />
+      {rows &&
+        rows.length > 0 &&
+        rows.every((row) => row.created < MIN_CHECKOUTS) && (
+          <p className='text-muted-foreground mt-2 text-xs'>
+            {t('Too few checkouts to judge a completion rate.')}
+          </p>
+        )}
+    </Panel>
+  )
+}
+
+/**
+ * The plan book: per plan, how many run now, what sold, renewed, was given
+ * and ran out in the range, what ends within a week, and how much of its
+ * quota finished plans used. Hidden on a server that does not send it.
+ */
+export function PlanBookPanel(props: {
+  data: FinanceInsights | undefined
+  sources?: InsightsSources
+}) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const defs = useInsightsDefinitions()
+  const data = props.data
+  if (data && data.plan_book == null) return null
+  const rows = data?.plan_book ?? undefined
+  const totals = rows ? planBookTotals(rows) : undefined
+  return (
+    <Panel
+      title={t('Plan book')}
+      error={failedText(props.sources?.view, data, t('Could not be read'))}
+      description={
+        totals && rows && rows.length > 0
+          ? t(
+              '{{running}} paid plans running now, {{deferred}} not yet earned; {{sold}} sold in the range for {{value}}, {{renewed}} of them renewals; {{expiring}} end within 7 days ({{expiringValue}}).',
+              {
+                running: fmt.num(totals.runningPaid),
+                deferred: fmt.cny(totals.deferred),
+                sold: fmt.num(totals.sold),
+                value: fmt.cny(totals.soldValue),
+                renewed: fmt.num(totals.renewed),
+                expiring: fmt.num(totals.expiring),
+                expiringValue: fmt.cny(totals.expiringValue),
+              }
+            )
+          : undefined
+      }
+      help={joinSentences(
+        t(
+          'Running, not yet earned and ending within 7 days are as of now, whatever the range. Sold, renewed, given and ended count plans that started or ended in the range. A renewal is a sale to a buyer who held the same plan ending no more than 7 days before. Used is quota used over quota granted by the paid plans with a fixed total that ended in the range; plans that reset each period are not counted. Amounts are in yuan; not yet earned is each plan’s price times the share of its time still to run.'
+        ),
+        defs.live
+      )}
+    >
+      <SimpleTable
+        rows={rows}
+        rowKey={(row) => row.plan_id}
+        empty={t('No plans running or sold in this range')}
+        state={tableState(props.sources?.view, rows)}
+        columns={[
+          {
+            key: 'plan',
+            label: t('Plan'),
+            render: (row: PlanBookRow) => (
+              <span className='flex flex-col leading-tight'>
+                <span>{row.title || `#${row.plan_id}`}</span>
+                <span className='text-muted-foreground text-xs'>
+                  {fmt.cny(row.price)}
+                </span>
+              </span>
+            ),
+          },
+          {
+            key: 'running',
+            label: t('Running now'),
+            hint: t('Paid plans running now, with given ones after the plus.'),
+            align: 'right',
+            render: (row) =>
+              row.running_gifted > 0
+                ? `${fmt.num(row.running_paid)} + ${fmt.num(row.running_gifted)}`
+                : fmt.num(row.running_paid),
+          },
+          {
+            key: 'sold',
+            label: t('Sold'),
+            hint: t('Paid plans started in the range, renewals in brackets.'),
+            align: 'right',
+            render: (row) =>
+              `${fmt.num(row.sold)} (${fmt.num(row.renewed)}) · ${fmt.cny(row.sold_value)}`,
+          },
+          {
+            key: 'gifted',
+            label: t('Given'),
+            align: 'right',
+            render: (row) => fmt.num(row.gifted),
+          },
+          {
+            key: 'expired',
+            label: t('Ended'),
+            align: 'right',
+            render: (row) => fmt.num(row.expired),
+          },
+          {
+            key: 'expiring',
+            label: t('Ending in 7 days'),
+            align: 'right',
+            render: (row) =>
+              row.expiring_7d > 0
+                ? `${fmt.num(row.expiring_7d)} · ${fmt.cny(row.expiring_7d_value)}`
+                : fmt.num(0),
+          },
+          {
+            key: 'deferred',
+            label: t('Not yet earned'),
+            align: 'right',
+            render: (row) => fmt.cny(row.deferred_value),
+          },
+          {
+            key: 'used',
+            label: t('Used'),
+            hint: t(
+              'Quota used by the finished paid plans with a fixed total, with how many there were.'
+            ),
+            align: 'right',
+            render: (row) =>
+              row.finished_plans > 0
+                ? `${fmt.pct(row.finished_used_share)} (${fmt.num(row.finished_plans)})`
+                : '-',
+          },
+        ]}
+      />
+    </Panel>
+  )
+}
+
+/**
+ * Customers' use by the group each request was billed in, with each
+ * group's share and its change against the previous period. Hidden on a
+ * server that does not send it.
+ */
+export function GroupConsumptionPanel(props: {
+  data: FinanceInsights | undefined
+  previous?: FinanceInsights
+  sources?: InsightsSources
+}) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const defs = useInsightsDefinitions()
+  const data = props.data
+  if (data && data.groups == null) return null
+  const rows: GroupRow[] | undefined = data
+    ? groupRows(data.groups, props.previous?.groups)
+    : undefined
+  const top = rows?.[0]
+  const name = (group: string) => group || t('Not recorded')
+  const points = (value: number) =>
+    t('{{change}} pt', {
+      change: `${value > 0 ? '+' : ''}${fmt.num(Math.round(value * 1000) / 10)}`,
+    })
+  return (
+    <Panel
+      title={t('Use by group')}
+      error={failedText(props.sources?.view, data, t('Could not be read'))}
+      description={
+        top
+          ? t('{{group}} takes {{share}} of customers’ consumption.', {
+              group: name(top.group),
+              share: fmt.pct(top.share),
+            })
+          : undefined
+      }
+      help={joinSentences(
+        t(
+          'Each group the requests were billed in, customers only. Consumption is after the group’s ratio; at list price divides it by today’s ratio, so a group sold cheaper shows how much use it carried. Change is in percentage points of share against the previous period. Requests logged before groups were recorded show as not recorded.'
+        ),
+        defs.listCharge,
+        defs.estimatedRevenue
+      )}
+    >
+      <SimpleTable
+        rows={rows}
+        rowKey={(row) => row.group}
+        empty={t('No consumption in this range')}
+        state={tableState(props.sources?.view, rows)}
+        columns={[
+          {
+            key: 'group',
+            label: t('Group'),
+            render: (row) => (
+              <span className='flex flex-col leading-tight'>
+                <span>{name(row.group)}</span>
+                {row.ratio > 0 && (
+                  <span className='text-muted-foreground text-xs'>
+                    {fmt.multiple(row.ratio)}
+                  </span>
+                )}
+              </span>
+            ),
+          },
+          {
+            key: 'usd',
+            label: t('Consumption'),
+            align: 'right',
+            render: (row) =>
+              `${fmt.cny(row.consumption_usd)} · ${fmt.pct(row.share)}`,
+          },
+          {
+            key: 'change',
+            label: t('Change'),
+            hint: t(
+              'Share of consumption against the previous period, in percentage points.'
+            ),
+            align: 'right',
+            render: (row) =>
+              row.shareChange == null ? '-' : points(row.shareChange),
+          },
+          {
+            key: 'list',
+            label: t('At list price'),
+            align: 'right',
+            render: (row) => (row.list_usd > 0 ? fmt.cny(row.list_usd) : '-'),
+          },
+          {
+            key: 'requests',
+            label: t('Requests'),
+            align: 'right',
+            render: (row) => fmt.num(row.requests),
+          },
+          {
+            key: 'users',
+            label: t('Users'),
+            align: 'right',
+            render: (row) => fmt.num(row.users),
+          },
+          {
+            key: 'rev',
+            label: t('Revenue (est.)'),
+            align: 'right',
+            render: (row) => fmt.cny(row.revenue_estimate),
+          },
+        ]}
+      />
     </Panel>
   )
 }

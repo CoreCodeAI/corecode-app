@@ -30,8 +30,22 @@ import {
   rateIsAbove,
   type Contribution,
 } from './analysis'
-import { HOUR_SAMPLE, SMALL_SAMPLE, SPIKE_FACTOR } from './lib'
-import type { NamedCount, QualityHour, QualityInsights } from './types'
+import {
+  CLIENT_CATEGORIES,
+  ENGINE_CATEGORIES,
+  failureTone,
+  HOUR_SAMPLE,
+  MIN_TASKS,
+  SMALL_SAMPLE,
+  SPIKE_FACTOR,
+} from './lib'
+import type {
+  NamedCount,
+  QualityHour,
+  QualityInsights,
+  TaskOutcome,
+  TaskOutcomes,
+} from './types'
 
 export type QualityModel = NonNullable<QualityInsights['models']>[number]
 
@@ -367,19 +381,27 @@ export function failingWindow(
   return { from, to, worst }
 }
 
-/** Whose failure a category is, and so where it is acted on. */
-export type FailureOwner = 'ours' | 'upstream' | 'client' | 'other'
+/**
+ * Whose failure a category is, and so where it is acted on. ours is the
+ * engine's slots, caps and budgets; routing is a request no channel of the
+ * customer's group serves, the site's configuration rather than a channel's
+ * fault or the customer's.
+ */
+export type FailureOwner = 'ours' | 'routing' | 'upstream' | 'client' | 'other'
 
-const CATEGORY_OWNERS: Record<string, FailureOwner> = {
-  engine_concurrency: 'ours',
-  upstream_rate_limit: 'upstream',
-  upstream_overloaded: 'upstream',
-  upstream_error: 'upstream',
-  client_error: 'client',
-}
+const UPSTREAM_CATEGORIES = new Set([
+  'upstream_rate_limit',
+  'upstream_overloaded',
+  'upstream_auth',
+  'upstream_error',
+])
 
 export function categoryOwner(name: string): FailureOwner {
-  return CATEGORY_OWNERS[name] ?? 'other'
+  if ((ENGINE_CATEGORIES as readonly string[]).includes(name)) return 'ours'
+  if ((CLIENT_CATEGORIES as readonly string[]).includes(name)) return 'client'
+  if (UPSTREAM_CATEGORIES.has(name)) return 'upstream'
+  if (name === 'no_channel') return 'routing'
+  return 'other'
 }
 
 /** Customers' failures by whose they are, largest first; owners with none left out. */
@@ -399,8 +421,9 @@ export function failureOwners(
 
 /**
  * The failure rate with customers' client errors (4xx) left out of both the
- * failures and the requests: what the service itself failed. Null without
- * categories.
+ * failures and the requests: what the service itself failed. A request no
+ * channel served, an engine limit and an upstream's refused key count as
+ * the service's. Null without categories.
  */
 export function serviceFailureRate(
   data: Pick<QualityInsights, 'requests' | 'errors' | 'error_categories'>
@@ -417,12 +440,13 @@ export function serviceFailureRate(
 
 // Stream ends that finished as the protocol expects.
 const NORMAL_ENDS = new Set(['eof', 'done', 'handler_stop'])
-// Stream ends where the client went away; not the service's doing.
-const CLIENT_ENDS = new Set(['client_gone', 'ping_fail'])
+// Stream ends where the client went away or stopped; not the service's doing.
+const CLIENT_ENDS = new Set(['client_gone', 'ping_fail', 'cancelled'])
 
 /**
- * The share of streams that did not end normally, and how many of those the
- * client ended by leaving. Null without streams.
+ * Streams the upstream or the site cut short after they started (a timeout,
+ * a read error, a crash), as a share of every stream; the ones the client
+ * left are counted apart and are not failures. Null without streams.
  */
 export function abnormalStreams(
   ends: NamedCount[] | null | undefined
@@ -431,9 +455,109 @@ export function abnormalStreams(
   const total = items.reduce((sum, item) => sum + item.count, 0)
   if (total <= 0) return null
   const abnormal = items.filter((item) => !NORMAL_ENDS.has(item.name))
-  const count = abnormal.reduce((sum, item) => sum + item.count, 0)
   const clientGone = abnormal
     .filter((item) => CLIENT_ENDS.has(item.name))
     .reduce((sum, item) => sum + item.count, 0)
+  const count = abnormal.reduce((sum, item) => sum + item.count, 0) - clientGone
   return { share: count / total, count, clientGone, total }
+}
+
+/**
+ * A cut list with what it leaves out added as one more row, so each row's
+ * share is of the true total. total is the count the full list adds up to;
+ * the list comes back as it is when nothing is left out or total is unknown.
+ */
+export function withRemainder(
+  items: NamedCount[] | null | undefined,
+  total: number | null | undefined,
+  name: string
+): { items: NamedCount[]; left: number } {
+  const rows = items ?? []
+  const listed = rows.reduce((sum, item) => sum + item.count, 0)
+  const left = total == null ? 0 : Math.round(total - listed)
+  if (left <= 0) return { items: rows, left: 0 }
+  return { items: [...rows, { name, count: left }], left }
+}
+
+/**
+ * Every failure the reasons list was cut from: the status codes, which the
+ * server keeps whole and which cover every model as the reasons do.
+ */
+export function failuresListed(
+  data: Pick<QualityInsights, 'status_codes'>
+): number | null {
+  const codes = data.status_codes ?? []
+  if (codes.length === 0) return null
+  return codes.reduce((sum, item) => sum + item.count, 0)
+}
+
+/**
+ * Models the model map cannot place: enough requests, but no first-token
+ * time (every request failed, none streamed, or image and video tasks).
+ * Most requests first.
+ */
+export function unplacedModels(
+  models: QualityModel[] | null | undefined,
+  minRequests: number
+): QualityModel[] {
+  return (models ?? [])
+    .filter((row) => row.requests >= minRequests && row.ttft_p50_ms <= 0)
+    .sort((a, b) => b.requests - a.requests)
+}
+
+/**
+ * Attempts as the quality view sends them once it counts each request once
+ * (rollup version 5): every try on a channel, and the tries that failed.
+ * Not in types.ts yet; absent on every server so far.
+ */
+export type QualityAttempts = { attempts?: number; attempt_errors?: number }
+
+/** The view's attempts when it sends them and they differ from its requests; null otherwise. */
+export function attemptsOf(
+  data: QualityInsights & QualityAttempts
+): { attempts: number; failed: number; rate: number } | null {
+  const attempts = data.attempts
+  if (attempts == null || attempts <= 0) return null
+  const failed = data.attempt_errors ?? 0
+  return { attempts, failed, rate: failed / attempts }
+}
+
+/** Tasks that finished, the ones a failure rate rests on. */
+export function finishedTasks(row: TaskOutcome): number {
+  return row.succeeded + row.failed
+}
+
+/** A task failure rate rests on enough finished tasks to colour or rank. */
+export function tasksJudged(row: TaskOutcome): boolean {
+  return finishedTasks(row) >= MIN_TASKS
+}
+
+/**
+ * Task models failing past 2% on enough finished tasks, most failed tasks
+ * first.
+ */
+export function failingTaskModels(
+  tasks: TaskOutcomes | null | undefined
+): TaskOutcome[] {
+  return (tasks?.models ?? [])
+    .filter(
+      (row) => tasksJudged(row) && failureTone(row.failure_rate) !== 'default'
+    )
+    .sort((a, b) => b.failed - a.failed || b.submitted - a.submitted)
+}
+
+/**
+ * Models whose requests are async tasks or image and video calls: their
+ * logged duration is the submission's, not the work's, and they have no
+ * first token.
+ */
+export function mediaModels(data: QualityInsights): Set<string> {
+  const names = new Set<string>()
+  for (const row of data.tasks?.models ?? []) {
+    if (row.model) names.add(row.model)
+  }
+  for (const row of data.models ?? []) {
+    if (row.vendor === 'media') names.add(row.model)
+  }
+  return names
 }

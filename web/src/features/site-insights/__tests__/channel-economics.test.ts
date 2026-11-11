@@ -19,6 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { describe, expect, it } from 'vitest'
 
 import {
+  accruingChannels,
+  addFeeEntry,
   breakEvenDays,
   channelTotals,
   cohortRate,
@@ -29,8 +31,11 @@ import {
   monthFees,
   newAccountShare,
   organicLift,
+  preFeeChannels,
+  resolveFeeEntries,
   revenuePerPayer,
   roiMuted,
+  sinceFeeShare,
   worstPaidChannel,
 } from '../components/channels-analysis'
 import { channelEconomics } from '../lib'
@@ -232,5 +237,79 @@ describe('channel analysis', () => {
         now
       )
     ).toEqual({ accrued: 100 + 100, monthly: 300 })
+  })
+
+  it('ends an entry where the channel’s next one starts, so overlapping fees do not add up', () => {
+    const monthStart = 300 * DAY
+    const now = monthStart + 10 * DAY
+    const costs = [
+      { user_id: 1, monthly_usd: 1000, start: 0, end: 0, note: 'old' },
+      {
+        user_id: 1,
+        monthly_usd: 600,
+        start: monthStart + 4 * DAY,
+        end: 0,
+        note: 'new',
+      },
+      { user_id: 2, monthly_usd: 300, start: 0, end: 0, note: '' },
+    ]
+    expect(resolveFeeEntries(costs)).toEqual([
+      { ...costs[0], end: monthStart + 4 * DAY },
+      costs[1],
+      costs[2],
+    ])
+    // 1000 for 4 days, 600 for 6, 300 for 10.
+    const fees = monthFees(costs, monthStart, now)
+    expect(fees.accrued).toBeCloseTo((1000 * 4 + 600 * 6 + 300 * 10) / 30, 6)
+    expect(fees.monthly).toBe(900)
+  })
+
+  it('closes the channel’s running entry when a new one is added', () => {
+    const running = {
+      user_id: 1,
+      monthly_usd: 1000,
+      start: 0,
+      end: 0,
+      note: '',
+    }
+    const ended = { user_id: 1, monthly_usd: 500, start: 0, end: DAY, note: '' }
+    const other = { user_id: 2, monthly_usd: 300, start: 0, end: 0, note: '' }
+    const entry = {
+      user_id: 1,
+      monthly_usd: 600,
+      start: 10 * DAY,
+      end: 0,
+      note: '',
+    }
+    expect(addFeeEntry([running, ended, other], entry)).toEqual({
+      costs: [{ ...running, end: 10 * DAY }, ended, other, entry],
+      closed: 1,
+    })
+  })
+
+  it('lists fee channels still credited commission, largest first, and none from an old server', () => {
+    const a = { ...row, commission_accruing: 30 }
+    const b = {
+      ...row,
+      channel: { user_id: 7, username: 'b' },
+      commission_accruing: 80,
+    }
+    const none = { ...row, channel: { user_id: 8, username: 'c' } }
+    expect(accruingChannels([a, b, none])).toEqual([b, a])
+    expect(accruingChannels([row])).toEqual([])
+  })
+
+  it('flags fees that began after the range started, and reads revenue since the fee', () => {
+    const late = { ...row, fee_start: 20 * DAY, revenue_since_fee: 1500 }
+    const early = {
+      ...row,
+      channel: { user_id: 7, username: 'b' },
+      fee_start: 5 * DAY,
+    }
+    expect(preFeeChannels([late, early], 10 * DAY)).toEqual([late])
+    expect(preFeeChannels([row], 10 * DAY)).toEqual([])
+    expect(sinceFeeShare(late)).toBe(0.25)
+    expect(sinceFeeShare(row)).toBeNull()
+    expect(sinceFeeShare({ ...late, fee_start: 0 })).toBeNull()
   })
 })

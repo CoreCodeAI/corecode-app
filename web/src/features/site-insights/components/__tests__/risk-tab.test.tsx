@@ -23,13 +23,19 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RiskInsights } from '../../types'
 import {
   clusterRisk,
+  giftOutcomes,
+  hasRepeatBuyers,
   largestBurst,
   materialDebtors,
   neverUsed,
   neverUsedComparable,
   rankClusters,
+  sharedCounts,
   signalDelta,
   signupSurges,
+  splitExits,
+  suspectInviters,
+  unpaidSpend,
   type RiskCluster,
 } from '../risk-analysis'
 import { RiskTab } from '../risk-tab'
@@ -103,6 +109,7 @@ describe('risk analysis', () => {
       fresh: 3,
       burst: 3,
       buyers: 0,
+      limited: false,
       empty: 3,
       allPaid: false,
       score: 15,
@@ -112,6 +119,7 @@ describe('risk analysis', () => {
       fresh: 0,
       burst: 1,
       buyers: 0,
+      limited: false,
       empty: 0,
       allPaid: true,
       score: 0,
@@ -200,6 +208,76 @@ describe('risk analysis', () => {
     ]
     expect(materialDebtors(debtors).map((user) => user.user_id)).toEqual([3, 2])
   })
+
+  it('sets shared exits apart and counts addresses in all against those listed', () => {
+    const exit = { ...office, ip: '10.0.0.3', shared_exit: true }
+    const buyers = { ...farm, shared_exit: false, subscription_buyers: 2 }
+    const exitBuyers = { ...exit, subscription_buyers: 4 }
+    expect(splitExits([farm, exit]).exits.map((c) => c.ip)).toEqual([
+      '10.0.0.3',
+    ])
+    // An old server: the list is all there is.
+    expect(sharedCounts({}, [farm, office, exit])).toEqual({
+      total: 2,
+      listed: 2,
+      exits: 1,
+      exitsListed: 1,
+    })
+    // 80 before the cut, 30 of them exits; 2 of the rest listed.
+    expect(
+      sharedCounts({ shared_ip_total: 80, shared_exits: 30 }, [
+        farm,
+        office,
+        exit,
+      ])
+    ).toEqual({ total: 50, listed: 2, exits: 30, exitsListed: 1 })
+    // A total never reads under what is listed.
+    expect(sharedCounts({ shared_ip_total: 1 }, [farm, office]).total).toBe(2)
+    // Plan buyers behind a shared exit are not the danger signal.
+    expect(hasRepeatBuyers([farm, exitBuyers])).toBe(false)
+    expect(hasRepeatBuyers([buyers, exit])).toBe(true)
+    expect(clusterRisk(buyers, 1000).limited).toBe(true)
+  })
+
+  it('reads unpaid spenders, gift guard outcomes and suspect inviters when the server sends them', () => {
+    const base = { signups: 10, zero_use_accounts: 4 } as RiskInsights
+    expect(unpaidSpend(base)).toBeUndefined()
+    expect(giftOutcomes(base)).toBeUndefined()
+    expect(neverUsed({ ...base, zero_use_failed: 1 })).toEqual({
+      zero: 4,
+      signups: 10,
+      mature: false,
+      failed: 1,
+    })
+    const data = {
+      ...base,
+      signup_spenders: 8,
+      unpaid_spenders: 2,
+      unpaid_spend_usd: 6.5,
+      signup_gifts: [
+        { name: 'ip_used', count: 4 },
+        { name: 'gifted', count: 3 },
+        { name: 'email_signup', count: 2 },
+        { name: 'cap_reached', count: 1 },
+      ],
+      unpaid_inviters: [
+        { user_id: 1, username: 'a', accounts: 3, consumption_usd: 9 },
+        { user_id: 0, username: '', accounts: 5, consumption_usd: 9 },
+        { user_id: 2, username: 'b', accounts: 2, consumption_usd: 1 },
+      ],
+      gift_block_inviters: [
+        { user_id: 1, username: 'a', blocked: 5, gifted: 1 },
+      ],
+    } as RiskInsights
+    expect(unpaidSpend(data)).toEqual({
+      spenders: 8,
+      unpaid: 2,
+      spend: 6.5,
+      share: 0.25,
+    })
+    expect(giftOutcomes(data)).toEqual({ total: 10, blocked: 5, gifted: 3 })
+    expect(suspectInviters(data)).toEqual({ unpaid: 1, blocked: 1 })
+  })
 })
 
 describe('risk tab', () => {
@@ -255,5 +333,114 @@ describe('risk tab', () => {
         .getByRole('link', { name: 'Violation records' })
         .getAttribute('href')
     ).toBe('/risk-control#violations')
+  })
+
+  it('folds shared exits away, counts addresses in all, and shows unpaid spenders and gift outcomes', () => {
+    const exit = { ...office, ip: '10.0.0.3', shared_exit: true }
+    const data = {
+      signups: 3,
+      signup_series: [],
+      series_unit: 'hour',
+      peak_signups: { at: 0, count: 0 },
+      signup_methods: [],
+      email_domains: [],
+      alias_emails: 1,
+      alias_pattern_emails: 4,
+      alias_clusters: [
+        {
+          canonical: 'johnsmith@gmail.com',
+          users: [
+            { user_id: 5, username: 'inbox' },
+            { user_id: 8, username: 'alias' },
+          ],
+        },
+      ],
+      email_restriction: false,
+      off_whitelist: 0,
+      zero_use_accounts: 3,
+      zero_use_failed: 2,
+      shared_ip_total: 60,
+      shared_exits: 9,
+      shared_ips: [{ ...farm, shared_exit: false }, exit],
+      debtors: [],
+      signup_spenders: 4,
+      unpaid_spenders: 3,
+      unpaid_spend_usd: 7.5,
+      unpaid_spender_top: [
+        {
+          user_id: 31,
+          username: 'farm31',
+          consumption_usd: 3,
+          gift_plan_usd: 2,
+          signup_method: 'password',
+          inviter: { user_id: 1, username: 'boss' },
+          created_at: 1200,
+        },
+      ],
+      unpaid_inviters: [
+        { user_id: 1, username: 'boss', accounts: 3, consumption_usd: 7.5 },
+      ],
+      signup_gifts: [
+        { name: 'ip_used', count: 2 },
+        { name: 'gifted', count: 1 },
+      ],
+      gift_block_inviters: [
+        { user_id: 1, username: 'boss', blocked: 2, gifted: 1 },
+      ],
+    } as unknown as RiskInsights
+    render(
+      <RiskTab
+        data={data}
+        range={{ start: 1000, end: 1000 + 86400, days: 1, hourly: true }}
+      />
+    )
+    expect(
+      screen.getByText(
+        '51 addresses are shared by several accounts; the 1 riskiest are listed, the riskiest first.'
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('9 shared exits, 1 listed: not counted above')
+    ).toBeInTheDocument()
+    expect(screen.getByText('9 shared exits left out')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /^3 of the 4 new accounts that used credit have never paid; they used ¥7\.5 in the range\.$/
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('2 of 3 gift claims were blocked.')
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Blocked: address already claimed')
+    ).toBeInTheDocument()
+    expect(screen.getByText('johnsmith@gmail.com')).toBeInTheDocument()
+    expect(
+      screen.getByText('Domain restriction is off: not checked')
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('2 of them tried and every request failed.', {
+        exact: false,
+      })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/1 inviters with 3 or more unpaid spenders/)
+    ).toBeInTheDocument()
+  })
+
+  it('says the figures could not be read instead of printing zero or none', () => {
+    render(
+      <RiskTab
+        data={undefined}
+        sources={{
+          view: { status: 'error', error: 'boom' },
+          previous: { status: 'error' },
+        }}
+      />
+    )
+    expect(screen.queryByText('No address is shared in this range')).toBeNull()
+    expect(screen.queryByText('No customer owes money')).toBeNull()
+    expect(screen.getAllByText('Could not be read').length).toBeGreaterThan(0)
+    expect(screen.queryByText('0')).toBeNull()
   })
 })

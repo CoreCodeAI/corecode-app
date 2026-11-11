@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { Tone } from '../components/shared'
 import {
+  MIN_TASKS,
   SMALL_SAMPLE,
   failureTone,
   useInsightsFormat,
@@ -28,8 +29,13 @@ import {
 import type { UpstreamInsights } from '../types'
 import {
   CLEAR_RATE,
+  INCIDENT_RATE,
   attemptsOf,
+  channelTasks,
+  finishedTasks,
+  idleDisabled,
   rescuedFrom,
+  shortBills,
   staleCosts,
   topRescuer,
   unrescuedOf,
@@ -179,6 +185,57 @@ export function useUpstreamVerdict(
     )
   }
 
+  const tasks = channelTasks(data).filter(
+    (item) =>
+      finishedTasks(item.tasks) >= MIN_TASKS &&
+      item.tasks.failure_rate > INCIDENT_RATE
+  )
+  const failingTasks = tasks.sort((a, b) => b.tasks.failed - a.tasks.failed)[0]
+  if (failingTasks) {
+    tone = worse(tone, failureTone(failingTasks.tasks.failure_rate))
+    parts.push(
+      t('{{name}} failed {{rate}} of its {{count}} finished tasks.', {
+        name: failingTasks.channel.name,
+        rate: fmt.pct(failingTasks.tasks.failure_rate),
+        count: fmt.num(finishedTasks(failingTasks.tasks)),
+      })
+    )
+  }
+
+  const disabled = idleDisabled(data)
+  if (disabled.length > 0) {
+    tone = worse(tone, 'warning')
+    const first = disabled[0]
+    const values = {
+      name: first.name,
+      time: first.status_time ? fmt.time(first.status_time) : '',
+      reason: first.status_reason?.trim() ?? '',
+      count: disabled.length - 1,
+    }
+    let line = t(
+      '{{name}} was disabled automatically and served nothing in this range.',
+      values
+    )
+    if (values.time && values.reason) {
+      line = t(
+        '{{name}} was disabled automatically {{time}} and served nothing in this range: {{reason}}.',
+        values
+      )
+    } else if (values.time) {
+      line = t(
+        '{{name}} was disabled automatically {{time}} and served nothing in this range.',
+        values
+      )
+    }
+    parts.push(line)
+    if (disabled.length > 1) {
+      parts.push(
+        t('{{count}} more channels are disabled automatically.', values)
+      )
+    }
+  }
+
+  const short = shortBills(data)
   if (stale.length > 0) {
     tone = worse(tone, 'warning')
     const known = stale.every((item) => item.revenue !== null)
@@ -204,11 +261,20 @@ export function useUpstreamVerdict(
     )
   } else if (totals.cost > 0) {
     if (totals.margin < 0) tone = worse(tone, 'warning')
-    parts.push(
-      t('Gross margin on channels with a known cost: {{rate}}.', {
-        rate: fmt.pct(totals.marginRate),
-      })
-    )
+    const rate = fmt.pct(totals.marginRate)
+    if (short.length > 0) {
+      tone = worse(tone, 'warning')
+      parts.push(
+        t(
+          'Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.',
+          { rate, names: short.map((row) => row.name).join(', ') }
+        )
+      )
+    } else {
+      parts.push(
+        t('Gross margin on channels with a known cost: {{rate}}.', { rate })
+      )
+    }
   }
   return { tone, text: join(...parts) }
 }

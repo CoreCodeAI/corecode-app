@@ -38,6 +38,8 @@ import { Panel } from './shared'
 export function SignupDriversPanel(props: {
   data: GrowthInsights | undefined
   previous?: GrowthInsights
+  /** Why the previous period is missing, said in place of the changes. */
+  previousError?: string
   range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
 }) {
@@ -46,8 +48,9 @@ export function SignupDriversPanel(props: {
   const label = useSignupMethodLabel()
   const data = props.data
   const previous = props.previous
+  const previousError = previous ? undefined : props.previousError
   const burst = props.range?.hourly ? signupBurst(data?.hourly) : null
-  if (!data || (!previous && !burst)) return null
+  if (!data || (!previous && !burst && !previousError)) return null
   const rows = (parts: Contribution[]): DriverRow[] =>
     parts.map((part) => ({
       key: part.key,
@@ -89,6 +92,7 @@ export function SignupDriversPanel(props: {
     <Panel
       title={t('What moved sign-ups')}
       description={description}
+      error={previousError}
       help={t(
         'Each segment’s sign-ups against the same segment in the previous period. Sign-up counts are fair to compare at any range; activation and payment are not, since a newer cohort has had less time.'
       )}

@@ -31,8 +31,12 @@ import {
   SMALL_SAMPLE,
   TONES,
   failureTone,
+  joinSentences,
+  tableState,
+  useInsightsDefinitions,
   useInsightsFormat,
   type InsightsRangeInfo,
+  type InsightsSources,
   type InsightsTab,
 } from '../lib'
 import type { UpstreamChannel, UpstreamInsights } from '../types'
@@ -40,8 +44,15 @@ import {
   attemptsOf,
   channelNamer,
   channelTokens,
+  UPSTREAM_COST_MAX_KEYS,
+  faultsOf,
+  partialBill,
   rescuedFrom,
+  revenuePerRequest,
+  shortBills,
+  splitsClientErrors,
   staleCosts,
+  unmatchedCosts,
   unrescuedOf,
   upstreamDailySeries,
   upstreamMargin,
@@ -50,6 +61,7 @@ import {
   type UpstreamModelRow,
 } from '../upstream'
 import { useUpstreamVerdict } from '../verdicts'
+import { SampleNote, StaleNote } from './insight-kit'
 import {
   BarSeries,
   Breakdown,
@@ -60,14 +72,17 @@ import {
   TruncatedNotice,
   Verdict,
   type MetricDelta,
+  type TableState,
   type Tone,
 } from './shared'
+import { useRevenueBars, useUpstreamHelp } from './upstream-help'
 import {
   UpstreamChanges,
   UpstreamHourlyCharts,
   UpstreamIncidents,
   UpstreamRoutingNotes,
   UpstreamRunRate,
+  UpstreamTasks,
 } from './upstream-insights'
 
 const BEST = 'font-semibold text-emerald-600 dark:text-emerald-400'
@@ -104,6 +119,7 @@ function CostSourceLabel(props: { row: UpstreamChannel; stale: boolean }) {
   const fmt = useInsightsFormat()
   const row = props.row
   if (row.cost_source === 'upstream') {
+    const partial = partialBill(row)
     return (
       <span className='text-muted-foreground block text-[11px] whitespace-nowrap'>
         <span className='block'>
@@ -119,6 +135,17 @@ function CostSourceLabel(props: { row: UpstreamChannel; stale: boolean }) {
             ? t('read {{time}}, behind', { time: fmt.time(row.latest_cost_at) })
             : t('read {{time}}', { time: fmt.time(row.latest_cost_at) })}
         </span>
+        {partial?.kind === 'keys' && (
+          <span className={cn('block', TONES.warning)}>
+            {t('Partial: {{read}} of {{count}} keys read', {
+              read: partial.read,
+              count: partial.total,
+            })}
+          </span>
+        )}
+        {partial?.kind === 'disabled' && (
+          <span className='block'>{t('Partial: not read while disabled')}</span>
+        )}
       </span>
     )
   }
@@ -136,6 +163,55 @@ function CostSourceLabel(props: { row: UpstreamChannel; stale: boolean }) {
   )
 }
 
+/**
+ * Why and when a channel, or on an enabled multi-key channel its latest
+ * key, was disabled; null when the server does not say.
+ */
+function DisableNote(props: { row: UpstreamChannel }) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const row = props.row
+  const reason = row.status_reason?.trim() ?? ''
+  const time = row.status_time ? fmt.time(row.status_time) : ''
+  const disabledKeys = row.disabled_keys ?? 0
+  const keys = row.key_count ?? 0
+  let text = ''
+  if (row.status !== 1) {
+    if (time && reason) {
+      text = t('Disabled {{time}}: {{reason}}', { time, reason })
+    } else if (time) {
+      text = t('Disabled {{time}}', { time })
+    } else {
+      text = reason
+    }
+  } else if (disabledKeys > 0) {
+    const count = t('{{disabled}} of {{count}} keys disabled', {
+      disabled: disabledKeys,
+      count: keys,
+    })
+    text =
+      time && reason
+        ? t('{{keys}}; the latest {{time}}: {{reason}}', {
+            keys: count,
+            time,
+            reason,
+          })
+        : count
+  }
+  if (!text) return null
+  return (
+    <span
+      className={cn(
+        'block truncate text-[11px]',
+        row.status === 3 ? TONES.warning : 'text-muted-foreground'
+      )}
+      title={text}
+    >
+      {text}
+    </span>
+  )
+}
+
 function ChannelName(props: { row: UpstreamChannel }) {
   const { t } = useTranslation()
   return (
@@ -144,7 +220,7 @@ function ChannelName(props: { row: UpstreamChannel }) {
         <span className='truncate font-medium'>{props.row.name}</span>
         {props.row.status !== 1 && (
           <Badge variant='outline' className='h-4 px-1 text-[10px]'>
-            {t('Disabled')}
+            {props.row.status === 3 ? t('Auto-disabled') : t('Disabled')}
           </Badge>
         )}
       </span>
@@ -152,6 +228,7 @@ function ChannelName(props: { row: UpstreamChannel }) {
         {props.row.host || '—'} ·{' '}
         {t('priority {{priority}}', { priority: props.row.priority })}
       </span>
+      <DisableNote row={props.row} />
     </span>
   )
 }
@@ -160,9 +237,12 @@ function ChannelTable(props: {
   data: UpstreamInsights | undefined
   previous: UpstreamInsights | undefined
   range?: InsightsRangeInfo
+  state?: TableState
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const help = useUpstreamHelp()
+  const splits = splitsClientErrors(props.data)
   const channels = props.data?.channels ?? []
   const before = new Map(
     (props.previous?.channels ?? []).map((row) => [row.id, row])
@@ -180,10 +260,11 @@ function ChannelTable(props: {
       return <span className='text-muted-foreground'>—</span>
     }
     const behind = stale.has(row.id)
+    const short = partialBill(row)?.kind === 'keys'
     let tone: Tone = 'default'
     if (value.margin < 0) {
       tone = 'danger'
-    } else if (behind) {
+    } else if (behind || short) {
       tone = 'warning'
     }
     return (
@@ -196,7 +277,12 @@ function ChannelTable(props: {
             {t('Overstated: recent revenue has no cost yet')}
           </span>
         )}
-        {!behind && value.rate !== null && (
+        {!behind && short && (
+          <span className='text-muted-foreground block text-[11px]'>
+            {t('Overstated: part of the bill is not read')}
+          </span>
+        )}
+        {!behind && !short && value.rate !== null && (
           <span className='text-muted-foreground block text-[11px] tabular-nums'>
             {fmt.pct(value.rate)}
           </span>
@@ -239,7 +325,13 @@ function ChannelTable(props: {
           {fmt.pct(row.failure_rate)}
         </span>
         <span className='text-muted-foreground block text-[11px]'>
-          {t('{{count}} failed', { count: row.errors })} {change}
+          {row.client_errors
+            ? t('{{count}} failed, {{client}} by the client', {
+                count: faultsOf(row),
+                client: row.client_errors,
+              })
+            : t('{{count}} failed', { count: faultsOf(row) })}{' '}
+          {change}
         </span>
       </span>
     )
@@ -247,6 +339,7 @@ function ChannelTable(props: {
   return (
     <SimpleTable
       rows={channels}
+      state={props.state}
       rowKey={(row) => row.id}
       empty={t('No channel has traffic in this range.')}
       faded={(row) => attemptsOf(row) === 0}
@@ -283,9 +376,12 @@ function ChannelTable(props: {
         {
           key: 'failure',
           label: t('Failure rate'),
-          hint: t(
-            'Failed attempts over all attempts on the channel. A request retried on another channel counts as a failure here and a success there. Under {{count}} attempts the rate is not colored or compared.',
-            { count: SMALL_SAMPLE }
+          hint: joinSentences(
+            t(
+              'Failed attempts over all attempts on the channel. A request retried on another channel counts as a failure here and a success there. Under {{count}} attempts the rate is not colored or compared.',
+              { count: SMALL_SAMPLE }
+            ),
+            splits && help.clientLeftOut
           ),
           align: 'right',
           render: failure,
@@ -299,13 +395,14 @@ function ChannelTable(props: {
           align: 'right',
           render: (row) => {
             const count = unrescuedOf(row, rescued)
+            const faults = faultsOf(row)
             return (
               <span className='block tabular-nums'>
                 {fmt.num(count)}
-                {row.errors > 0 && (
+                {faults > 0 && (
                   <span className='text-muted-foreground block text-[11px]'>
                     {t('{{rate}} rescued', {
-                      rate: fmt.pct(1 - count / row.errors),
+                      rate: fmt.pct(1 - count / faults),
                     })}
                   </span>
                 )}
@@ -366,8 +463,11 @@ function ChannelTable(props: {
         {
           key: 'revenue',
           label: t('Revenue'),
-          hint: t(
-            'What customers were charged for the requests the channel served; root is left out.'
+          hint: joinSentences(
+            t(
+              'What customers were charged for the requests the channel served; root is left out.'
+            ),
+            help.units
           ),
           align: 'right',
           render: (row) => (
@@ -377,8 +477,15 @@ function ChannelTable(props: {
         {
           key: 'cost',
           label: t('Cost'),
-          hint: t(
-            'The upstream bill read from the upstream site with the channel key, or the monthly fee spread over the range.'
+          hint: joinSentences(
+            t(
+              'The upstream bill read from the upstream site with the channel key, or the monthly fee spread over the range.'
+            ),
+            help.costUnits,
+            t(
+              'The reader reads a channel’s first {{count}} keys and stops once the channel is disabled, so a bill short of either reads as partial.',
+              { count: UPSTREAM_COST_MAX_KEYS }
+            )
           ),
           align: 'right',
           render: (row) => (
@@ -393,7 +500,10 @@ function ChannelTable(props: {
         {
           key: 'margin',
           label: t('Gross margin'),
-          hint: t('Revenue less cost, and that over revenue.'),
+          hint: joinSentences(
+            t('Revenue less cost, and that over revenue.'),
+            help.units
+          ),
           align: 'right',
           render: margin,
         },
@@ -414,12 +524,19 @@ function DailyCharts(props: { data: UpstreamInsights | undefined }) {
     ...series.named.map(name),
     ...(series.hasOther ? [t('Other channels')] : []),
   ]
+  const muted = (at: number) => series.hasOther && at === series.named.length
+  const help = useUpstreamHelp()
+  const splits = splitsClientErrors(props.data)
+  const revenue = useRevenueBars(series.days)
   return (
     <div className='grid gap-4 lg:grid-cols-2'>
       <Panel
         title={t('Attempts by channel')}
-        help={t(
-          'Each day’s attempts on each channel, served and failed, stacked.'
+        help={joinSentences(
+          t(
+            'Each day’s attempts on each channel, stacked; the readout lists each channel’s failed attempts.'
+          ),
+          splits && help.clientLeftOut
         )}
       >
         <BarSeries
@@ -433,13 +550,20 @@ function DailyCharts(props: { data: UpstreamInsights | undefined }) {
               value: fmt.num(day.errors[at]),
             })),
           }))}
-          series={labels.map((label) => ({ label, compact: fmt.num }))}
+          series={labels.map((label, at) => ({
+            label,
+            compact: fmt.num,
+            muted: muted(at),
+          }))}
         />
       </Panel>
       <Panel
         title={t('Failure rate by channel')}
-        help={t(
-          'Each day’s failed attempts over attempts, per channel, side by side.'
+        help={joinSentences(
+          t(
+            'Each day’s failed attempts over attempts, per channel, side by side.'
+          ),
+          splits && help.clientLeftOut
         )}
       >
         <BarSeries
@@ -450,14 +574,21 @@ function DailyCharts(props: { data: UpstreamInsights | undefined }) {
             title: fmt.day(day.day),
             values: day.failureRates,
           }))}
-          series={labels.map((label) => ({ label, format: fmt.pct }))}
+          series={labels.map((label, at) => ({
+            label,
+            format: fmt.pct,
+            muted: muted(at),
+          }))}
         />
       </Panel>
       <Panel
         className='lg:col-span-2'
         title={t('Revenue and cost')}
-        help={t(
-          'Each day’s revenue across channels beside what the channels cost that day.'
+        help={joinSentences(
+          t(
+            'Each day’s revenue on the channels whose cost is known beside what they cost that day; revenue on channels with no known cost is drawn grey and left out of the margin.'
+          ),
+          help.units
         )}
       >
         <BarSeries
@@ -466,25 +597,20 @@ function DailyCharts(props: { data: UpstreamInsights | undefined }) {
           points={series.days.map((day) => ({
             key: day.day,
             title: fmt.day(day.day),
-            values: [day.revenue, day.cost],
-            extra: [
-              {
-                label: t('Gross margin'),
-                value: fmt.usd(day.revenue - day.cost),
-              },
-            ],
+            values: revenue.values(day),
+            extra: revenue.extra(day),
           }))}
-          series={[
-            { label: t('Revenue'), format: fmt.usd, compact: fmt.usdCompact },
-            { label: t('Cost'), format: fmt.usd, compact: fmt.usdCompact },
-          ]}
+          series={revenue.series}
         />
       </Panel>
     </div>
   )
 }
 
-function ModelComparison(props: { data: UpstreamInsights | undefined }) {
+function ModelComparison(props: {
+  data: UpstreamInsights | undefined
+  state?: TableState
+}) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const name = channelNamer(props.data)
@@ -492,6 +618,10 @@ function ModelComparison(props: { data: UpstreamInsights | undefined }) {
     props.data?.models ?? [],
     props.data?.channels ?? []
   )
+  const customers = (props.data?.models ?? []).some(
+    (row) => row.customer_requests != null
+  )
+  const unmatched = unmatchedCosts(props.data)
   const mark = (best: boolean, value: ReactNode) => (
     <span className={cn('tabular-nums', best && BEST)}>{value}</span>
   )
@@ -504,6 +634,7 @@ function ModelComparison(props: { data: UpstreamInsights | undefined }) {
     >
       <SimpleTable<UpstreamModelRow>
         rows={rows}
+        state={props.state}
         rowKey={(row) => `${row.model}:${row.channel_id}`}
         empty={t('No model has traffic in this range.')}
         columns={[
@@ -560,18 +691,29 @@ function ModelComparison(props: { data: UpstreamInsights | undefined }) {
           {
             key: 'revenue',
             label: t('Revenue per request'),
+            hint: customers
+              ? t(
+                  'What customers were charged per request they sent; root’s requests and charges are both left out.'
+                )
+              : t(
+                  'What customers were charged over every request served, root’s included, though root’s charges are not, so it reads low where root used the channel.'
+                ),
             align: 'right',
-            render: (row) => (
-              <span className='tabular-nums'>
-                {row.requests
-                  ? fmt.usdFine(row.revenue_usd / row.requests)
-                  : '—'}
-              </span>
-            ),
+            render: (row) => {
+              const value = revenuePerRequest(row)
+              return (
+                <span className='tabular-nums'>
+                  {value === null ? '—' : fmt.usdFine(value)}
+                </span>
+              )
+            },
           },
           {
             key: 'cost',
             label: t('Cost per request'),
+            hint: t(
+              'The upstream bill over every request served, root’s included: root’s use costs money too.'
+            ),
             align: 'right',
             render: (row) => (
               <span className='tabular-nums'>
@@ -594,12 +736,30 @@ function ModelComparison(props: { data: UpstreamInsights | undefined }) {
           },
         ]}
       />
+      {unmatched.length > 0 && (
+        <div className='mt-3 grid gap-1'>
+          {unmatched.map((row) => (
+            <SampleNote key={row.id}>
+              {t(
+                '{{cost}} of the upstream bill of {{name}} names no model the channel served here, so it is in the channel’s cost but in no row above, and the margins of its models read high.',
+                {
+                  cost: fmt.usd(row.unmatched_cost_usd ?? 0),
+                  name: row.name,
+                }
+              )}
+            </SampleNote>
+          ))}
+        </div>
+      )}
       <UpstreamRoutingNotes data={props.data} rows={rows} />
     </Panel>
   )
 }
 
-function FailurePanels(props: { data: UpstreamInsights | undefined }) {
+function FailurePanels(props: {
+  data: UpstreamInsights | undefined
+  state?: TableState
+}) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const name = channelNamer(props.data)
@@ -612,13 +772,15 @@ function FailurePanels(props: { data: UpstreamInsights | undefined }) {
       <Panel
         title={t('Why channels failed')}
         help={t(
-          'The most common failure messages on each channel, from the error logs.'
+          'The most common failure messages on each channel, from the error logs. Every failed attempt is counted here, customers’ own bad requests included.'
         )}
       >
         {failing.length === 0 ? (
-          <p className='text-muted-foreground text-xs'>
-            {t('No failed attempts in this range.')}
-          </p>
+          <Breakdown
+            items={[]}
+            state={props.state}
+            empty={t('No failed attempts in this range.')}
+          />
         ) : (
           <div className='grid gap-4'>
             {failing.map((row) => (
@@ -646,6 +808,7 @@ function FailurePanels(props: { data: UpstreamInsights | undefined }) {
       >
         <SimpleTable
           rows={props.data?.rescues ?? []}
+          state={props.state}
           rowKey={(row) => `${row.from}:${row.to}`}
           empty={t('No request was moved to another channel in this range.')}
           columns={[
@@ -770,13 +933,28 @@ export function UpstreamTab(props: {
   previous?: UpstreamInsights
   range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
+  sources?: InsightsSources
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const definitions = useInsightsDefinitions()
+  const help = useUpstreamHelp()
   const verdict = useUpstreamVerdict(props.data, props.previous, props.range)
   const totals = upstreamTotals(props.data)
   const before = props.previous ? upstreamTotals(props.previous) : undefined
   const stale = staleCosts(props.data, props.range?.end)
+  const short = shortBills(props.data)
+  const splits = splitsClientErrors(props.data)
+  const viewError =
+    props.sources?.view.status === 'error' && !props.data
+      ? (props.sources.view.error ?? t('Could not be read'))
+      : undefined
+  const missing = viewError !== undefined
+  const previousFailed = props.sources?.previous.status === 'error'
+  const rows = (value: unknown) => tableState(props.sources?.view, value)
+  const rangeHours = props.range
+    ? (props.range.end - props.range.start) / 3600
+    : 0
   const staleRevenue = stale.every((item) => item.revenue !== null)
     ? stale.reduce((sum, item) => sum + (item.revenue ?? 0), 0)
     : null
@@ -798,6 +976,10 @@ export function UpstreamTab(props: {
               revenue: fmt.usd(staleRevenue),
             }
           )
+  } else if (short.length > 0) {
+    costHint = t('Partial: {{names}} read from some keys only', {
+      names: short.map((row) => row.name).join(', '),
+    })
   } else if (totals.uncostedRevenue > 0) {
     costHint = t('{{revenue}} of revenue has no known cost', {
       revenue: fmt.usd(totals.uncostedRevenue),
@@ -806,24 +988,48 @@ export function UpstreamTab(props: {
   let marginTone: Tone = 'default'
   if (totals.margin < 0) {
     marginTone = 'danger'
-  } else if (stale.length > 0) {
+  } else if (stale.length > 0 || short.length > 0) {
     marginTone = 'warning'
+  }
+  let marginHint = fmt.pct(totals.marginRate)
+  if (stale.length > 0) {
+    marginHint = t('{{rate}}, overstated: recent revenue has no cost yet', {
+      rate: fmt.pct(totals.marginRate),
+    })
+  } else if (short.length > 0) {
+    marginHint = t('{{rate}}, overstated: part of a bill is not read', {
+      rate: fmt.pct(totals.marginRate),
+    })
   }
   return (
     <div className='grid gap-4'>
-      <Verdict
-        loading={!props.data}
-        tone={verdict?.tone ?? 'default'}
-        text={verdict?.text}
-      />
+      {viewError ? (
+        <Verdict tone='danger' text={viewError} />
+      ) : (
+        <Verdict
+          loading={!props.data}
+          tone={verdict?.tone ?? 'default'}
+          text={verdict?.text}
+        />
+      )}
       <TruncatedNotice show={props.data?.truncated ?? false} />
+      <StaleNote staleHours={props.data?.stale_hours} rangeHours={rangeHours} />
+      {previousFailed && props.data && (
+        <SampleNote>
+          {t(
+            'The previous period could not be read, so nothing is compared with it.'
+          )}
+        </SampleNote>
+      )}
       <MetricGrid
-        loading={!props.data}
+        loading={!props.data && !missing}
         items={[
           {
             label: t('Attempts'),
             value: fmt.num(totals.attempts),
+            missing,
             hint: t('{{count}} served', { count: totals.requests }),
+            help: definitions.attempts,
             delta: {
               current: totals.attempts,
               previous: before?.attempts,
@@ -833,7 +1039,18 @@ export function UpstreamTab(props: {
           {
             label: t('Failure rate'),
             value: fmt.pct(totals.failureRate),
-            help: t('Failed attempts over all attempts, across channels.'),
+            missing,
+            hint:
+              totals.clientErrors > 0
+                ? t('{{count}} client errors left out', {
+                    count: fmt.num(totals.clientErrors),
+                  })
+                : undefined,
+            help: joinSentences(
+              t('Failed attempts over all attempts, across channels.'),
+              definitions.attempts,
+              splits && help.clientLeftOut
+            ),
             tone: rateTone(totals, totals.failureRate),
             delta: {
               current: totals.failureRate,
@@ -848,6 +1065,7 @@ export function UpstreamTab(props: {
           {
             label: t('Rescued'),
             value: fmt.num(totals.rescued),
+            missing,
             help: t('Requests served after failing on another channel.'),
             delta: {
               current: totals.rescued,
@@ -858,6 +1076,7 @@ export function UpstreamTab(props: {
           {
             label: t('Failures customers saw'),
             value: `≈ ${fmt.num(totals.unrescued)}`,
+            missing,
             help: t(
               'Failed attempts less the requests another channel then served. Attempt based: retries on the same channel count each time, so it can run high.'
             ),
@@ -870,6 +1089,13 @@ export function UpstreamTab(props: {
           {
             label: t('Revenue'),
             value: fmt.usd(totals.revenue),
+            missing,
+            help: joinSentences(
+              t(
+                'What customers were charged for the requests the channels served; root is left out.'
+              ),
+              help.units
+            ),
             delta: {
               current: totals.revenue,
               previous: before?.revenue,
@@ -879,8 +1105,10 @@ export function UpstreamTab(props: {
           {
             label: t('Cost'),
             value: fmt.usd(totals.cost),
+            missing,
             hint: costHint,
-            tone: stale.length > 0 ? 'warning' : 'default',
+            help: help.costUnits,
+            tone: stale.length > 0 || short.length > 0 ? 'warning' : 'default',
             delta: {
               current: totals.cost,
               previous: before?.cost,
@@ -890,13 +1118,12 @@ export function UpstreamTab(props: {
           {
             label: t('Gross margin'),
             value: fmt.usd(totals.margin),
-            hint:
-              stale.length > 0
-                ? t('{{rate}}, overstated: recent revenue has no cost yet', {
-                    rate: fmt.pct(totals.marginRate),
-                  })
-                : fmt.pct(totals.marginRate),
-            help: t('Revenue less cost over the channels whose cost is known.'),
+            missing,
+            hint: marginHint,
+            help: joinSentences(
+              t('Revenue less cost over the channels whose cost is known.'),
+              help.units
+            ),
             tone: marginTone,
             delta: {
               current: totals.margin,
@@ -908,14 +1135,16 @@ export function UpstreamTab(props: {
       />
       <Panel
         title={t('Channels')}
+        error={viewError}
         help={t(
-          'Every enabled channel, and any other with traffic in the range, busiest first.'
+          'Every enabled channel, every automatically disabled one, and any other with traffic or tasks in the range, busiest first.'
         )}
       >
         <ChannelTable
           data={props.data}
           previous={props.previous}
           range={props.range}
+          state={rows(props.data?.channels)}
         />
       </Panel>
       <UpstreamChanges data={props.data} previous={props.previous} />
@@ -925,9 +1154,10 @@ export function UpstreamTab(props: {
       ) : (
         <DailyCharts data={props.data} />
       )}
+      <UpstreamTasks data={props.data} />
       <UpstreamRunRate data={props.data} range={props.range} />
-      <ModelComparison data={props.data} />
-      <FailurePanels data={props.data} />
+      <ModelComparison data={props.data} state={rows(props.data?.models)} />
+      <FailurePanels data={props.data} state={rows(props.data?.channels)} />
       <FeeEditor channels={props.data?.channels ?? []} />
     </div>
   )

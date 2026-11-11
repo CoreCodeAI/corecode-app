@@ -19,11 +19,14 @@ For commercial licensing, please contact support@quantumnous.com
 import { useTranslation } from 'react-i18next'
 
 import {
+  joinSentences,
+  tableState,
   useHourAxis,
   useInsightsFormat,
   useSharedAddresses,
   useSignupMethodLabel,
   type InsightsRangeInfo,
+  type InsightsSources,
   type InsightsTab,
 } from '../lib'
 import type { RiskInsights } from '../types'
@@ -31,16 +34,27 @@ import { useRiskVerdict } from '../verdicts'
 import { largestSurge, useSurgeText } from '../verdicts/risk'
 import {
   clusteredUserIds,
+  hasRepeatBuyers,
   materialDebtors,
+  MIN_SIGNAL_COUNT,
   neverUsed,
   neverUsedComparable,
-  rankClusters,
   riskRangeStart,
   riskSurges,
+  sharedCounts,
   signalDelta,
   signupUnit,
+  suspectInviters,
+  unpaidSpend,
 } from './risk-analysis'
-import { ClusterList, DebtPanel, RiskControlLinks } from './risk-insights'
+import {
+  AliasClusterPanel,
+  DebtPanel,
+  GiftGuardPanel,
+  RiskControlLinks,
+  SharedAddressPanel,
+  UnpaidSpendersPanel,
+} from './risk-insights'
 import {
   BarSeries,
   Breakdown,
@@ -48,6 +62,7 @@ import {
   Panel,
   SimpleTable,
   type BarPoint,
+  type MetricItem,
   type Tone,
   Verdict,
 } from './shared'
@@ -57,6 +72,7 @@ export function RiskTab(props: {
   previous?: RiskInsights
   range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
+  sources?: InsightsSources
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -66,16 +82,32 @@ export function RiskTab(props: {
   const methodLabel = useSignupMethodLabel()
   const data = props.data
   const previous = props.previous
+  const viewSource = props.sources?.view
+  // With no data, a failed view shows - on every card; a pending one, skeletons.
+  const failed = !data && viewSource?.status === 'error'
+  const listState = tableState(viewSource, data)
   const clusters = useSharedAddresses(data)
   const previousClusters = useSharedAddresses(previous)
-  const ranked = data
-    ? rankClusters(clusters, riskRangeStart(data, props.range))
-    : []
-  const repeatBuyers = clusters.some(
-    (cluster) => cluster.subscription_buyers > 1
-  )
-  let sharedTone: Tone = clusters.length > 0 ? 'warning' : 'default'
+  const shared = sharedCounts(data, clusters)
+  const previousShared = previous
+    ? sharedCounts(previous, previousClusters)
+    : undefined
+  const repeatBuyers = hasRepeatBuyers(clusters)
+  const limitedBuyers = clusters.some((cluster) => cluster.shared_exit != null)
+  let sharedTone: Tone = shared.total > 0 ? 'warning' : 'default'
   if (repeatBuyers) sharedTone = 'danger'
+  let buyersHint: string | undefined
+  if (repeatBuyers) {
+    buyersHint = limitedBuyers
+      ? t('One has several recent buyers of one-per-user plans')
+      : t('One has several plan buyers')
+  }
+  const exitsHint =
+    shared.exits > 0
+      ? t('{{count}} shared exits left out', { count: shared.exits })
+      : undefined
+  const previousMissing =
+    !previous && props.sources?.previous.status === 'error'
 
   const daily = data?.series_unit === 'day'
   const unit = daily ? 'day' : 'hour'
@@ -117,6 +149,10 @@ export function RiskTab(props: {
   let signupHint: string | undefined
   if (surge) {
     signupHint = surgeText(surge, unit)
+  } else if (data?.deleted_signups) {
+    signupHint = t('{{count}} deleted since', {
+      count: fmt.num(data.deleted_signups),
+    })
   } else if (data?.peak_signups?.count) {
     signupHint = t('Busiest {{unit}}: {{count}} at {{time}}', {
       unit: daily ? t('day') : t('hour'),
@@ -139,124 +175,203 @@ export function RiskTab(props: {
         })
       : fmt.pct(share(cohort))
   }
+  if (cohort?.failed) {
+    neverUsedHint = joinSentences(
+      neverUsedHint && `${neverUsedHint}.`,
+      t('{{count}} of them tried and every request failed.', {
+        count: fmt.num(cohort.failed),
+      })
+    )
+  }
+  const neverUsedHelp = joinSentences(
+    t(
+      'Sign-ups with no successful request: a request that failed does not count as use.'
+    ),
+    cohort?.mature &&
+      t(
+        'Counts only sign-ups at least 6 hours old, so new accounts have had time to send a first request.'
+      ),
+    cohort?.failed != null &&
+      t(
+        'Those that tried and only failed are lost conversions more than junk sign-ups: check quality for the hours they tried.'
+      )
+  )
 
   const debtors = materialDebtors(data?.debtors)
   const clustered = clusteredUserIds(clusters)
+  const spend = unpaidSpend(data)
+  const previousSpend = unpaidSpend(previous)
+  const inviters = suspectInviters(data)
+
+  const canonicalAlias = data?.alias_pattern_emails != null
+  const aliasHint =
+    canonicalAlias && data?.alias_pattern_emails
+      ? t('{{count}} with a +tag or dotted Gmail address', {
+          count: fmt.num(data.alias_pattern_emails),
+        })
+      : undefined
+  const restrictionOff = data?.email_restriction === false
+  const offTone: Tone =
+    !restrictionOff && (data?.off_whitelist ?? 0) > 0 ? 'warning' : 'default'
+
+  const items: MetricItem[] = [
+    {
+      label: t('Sign-ups'),
+      featured: true,
+      value: fmt.num(data?.signups ?? 0),
+      missing: failed,
+      delta: {
+        current: data?.signups ?? 0,
+        previous: previous?.signups,
+        better: 'neutral',
+      },
+      trend: series.map((point) => ({
+        title: pointTitle(point.at),
+        value: point.count,
+      })),
+      tone: surge ? 'warning' : undefined,
+      hint:
+        previousMissing && !surge
+          ? t('The previous period could not be read, so no change is shown.')
+          : signupHint,
+      help:
+        data?.deleted_signups != null
+          ? t(
+              'Accounts created in the range, root left out, deleted accounts included.'
+            )
+          : undefined,
+    },
+    {
+      label: t('No successful request'),
+      value: fmt.num(cohort?.zero ?? 0),
+      missing: failed,
+      hint: neverUsedHint,
+      help: neverUsedHelp,
+      delta:
+        cohort && previousCohort && comparable
+          ? {
+              current: share(cohort),
+              previous: share(previousCohort),
+              better: 'down',
+              points: true,
+            }
+          : undefined,
+    },
+    {
+      label: t('Alias emails'),
+      value: fmt.num(data?.alias_emails ?? 0),
+      missing: failed,
+      tone: (data?.alias_emails ?? 0) > 0 ? 'warning' : 'default',
+      hint: aliasHint,
+      help: canonicalAlias
+        ? t(
+            'Sign-ups whose inbox another account already has, once case, the +tag and Gmail dots are ignored. A +tag or dotted Gmail address alone is not counted.'
+          )
+        : undefined,
+      delta: signalDelta(data?.alias_emails ?? 0, previous?.alias_emails),
+    },
+    {
+      label: t('Off the domain allowlist'),
+      value: fmt.num(data?.off_whitelist ?? 0),
+      missing: failed,
+      tone: offTone,
+      hint: restrictionOff
+        ? t('Domain restriction is off: not checked')
+        : undefined,
+      help:
+        data?.email_restriction != null
+          ? t(
+              'Email sign-ups whose domain is not on the allowlist, counted only while the domain restriction is on and the list is not empty.'
+            )
+          : undefined,
+      delta: restrictionOff
+        ? undefined
+        : signalDelta(data?.off_whitelist ?? 0, previous?.off_whitelist),
+    },
+    {
+      label: t('Shared addresses'),
+      value: fmt.num(shared.total),
+      missing: failed,
+      hint: buyersHint ?? exitsHint,
+      tone: sharedTone,
+      delta: signalDelta(shared.total, previousShared?.total),
+    },
+  ]
+  if (spend) {
+    let spendHint: string | undefined
+    if (spend.unpaid > 0) {
+      spendHint = t('{{amount}} used; {{share}} of new accounts that spent', {
+        amount: fmt.cny(spend.spend),
+        share: fmt.pct(spend.share),
+      })
+    }
+    items.push({
+      label: t('Spent without paying'),
+      value: fmt.num(spend.unpaid),
+      missing: failed,
+      hint: spendHint,
+      tone: inviters.unpaid > 0 ? 'warning' : 'default',
+      help: t(
+        'New accounts of the range that consumed in it and have never paid. An inviter with {{min}} or more of them turns this amber.',
+        { min: MIN_SIGNAL_COUNT }
+      ),
+      delta: signalDelta(spend.unpaid, previousSpend?.unpaid),
+    })
+  }
 
   return (
     <div className='grid gap-4'>
       <Verdict
-        loading={!props.data}
+        loading={!props.data && !failed}
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text}
       />
       <RiskControlLinks />
-      <MetricGrid
-        loading={!data}
-        items={[
-          {
-            label: t('Sign-ups'),
-            featured: true,
-            value: fmt.num(data?.signups ?? 0),
-            delta: {
-              current: data?.signups ?? 0,
-              previous: previous?.signups,
-              better: 'neutral',
-            },
-            trend: series.map((point) => ({
-              title: pointTitle(point.at),
-              value: point.count,
-            })),
-            tone: surge ? 'warning' : undefined,
-            hint: signupHint,
-          },
-          {
-            label: t('Never sent a request'),
-            value: fmt.num(cohort?.zero ?? 0),
-            hint: neverUsedHint,
-            help: cohort?.mature
-              ? t(
-                  'Counts only sign-ups at least 6 hours old, so new accounts have had time to send a first request.'
-                )
-              : undefined,
-            delta:
-              cohort && previousCohort && comparable
-                ? {
-                    current: share(cohort),
-                    previous: share(previousCohort),
-                    better: 'down',
-                    points: true,
-                  }
-                : undefined,
-          },
-          {
-            label: t('Alias emails'),
-            value: fmt.num(data?.alias_emails ?? 0),
-            tone: (data?.alias_emails ?? 0) > 0 ? 'warning' : 'default',
-            delta: signalDelta(data?.alias_emails ?? 0, previous?.alias_emails),
-          },
-          {
-            label: t('Off the domain allowlist'),
-            value: fmt.num(data?.off_whitelist ?? 0),
-            tone: (data?.off_whitelist ?? 0) > 0 ? 'warning' : 'default',
-            delta: signalDelta(
-              data?.off_whitelist ?? 0,
-              previous?.off_whitelist
-            ),
-          },
-          {
-            label: t('Shared addresses'),
-            value: fmt.num(clusters.length),
-            hint: repeatBuyers ? t('One has several plan buyers') : undefined,
-            tone: sharedTone,
-            delta: signalDelta(
-              clusters.length,
-              previous ? previousClusters.length : undefined
-            ),
-          },
-        ]}
-      />
+      <MetricGrid loading={!data && !failed} items={items} />
 
       <Panel
         title={t('Sign-ups over time')}
         description={surge ? surgeText(surge, unit) : undefined}
       >
-        <BarSeries
-          ariaLabel={t('Sign-ups over time')}
-          series={[{ label: t('Sign-ups') }]}
-          points={points}
-        />
-      </Panel>
-
-      <Panel
-        title={t('Accounts sharing an address')}
-        description={
-          data &&
-          (clusters.length
-            ? t(
-                '{{count}} addresses are shared by several accounts, the riskiest first.',
-                { count: clusters.length }
-              )
-            : undefined)
-        }
-        help={t(
-          'Addresses several accounts sent requests or signed in from: one person with several accounts, a shared machine, or a reseller. Ranked by accounts created in the range, registrations within 10 minutes of each other, several plan buyers, and unpaid accounts with nothing left; an address where every account paid ranks low.'
-        )}
-      >
-        {clusters.length === 0 ? (
+        {failed ? (
           <p className='text-muted-foreground text-xs'>
-            {t('No address is shared in this range')}
+            {t('Could not be read')}
           </p>
         ) : (
-          <ClusterList clusters={ranked} />
+          <BarSeries
+            ariaLabel={t('Sign-ups over time')}
+            series={[{ label: t('Sign-ups') }]}
+            points={points}
+          />
         )}
       </Panel>
+
+      <SharedAddressPanel
+        data={data}
+        clusters={clusters}
+        start={data ? riskRangeStart(data, props.range) : undefined}
+        state={listState}
+      />
+
+      {(spend || data?.signup_gifts != null) && (
+        <div className='grid gap-4 lg:grid-cols-2'>
+          {spend && <UnpaidSpendersPanel data={data} state={listState} />}
+          {data?.signup_gifts != null && (
+            <GiftGuardPanel data={data} state={listState} />
+          )}
+        </div>
+      )}
+
+      {(data?.alias_clusters?.length ?? 0) > 0 && (
+        <AliasClusterPanel data={data} />
+      )}
 
       <div className='grid gap-4 lg:grid-cols-3'>
         <Panel title={t('Sign-up method')}>
           <Breakdown
             items={data?.signup_methods}
             label={methodLabel}
+            state={listState}
             empty={t('No sign-ups in this range')}
           />
         </Panel>
@@ -264,6 +379,7 @@ export function RiskTab(props: {
           <SimpleTable
             rows={data?.email_domains}
             rowKey={(row) => row.domain}
+            state={tableState(viewSource, data?.email_domains)}
             empty={t('No sign-ups in this range')}
             columns={[
               {
@@ -290,7 +406,12 @@ export function RiskTab(props: {
             ]}
           />
         </Panel>
-        <DebtPanel debtors={debtors} clustered={clustered} loading={!data} />
+        <DebtPanel
+          debtors={debtors}
+          clustered={clustered}
+          loading={!data}
+          state={listState}
+        />
       </div>
     </div>
   )

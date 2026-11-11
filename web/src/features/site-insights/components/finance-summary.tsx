@@ -29,15 +29,19 @@ import {
   financeHours,
   financeRange,
   ordersComparable,
+  owedNow,
   RUNWAY_WARN_DAYS,
   signed,
 } from '../finance-analysis'
 import {
   DEBT_ALERT_USD,
+  joinSentences,
   TONES,
   useChargeFormat,
+  useInsightsDefinitions,
   useInsightsFormat,
   type InsightsRangeInfo,
+  type SourceState,
 } from '../lib'
 import type { FinanceInsights } from '../types'
 import {
@@ -57,19 +61,21 @@ import {
  */
 function creditTotals(data: FinanceInsights | undefined) {
   const root = data?.root_consumption_usd ?? 0
-  const consumed = (data?.consumption_usd ?? 0) + root
+  const customers = data?.consumption_usd ?? 0
+  const consumed = customers + root
   const gifted = data?.gift_consumption_usd ?? 0
-  const paid = (data?.consumption_usd ?? 0) - gifted
+  const paid = customers - gifted
   const earned = data?.recognized_revenue ?? 0
   return {
     consumed,
     paid,
     gifted,
     root,
-    /** Revenue earned per yuan of credit consumed, root's included. */
-    earnedPerYuan: consumed > 0 ? earned / consumed : 0,
+    // Customers on both sides: earned revenue leaves root out, so root's
+    // internal use stays out of the yuan it is divided by.
+    earnedPerYuan: customers > 0 ? earned / customers : 0,
     paidPerYuan: paid > 0 ? earned / paid : 0,
-    cashPerYuan: consumed > 0 ? (data?.revenue ?? 0) / consumed : 0,
+    cashPerYuan: customers > 0 ? (data?.revenue ?? 0) / customers : 0,
   }
 }
 
@@ -83,15 +89,20 @@ export function FinanceSummary(props: {
   data: FinanceInsights | undefined
   previous?: FinanceInsights
   range?: InsightsRangeInfo
+  /** The funds view's read: a failure shows - rather than zero. */
+  source?: SourceState
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const defs = useInsightsDefinitions()
   const data = props.data
   const previous = props.previous
   const charge = useChargeFormat(data)
   const credit = creditTotals(data)
   const before = previous ? creditTotals(previous) : undefined
-  const loading = !data
+  const missing = !data && props.source?.status === 'error'
+  const loading = !data && !missing
+  const owed = owedNow(data)
   const dollars = (yuan: number) => `≈ ${fmt.usd(charge.toUSD(yuan))}`
   const range = financeRange(data, props.range)
   const hours = financeHours(data, range)
@@ -148,13 +159,22 @@ export function FinanceSummary(props: {
           className='xl:col-span-2'
           title={t('Cash')}
           description={t('Money customers paid, in yuan.')}
+          error={
+            missing
+              ? (props.source?.error ?? t('Could not be read'))
+              : undefined
+          }
         >
           <div className='grid gap-4 sm:grid-cols-2'>
             <Stat
               loading={loading}
-              label={t('Revenue')}
-              help={t(
-                'Money customers paid in the range, in yuan: wallet top-ups and plans, counted when paid. Credit given away brings in nothing.'
+              missing={missing}
+              label={t('Revenue paid')}
+              help={joinSentences(
+                defs.paidRevenue,
+                t(
+                  'In yuan: wallet top-ups and plans. Credit given away brings in nothing. Revenue earned, beside it, is what the range earned of all money paid.'
+                )
               )}
               value={fmt.cny(data?.revenue ?? 0)}
               delta={
@@ -182,10 +202,9 @@ export function FinanceSummary(props: {
             />
             <Stat
               loading={loading}
+              missing={missing}
               label={t('Revenue earned')}
-              help={t(
-                'The part of all money paid that this range earned. A plan earns its price evenly over the days it runs; a wallet earns as it is spent, each dollar at what its owner paid per dollar credited, gifts included. Given credit earns nothing.'
-              )}
+              help={defs.earnedRevenue}
               value={fmt.cny(data?.recognized_revenue ?? 0)}
               delta={{
                 current: data?.recognized_revenue ?? 0,
@@ -213,6 +232,11 @@ export function FinanceSummary(props: {
         <Panel
           className='xl:col-span-3'
           title={t('new-api credit')}
+          error={
+            missing
+              ? (props.source?.error ?? t('Could not be read'))
+              : undefined
+          }
           description={t(
             'In yuan: customers pay ¥1 for each credit dollar. ≈ is in dollars at ¥{{rate}} to the dollar, the unit compared with gpt-load.',
             { rate: fmt.num(charge.rate) }
@@ -221,9 +245,13 @@ export function FinanceSummary(props: {
           <div className='grid gap-4 sm:grid-cols-3'>
             <Stat
               loading={loading}
+              missing={missing}
               label={t('Consumed at list price')}
-              help={t(
-                'Every request new-api charged in the range at list price, root’s internal use included. Paid is what customers’ payments cover; gifted is given plans and the unpaid share of each wallet; root’s is internal use, which nobody pays for.'
+              help={joinSentences(
+                defs.listCharge,
+                t(
+                  'Every request new-api charged in the range at list price, root’s internal use included. Paid is what customers’ payments cover; gifted is given plans and the unpaid share of each wallet; root’s is internal use, which nobody pays for.'
+                )
               )}
               value={fmt.cny(credit.consumed)}
               sub={dollars(credit.consumed)}
@@ -240,9 +268,10 @@ export function FinanceSummary(props: {
             />
             <Stat
               loading={loading}
+              missing={missing}
               label={t('Earned per ¥1 consumed')}
               help={t(
-                'Revenue earned divided by credit consumed, root’s included: what each yuan of credit used earned. Paid use divides by the paid part only: the price customers actually paid. Cash basis divides the money paid in the range instead, which swings with when customers pay.'
+                'Revenue earned divided by customers’ consumption, root’s internal use left out on both sides: what each yuan customers used earned. Paid use divides by the paid part only: the price customers actually paid. Cash basis divides the revenue paid in the range instead, which swings with when customers pay.'
               )}
               value={fmt.cny(credit.earnedPerYuan)}
               delta={{
@@ -257,21 +286,46 @@ export function FinanceSummary(props: {
             />
             <Stat
               loading={loading}
+              missing={missing}
               label={t('Balances owed')}
-              help={t(
-                'Credit customers hold now and can still spend, in yuan. Deferred revenue is what they paid for it at each wallet’s price, money taken but not yet earned; the rest was given. Root’s balance is internal and not counted. The runway is the balance over customers’ paid use per day in this range. Red when debt passes the alert line; amber when the balance covers more than 60 days of paid use, money owed back in use or refunds that the current pace takes over two months to earn.'
+              help={joinSentences(
+                t(
+                  'Credit customers hold now and can still spend, in yuan. Deferred revenue is what they paid for it at each wallet’s price, money taken but not yet earned; the rest was given. Root’s balance is internal and not counted. The runway is the balance over customers’ paid use per day in this range. Red when debt passes the alert line; amber when the balance covers more than 60 days of paid use, money owed back in use or refunds that the current pace takes over two months to earn.'
+                ),
+                owed &&
+                  t(
+                    'Running paid plans also owe the share of their price whose time has not run yet, and the quota they still hold; owed in all is that plus the wallets’ deferred revenue.'
+                  ),
+                defs.live
               )}
               value={fmt.cny(data?.liability_usd ?? 0)}
               sub={dollars(data?.liability_usd ?? 0)}
               tone={balanceTone}
-              hint={t(
-                '{{count}} customers · deferred revenue {{paid}} · debt {{debt}}',
-                {
-                  count: data?.liability_users ?? 0,
-                  paid: fmt.cny(data?.liability_paid_value ?? 0),
-                  debt: fmt.cny(Math.abs(data?.debt_usd ?? 0)),
-                }
-              )}
+              hint={
+                <>
+                  {t(
+                    '{{count}} customers · deferred revenue {{paid}} · debt {{debt}}',
+                    {
+                      count: data?.liability_users ?? 0,
+                      paid: fmt.cny(data?.liability_paid_value ?? 0),
+                      debt: fmt.cny(Math.abs(data?.debt_usd ?? 0)),
+                    }
+                  )}
+                  {owed && (
+                    <span className='block'>
+                      {t(
+                        'Plans {{plans}} not yet run on {{count}} paid plans, {{quota}} of quota left · owed in all {{total}}',
+                        {
+                          plans: fmt.cny(owed.plans),
+                          count: fmt.num(owed.paidPlans),
+                          quota: fmt.cny(owed.planQuotaLeft),
+                          total: fmt.cny(owed.total),
+                        }
+                      )}
+                    </span>
+                  )}
+                </>
+              }
               note={runwayNote}
             />
           </div>
@@ -304,12 +358,24 @@ function Stat(props: {
   note?: ReactNode
   parts?: { label: string; value: number }[]
   loading: boolean
+  /** The source failed: a muted - and nothing that reads as a value. */
+  missing?: boolean
 }) {
   const fmt = useInsightsFormat()
   const total = (props.parts ?? []).reduce(
     (sum, part) => sum + Math.max(0, part.value),
     0
   )
+  if (props.missing) {
+    return (
+      <dl className='flex min-w-0 flex-col gap-1'>
+        <dt className='text-muted-foreground text-xs'>
+          <HelpLabel label={props.label} help={props.help} />
+        </dt>
+        <dd className='text-muted-foreground text-2xl font-semibold'>-</dd>
+      </dl>
+    )
+  }
   return (
     <dl className='flex min-w-0 flex-col gap-1'>
       <dt className='text-muted-foreground text-xs'>

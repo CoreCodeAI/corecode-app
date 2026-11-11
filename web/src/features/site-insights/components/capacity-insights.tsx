@@ -22,36 +22,35 @@ import { alignPrevious } from '../analysis'
 import {
   dailyPeaks,
   failureHours,
+  hasPoolPeak,
+  peakTone,
   peakTrend,
+  poolPeakOf,
+  type EngineRefusals,
   type RejectionDiagnosis,
 } from '../capacity-analysis'
 import {
-  HEADROOM_SHARE,
   HOUR_SAMPLE,
+  joinSentences,
   SPIKE_FACTOR,
   useHourAxis,
+  useInsightsDefinitions,
   useInsightsFormat,
 } from '../lib'
 import type { CapacityHour, PoolProvider } from '../types'
 import { TabLink } from './insight-kit'
-import { BarSeries, Panel, type Tone } from './shared'
+import { BarSeries, Panel } from './shared'
 
 // A forecast further out than this is not a buying decision.
 const FORECAST_MAX_DAYS = 365
 // Spiking hours named in the failure panel's sentence.
 const NAMED_SPIKES = 3
 
-function peakTone(peak: number, slots: number): Tone | undefined {
-  if (slots <= 0) return undefined
-  if (peak > slots) return 'danger'
-  if (peak >= slots * HEADROOM_SHARE) return 'warning'
-  return undefined
-}
-
 /**
  * Each hour's peak concurrency against today's slots, with the previous
- * period's same hour in its readout. Hours near or past the slots are
- * coloured; the open hour is faded.
+ * period's same hour in its readout. With the pool's own peak, the site's on
+ * every channel is drawn beside it; the pool's is the one coloured near or
+ * past the slots. The open hour is faded.
  */
 export function HourlyPeakChart(props: {
   hourly: CapacityHour[]
@@ -67,26 +66,38 @@ export function HourlyPeakChart(props: {
     props.span === undefined
       ? []
       : alignPrevious(props.hourly, props.previous, props.span)
+  const own = hasPoolPeak(props.hourly)
+  // The previous period's hours are compared only on the same definition.
+  const comparable = own === hasPoolPeak(props.previous ?? [])
   return (
     <BarSeries
       ariaLabel={t('Hourly peak concurrency')}
-      series={[{ label: t('Peak concurrency') }]}
+      grouped={own}
+      series={
+        own
+          ? [
+              { label: t('Pool peak') },
+              { label: t('Site peak, every channel') },
+            ]
+          : [{ label: t('Peak concurrency') }]
+      }
       reference={
         props.slots > 0
           ? { value: props.slots, label: t("Today's pool slots") }
           : undefined
       }
       points={axis.bars(props.hourly, props.end, (row, index) => {
-        const previous = before[index]
+        const previous = comparable ? before[index] : undefined
+        const peak = poolPeakOf(row)
         return {
-          values: [row.peak_concurrency],
-          tone: peakTone(row.peak_concurrency, props.slots),
+          values: own ? [peak, row.peak_concurrency] : [peak],
+          tone: peakTone(peak, props.slots, own),
           extra: [
             ...(previous
               ? [
                   {
                     label: t('Same hour, previous period'),
-                    value: fmt.num(previous.peak_concurrency),
+                    value: fmt.num(poolPeakOf(previous)),
                   },
                 ]
               : []),
@@ -143,6 +154,35 @@ export function RejectionDiagnosisNote(props: {
 }
 
 /**
+ * The engine's refusals that are neither the pool full nor an upstream's:
+ * its own caps, which a higher limit lifts, and its accounts' budgets,
+ * which the window's reset or more accounts lift.
+ */
+export function EngineCapsNote(props: { refusals: EngineRefusals }) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const limit = props.refusals.limit
+  const budget = props.refusals.budget
+  if (limit <= 0 && budget <= 0) return null
+  return (
+    <p className='text-muted-foreground mb-3 text-xs'>
+      {joinSentences(
+        limit > 0 &&
+          t(
+            "The engine refused {{count}} at its own caps (a group, global or key concurrency limit, or the key's rate limit), with accounts to spare: raise the group's limit or the key's cap.",
+            { count: fmt.num(limit) }
+          ),
+        budget > 0 &&
+          t(
+            'The engine refused {{count}} because accounts were at their request rate or quota budget, or had no fresh quota reading: wait for the window to reset or add accounts.',
+            { count: fmt.num(budget) }
+          )
+      )}
+    </p>
+  )
+}
+
+/**
  * Each hour's failure rate beside the previous period's same hour. Hours
  * with too few requests have no rate; hours far above their usual rate are
  * flagged.
@@ -152,6 +192,8 @@ export function FailureRatePanel(props: {
   previous: CapacityHour[] | null | undefined
   span: number | undefined
   end: number
+  /** What a request is on the view's server, joined to the help. */
+  definition?: string
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -197,9 +239,12 @@ export function FailureRatePanel(props: {
     <Panel
       title={t('Hourly failure rate')}
       description={description}
-      help={t(
-        'Failed requests over requests, per hour. An hour under {{count}} requests has no rate. Usual is the previous period’s same hour, or the median hour when that has too few requests. Requests a per-user limit turned away never reach the logs and are not counted.',
-        { count: HOUR_SAMPLE }
+      help={joinSentences(
+        t(
+          'Failed requests over requests, per hour. An hour under {{count}} requests has no rate. Usual is the previous period’s same hour, or the median hour when that has too few requests. Requests a per-user limit turned away never reach the logs and are not counted.',
+          { count: HOUR_SAMPLE }
+        ),
+        props.definition
       )}
     >
       <BarSeries
@@ -245,6 +290,8 @@ export function PeakTrendPanel(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const definitions = useInsightsDefinitions()
+  const own = hasPoolPeak(props.hourly)
   const days = dailyPeaks(props.hourly, props.end)
   const trend = peakTrend(
     days.map((day) => day.peak),
@@ -281,13 +328,16 @@ export function PeakTrendPanel(props: {
     <Panel
       title={t('Daily peak concurrency')}
       description={description}
-      help={t(
-        'The highest hourly peak of each whole day, with a straight line fitted through them. Slots are the pool’s current value; adding or losing accounts moves the forecast.'
+      help={joinSentences(
+        t(
+          'The highest hourly peak of each whole day, with a straight line fitted through them. Slots are the pool’s current value; adding or losing accounts moves the forecast.'
+        ),
+        own ? definitions.poolPeak : definitions.sitePeak
       )}
     >
       <BarSeries
         ariaLabel={t('Daily peak concurrency')}
-        series={[{ label: t('Peak concurrency') }]}
+        series={[{ label: own ? t('Pool peak') : t('Peak concurrency') }]}
         reference={
           props.slots > 0
             ? { value: props.slots, label: t("Today's pool slots") }
@@ -297,7 +347,7 @@ export function PeakTrendPanel(props: {
           key: day.day,
           title: fmt.day(day.day),
           values: [day.peak],
-          tone: peakTone(day.peak, props.slots),
+          tone: peakTone(day.peak, props.slots, own),
         }))}
       />
     </Panel>

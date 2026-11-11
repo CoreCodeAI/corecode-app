@@ -48,6 +48,11 @@ export type ClusterRisk = {
   burst: number
   /** Members who bought a plan. */
   buyers: number
+  /**
+   * buyers counts only recent buyers of one-per-user plans, as the server
+   * has since its release; before, it counted any plan ever bought.
+   */
+  limited: boolean
   /** Members who never paid and have nothing left. */
   empty: number
   /** Every member paid: an office or a reseller more than a farm. */
@@ -84,9 +89,13 @@ export function clusterRisk(
   const created = cluster.users
     .map((user) => user.created_at)
     .filter((at) => at > 0)
-  const fresh = start == null ? 0 : created.filter((at) => at >= start).length
+  const fresh =
+    start == null
+      ? (cluster.new_members ?? 0)
+      : created.filter((at) => at >= start).length
   const burst = largestBurst(created)
   const buyers = cluster.subscription_buyers
+  const limited = cluster.shared_exit != null
   const empty = cluster.users.filter(
     (user) =>
       !user.paid && !user.subscription && user.balance_usd <= EMPTY_BALANCE_USD
@@ -96,7 +105,64 @@ export function clusterRisk(
   if (burst > 1) score += 2 * burst
   if (buyers > 1) score += 3 * buyers
   if (allPaid) score /= 4
-  return { fresh, burst, buyers, empty, allPaid, score }
+  return { fresh, burst, buyers, limited, empty, allPaid, score }
+}
+
+/**
+ * The shared addresses split into those to review and the shared exits
+ * (proxies, offices, campus networks), which the server marks and which
+ * stay out of every count and the verdict.
+ */
+export function splitExits(clusters: RiskCluster[]): {
+  review: RiskCluster[]
+  exits: RiskCluster[]
+} {
+  return {
+    review: clusters.filter((cluster) => !cluster.shared_exit),
+    exits: clusters.filter((cluster) => !!cluster.shared_exit),
+  }
+}
+
+/** How many shared addresses there are in all against how many are listed. */
+export type SharedCounts = {
+  /** Addresses to review in all, before the server's cut to 50. */
+  total: number
+  /** Of them, the ones in the response. */
+  listed: number
+  /** Shared exits in all, and how many are in the response. */
+  exits: number
+  exitsListed: number
+}
+
+/**
+ * The shared-address counts of a response, its listed clusters already
+ * filtered (useSharedAddresses). Before the server sends its totals the
+ * list is all there is; a total never reads under what is listed.
+ */
+export function sharedCounts(
+  data: Pick<RiskInsights, 'shared_ip_total' | 'shared_exits'> | undefined,
+  clusters: RiskCluster[]
+): SharedCounts {
+  const split = splitExits(clusters)
+  const listed = split.review.length
+  const exitsListed = split.exits.length
+  if (data?.shared_ip_total == null) {
+    return { total: listed, listed, exits: exitsListed, exitsListed }
+  }
+  const exits = Math.max(data.shared_exits ?? 0, exitsListed)
+  return {
+    total: Math.max(data.shared_ip_total - exits, listed),
+    listed,
+    exits,
+    exitsListed,
+  }
+}
+
+/** Whether an address to review has several plan buyers: the danger signal. */
+export function hasRepeatBuyers(clusters: RiskCluster[]): boolean {
+  return splitExits(clusters).review.some(
+    (cluster) => cluster.subscription_buyers > 1
+  )
 }
 
 /** Clusters by risk, highest first; ties by size, then requests, then address. */
@@ -209,18 +275,97 @@ export type NeverUsed = {
   signups: number
   /** Only sign-ups at least 6 hours old. */
   mature: boolean
+  /** Of zero, those whose every request failed; absent before the server's release. */
+  failed?: number
 }
 
 /** The never-used cohort: sign-ups old enough to have tried, when the server sends them. */
 export function neverUsed(data: RiskInsights): NeverUsed {
   if (data.signups_mature != null && data.zero_use_mature != null) {
-    return {
+    const cohort: NeverUsed = {
       zero: data.zero_use_mature,
       signups: data.signups_mature,
       mature: true,
     }
+    if (data.zero_use_failed_mature != null) {
+      cohort.failed = data.zero_use_failed_mature
+    }
+    return cohort
   }
-  return { zero: data.zero_use_accounts, signups: data.signups, mature: false }
+  const cohort: NeverUsed = {
+    zero: data.zero_use_accounts,
+    signups: data.signups,
+    mature: false,
+  }
+  if (data.zero_use_failed != null) cohort.failed = data.zero_use_failed
+  return cohort
+}
+
+/** Sign-ups that consumed in the range and never paid, in quota dollars. */
+export type UnpaidSpend = {
+  spenders: number
+  unpaid: number
+  spend: number
+  /** unpaid over spenders; 0 without spenders. */
+  share: number
+}
+
+/** The unpaid spenders of a response; undefined before the server's release. */
+export function unpaidSpend(
+  data: RiskInsights | undefined
+): UnpaidSpend | undefined {
+  if (data?.signup_spenders == null || data.unpaid_spenders == null) {
+    return undefined
+  }
+  const spenders = data.signup_spenders
+  const unpaid = data.unpaid_spenders
+  return {
+    spenders,
+    unpaid,
+    spend: data.unpaid_spend_usd ?? 0,
+    share: spenders > 0 ? unpaid / spenders : 0,
+  }
+}
+
+/** Invite gift statuses the guard refused; email_signup is policy, not a block. */
+export const GIFT_BLOCKS: readonly string[] = [
+  'ip_used',
+  'cap_reached',
+  'email_blocked',
+]
+
+/** Invite gift claims in the range and how many were blocked; undefined before the server's release. */
+export function giftOutcomes(
+  data: RiskInsights | undefined
+): { total: number; blocked: number; gifted: number } | undefined {
+  if (data?.signup_gifts == null) return undefined
+  let total = 0
+  let blocked = 0
+  let gifted = 0
+  for (const item of data.signup_gifts) {
+    total += item.count
+    if (GIFT_BLOCKS.includes(item.name)) blocked += item.count
+    if (item.name === 'gifted') gifted += item.count
+  }
+  return { total, blocked, gifted }
+}
+
+/**
+ * Inviters worth a look: MIN_SIGNAL_COUNT or more unpaid spenders, or as
+ * many gifts blocked, in the range.
+ */
+export function suspectInviters(data: RiskInsights | undefined): {
+  unpaid: number
+  blocked: number
+} {
+  return {
+    unpaid: (data?.unpaid_inviters ?? []).filter(
+      (row) => row.user_id > 0 && row.accounts >= MIN_SIGNAL_COUNT
+    ).length,
+    blocked: (data?.gift_block_inviters ?? []).filter(
+      (row) => row.user_id > 0 && row.blocked >= MIN_SIGNAL_COUNT
+    ).length,
+  }
 }
 
 /**

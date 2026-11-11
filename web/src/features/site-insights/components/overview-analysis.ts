@@ -477,8 +477,30 @@ export function overviewExtraSignals(
 }
 
 /**
+ * What the billed upstreams cost over the range, in yuan: bills in each
+ * upstream's quota dollars, taken one for one, and fees in real US dollars
+ * at rate. Cost on channels that earned nothing in the range is included.
+ * Undefined from a server that does not send it.
+ */
+export function upstreamCost(
+  finance: FinanceInsights | undefined,
+  rate: number
+): number | undefined {
+  if (!finance?.vendor_upstream) return undefined
+  let bill = finance.upstream_unattributed_bill_usd ?? 0
+  let fee = finance.upstream_unattributed_fee_usd ?? 0
+  for (const row of finance.vendor_upstream) {
+    bill += row.bill_usd
+    fee += row.fee_usd
+  }
+  return bill + fee * rate
+}
+
+/**
  * Revenue earned in the range and the gross margin on it after the pool
- * accounts' cost, colored as the funds tab's verdict.
+ * accounts' cost and, from a server that sends them, the upstreams' bills
+ * and fees, colored as the funds tab's verdict. missing while finance has
+ * not loaded.
  */
 export function marginCard(
   t: TFunction,
@@ -487,32 +509,45 @@ export function marginCard(
   rate: number
 ): MetricItem {
   const label = t('Gross margin')
-  const help = t(
-    'Revenue earned from what customers used, less what the pool’s accounts cost over the range.'
-  )
-  const rows = finance ? vendorMargins(finance, rate) : []
+  const upstream = upstreamCost(finance, rate)
+  const help =
+    upstream === undefined
+      ? t(
+          'Revenue earned from what customers used, less what the pool’s accounts cost over the range.'
+        )
+      : t(
+          'Revenue earned from what customers used, less what the pool’s accounts cost over the range and the upstreams’ bills and monthly fees. A bill is in that upstream’s own quota dollars, taken one for one; a fee is in US dollars at the site’s exchange rate.'
+        )
+  if (!finance) return { label, help, value: '-', missing: true }
+  const rows = vendorMargins(finance, rate)
   const revenue = rows.reduce((sum, row) => sum + row.revenue, 0)
-  if (!finance || revenue <= 0) {
+  if (revenue <= 0) {
     return {
       label,
       help,
       value: '-',
-      hint: finance
-        ? t('Earned {{amount}}', {
-            amount: fmt.cny(finance.recognized_revenue ?? 0),
-          })
-        : undefined,
+      hint: t('Earned {{amount}}', {
+        amount: fmt.cny(finance.recognized_revenue ?? 0),
+      }),
     }
   }
-  const margin = revenue - rows.reduce((sum, row) => sum + row.cost, 0)
+  const pool = rows.reduce((sum, row) => sum + row.cost, 0)
+  const margin = revenue - pool - (upstream ?? 0)
   return {
     label,
     help,
     value: fmt.cny(margin),
     tone: marginTone(revenue, margin),
-    hint: t('{{rate}} of {{earned}} earned', {
-      rate: fmt.pct(margin / revenue),
-      earned: fmt.cny(revenue),
-    }),
+    hint:
+      upstream === undefined
+        ? t('{{rate}} of {{earned}} earned', {
+            rate: fmt.pct(margin / revenue),
+            earned: fmt.cny(revenue),
+          })
+        : t('{{rate}} of {{earned}} earned; upstreams {{upstream}}', {
+            rate: fmt.pct(margin / revenue),
+            earned: fmt.cny(revenue),
+            upstream: fmt.cny(upstream),
+          }),
   }
 }

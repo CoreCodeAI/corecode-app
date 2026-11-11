@@ -20,25 +20,34 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { TapTooltip, TapTooltipTrigger } from '@/components/tap-tooltip'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 import { alignPrevious } from '../analysis'
 import {
+  claudeCoverage,
+  dayInProgress,
   hourSpan,
   lastFullDay,
   perActiveUser,
   signupBurst,
   stickiness,
+  viewState,
+  type ViewState,
 } from '../growth-analysis'
 import {
+  joinSentences,
   MIN_COHORT,
+  tableState,
   useChargeFormat,
   useHourAxis,
+  useInsightsDefinitions,
   useInsightsFormat,
   useSignupMethodLabel,
   type InsightsRangeInfo,
+  type InsightsSources,
   type InsightsTab,
 } from '../lib'
 import type {
@@ -76,6 +85,7 @@ export function GrowthTab(props: {
   businessPrevious?: BusinessInsights
   range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
+  sources?: InsightsSources
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -85,8 +95,15 @@ export function GrowthTab(props: {
   const data = props.data
   const previous = props.previous
   const range = props.range
+  const state = viewState(data, props.sources?.view)
+  const failed = state === 'error'
+  const viewError = failed ? t('Could not be read') : undefined
+  const previousError =
+    !previous && props.sources?.previous.status === 'error'
+      ? t('The previous period could not be read, so no change is shown.')
+      : undefined
   const cohortHelp = t(
-    'Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.'
+    'Accounts created in the range, followed up to now. Activated: a request of theirs came back with usage (tokens or a charge) at any time up to now. Paid: completed a gateway order. Accounts deleted since are left out; the risk tab counts them.'
   )
   const funnel = data?.funnel
   const registered = funnel?.registered ?? 0
@@ -190,15 +207,16 @@ export function GrowthTab(props: {
   return (
     <div className='grid gap-4'>
       <Verdict
-        loading={!props.data}
+        loading={state === 'loading'}
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text}
       />
       <MetricGrid
-        loading={!data}
+        loading={state === 'loading'}
         items={[
           {
             label: t('Registered'),
+            missing: failed,
             featured: true,
             value: fmt.num(funnel?.registered ?? 0),
             help: cohortHelp,
@@ -220,11 +238,12 @@ export function GrowthTab(props: {
           },
           {
             label: t('Activated'),
+            missing: failed,
             value: fmt.num(funnel?.activated ?? 0),
             hint: sofar(rate(funnel?.activated ?? 0, registered)),
             help: young
               ? t(
-                  'Accounts created in the range sent a request. They signed up hours ago, so the rate is not judged until a longer range.'
+                  'Accounts created in the range that had a request come back with usage (tokens or a charge). They signed up hours ago, so the rate is not judged until a longer range.'
                 )
               : cohortHelp,
             tone:
@@ -236,12 +255,14 @@ export function GrowthTab(props: {
           },
           {
             label: t('Has paid'),
+            missing: failed,
             value: fmt.num(funnel?.paid ?? 0),
             hint: sofar(rate(funnel?.paid ?? 0, registered)),
             help: cohortHelp,
           },
           {
             label: t('Paid again'),
+            missing: failed,
             value: fmt.num(funnel?.repeat ?? 0),
             hint: t('{{rate}} of payers', {
               rate: rate(funnel?.repeat ?? 0, funnel?.paid ?? 0),
@@ -249,6 +270,7 @@ export function GrowthTab(props: {
           },
           {
             label: t('Plan → top-up'),
+            missing: failed,
             value: fmt.num(data?.subscription_to_topup ?? 0),
             hint: t('{{rate}} of {{count}} plan buyers', {
               rate: rate(
@@ -292,25 +314,32 @@ export function GrowthTab(props: {
           />
         </Panel>
       ) : (
-        <Panel title={t('Sign-ups by day and what they did')} help={cohortHelp}>
-          <BarSeries
-            ariaLabel={t('Sign-ups by day')}
-            series={signupSeries}
-            points={(data?.daily ?? []).map((day) => ({
-              key: day.day,
-              title: fmt.day(day.day),
-              values: [
-                day.paid,
-                Math.max(day.activated - day.paid, 0),
-                Math.max(day.registered - day.activated, 0),
-              ],
-            }))}
-          />
+        <Panel
+          title={t('Sign-ups by day and what they did')}
+          help={cohortHelp}
+          error={viewError}
+        >
+          {!failed && (
+            <BarSeries
+              ariaLabel={t('Sign-ups by day')}
+              series={signupSeries}
+              points={(data?.daily ?? []).map((day) => ({
+                key: day.day,
+                title: fmt.day(day.day),
+                values: [
+                  day.paid,
+                  Math.max(day.activated - day.paid, 0),
+                  Math.max(day.registered - day.activated, 0),
+                ],
+              }))}
+            />
+          )}
         </Panel>
       )}
       <SignupDriversPanel
         data={data}
         previous={previous}
+        previousError={previousError}
         range={range}
         onOpen={props.onOpen}
       />
@@ -318,16 +347,19 @@ export function GrowthTab(props: {
         title={t('Sign-up funnel')}
         description={funnelSentence}
         help={cohortHelp}
+        error={viewError}
       >
-        <FunnelChart
-          loading={!data}
-          steps={[
-            { label: t('Registered'), value: funnel?.registered ?? 0 },
-            { label: t('Activated'), value: funnel?.activated ?? 0 },
-            { label: t('Has paid'), value: funnel?.paid ?? 0 },
-            { label: t('Paid again'), value: funnel?.repeat ?? 0 },
-          ]}
-        />
+        {!failed && (
+          <FunnelChart
+            loading={!data}
+            steps={[
+              { label: t('Registered'), value: funnel?.registered ?? 0 },
+              { label: t('Activated'), value: funnel?.activated ?? 0 },
+              { label: t('Has paid'), value: funnel?.paid ?? 0 },
+              { label: t('Paid again'), value: funnel?.repeat ?? 0 },
+            ]}
+          />
+        )}
       </Panel>
       <div className='grid gap-4 lg:grid-cols-2'>
         <Panel title={t('Funnel by sign-up method')}>
@@ -337,6 +369,7 @@ export function GrowthTab(props: {
             faded={small}
             empty={t('No sign-ups in this range')}
             columns={columnsWith(previous?.by_source)}
+            state={tableState(props.sources?.view, data?.by_source)}
           />
         </Panel>
         <Panel title={t('Funnel by referral')}>
@@ -346,11 +379,18 @@ export function GrowthTab(props: {
             faded={small}
             empty={t('No sign-ups in this range')}
             columns={columnsWith(previous?.by_invite)}
+            state={tableState(props.sources?.view, data?.by_invite)}
           />
         </Panel>
       </div>
-      <ReferralPanel data={props.business} previous={props.businessPrevious} />
-      <GroupsPanel data={props.business} />
+      <ReferralPanel
+        data={props.business}
+        previous={props.businessPrevious}
+        source={props.sources?.business}
+        previousSource={props.sources?.businessPrevious}
+        range={range}
+      />
+      <GroupsPanel data={props.business} source={props.sources?.business} />
     </div>
   )
 }
@@ -363,14 +403,30 @@ export function ActivityTab(props: {
   previous?: ActivityInsights
   range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
+  sources?: InsightsSources
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const defs = useInsightsDefinitions()
   const verdict = useActivityVerdict(props.data, props.previous)
   const data = props.data
   const charge = useChargeFormat(data)
   const previous = props.previous
   const range = props.range
+  const state = viewState(data, props.sources?.view)
+  const failed = state === 'error'
+  const viewError = failed ? t('Could not be read') : undefined
+  const previousError =
+    !previous && props.sources?.previous.status === 'error'
+      ? t('The previous period could not be read, so no change is shown.')
+      : undefined
+  // An older server counts root in every figure and sends no root_quota_usd.
+  const customersOnly = data?.root_quota_usd != null
+  const rootQuota = data?.root_quota_usd ?? 0
+  const activeHelp = t(
+    'A user is active when a request of theirs came back with usage (tokens or a charge); a request that came back with none does not count.'
+  )
+  const coverage = claudeCoverage(data)
   const daily = data?.daily ?? []
   const last = daily.at(-1)
   const hourly =
@@ -392,9 +448,14 @@ export function ActivityTab(props: {
   const engineByDay = new Map(
     (engine?.daily ?? []).map((day) => [day.day, day])
   )
-  const engineHelp = t(
-    'What the Claude requests in the range cost at Anthropic’s official prices, as corecode-engine priced each one. Consumption is what new-api charged for every model at its own ratios.'
-  )
+  const claudeCharged = data?.claude_quota_usd != null
+  const engineHelp = claudeCharged
+    ? t(
+        'What the Claude requests in the range cost at Anthropic’s official prices, as corecode-engine priced each one. Claude’s charge is what new-api charged customers for Claude models at its own ratios, on the days the engine reported, through every channel that served them.'
+      )
+    : t(
+        'What the Claude requests in the range cost at Anthropic’s official prices, as corecode-engine priced each one. Consumption is what new-api charged for every model at its own ratios.'
+      )
   const total = data?.engine_total
   const totalReady = !!total?.configured && !total.error
   const totalByDay = new Map(
@@ -464,19 +525,41 @@ export function ActivityTab(props: {
         usd: fmt.usd(charge.toUSD(quota)),
         cny: fmt.cny(quota),
       })
+  let claudeSentence: string | undefined
+  if (coverage?.claudeOnly) {
+    claudeSentence = t(
+      'Claude charged {{charged}} against {{official}} at official prices, on the days the engine reported.',
+      {
+        charged: charge.usd(charge.toUSD(coverage.charged)),
+        official: fmt.usd(coverage.official),
+      }
+    )
+  } else if (coverage) {
+    claudeSentence = t(
+      'Charged {{charged}} against {{official}} at official prices.',
+      {
+        charged: charge.usd(charge.toUSD(coverage.charged)),
+        official: fmt.usd(coverage.official),
+      }
+    )
+  }
 
   return (
     <div className='grid gap-4'>
       <Verdict
-        loading={!props.data}
+        loading={state === 'loading'}
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text}
       />
       <MetricGrid
-        loading={!data}
+        loading={state === 'loading'}
         items={[
           {
             label: t('Active users'),
+            missing: failed,
+            help: customersOnly
+              ? joinSentences(activeHelp, defs.customers)
+              : activeHelp,
             featured: true,
             value: fmt.num(data?.active_users ?? 0),
             delta: {
@@ -501,16 +584,29 @@ export function ActivityTab(props: {
           },
           {
             label: t('Consumption'),
-            help: t(
-              'What new-api charged, in dollars at the site’s exchange rate: quota dollars that customers pay ¥1 each for, so yuan. Below, the yuan, and what gpt-load’s requests for every model were worth at official prices.'
-            ),
+            missing: failed,
+            help: customersOnly
+              ? t(
+                  'What new-api charged customers, in dollars at the site’s exchange rate: quota dollars that customers pay ¥1 each for, so yuan. Root’s own use is left out and shown below on its own. Below, the yuan, and what gpt-load’s requests for every model were worth at official prices.'
+                )
+              : t(
+                  'What new-api charged, in dollars at the site’s exchange rate: quota dollars that customers pay ¥1 each for, so yuan. Below, the yuan, and what gpt-load’s requests for every model were worth at official prices.'
+                ),
             value: fmt.usd(charge.toUSD(quota)),
-            hint: totalReady
-              ? t('{{cny}} · gpt-load {{engine}}', {
-                  cny: fmt.cny(quota),
-                  engine: fmt.usd(total.cost_usd),
-                })
-              : fmt.cny(quota),
+            hint: [
+              totalReady
+                ? t('{{cny}} · gpt-load {{engine}}', {
+                    cny: fmt.cny(quota),
+                    engine: fmt.usd(total.cost_usd),
+                  })
+                : fmt.cny(quota),
+              rootQuota > 0 &&
+                t('root {{amount}} apart', {
+                  amount: fmt.usd(charge.toUSD(rootQuota)),
+                }),
+            ]
+              .filter(Boolean)
+              .join(' · '),
             delta: {
               current: data?.quota_usd ?? 0,
               previous: previous?.quota_usd,
@@ -519,6 +615,15 @@ export function ActivityTab(props: {
           },
           {
             label: t('Requests'),
+            missing: failed,
+            help: customersOnly
+              ? joinSentences(
+                  t(
+                    'Every logged request, those that came back with no usage included.'
+                  ),
+                  defs.customers
+                )
+              : undefined,
             value: fmt.num(data?.requests ?? 0),
             delta: {
               current: data?.requests ?? 0,
@@ -528,6 +633,7 @@ export function ActivityTab(props: {
           },
           {
             label: t('Claude official cost'),
+            missing: failed,
             value: engineReady ? fmt.usd(engine.cost_usd) : '-',
             hint: engineReady
               ? t('{{count}} requests in corecode-engine', {
@@ -547,6 +653,7 @@ export function ActivityTab(props: {
           },
           {
             label: t('Per active user'),
+            missing: failed,
             value: perUser == null ? '-' : fmt.usd(charge.toUSD(perUser)),
             hint: t('Consumption per active user'),
             delta:
@@ -556,6 +663,7 @@ export function ActivityTab(props: {
           },
           {
             label: t('Stickiness'),
+            missing: failed,
             value: sticky == null ? '-' : fmt.pct(sticky),
             hint: fullDay
               ? t('DAU ÷ WAU on {{day}}', { day: fmt.day(fullDay.day) })
@@ -575,13 +683,17 @@ export function ActivityTab(props: {
           },
           {
             label: t('Top 3 share'),
+            missing: failed,
             value: fmt.pct(data?.top3_share ?? 0),
             hint: t('Top 1: {{top1}} · Top 10: {{top10}}', {
               top1: fmt.pct(data?.top1_share ?? 0),
               top10: fmt.pct(data?.top10_share ?? 0),
             }),
-            help: t(
-              'Share of consumption from the three largest customers. Colored above 60%, where losing one customer moves the total.'
+            help: joinSentences(
+              t(
+                'Share of consumption from the three largest customers. Colored above 60%, where losing one customer moves the total.'
+              ),
+              customersOnly && defs.customers
             ),
             tone: (data?.top3_share ?? 0) > 0.6 ? 'warning' : 'default',
             delta: {
@@ -606,20 +718,27 @@ export function ActivityTab(props: {
         </div>
       ) : (
         <div className='grid gap-4 lg:grid-cols-2'>
-          <Panel title={t('Daily active users')}>
-            <BarSeries
-              ariaLabel={t('Daily active users')}
-              series={[{ label: t('DAU') }]}
-              points={daily.map((day) => ({
-                key: day.day,
-                title: fmt.day(day.day),
-                values: [day.dau],
-                extra: [{ label: t('WAU'), value: fmt.num(day.wau) }],
-              }))}
-            />
+          <Panel
+            title={t('Daily active users')}
+            help={activeHelp}
+            error={viewError}
+          >
+            {!failed && (
+              <BarSeries
+                ariaLabel={t('Daily active users')}
+                series={[{ label: t('DAU') }]}
+                points={daily.map((day) => ({
+                  key: day.day,
+                  title: fmt.day(day.day),
+                  values: [day.dau],
+                  extra: [{ label: t('WAU'), value: fmt.num(day.wau) }],
+                }))}
+              />
+            )}
           </Panel>
           <Panel
             title={t('Daily consumption')}
+            error={viewError}
             help={t(
               'Three measures of the same use. new-api, US$ and ¥: what new-api charged for every model, quota dollars that customers pay ¥1 each for, so yuan, and in dollars at the site’s exchange rate. gpt-load value: what gpt-load’s requests for every model were worth at official prices, the unit the pool’s quota is in.'
             )}
@@ -635,73 +754,69 @@ export function ActivityTab(props: {
               .filter(Boolean)
               .join(' ')}
             actions={
-              <ToggleGroup
-                variant='outline'
-                size='sm'
-                aria-label={t('Measure')}
-                value={[measure]}
-                onValueChange={(value: string[]) => {
-                  const next = value.at(-1) as SpendMeasure | undefined
-                  if (next) setPicked(next)
-                }}
-              >
-                <ToggleGroupItem value='usd' aria-label={measures.usd.label}>
-                  US$
-                </ToggleGroupItem>
-                <ToggleGroupItem value='cny' aria-label={measures.cny.label}>
-                  ¥
-                </ToggleGroupItem>
-                <ToggleGroupItem
-                  value='engine'
-                  aria-label={measures.engine.label}
-                  disabled={!totalReady}
+              failed ? undefined : (
+                <ToggleGroup
+                  variant='outline'
+                  size='sm'
+                  aria-label={t('Measure')}
+                  value={[measure]}
+                  onValueChange={(value: string[]) => {
+                    const next = value.at(-1) as SpendMeasure | undefined
+                    if (next) setPicked(next)
+                  }}
                 >
-                  gpt-load
-                </ToggleGroupItem>
-              </ToggleGroup>
+                  <ToggleGroupItem value='usd' aria-label={measures.usd.label}>
+                    US$
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value='cny' aria-label={measures.cny.label}>
+                    ¥
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value='engine'
+                    aria-label={measures.engine.label}
+                    disabled={!totalReady}
+                  >
+                    gpt-load
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              )
             }
           >
-            <div className='grid gap-2'>
-              <BarSeries
-                ariaLabel={t('Daily consumption')}
-                series={[
-                  {
-                    label: shown.label,
-                    format: shown.format,
-                    compact: shown.compact,
-                  },
-                ]}
-                points={spendPoints}
-              />
-              {total?.error && (
-                <p className='text-destructive text-xs'>{total.error}</p>
-              )}
-              {measure === 'engine' && (total?.unpriced_requests ?? 0) > 0 && (
-                <p className='text-muted-foreground text-xs'>
-                  {t(
-                    '{{count}} requests had no gpt-load price and are not in its value.',
-                    { count: total?.unpriced_requests }
+            {!failed && (
+              <div className='grid gap-2'>
+                <BarSeries
+                  ariaLabel={t('Daily consumption')}
+                  series={[
+                    {
+                      label: shown.label,
+                      format: shown.format,
+                      compact: shown.compact,
+                    },
+                  ]}
+                  points={spendPoints}
+                />
+                {total?.error && (
+                  <p className='text-destructive text-xs'>{total.error}</p>
+                )}
+                {measure === 'engine' &&
+                  (total?.unpriced_requests ?? 0) > 0 && (
+                    <p className='text-muted-foreground text-xs'>
+                      {t(
+                        '{{count}} requests had no gpt-load price and are not in its value.',
+                        { count: total?.unpriced_requests }
+                      )}
+                    </p>
                   )}
-                </p>
-              )}
-            </div>
+              </div>
+            )}
           </Panel>
         </div>
       )}
       <Panel
         title={t('Daily Claude cost at official prices')}
         help={engineHelp}
-        description={
-          engineReady && engine.cost_usd > 0
-            ? t(
-                'Charged {{charged}} against {{official}} at official prices.',
-                {
-                  charged: charge.usd(charge.toUSD(quota)),
-                  official: fmt.usd(engine.cost_usd),
-                }
-              )
-            : undefined
-        }
+        error={viewError}
+        description={claudeSentence}
       >
         {engine && !engine.configured && (
           <p className='text-muted-foreground text-sm'>
@@ -713,7 +828,7 @@ export function ActivityTab(props: {
         {engine?.error && (
           <p className='text-destructive text-sm'>{engine.error}</p>
         )}
-        {(!engine || engineReady) && (
+        {!failed && (!engine || engineReady) && (
           <BarSeries
             ariaLabel={t('Daily Claude cost at official prices')}
             series={[
@@ -730,10 +845,17 @@ export function ActivityTab(props: {
                 title: fmt.day(day.day),
                 values: [official?.cost_usd ?? 0],
                 extra: [
-                  {
-                    label: t('Charged'),
-                    value: charge.usd(charge.toUSD(day.quota_usd)),
-                  },
+                  claudeCharged
+                    ? {
+                        label: t('Claude charged'),
+                        value: charge.usd(
+                          charge.toUSD(day.claude_quota_usd ?? 0)
+                        ),
+                      }
+                    : {
+                        label: t('Charged'),
+                        value: charge.usd(charge.toUSD(day.quota_usd)),
+                      },
                   {
                     label: t('Claude requests'),
                     value: fmt.num(official?.requests ?? 0),
@@ -747,24 +869,43 @@ export function ActivityTab(props: {
       <Panel
         title={t('Retention by sign-up day')}
         help={t(
-          'Share of each day’s sign-ups that sent a request N days later. Day 0 is the sign-up day.'
+          'Share of each day’s sign-ups active N days later: a request of theirs came back with usage (tokens or a charge). Day 0 is the sign-up day. A faded cell is a day still in progress.'
         )}
+        error={viewError}
       >
-        {range?.hourly ? (
-          <RetentionNeedsRange />
-        ) : (
-          <RetentionGrid data={data} />
+        {range?.hourly && <RetentionNeedsRange />}
+        {!range?.hourly && !failed && (
+          <RetentionGrid data={data} state={state} end={range?.end} />
         )}
       </Panel>
-      <TopCustomersPanel data={data} previous={previous} />
+      <TopCustomersPanel
+        data={data}
+        previous={previous}
+        previousError={previousError}
+        state={tableState(props.sources?.view, data?.top_users)}
+      />
     </div>
   )
 }
 
-function RetentionGrid(props: { data: ActivityInsights | undefined }) {
+function RetentionGrid(props: {
+  data: ActivityInsights | undefined
+  state: ViewState
+  /** The range's end, unix seconds: a day that had not ended by it is in progress. */
+  end?: number
+}) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const cohorts = props.data?.retention ?? []
+  const end = props.end
+  if (props.state === 'loading') {
+    return (
+      <div role='status' aria-label={t('Loading...')} className='grid gap-2'>
+        <Skeleton className='h-4 w-full' />
+        <Skeleton className='h-4 w-full' />
+      </div>
+    )
+  }
   if (cohorts.length === 0) {
     return (
       <p className='text-muted-foreground text-xs'>
@@ -797,6 +938,14 @@ function RetentionGrid(props: { data: ActivityInsights | undefined }) {
                 <td className='pr-3 text-right'>{cohort.size}</td>
                 {Array.from({ length: width }, (_, day) => {
                   const value = cohort.days?.[day]
+                  const partial =
+                    end != null && dayInProgress(cohort.day + day * 86400, end)
+                  const reading = {
+                    share: fmt.pct(value ?? 0),
+                    size: fmt.num(cohort.size),
+                    day: fmt.day(cohort.day),
+                    n: day,
+                  }
                   return (
                     <td key={day} className='p-0.5'>
                       {value == null ? null : (
@@ -807,7 +956,8 @@ function RetentionGrid(props: { data: ActivityInsights | undefined }) {
                                 tabIndex={0}
                                 className={cn(
                                   'hover:ring-foreground/30 focus-visible:ring-ring/50 block cursor-default rounded px-1 py-0.5 text-center outline-none hover:ring-1 focus-visible:ring-2',
-                                  value > 0.5 && 'text-primary-foreground'
+                                  value > 0.5 && 'text-primary-foreground',
+                                  partial && 'opacity-50'
                                 )}
                                 style={{
                                   backgroundColor: `color-mix(in oklab, var(--primary) ${Math.round(value * 100)}%, transparent)`,
@@ -818,15 +968,15 @@ function RetentionGrid(props: { data: ActivityInsights | undefined }) {
                             {Math.round(value * 100)}
                           </TapTooltipTrigger>
                           <TooltipContent>
-                            {t(
-                              '{{share}} of the {{size}} users who signed up {{day}} sent requests on D{{n}}',
-                              {
-                                share: fmt.pct(value),
-                                size: fmt.num(cohort.size),
-                                day: fmt.day(cohort.day),
-                                n: day,
-                              }
-                            )}
+                            {partial
+                              ? t(
+                                  '{{share}} of the {{size}} users who signed up {{day}} were active on D{{n}} so far; the day is still in progress.',
+                                  reading
+                                )
+                              : t(
+                                  '{{share}} of the {{size}} users who signed up {{day}} were active on D{{n}}',
+                                  reading
+                                )}
                           </TooltipContent>
                         </TapTooltip>
                       )}

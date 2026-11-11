@@ -23,7 +23,7 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
-import { poolUse } from '../finance-analysis'
+import { claudeEarned, poolUse } from '../finance-analysis'
 import {
   accountPrice,
   PRICE_MONTH_DAYS,
@@ -94,6 +94,12 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
   const coveredCost = perDayUSD * coveredDays
   const officialPerCost = coveredCost > 0 ? official / coveredCost : 0
   const chargedPerCost = coveredCost > 0 ? charged / coveredCost : 0
+  const earned = claudeEarned(data, coveredDays, rangeDays)
+  const earnedPerCost =
+    earned && coveredCost > 0
+      ? charge.toUSD(earned.earnedYuan) / coveredCost
+      : 0
+  const earnedPerCharge = earned?.perCharge ?? null
   const hasCost = monthlyUSD > 0
   const dayCount = (value: number) => fmt.num(Math.round(value * 10) / 10)
   const ratio = (value: number) => (value > 0 ? fmt.multiple(value) : '-')
@@ -141,7 +147,19 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
     }
   }
   let breakEven: string | undefined
-  if (poolFit && hasCost) {
+  const earnedPerDay =
+    earned && coveredDays > 0
+      ? charge.toUSD(earned.earnedYuan) / coveredDays
+      : null
+  if (poolFit && hasCost && earnedPerDay != null) {
+    breakEven = t(
+      'The accounts break even at {{breakEven}} of Claude revenue earned a day; it earned {{earned}} a day.',
+      {
+        breakEven: charge.usd(poolFit.breakEven),
+        earned: charge.usd(earnedPerDay),
+      }
+    )
+  } else if (poolFit && hasCost) {
     breakEven = t(
       'The accounts break even at {{breakEven}} of new-api Claude charge a day; it charged {{charged}} a day.',
       {
@@ -211,7 +229,7 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
             dot={COST}
             label={t('Account cost in this range')}
             help={t(
-              'The monthly price of every Claude account in the pool, divided by 30 and multiplied by the range’s days.'
+              'The monthly price of every Claude account in the pool now, divided by 30 and multiplied by the range’s days. Accounts bought or dropped during the range are not reflected.'
             )}
             value={hasCost ? fmt.usd(rangeCost) : '-'}
             hint={
@@ -262,27 +280,50 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
                 : undefined
             }
           />
-          <Figure
-            result
-            loading={!data}
-            formula={[CHARGE, COST]}
-            label={t('new-api ÷ account cost')}
-            help={t(
-              'new-api’s charge in dollars divided by the account cost of the same days. Below 1×, red, the charge does not cover what the accounts cost.'
-            )}
-            value={ratio(chargedPerCost)}
-            tone={
-              chargedPerCost > 0 && chargedPerCost < 1 ? 'danger' : undefined
-            }
-            hint={
-              chargedPerCost > 0
-                ? t(
-                    'Each $1 of account cost brings {{amount}} of new-api charge.',
-                    { amount: charge.usd(chargedPerCost) }
-                  )
-                : undefined
-            }
-          />
+          {earned ? (
+            <Figure
+              result
+              loading={!data}
+              formula={[CHARGE, COST]}
+              label={t('Earned ÷ account cost')}
+              help={t(
+                'Claude’s revenue earned over the days gpt-load reported, root’s use and given credit left out, divided by the account cost of the same days: whether the accounts pay for themselves. Below 1×, red. The usage multiple beside it divides new-api’s Claude charge instead, root, gifted balance and plan use included: how much use the accounts carry, not what they earn.'
+              )}
+              value={ratio(earnedPerCost)}
+              tone={
+                earnedPerCost > 0 && earnedPerCost < 1 ? 'danger' : undefined
+              }
+              hint={
+                chargedPerCost > 0
+                  ? t(
+                      'Usage multiple {{multiple}} (new-api charge ÷ account cost)',
+                      {
+                        multiple: ratio(chargedPerCost),
+                      }
+                    )
+                  : undefined
+              }
+            />
+          ) : (
+            <Figure
+              result
+              loading={!data}
+              formula={[CHARGE, COST]}
+              label={t('new-api ÷ account cost')}
+              help={t(
+                'A usage multiple: new-api’s Claude charge in dollars, root, gifted balance and plan use included, divided by the account cost of the same days. It reads how much use the accounts carry, not what they earn; Gross margin by vendor sets revenue earned against the same cost.'
+              )}
+              value={ratio(chargedPerCost)}
+              hint={
+                chargedPerCost > 0
+                  ? t(
+                      'Each $1 of account cost carries {{amount}} of new-api charge.',
+                      { amount: charge.usd(chargedPerCost) }
+                    )
+                  : undefined
+              }
+            />
+          )}
         </div>
 
         {advice && (
@@ -295,7 +336,8 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
             {breakEven && (
               <span
                 className={cn(
-                  poolFit && poolFit.chargedPerDay < poolFit.breakEven
+                  poolFit &&
+                    (earnedPerDay ?? poolFit.chargedPerDay) < poolFit.breakEven
                     ? TONES.danger
                     : 'text-muted-foreground'
                 )}
@@ -553,15 +595,23 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
               {
                 key: 'payback',
                 label: t('Value ÷ price'),
-                hint: t(
-                  'The new-api value per month divided by the plan’s monthly price: how many times one account earns back its price.'
-                ),
+                hint:
+                  earnedPerCharge != null
+                    ? t(
+                        'What a month of one account earns, the new-api value per month times Claude’s revenue earned per yuan charged, divided by the plan’s monthly price: how many times one account earns back its price.'
+                      )
+                    : t(
+                        'The new-api value per month divided by the plan’s monthly price: charge, not revenue, so root, gifted and plan use count as if paid.'
+                      ),
                 align: 'right',
                 render: (row) => {
                   const price = accountPrice(row.plan, row.tier)
                   if (!price || multiple <= 0) return '-'
                   return fmt.multiple(
-                    (((row.week_usd * 30) / 7) * multiple) / price.monthlyUSD
+                    (((row.week_usd * 30) / 7) *
+                      multiple *
+                      (earnedPerCharge ?? 1)) /
+                      price.monthlyUSD
                   )
                 },
               },

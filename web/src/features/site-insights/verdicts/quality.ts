@@ -26,6 +26,7 @@ import {
   useVendorName,
 } from '../lib'
 import {
+  failingTaskModels,
   failingWindow,
   failsAboveSite,
   failureDrivers,
@@ -129,6 +130,23 @@ export function useQualityVerdict(
     ? mixShift(p95.now, p95.before, data.vendors, previous?.vendors)
     : null
 
+  const failingTasks = failingTaskModels(data.tasks)
+  if (failingTasks.length > 0) tone = worse(tone, 'warning')
+  const tasks =
+    failingTasks.length > 0
+      ? t('{{model}} tasks fail {{rate}} after submission.', {
+          model: failingTasks[0].model,
+          rate: fmt.pct(failingTasks[0].failure_rate),
+        })
+      : null
+  const noChannel = data.refusals?.no_channel ?? 0
+  const refused =
+    noChannel > 0
+      ? t('{{count}} requests found no channel.', {
+          count: fmt.num(noChannel),
+        })
+      : null
+
   const hourly = data.hourly ?? []
   const end = options?.end ?? (hourly.at(-1)?.hour ?? 0) + 1
   const window = failingWindow(hourFlags(hourly, previous?.hourly, end))
@@ -183,7 +201,9 @@ export function useQualityVerdict(
         t('Failing most: {{model}} at {{rate}}.', {
           model: failing[0].model,
           rate: fmt.pct(failing[0].error_rate),
-        })
+        }),
+      tasks,
+      refused
     ),
   }
 }

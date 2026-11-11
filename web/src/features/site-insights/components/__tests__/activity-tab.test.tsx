@@ -171,6 +171,88 @@ describe('daily consumption', () => {
   })
 })
 
+describe('customers only, Claude against Claude, and the open day', () => {
+  const engine: EngineDailyCost = {
+    configured: true,
+    cost_usd: 12.5,
+    requests: 3,
+    daily: [{ day: day(1), cost_usd: 12.5, requests: 3 }],
+  }
+
+  it('compares Claude’s own charge on the engine’s days and shows root apart', () => {
+    render(
+      <ActivityTab
+        data={activity(engine, {
+          claude_quota_usd: 14,
+          root_quota_usd: 16,
+          daily: [
+            {
+              day: day(0),
+              dau: 1,
+              wau: 1,
+              requests: 4,
+              quota_usd: 10,
+              claude_quota_usd: 6,
+            },
+            {
+              day: day(1),
+              dau: 2,
+              wau: 2,
+              requests: 5,
+              quota_usd: 20,
+              claude_quota_usd: 8,
+            },
+          ],
+        })}
+      />
+    )
+    // ¥8 on the one day the engine reported, at ¥8 a dollar.
+    expect(
+      screen.getByText(
+        /^Claude charged \$1\.00 \(¥8.*\) against \$12\.50 at official prices, on the days the engine reported\.$/
+      )
+    ).toBeInTheDocument()
+    const bars = screen
+      .getByRole('list', { name: 'Daily Claude cost at official prices' })
+      .querySelectorAll('[tabindex="0"]')
+    expect(bars[1].getAttribute('aria-label')).toMatch(
+      /Claude charged \$1\.00 \(¥8/
+    )
+    expect(screen.getByText(/root \$2\.00 apart/)).toBeInTheDocument()
+  })
+
+  it('fades and labels a retention cell whose day is still in progress', () => {
+    const range = { start: day(0), end: day(1) + 3600, days: 2, hourly: false }
+    render(
+      <ActivityTab
+        data={activity(engine, {
+          retention: [{ day: day(0), size: 10, days: [0.5, 0.2] }],
+        })}
+        range={range}
+      />
+    )
+    const cells = screen.getAllByText(/^(50|20)$/)
+    expect(cells[0]).not.toHaveClass('opacity-50')
+    expect(cells[1]).toHaveClass('opacity-50')
+  })
+
+  it('says the view could not be read instead of printing zeros', () => {
+    render(
+      <ActivityTab
+        data={undefined}
+        sources={{ view: { status: 'error' }, previous: { status: 'error' } }}
+      />
+    )
+    expect(screen.getAllByText('Could not be read').length).toBeGreaterThan(0)
+    expect(
+      screen.queryByText('No consumption in this range')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('No sign-ups in this range')
+    ).not.toBeInTheDocument()
+  })
+})
+
 describe('a short range', () => {
   const H = 3600
   const T0 = day(0)

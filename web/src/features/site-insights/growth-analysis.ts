@@ -21,8 +21,66 @@ For commercial licensing, please contact support@quantumnous.com
 // consumption, and engagement read from the last full day.
 
 import { closedHours, contributions, type Contribution } from './analysis'
-import { MIN_COHORT } from './lib'
+import { MIN_COHORT, type SourceState } from './lib'
 import type { ActivityInsights, FunnelRow, GrowthHour } from './types'
+
+/** Whether a view's figures are here, still loading, or could not be read. */
+export type ViewState = 'ready' | 'loading' | 'error'
+
+/**
+ * A view's state from its data and query. Without a query state (a caller
+ * that passes none), missing data reads as loading.
+ */
+export function viewState(
+  data: unknown,
+  source: SourceState | undefined
+): ViewState {
+  if (data != null) return 'ready'
+  return source?.status === 'error' ? 'error' : 'loading'
+}
+
+/** Claude's charge set against its official cost from corecode-engine. */
+export type ClaudeCoverage = {
+  /** Quota dollars, which customers pay ¥1 each for, so yuan. */
+  charged: number
+  /** US dollars at Anthropic's official prices. */
+  official: number
+  /** False on an older server, whose charge covers every model. */
+  claudeOnly: boolean
+}
+
+/**
+ * Claude's charge on the days the engine reported, against the engine's
+ * official cost, or null without an engine cost. An older server sends no
+ * Claude charge, and the whole range's charge for every model stands in.
+ */
+export function claudeCoverage(
+  data: ActivityInsights | undefined
+): ClaudeCoverage | null {
+  const engine = data?.engine_cost
+  if (!data || !engine?.configured || engine.error || engine.cost_usd <= 0) {
+    return null
+  }
+  if (data.claude_quota_usd == null) {
+    return {
+      charged: data.quota_usd,
+      official: engine.cost_usd,
+      claudeOnly: false,
+    }
+  }
+  const reported = new Set(engine.daily.map((day) => day.day))
+  const charged = data.daily.reduce(
+    (sum, day) =>
+      reported.has(day.day) ? sum + (day.claude_quota_usd ?? 0) : sum,
+    0
+  )
+  return { charged, official: engine.cost_usd, claudeOnly: true }
+}
+
+/** Whether the day from dayStart had not ended by the range's end. */
+export function dayInProgress(dayStart: number, end: number): boolean {
+  return dayStart + 86400 > end
+}
 
 /** The share of a range's sign-ups in one hour that reads as a burst. */
 export const BURST_SHARE = 0.25

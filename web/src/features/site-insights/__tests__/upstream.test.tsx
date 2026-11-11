@@ -18,15 +18,28 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
 
 import { UpstreamTab } from '../components/upstream-tab'
-import type { UpstreamChannel, UpstreamInsights, UpstreamModel } from '../types'
+import type {
+  TaskOutcome,
+  UpstreamChannel,
+  UpstreamInsights,
+  UpstreamModel,
+} from '../types'
 import {
+  channelTasks,
   channelTokens,
+  faultsOf,
   feeBreakEven,
+  idleDisabled,
+  partialBill,
+  revenuePerRequest,
   routingHints,
   staleCosts,
+  unmatchedCosts,
+  unrescuedOf,
   upstreamChanges,
   upstreamDailySeries,
   upstreamHourSlots,
@@ -437,5 +450,196 @@ describe('UpstreamTab', () => {
     ).toBeGreaterThan(0)
     expect(screen.getAllByText('New this period').length).toBeGreaterThan(0)
     expect(screen.getByText('What changed by channel')).toBeInTheDocument()
+  })
+})
+
+const tasks = (overrides: Partial<TaskOutcome>): TaskOutcome => ({
+  submitted: 0,
+  succeeded: 0,
+  failed: 0,
+  timed_out: 0,
+  running: 0,
+  stalled: 0,
+  failure_rate: 0,
+  finish_p50_s: 0,
+  finish_p95_s: 0,
+  reasons: [],
+  ...overrides,
+})
+
+describe('upstream round 2', () => {
+  it('leaves customers’ own bad requests out of a channel’s failures', () => {
+    const row = channel({
+      id: 4,
+      requests: 70,
+      errors: 30,
+      client_errors: 20,
+      failure_rate: 0.1,
+    })
+    expect(faultsOf(row)).toBe(10)
+    expect(faultsOf(engine)).toBe(120)
+    expect(unrescuedOf(row, new Map([[4, 5]]))).toBe(5)
+    const totals = upstreamTotals({ ...data, channels: [row] })
+    expect(totals.attempts).toBe(100)
+    expect(totals.clientErrors).toBe(20)
+    expect(totals.failureRate).toBeCloseTo(0.1)
+  })
+
+  it('sets only costed revenue against cost each day and keeps the rest apart', () => {
+    const daily = [
+      { ...data.daily[0], client_errors: 20 },
+      data.daily[1],
+      {
+        ...data.daily[1],
+        channel_id: 9,
+        requests: 0,
+        revenue_usd: 30,
+        cost_usd: 0,
+      },
+      {
+        ...data.daily[1],
+        channel_id: 99,
+        requests: 0,
+        revenue_usd: 5,
+        cost_usd: 0,
+      },
+    ]
+    const [day] = upstreamDailySeries(data.channels, daily).days
+    expect(day.revenue).toBe(185)
+    expect(day.costedRevenue).toBe(150)
+    expect(day.uncostedRevenue).toBe(35)
+    expect(day.cost).toBe(21)
+    expect(day.attempts[0]).toBe(256)
+    expect(day.errors[0]).toBe(100)
+    expect(day.failureRates[0]).toBeCloseTo(100 / 256)
+  })
+
+  it('names two channels and folds the rest into one grey series', () => {
+    const third = channel({ id: 5, requests: 10 })
+    const series = upstreamDailySeries(
+      [...data.channels, third],
+      [...data.daily, { ...data.daily[1], channel_id: 5, requests: 10 }]
+    )
+    expect(series.named).toEqual([2, 7])
+    expect(series.hasOther).toBe(true)
+    expect(series.days[0].attempts).toEqual([256, 139, 10])
+  })
+
+  it('marks a bill read from some keys or not read while disabled as partial', () => {
+    expect(partialBill({ ...relay, key_count: 8 })).toEqual({
+      kind: 'keys',
+      read: 5,
+      total: 8,
+    })
+    expect(partialBill({ ...relay, key_count: 1, status: 3 })).toEqual({
+      kind: 'disabled',
+    })
+    expect(partialBill({ ...relay, status: 3 })).toBeNull()
+    expect(partialBill({ ...engine, key_count: 8 })).toBeNull()
+    const rows = upstreamModelComparison(data.models, [
+      engine,
+      { ...relay, key_count: 8 },
+    ])
+    expect(rows.every((row) => row.marginRate === null)).toBe(true)
+  })
+
+  it('lists idle auto-disabled channels, tasks and unmatched bills', () => {
+    const off = channel({ id: 3, status: 3 })
+    const retired = channel({ id: 11, status: 2 })
+    const media = channel({
+      id: 8,
+      status: 3,
+      tasks: tasks({ submitted: 5, failed: 5, failure_rate: 1 }),
+    })
+    const busy = channel({ id: 10, tasks: tasks({ submitted: 50 }) })
+    const view = { ...data, channels: [off, retired, media, busy] }
+    expect(idleDisabled(view).map((row) => row.id)).toEqual([3])
+    expect(channelTasks(view).map((item) => item.channel.id)).toEqual([10, 8])
+    expect(
+      unmatchedCosts({
+        ...data,
+        channels: [
+          { ...relay, unmatched_cost_usd: 2 },
+          { ...engine, unmatched_cost_usd: 3 },
+        ],
+      }).map((row) => row.id)
+    ).toEqual([7])
+  })
+
+  it('divides revenue by customers’ requests where the server sends them', () => {
+    const row = model({ requests: 100, revenue_usd: 40 })
+    expect(revenuePerRequest(row)).toBeCloseTo(0.4)
+    expect(revenuePerRequest({ ...row, customer_requests: 80 })).toBeCloseTo(
+      0.5
+    )
+    expect(revenuePerRequest(model({}))).toBeNull()
+  })
+
+  it('calls no incident on failures the customers caused', () => {
+    const range = { start: H0, end: H0 + 4 * HOUR }
+    const rows = [
+      { ...hour(1, 2, 60, 60), client_errors: 60 },
+      { ...hour(2, 2, 60, 60), client_errors: 60 },
+    ]
+    expect(upstreamIncidents(rows, [], range)).toEqual([])
+  })
+})
+
+describe('UpstreamTab round 2', () => {
+  const wrap = (node: ReactNode) =>
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        {node}
+      </QueryClientProvider>
+    )
+
+  it('shows no figure and no empty list when the view failed', () => {
+    wrap(
+      <UpstreamTab
+        data={undefined}
+        sources={{
+          view: { status: 'error', error: 'upstream view timed out' },
+          previous: { status: 'error' },
+        }}
+      />
+    )
+    expect(
+      screen.getAllByText('upstream view timed out').length
+    ).toBeGreaterThan(0)
+    expect(screen.getAllByText('Could not be read').length).toBeGreaterThan(0)
+    expect(
+      screen.queryByText('No channel has traffic in this range.')
+    ).not.toBeInTheDocument()
+  })
+
+  it('names an auto-disabled channel with its reason and lists tasks', () => {
+    const off = channel({
+      id: 3,
+      name: 'seedance',
+      status: 3,
+      status_reason: 'quota exhausted',
+      status_time: 1794212726,
+      key_count: 1,
+      tasks: tasks({
+        submitted: 30,
+        succeeded: 20,
+        failed: 10,
+        failure_rate: 1 / 3,
+        reasons: [{ name: 'content blocked', count: 6 }],
+      }),
+    })
+    wrap(
+      <UpstreamTab
+        data={{ ...data, channels: [engine, relay, off] }}
+        sources={{
+          view: { status: 'success' },
+          previous: { status: 'success' },
+        }}
+      />
+    )
+    expect(screen.getByText('Auto-disabled')).toBeInTheDocument()
+    expect(screen.getAllByText(/quota exhausted/).length).toBeGreaterThan(0)
+    expect(screen.getByText('Tasks by channel')).toBeInTheDocument()
+    expect(screen.getByText('content blocked (6)')).toBeInTheDocument()
   })
 })

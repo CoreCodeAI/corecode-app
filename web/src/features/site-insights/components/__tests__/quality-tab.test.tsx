@@ -20,7 +20,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { QualityInsights, VendorQuality } from '../../types'
+import type { QualityInsights, TaskOutcome, VendorQuality } from '../../types'
 import { QualityTab } from '../quality-tab'
 
 function figures(overrides: Partial<VendorQuality>): VendorQuality {
@@ -253,5 +253,162 @@ describe('QualityTab diagnosis', () => {
         'Most failures beyond the site’s rate: failing-model, 41% with 30 extra failures.'
       )
     ).toBeInTheDocument()
+  })
+})
+
+describe('QualityTab round 2', () => {
+  const task = (model: string, counts: Partial<TaskOutcome>): TaskOutcome => ({
+    model,
+    submitted: 0,
+    succeeded: 0,
+    failed: 0,
+    timed_out: 0,
+    running: 0,
+    stalled: 0,
+    failure_rate: 0,
+    finish_p50_s: 0,
+    finish_p95_s: 0,
+    reasons: null,
+    ...counts,
+  })
+  const media = {
+    ...data,
+    models: [
+      {
+        model: 'seedance-2.5-720p',
+        vendor: 'media',
+        requests: 200,
+        errors: 0,
+        error_rate: 0,
+        ttft_p50_ms: 0,
+        ttft_p95_ms: 0,
+        latency_p50_s: 0,
+        latency_p95_s: 0,
+        cache_share: 0,
+      },
+    ],
+    status_codes: [{ name: '503', count: 10 }],
+    error_reasons: [{ name: 'No eligible accounts', count: 4 }],
+    tasks: {
+      total: task('', {
+        submitted: 200,
+        succeeded: 140,
+        failed: 40,
+        timed_out: 5,
+        running: 20,
+        stalled: 3,
+        failure_rate: 40 / 180,
+      }),
+      models: [
+        task('seedance-2.5-720p', {
+          submitted: 200,
+          succeeded: 140,
+          failed: 40,
+          timed_out: 5,
+          running: 20,
+          stalled: 3,
+          failure_rate: 40 / 180,
+          finish_p50_s: 90,
+          finish_p95_s: 600,
+          reasons: [{ name: 'content policy', count: 30 }],
+        }),
+      ],
+      channels: null,
+      truncated: false,
+    },
+    refusals: {
+      no_channel: 12,
+      risk_gate: 7,
+      risk_gate_stages: [{ name: 'violation_guard', count: 7 }],
+    },
+  } satisfies QualityInsights
+
+  it('shows media task outcomes, leaves their latency blank and names stuck tasks', () => {
+    render(
+      <QualityTab data={media} models={{ selected: [], onChange: vi.fn() }} />
+    )
+    expect(screen.getByText('Image and video tasks')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /^200 submitted: 140 succeeded, 40 failed \(5 timed out\), 20 still running\./
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByText('90s / 10 min')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        '3 tasks have run over 30 minutes and may be stuck at the supplier.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText('0s / 0s')).not.toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /^1 models have no first-token time, so the map leaves them out/
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'seedance-2.5-720p tasks fail 22.2%: 40 of 180 finished.'
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('shows refusals before a channel with where to act', () => {
+    render(
+      <QualityTab data={media} models={{ selected: [], onChange: vi.fn() }} />
+    )
+    expect(screen.getByText('Refused before a channel')).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Risk Control →' })
+    ).toHaveAttribute('href', '/risk-control#audit')
+    expect(
+      screen.getByText('12 requests found no channel for their model.')
+    ).toBeInTheDocument()
+  })
+
+  it('shares failure reasons over every failure, not the listed ones', () => {
+    render(
+      <QualityTab data={media} models={{ selected: [], onChange: vi.fn() }} />
+    )
+    expect(screen.getByText('Other reasons')).toBeInTheDocument()
+  })
+
+  it('keeps round 1 on an old server: no task or refusal panels', () => {
+    render(
+      <QualityTab data={data} models={{ selected: [], onChange: vi.fn() }} />
+    )
+    expect(screen.queryByText('Image and video tasks')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Refused before a channel')
+    ).not.toBeInTheDocument()
+  })
+
+  it('says the figures could not be read rather than none when the view failed', () => {
+    render(
+      <QualityTab
+        data={undefined}
+        models={{ selected: [], onChange: vi.fn() }}
+        sources={{
+          view: { status: 'error', error: 'boom' },
+          previous: { status: 'error' },
+          business: { status: 'error' },
+        }}
+      />
+    )
+    expect(screen.getAllByText('Could not be read').length).toBeGreaterThan(0)
+    expect(
+      screen.queryByText('No requests in this range')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('No failed requests in this range')
+    ).not.toBeInTheDocument()
+  })
+
+  it('turns the all-models card into a clear-filter button under a filter', async () => {
+    const onChange = renderTab(['claude-opus-5-5'])
+    const all = screen.getByRole('button', { name: /^All models/ })
+    expect(all).toHaveTextContent('Clear the filter')
+    expect(all).not.toHaveTextContent('requests')
+    await userEvent.click(all)
+    expect(onChange).toHaveBeenCalledWith([])
   })
 })

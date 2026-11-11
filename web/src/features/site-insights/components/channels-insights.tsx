@@ -31,15 +31,17 @@ import {
 } from '../lib'
 import type { ChannelCost, ChannelRow } from '../types'
 import {
+  accruingChannels,
   channelKey,
   contractRows,
   contractStart,
   costParts,
   giftShare,
   revenuePerPayer,
+  sinceFeeShare,
   type ContractRow,
 } from './channels-analysis'
-import { SampleNote } from './insight-kit'
+import { Findings, SampleNote, type Finding } from './insight-kit'
 import { BarSeries, Panel, SimpleTable, UserLabel } from './shared'
 
 /** A source's name as plain text, for a chart's axis and readout. */
@@ -85,7 +87,7 @@ export function ChannelCostChart(props: { rows: ChannelRow[]; rate: number }) {
           : undefined
       }
       help={t(
-        'Each bar stacks what a source cost over the range, in yuan: the channel fee at the site’s exchange rate, the commission charged to a channel without a fee, and the given credit its accounts spent at list price. Revenue and net are listed in the readout to read the bar against.'
+        'Each bar stacks what a source cost over the range, in yuan: the channel fee at the site’s exchange rate, the commission its accounts’ payments earned any affiliate (charged only to a source without a fee), and the given credit its accounts spent at list price. Revenue and net are listed in the readout to read the bar against.'
       )}
     >
       <BarSeries
@@ -123,6 +125,65 @@ export function ChannelCostChart(props: { rows: ChannelRow[]; rate: number }) {
           }
         })}
       />
+    </Panel>
+  )
+}
+
+/**
+ * A fee channel's revenue from accounts created since its fee began, with
+ * its share of all its revenue; - without a fee or before the server
+ * sends it.
+ */
+export function SinceFee(props: { row: ChannelRow }) {
+  const fmt = useInsightsFormat()
+  const share = sinceFeeShare(props.row)
+  if (share == null || props.row.revenue_since_fee == null) return '-'
+  return (
+    <span className='tabular-nums'>
+      {fmt.cny(props.row.revenue_since_fee)}
+      <span className='text-muted-foreground ml-1 text-xs'>
+        {fmt.pct(share)}
+      </span>
+    </span>
+  )
+}
+
+/**
+ * Fee channels still credited commission while their fee ran, one warning
+ * each, largest first. The net does not subtract it (the fee is the whole
+ * deal), but the money is real: the affiliate account can withdraw it.
+ */
+export function CommissionAccrualFindings(props: { rows: ChannelRow[] }) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const items: Finding[] = accruingChannels(props.rows).map((row) => {
+    const amount = row.commission_accruing ?? 0
+    return {
+      key: channelKey(row),
+      tone: 'warning',
+      title: t(
+        '{{name}} was credited {{amount}} of commission while its fee ran',
+        {
+          name: row.channel.username || `#${row.channel.user_id}`,
+          amount: fmt.cny(amount),
+        }
+      ),
+      detail: t(
+        'Its affiliate account can withdraw it or move it into its wallet. Setting its affiliate rate to 0 stops it, but also stops attributing its sign-ups and the gift plan they get. Net does not subtract it.'
+      ),
+      href: '/affiliates',
+      impact: amount,
+    }
+  })
+  if (items.length === 0) return null
+  return (
+    <Panel
+      title={t('Commission on fee channels')}
+      help={t(
+        'Commission the channel’s own account earned, at both levels, on days one of its fee entries was active. A channel paid a fee is not charged commission, so net leaves it out.'
+      )}
+    >
+      <Findings items={items} />
     </Panel>
   )
 }
@@ -173,6 +234,7 @@ export function ChannelContractPanel(props: {
       )
     : []
   const preContract = rows.filter((row) => row.preContractDays >= 1)
+  const showsSinceFee = rows.some((row) => row.row.revenue_since_fee != null)
   const clipped = props.costs.some(
     (cost) => cost.monthly_usd > 0 && cost.start < start
   )
@@ -227,6 +289,19 @@ export function ChannelContractPanel(props: {
               align: 'right',
               render: (row) => fmt.cny(row.row.revenue),
             },
+            ...(showsSinceFee
+              ? [
+                  {
+                    key: 'since-fee',
+                    label: t('From accounts since the fee'),
+                    hint: t(
+                      'Revenue paid by accounts created on or after the channel’s fee began; the rest came from accounts it brought before the deal.'
+                    ),
+                    align: 'right' as const,
+                    render: (row: ContractRow) => <SinceFee row={row.row} />,
+                  },
+                ]
+              : []),
             {
               key: 'net',
               label: t('Net'),

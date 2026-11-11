@@ -19,10 +19,15 @@ For commercial licensing, please contact support@quantumnous.com
 import { useTranslation } from 'react-i18next'
 
 import {
+  hasRepeatBuyers,
   materialDebtors,
+  MIN_SIGNAL_COUNT,
   rankClusters,
   riskRangeStart,
   riskSurges,
+  sharedCounts,
+  splitExits,
+  suspectInviters,
   type ClusterRisk,
   type SignupSurge,
 } from '../components/risk-analysis'
@@ -47,7 +52,11 @@ export function useClusterReasons(): (risk: ClusterRisk) => ClusterReason[] {
       reasons.push({
         key: 'buyers',
         tone: 'danger',
-        text: t('{{count}} plan buyers', { count: risk.buyers }),
+        text: risk.limited
+          ? t('{{count}} recent buyers of one-per-user plans', {
+              count: risk.buyers,
+            })
+          : t('{{count}} plan buyers', { count: risk.buyers }),
       })
     }
     if (risk.burst > 1) {
@@ -156,19 +165,34 @@ export function useRiskVerdict(
   const surgeText = useSurgeText()
   if (!data) return undefined
   const debtors = materialDebtors(data.debtors).length
-  const buyers = clusters.some((cluster) => cluster.subscription_buyers > 1)
+  const buyers = hasRepeatBuyers(clusters)
+  const shared = sharedCounts(data, clusters)
+  const inviters = suspectInviters(data)
   const surge = largestSurge(riskSurges(data, previous, range))
-  const [top] = rankClusters(clusters, riskRangeStart(data, range))
+  const [top] = rankClusters(
+    splitExits(clusters).review,
+    riskRangeStart(data, range)
+  )
   const findings = [
-    clusters.length > 0 &&
+    shared.total > 0 &&
       t('{{count}} addresses shared by several accounts', {
-        count: clusters.length,
+        count: shared.total,
       }),
     data.alias_emails > 0 &&
       t('{{count}} alias emails', { count: data.alias_emails }),
     data.off_whitelist > 0 &&
       t('{{count}} sign-ups off the email whitelist', {
         count: data.off_whitelist,
+      }),
+    inviters.unpaid > 0 &&
+      t('{{count}} inviters with {{min}} or more unpaid spenders', {
+        count: inviters.unpaid,
+        min: MIN_SIGNAL_COUNT,
+      }),
+    inviters.blocked > 0 &&
+      t('{{count}} inviters with {{min}} or more blocked gifts', {
+        count: inviters.blocked,
+        min: MIN_SIGNAL_COUNT,
       }),
     debtors > 0 && t('{{count}} accounts in debt', { count: debtors }),
   ].filter((item): item is string => !!item)

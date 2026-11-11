@@ -28,6 +28,7 @@ import type { InsightsView } from './api'
 import type { BarPoint, Tone } from './components/shared'
 import type {
   ChannelRow,
+  ErrorCategory,
   FinanceInsights,
   NamedCount,
   PoolProvider,
@@ -115,6 +116,83 @@ export const HEADROOM_SHARE = 0.8
 
 /** Debt within a dollar is rounding and test traffic; past it, someone owes. */
 export const DEBT_ALERT_USD = -1
+
+/** Below this many finished tasks, a task failure rate is not colored or ranked. */
+export const MIN_TASKS = 20
+
+/** A task still running this long after submission is stalled, as the server counts it. */
+export const STALLED_TASK_SECONDS = 1800
+
+/** Below this many checkouts opened, an order completion rate is not colored. */
+export const MIN_CHECKOUTS = 10
+
+/** A checkout still pending this long after it opened is stale, as the server counts it. */
+export const PENDING_STALE_SECONDS = 3600
+
+/** Plans ending within this many days are expiring, as the server counts them. */
+export const EXPIRING_PLAN_DAYS = 7
+
+/** A page open this long past its range's end says its figures are from then. */
+export const STALE_VIEW_SECONDS = 300
+
+/** The engine's own refusals: its slots, caps and budgets, not an upstream's. */
+export const ENGINE_CATEGORIES: readonly ErrorCategory[] = [
+  'engine_concurrency',
+  'engine_limit',
+  'engine_budget',
+]
+
+/**
+ * Failures the customer caused: their request, not the site or a channel,
+ * is at fault. no_channel is not one: it is the site's routing.
+ */
+export const CLIENT_CATEGORIES: readonly ErrorCategory[] = ['client_error']
+
+/** Where one query of a tab stands, and its error message once it failed. */
+export type SourceState = {
+  status: 'pending' | 'error' | 'success'
+  error?: string
+}
+
+/**
+ * The queries a tab reads, so it can tell a figure still loading from one
+ * that failed and from one that is truly empty. business and
+ * businessPrevious are set on the tabs that read the business view.
+ */
+export type InsightsSources = {
+  view: SourceState
+  previous: SourceState
+  business?: SourceState
+  businessPrevious?: SourceState
+}
+
+/** A query's state as a SourceState; a disabled query reads as pending. */
+export function sourceState(query: {
+  status: 'pending' | 'error' | 'success'
+  error: unknown
+}): SourceState {
+  if (query.status !== 'error') return { status: query.status }
+  return {
+    status: 'error',
+    error: query.error instanceof Error ? query.error.message : undefined,
+  }
+}
+
+/**
+ * The state a table or breakdown fed by this source shows instead of its
+ * rows: loading while pending with no rows, failed when it errored with no
+ * rows. Undefined once there are rows to show (an earlier read's rows stay
+ * on screen through a failed refetch) or the source has loaded.
+ */
+export function tableState(
+  source: SourceState | undefined,
+  rows: unknown
+): 'loading' | 'error' | undefined {
+  if (rows != null || !source) return undefined
+  if (source.status === 'error') return 'error'
+  if (source.status === 'pending') return 'loading'
+  return undefined
+}
 
 /** Pool statuses that need an operator, as the engine's own console groups them. */
 export const ATTENTION = new Set([
@@ -380,15 +458,80 @@ export function useInsightsFormat() {
 
 export function useErrorCategoryLabel() {
   const { t } = useTranslation()
-  return (name: string) =>
-    ({
-      engine_concurrency: t('Engine account concurrency full'),
-      upstream_rate_limit: t('Claude upstream rate limit'),
-      upstream_overloaded: t('Claude upstream overloaded'),
-      upstream_error: t('Upstream error'),
-      client_error: t('Client error'),
-      other: t('Other'),
-    })[name] ?? name
+  const labels: Record<ErrorCategory, string> = {
+    engine_concurrency: t('Engine account concurrency full'),
+    engine_limit: t('Engine concurrency or rate cap'),
+    engine_budget: t('Engine account budget'),
+    upstream_rate_limit: t('Claude upstream rate limit'),
+    upstream_overloaded: t('Claude upstream overloaded'),
+    upstream_auth: t('Upstream refused the key'),
+    upstream_error: t('Upstream error'),
+    client_error: t('Client error'),
+    no_channel: t('No channel for the model'),
+    other: t('Other'),
+  }
+  return (name: string) => labels[name as ErrorCategory] ?? name
+}
+
+/**
+ * Whether a view counts each request once (rollup version 5) rather than
+ * each try: a server of that version sends stale_hours, 0 included.
+ */
+export function countsRequestsOnce(
+  data: { stale_hours?: number } | null | undefined
+): boolean {
+  return data?.stale_hours != null
+}
+
+/**
+ * The definitions that recur across tabs, one sentence each, so a name
+ * means one thing wherever it is printed. A figure's help joins the one it
+ * rests on with its own sentences (joinSentences). now and allTime are short
+ * hints for a figure that does not follow the range.
+ */
+export function useInsightsDefinitions() {
+  const { t } = useTranslation()
+  return {
+    requests: t(
+      'A request is counted once, however many channels it tried; it failed only when no channel served it.'
+    ),
+    requestsAsAttempts: t(
+      'Each try on a channel counts as a request here, so a request retried on another channel counts twice, and a failover that worked still counts one failure.'
+    ),
+    attempts: t(
+      'Attempts count every try on a channel: a request retried on another channel is one request and two attempts.'
+    ),
+    customers: t(
+      "Customers are every account but root, the site's own, so the operator's tests are left out."
+    ),
+    everyone: t("Everyone includes root, the site's own account."),
+    sitePeak: t(
+      "The site's peak is the most requests in flight at once on every channel: the pool, paid upstreams and the media supplier."
+    ),
+    poolPeak: t(
+      "The pool's peak counts only successful requests the pool's accounts served, so it is the one to read against the pool's slots."
+    ),
+    paidRevenue: t(
+      'Revenue is money paid in the range, counted when the order was paid.'
+    ),
+    earnedRevenue: t(
+      'The part of all money paid that this range earned. A plan earns its price evenly over the days it runs; a wallet earns as it is spent, each dollar at what its owner paid per dollar credited, gifts included. Given credit earns nothing.'
+    ),
+    estimatedRevenue: t(
+      "An estimate: the range's revenue earned shared out by each part's share of consumption, not money that part paid."
+    ),
+    listCharge: t(
+      "Consumption is credit spent at the site's list prices, given credit included: what was charged, not money received."
+    ),
+    upstreamBill: t(
+      "An upstream's bill is in that upstream's own quota dollars, compared with revenue one for one."
+    ),
+    fee: t('A monthly fee is in real US dollars.'),
+    live: t('Live: as it stands now, whatever the range.'),
+    allTimeHelp: t('As it stands now, over all time, whatever the range.'),
+    now: t('Now'),
+    allTime: t('All time'),
+  }
 }
 
 export function useSignupMethodLabel() {
@@ -426,10 +569,26 @@ export const SERIES_COLORS: SeriesColor[] = [
 export const OTHER_COLOR: SeriesColor =
   'color-mix(in oklab, var(--muted-foreground) 45%, transparent)'
 
-/** Each vendor keeps its color whatever else is on the chart. */
-export const VENDOR_ORDER = ['claude', 'codex', 'grok', 'gemini', 'other']
+/**
+ * Each vendor keeps its color whatever else is on the chart. media is image
+ * and video models, sold apart from the pool's vendors.
+ */
+export const VENDOR_ORDER = [
+  'claude',
+  'codex',
+  'grok',
+  'gemini',
+  'media',
+  'other',
+]
+
+// Past the four categorical slots: a deeper step of the third, told from it
+// by lightness, since Grok and media rarely share a chart.
+const MEDIA_COLOR: SeriesColor =
+  'color-mix(in oklab, var(--series-3) 60%, var(--foreground))'
 
 export function vendorColor(vendor: string): SeriesColor {
+  if (vendor === 'media') return MEDIA_COLOR
   const index = VENDOR_ORDER.indexOf(vendor)
   return index >= 0 && index < SERIES_COLORS.length
     ? SERIES_COLORS[index]
@@ -503,6 +662,7 @@ export function useVendorName() {
     codex: 'GPT',
     grok: 'Grok',
     gemini: 'Gemini',
+    media: t('Image and video'),
     other: t('Other models'),
   }
   return (vendor: string) => names[vendor] ?? vendor
@@ -524,12 +684,17 @@ export function groupProvider(group: { channel: string; provider?: string }) {
   return group.provider ?? CHANNEL_PROVIDERS[group.channel] ?? group.channel
 }
 
-/** The vendors in the order the margin lists them; other models last. */
+/**
+ * The vendors in the order the margin lists them; other models last. media
+ * has no pool accounts, so its account cost is 0; its cost is the upstream
+ * bill.
+ */
 export const MARGIN_VENDORS = [
   'claude',
   'codex',
   'grok',
   'gemini',
+  'media',
   'other',
 ] as const
 

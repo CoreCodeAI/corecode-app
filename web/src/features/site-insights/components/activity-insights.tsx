@@ -34,7 +34,13 @@ import {
 } from '../lib'
 import type { ActivityHour, ActivityInsights } from '../types'
 import { SampleNote, TabLink } from './insight-kit'
-import { BarSeries, Panel, SimpleTable, UserLabel } from './shared'
+import {
+  BarSeries,
+  Panel,
+  SimpleTable,
+  UserLabel,
+  type TableState,
+} from './shared'
 
 /** A customer's share of consumption this period fell by at least this much. */
 const DROP_SHARE_OF_SPEND = 0.5
@@ -70,7 +76,7 @@ export function HourlyActivePanel(props: {
           : undefined
       }
       help={t(
-        'Users who sent a request in the hour. The readout lists the same hour of the previous period. The last hour is still filling.'
+        'Users with a request in the hour that came back with usage (tokens or a charge). The readout lists the same hour of the previous period. The last hour is still filling.'
       )}
     >
       <BarSeries
@@ -173,6 +179,9 @@ type MoverRow = CustomerMove & { requests?: number; share?: number }
 export function TopCustomersPanel(props: {
   data: ActivityInsights | undefined
   previous?: ActivityInsights
+  /** Why the previous period's figures are missing, said where its change would be. */
+  previousError?: string
+  state?: TableState
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -207,6 +216,7 @@ export function TopCustomersPanel(props: {
   return (
     <Panel
       title={t('Top customers by consumption')}
+      error={data ? props.previousError : undefined}
       description={
         previous && data && data.top_users.length > 0
           ? t(
@@ -221,6 +231,7 @@ export function TopCustomersPanel(props: {
         rowKey={(row) => row.user_id}
         faded={(row) => row.left}
         empty={t('No consumption in this range')}
+        state={props.state}
         columns={[
           {
             key: 'user',

@@ -23,6 +23,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { contributions, isOpenHour, type Contribution } from './analysis'
 import { COST_STALE_SECONDS, SMALL_SAMPLE } from './lib'
 import type {
+  TaskOutcome,
   UpstreamChannel,
   UpstreamDay,
   UpstreamHour,
@@ -31,8 +32,15 @@ import type {
   UpstreamRescue,
 } from './types'
 
-/** Channels drawn as their own series; the rest are summed as one. */
-export const UPSTREAM_SERIES = 3
+/**
+ * Channels drawn as their own series; the rest are summed as one, drawn
+ * grey. BarSeries colours a third slot amber and a fourth rose, which read
+ * as alarms, so only two channels get colours.
+ */
+export const UPSTREAM_SERIES = 2
+
+/** Keys the upstream cost reader reads per channel; the rest are left out. */
+export const UPSTREAM_COST_MAX_KEYS = 5
 
 /** Attempts below this are too few to name a channel best at a model. */
 export const UPSTREAM_MIN_ATTEMPTS = 20
@@ -47,6 +55,80 @@ const HOUR = 3600
 
 export const attemptsOf = (row: { requests: number; errors: number }) =>
   row.requests + row.errors
+
+/**
+ * Failed attempts the channel is to blame for: errors less the customers'
+ * own bad requests. All errors on a server that does not send client_errors.
+ */
+export const faultsOf = (row: {
+  errors: number
+  client_errors?: number
+}): number => Math.max(0, row.errors - (row.client_errors ?? 0))
+
+/** Whether the view tells customers' bad requests from channel failures. */
+export function splitsClientErrors(
+  data: UpstreamInsights | undefined
+): boolean {
+  return (data?.channels ?? []).some((row) => row.client_errors != null)
+}
+
+/**
+ * Why a read upstream bill is short: the reader reads only the first
+ * UPSTREAM_COST_MAX_KEYS keys (keys), or stops once the channel is disabled
+ * (disabled). Null for a whole bill, a channel not billed from its
+ * upstream, or a server that does not send key counts.
+ */
+export type PartialBill =
+  | { kind: 'keys'; read: number; total: number }
+  | { kind: 'disabled' }
+
+export function partialBill(row: UpstreamChannel): PartialBill | null {
+  if (row.cost_source !== 'upstream') return null
+  const keys = row.key_count ?? 0
+  if (keys > UPSTREAM_COST_MAX_KEYS) {
+    return { kind: 'keys', read: UPSTREAM_COST_MAX_KEYS, total: keys }
+  }
+  if (row.key_count != null && row.status !== 1) return { kind: 'disabled' }
+  return null
+}
+
+/** The channels whose bill leaves keys unread, so their cost is short. */
+export function shortBills(
+  data: UpstreamInsights | undefined
+): UpstreamChannel[] {
+  return (data?.channels ?? []).filter(
+    (row) => partialBill(row)?.kind === 'keys'
+  )
+}
+
+/** The channels that ran async tasks in the range, most submitted first. */
+export function channelTasks(
+  data: UpstreamInsights | undefined
+): { channel: UpstreamChannel; tasks: TaskOutcome }[] {
+  return (data?.channels ?? [])
+    .flatMap((channel) =>
+      channel.tasks && channel.tasks.submitted > 0
+        ? [{ channel, tasks: channel.tasks }]
+        : []
+    )
+    .sort((a, b) => b.tasks.submitted - a.tasks.submitted)
+}
+
+/** Tasks that reached an end, the task failure rate's denominator. */
+export const finishedTasks = (tasks: TaskOutcome): number =>
+  tasks.succeeded + tasks.failed
+
+/**
+ * Channels listed though automatically disabled and idle all range: no
+ * attempt and no task. A server that does not list them sends none.
+ */
+export function idleDisabled(
+  data: UpstreamInsights | undefined
+): UpstreamChannel[] {
+  return (data?.channels ?? []).filter(
+    (row) => row.status === 3 && attemptsOf(row) === 0 && !row.tasks?.submitted
+  )
+}
 
 /** A channel's name by id, or #id for one the view does not list. */
 export function channelNamer(
@@ -68,15 +150,15 @@ export function rescuedFrom(
 }
 
 /**
- * A channel's failed attempts that no other channel made up for. Attempt
- * based: retries on the same channel add failures no rescue offsets, so it
- * can overcount what customers saw.
+ * A channel's failed attempts, those it is to blame for (faultsOf), that no
+ * other channel made up for. Attempt based: retries on the same channel add
+ * failures no rescue offsets, so it can overcount what customers saw.
  */
 export function unrescuedOf(
-  row: { id: number; errors: number },
+  row: { id: number; errors: number; client_errors?: number },
   rescued: Map<number, number>
 ): number {
-  return Math.max(0, row.errors - (rescued.get(row.id) ?? 0))
+  return Math.max(0, faultsOf(row) - (rescued.get(row.id) ?? 0))
 }
 
 /** The channel that served most of what failed on a channel, and how many. */
@@ -152,6 +234,7 @@ export function upstreamTotals(data: UpstreamInsights | undefined) {
     channels.reduce((total, row) => total + pick(row), 0)
   const requests = sum((row) => row.requests)
   const errors = sum((row) => row.errors)
+  const faults = sum(faultsOf)
   const costed = channels.filter((row) => row.cost_source !== 'none')
   const revenue = sum((row) => row.revenue_usd)
   const costedRevenue = costed.reduce(
@@ -163,12 +246,16 @@ export function upstreamTotals(data: UpstreamInsights | undefined) {
   return {
     requests,
     errors,
+    /** The part of errors customers' own bad requests caused; 0 on an older server. */
+    clientErrors: errors - faults,
     attempts: requests + errors,
-    failureRate: requests + errors > 0 ? errors / (requests + errors) : 0,
+    /** Failed attempts the channels are to blame for, over every attempt. */
+    failureRate: requests + errors > 0 ? faults / (requests + errors) : 0,
     rescued: sum((row) => row.rescued),
     /** Failed attempts no other channel served; attempt based. */
     unrescued: sum((row) => unrescuedOf(row, rescued)),
     revenue,
+    costedRevenue,
     cost,
     /** Over the channels whose cost is known only. */
     margin: costedRevenue - cost,
@@ -181,10 +268,16 @@ type SlotRow = {
   channel_id: number
   requests: number
   errors: number
+  client_errors?: number
   revenue_usd: number
   cost_usd: number
 }
 
+/**
+ * errors are the failed attempts the channel is to blame for (faultsOf).
+ * revenue is every channel's; costedRevenue only that of channels whose
+ * cost is known, the part cost sets against, and uncostedRevenue the rest.
+ */
 export type UpstreamSlot = {
   slot: number
   requests: number[]
@@ -192,12 +285,15 @@ export type UpstreamSlot = {
   attempts: number[]
   failureRates: number[]
   revenue: number
+  costedRevenue: number
+  uncostedRevenue: number
   cost: number
 }
 
 /**
  * Each slot (a day or an hour) with each series' figure: the busiest
  * channels by attempts, then one series for the rest when there are more.
+ * A row of a channel the view does not list counts as uncosted.
  */
 function channelSeries<R extends SlotRow>(
   channels: UpstreamChannel[],
@@ -205,6 +301,9 @@ function channelSeries<R extends SlotRow>(
   slotOf: (row: R) => number,
   slots: number[]
 ): { named: number[]; hasOther: boolean; slots: UpstreamSlot[] } {
+  const costed = new Set(
+    channels.filter((row) => row.cost_source !== 'none').map((row) => row.id)
+  )
   const ranked = [...channels]
     .filter((row) => attemptsOf(row) > 0)
     .sort((a, b) => attemptsOf(b) - attemptsOf(a))
@@ -220,18 +319,32 @@ function channelSeries<R extends SlotRow>(
   const bySlot = new Map(
     slots.map((slot) => [
       slot,
-      { requests: empty(), errors: empty(), revenue: 0, cost: 0 },
+      {
+        requests: empty(),
+        errors: empty(),
+        attempts: empty(),
+        revenue: 0,
+        costedRevenue: 0,
+        uncostedRevenue: 0,
+        cost: 0,
+      },
     ])
   )
   for (const row of rows) {
     const entry = bySlot.get(slotOf(row))
     if (!entry) continue
     entry.revenue += row.revenue_usd
+    if (costed.has(row.channel_id)) {
+      entry.costedRevenue += row.revenue_usd
+    } else {
+      entry.uncostedRevenue += row.revenue_usd
+    }
     entry.cost += row.cost_usd
     const at = index(row.channel_id)
     if (at < 0) continue
     entry.requests[at] += row.requests
-    entry.errors[at] += row.errors
+    entry.errors[at] += faultsOf(row)
+    entry.attempts[at] += attemptsOf(row)
   }
   return {
     named,
@@ -239,14 +352,10 @@ function channelSeries<R extends SlotRow>(
     slots: slots.flatMap((slot) => {
       const entry = bySlot.get(slot)
       if (!entry) return []
-      const attempts = entry.requests.map(
-        (count, at) => count + entry.errors[at]
-      )
       return {
         slot,
         ...entry,
-        attempts,
-        failureRates: attempts.map((count, at) =>
+        failureRates: entry.attempts.map((count, at) =>
           count > 0 ? entry.errors[at] / count : 0
         ),
       }
@@ -316,7 +425,8 @@ export function upstreamHourlySeries(
 
 /**
  * A run of hours in which a channel failed past INCIDENT_RATE every hour
- * it was tried, over at least SMALL_SAMPLE attempts in the run. start is
+ * it was tried, over at least SMALL_SAMPLE attempts in the run. errors are
+ * the failures the channel is to blame for (faultsOf). start is
  * the first hour's start and end the last hour's end, or the range's end
  * when the run reaches into the open hour (ongoing). rescuer is the channel
  * that served most of what failed on it over the whole range.
@@ -356,6 +466,7 @@ export function upstreamIncidents(
             ...same,
             requests: same.requests + row.requests,
             errors: same.errors + row.errors,
+            client_errors: (same.client_errors ?? 0) + (row.client_errors ?? 0),
           }
         : row
     )
@@ -392,10 +503,9 @@ export function upstreamIncidents(
     for (const hour of slots) {
       const row = hours.get(hour)
       const attempts = row ? attemptsOf(row) : 0
+      const faults = row ? faultsOf(row) : 0
       const failing =
-        row !== undefined &&
-        attempts > 0 &&
-        row.errors / attempts > INCIDENT_RATE
+        row !== undefined && attempts > 0 && faults / attempts > INCIDENT_RATE
       const open = isOpenHour(hour, end)
       if (!failing || (open && !run)) {
         close()
@@ -406,7 +516,7 @@ export function upstreamIncidents(
       }
       run.last = hour
       run.attempts += attempts
-      run.errors += row.errors
+      run.errors += faults
       run.open = open
     }
     close()
@@ -415,8 +525,9 @@ export function upstreamIncidents(
 }
 
 /**
- * Each channel's part in the change of the failed attempts, the failures no
- * other channel rescued, and the margin over channels with a known cost,
+ * Each channel's part in the change of the failed attempts it is to blame
+ * for, the failures no other channel rescued, and the margin over channels
+ * with a known cost,
  * against the previous period. fresh holds the channels the previous period
  * did not list, whose figures are new rather than a jump from zero.
  */
@@ -438,7 +549,7 @@ export function upstreamChanges(
   const margin = (row: UpstreamChannel) =>
     row.cost_source === 'none' ? 0 : row.revenue_usd - row.cost_usd
   return {
-    failures: contributions(now, before, key, (row) => row.errors),
+    failures: contributions(now, before, key, faultsOf),
     unrescued: contributions(
       now.map((row) => ({ id: row.id, value: unrescuedOf(row, rescuedNow) })),
       before.map((row) => ({
@@ -508,6 +619,31 @@ export function feeBreakEven(
   return { dailyFee, dailyRevenue, gap: dailyRevenue - dailyFee }
 }
 
+/**
+ * The channels whose upstream bill names models no row of theirs serves, so
+ * that cost is in the channel's total but in no model row; most first.
+ */
+export function unmatchedCosts(
+  data: UpstreamInsights | undefined
+): UpstreamChannel[] {
+  return (data?.channels ?? [])
+    .filter(
+      (row) =>
+        row.cost_source === 'upstream' && (row.unmatched_cost_usd ?? 0) >= 0.01
+    )
+    .sort((a, b) => (b.unmatched_cost_usd ?? 0) - (a.unmatched_cost_usd ?? 0))
+}
+
+/**
+ * What customers were charged per request they sent. Revenue leaves root
+ * out, so the requests do too where the server says how many were
+ * customers'; null without requests.
+ */
+export function revenuePerRequest(row: UpstreamModel): number | null {
+  const requests = row.customer_requests ?? row.requests
+  return requests > 0 ? row.revenue_usd / requests : null
+}
+
 export type UpstreamModelRow = UpstreamModel & {
   /** The figures this row is best at among the model's channels. */
   best: { failure: boolean; ttft: boolean; margin: boolean }
@@ -520,7 +656,8 @@ export type UpstreamModelRow = UpstreamModel & {
  * The models served by more than one channel, each with its channels side by
  * side and the best one marked per figure; every model when none is shared.
  * A channel is a candidate for best only with UPSTREAM_MIN_ATTEMPTS
- * attempts, and for margin only when its upstream bill is read.
+ * attempts, and for margin only when its upstream bill is read whole (not
+ * from some of its keys).
  */
 export function upstreamModelComparison(
   models: UpstreamModel[],
@@ -528,7 +665,10 @@ export function upstreamModelComparison(
 ): UpstreamModelRow[] {
   const billed = new Set(
     channels
-      .filter((row) => row.cost_source === 'upstream')
+      .filter(
+        (row) =>
+          row.cost_source === 'upstream' && partialBill(row)?.kind !== 'keys'
+      )
       .map((row) => row.id)
   )
   const groups = new Map<string, UpstreamModel[]>()

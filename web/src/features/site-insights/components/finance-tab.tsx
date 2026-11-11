@@ -27,17 +27,28 @@ import {
   peakHour,
 } from '../finance-analysis'
 import {
+  joinSentences,
   paymentSlices,
+  tableState,
   useHourAxis,
+  useInsightsDefinitions,
   useInsightsFormat,
   type InsightsRangeInfo,
+  type InsightsSources,
   type InsightsTab,
 } from '../lib'
 import type { BusinessInsights, FinanceInsights } from '../types'
 import { useFinanceVerdict } from '../verdicts'
 import { ModelMixPanel, VendorMarginPanel } from './business-panels'
-import { FinanceDriversPanel, GiftWatchPanel } from './finance-insights'
+import {
+  FinanceDriversPanel,
+  GiftWatchPanel,
+  GroupConsumptionPanel,
+  OrdersPanel,
+  PlanBookPanel,
+} from './finance-insights'
 import { FinanceSummary } from './finance-summary'
+import { StaleNote } from './insight-kit'
 import { ShareDonut } from './share-donut'
 import {
   BarSeries,
@@ -58,13 +69,21 @@ export function FinanceTab(props: {
   businessPrevious?: BusinessInsights
   range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
+  /** Where each query stands, so a figure still loading or failed is not read as zero. */
+  sources?: InsightsSources
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const defs = useInsightsDefinitions()
   const hourAxis = useHourAxis()
   const verdict = useFinanceVerdict(props.data, props.previous)
   const data = props.data
   const previous = props.previous
+  const view = props.sources?.view
+  const failed = !data && view?.status === 'error'
+  const failedText = failed
+    ? (view?.error ?? t('Could not be read'))
+    : undefined
   const range = financeRange(data, props.range)
   const hours = financeHours(data, range)
   const daily = data?.daily ?? []
@@ -87,42 +106,114 @@ export function FinanceTab(props: {
     { label: t('Top-ups'), format: fmt.cny, compact: fmt.cnyCompact },
     { label: t('Subscriptions'), format: fmt.cny },
   ]
-  const issued = [
-    data?.topup_credit_usd ?? 0,
-    data?.bonus_usd ?? 0,
-    data?.redemption_usd ?? 0,
-    data?.commission_usd ?? 0,
-    data?.adjustment_net_usd ?? 0,
-  ].reduce((sum, value) => sum + value, 0)
+  // Check-in, sign-up and invitee credit arrive with the server's release;
+  // without it the panel keeps its five rows.
+  const signupRead = data?.checkin_credit_usd != null
+  const issuedRows: [string, number, string][] = [
+    [
+      t('Top-up credit'),
+      data?.topup_credit_usd ?? 0,
+      t('Credit customers paid for in a top-up, ¥1 for each.'),
+    ],
+    [
+      t('Top-up bonus'),
+      data?.bonus_usd ?? 0,
+      t(
+        'Credit added free on top of a top-up. It lowers what the owner paid per dollar, so revenue earned stays right, but spending it counts in the paid part of consumption, not the gifted part.'
+      ),
+    ],
+    [
+      t('Redemption codes'),
+      data?.redemption_usd ?? 0,
+      t('Credit from redeemed codes.'),
+    ],
+    [
+      t('Referral commission'),
+      data?.commission_usd ?? 0,
+      t(
+        'Commission inviters earned in the range, whether or not they have moved it into a wallet yet.'
+      ),
+    ],
+    [
+      t('Manual adjustments (net)'),
+      data?.adjustment_net_usd ?? 0,
+      t(
+        'Balance an administrator added, less what one took away, from the audit log. Root’s own wallet included.'
+      ),
+    ],
+  ]
+  if (signupRead) {
+    issuedRows.push(
+      [
+        t('Check-in credit'),
+        data?.checkin_credit_usd ?? 0,
+        t('Credit awarded for daily check-ins in the range.'),
+      ],
+      [
+        t('Sign-up bonus (est.)'),
+        data?.signup_credit_estimate_usd ?? 0,
+        t('{{count}} sign-up bonuses times today’s bonus: an estimate.', {
+          count: fmt.num(data?.signup_bonuses ?? 0),
+        }),
+      ],
+      [
+        t('Invitee bonus (est.)'),
+        data?.invitee_credit_estimate_usd ?? 0,
+        t('{{count}} invitee bonuses times today’s bonus: an estimate.', {
+          count: fmt.num(data?.invitee_bonuses ?? 0),
+        }),
+      ]
+    )
+  }
+  const issued = issuedRows.reduce((sum, row) => sum + row[1], 0)
+  const rangeHours = Math.round(range.days * 24)
   return (
     <div className='grid gap-4'>
       <Verdict
-        loading={!props.data}
+        loading={!props.data && !failed}
         tone={verdict?.tone ?? 'default'}
-        text={verdict?.text}
+        text={verdict?.text ?? failedText}
       />
-      <FinanceSummary data={data} previous={previous} range={range} />
+      <StaleNote staleHours={data?.stale_hours} rangeHours={rangeHours} />
+      <FinanceSummary
+        data={data}
+        previous={previous}
+        range={range}
+        source={view}
+      />
 
-      <FinanceDriversPanel data={data} previous={previous} />
+      <FinanceDriversPanel
+        data={data}
+        previous={previous}
+        previousSource={props.sources?.previous}
+      />
 
-      <VendorMarginPanel data={data} range={range} />
+      <VendorMarginPanel data={data} range={range} source={view} />
 
       <VendorTabs data={data} />
 
-      <ModelMixPanel data={props.business} />
+      <ModelMixPanel data={props.business} source={props.sources?.business} />
+
+      <GroupConsumptionPanel
+        data={data}
+        previous={previous}
+        sources={props.sources}
+      />
+
+      <PlanBookPanel data={data} sources={props.sources} />
 
       <Panel
-        title={
-          hours
-            ? t('Hourly revenue and consumption')
-            : t('Daily revenue and consumption')
-        }
+        title={hours ? t('Hourly revenue paid') : t('Daily revenue paid')}
         description={chartNote}
-        help={t(
-          'Revenue is the money paid, in yuan. Consumption is new-api credit used at list price, in yuan, root’s internal use included.'
+        error={failedText}
+        help={joinSentences(
+          t(
+            'The bars are revenue paid, top-ups and plans, in yuan. Consumption at list price, root’s internal use included, reads out on each bar, and by the day revenue earned too.'
+          ),
+          defs.paidRevenue
         )}
       >
-        {hours ? (
+        {!failed && hours && (
           <BarSeries
             ariaLabel={t('Hourly revenue')}
             series={revenueSeries}
@@ -138,7 +229,8 @@ export function FinanceTab(props: {
               ],
             }))}
           />
-        ) : (
+        )}
+        {!failed && !hours && (
           <BarSeries
             ariaLabel={t('Daily revenue')}
             series={revenueSeries}
@@ -163,14 +255,28 @@ export function FinanceTab(props: {
         )}
       </Panel>
 
-      <GiftWatchPanel data={data} previous={previous} onOpen={props.onOpen} />
+      <GiftWatchPanel
+        data={data}
+        previous={previous}
+        onOpen={props.onOpen}
+        source={view}
+      />
+
+      <OrdersPanel data={data} previous={previous} sources={props.sources} />
 
       <div className='grid gap-4 lg:grid-cols-3'>
         <Panel
           title={t('Wallet credit issued')}
-          help={t(
-            'Credit added to customers’ wallets in the range, in yuan, by where it came from. Only top-up credit was paid for.'
-          )}
+          error={failedText}
+          help={
+            signupRead
+              ? t(
+                  'Credit added to customers’ wallets in the range, in yuan, by where it came from. Only top-up credit was paid for. Sign-up and invitee bonuses are counts times today’s settings, so estimates.'
+                )
+              : t(
+                  'Credit added to customers’ wallets in the range, in yuan, by where it came from. Only top-up credit was paid for.'
+                )
+          }
           description={
             data && issued > 0
               ? t('{{total}} in all; manual adjustments are {{share}}.', {
@@ -181,61 +287,36 @@ export function FinanceTab(props: {
           }
         >
           <dl className='grid gap-2 text-sm'>
-            {[
-              [
-                t('Top-up credit'),
-                fmt.cny(data?.topup_credit_usd ?? 0),
-                t('Credit customers paid for in a top-up, ¥1 for each.'),
-              ],
-              [
-                t('Top-up bonus'),
-                fmt.cny(data?.bonus_usd ?? 0),
-                t('Credit added on top of a top-up, unpaid.'),
-              ],
-              [
-                t('Redemption codes'),
-                fmt.cny(data?.redemption_usd ?? 0),
-                t('Credit from redeemed codes.'),
-              ],
-              [
-                t('Referral commission'),
-                fmt.cny(data?.commission_usd ?? 0),
-                t('Referral rewards moved into a wallet.'),
-              ],
-              [
-                t('Manual adjustments (net)'),
-                fmt.cny(data?.adjustment_net_usd ?? 0),
-                t(
-                  'Balance an administrator added, less what one took away, from the audit log. Root’s own wallet included.'
-                ),
-              ],
-            ].map(([label, value, help]) => (
+            {issuedRows.map(([label, value, help]) => (
               <div key={label} className='flex justify-between gap-2'>
                 <dt className='text-muted-foreground'>
                   <HelpLabel label={label} help={help} />
                 </dt>
-                <dd className='tabular-nums'>{value}</dd>
+                <dd className='tabular-nums'>{data ? fmt.cny(value) : '-'}</dd>
               </div>
             ))}
           </dl>
         </Panel>
         <Panel title={t('By payment method')}>
-          <ShareDonut
-            loading={!data}
-            slices={paymentSlices(
-              data?.methods,
-              (method) => getPaymentMethodName(method, t) || method
-            )}
-            format={fmt.cny}
-            ariaLabel={t('Revenue by payment method')}
-            totalLabel={t('Revenue')}
-            empty={t('No successful orders in this range')}
-          />
+          {!failed && (
+            <ShareDonut
+              loading={!data}
+              slices={paymentSlices(
+                data?.methods,
+                (method) => getPaymentMethodName(method, t) || method
+              )}
+              format={fmt.cny}
+              ariaLabel={t('Revenue by payment method')}
+              totalLabel={t('Revenue paid')}
+              empty={t('No successful orders in this range')}
+            />
+          )}
           <div className='mt-4' />
           <SimpleTable
             rows={data?.methods}
             rowKey={(row) => row.payment_method}
             empty={t('No successful orders in this range')}
+            state={tableState(view, data?.methods)}
             columns={[
               {
                 key: 'method',
@@ -264,6 +345,7 @@ export function FinanceTab(props: {
             rows={data?.top_balances}
             rowKey={(row) => row.user_id}
             empty={t('No customer balances')}
+            state={tableState(view, data?.top_balances)}
             columns={[
               {
                 key: 'user',
@@ -292,6 +374,7 @@ export function FinanceTab(props: {
             rows={data?.adjustments}
             rowKey={(row, index) => `${row.created_at}-${index}`}
             empty={t('No manual adjustments in this range')}
+            state={tableState(view, data?.adjustments)}
             columns={[
               {
                 key: 'at',
@@ -328,6 +411,7 @@ export function FinanceTab(props: {
             rows={data?.debtors}
             rowKey={(row) => row.user_id}
             empty={t('No customer owes money')}
+            state={tableState(view, data?.debtors)}
             columns={[
               {
                 key: 'user',

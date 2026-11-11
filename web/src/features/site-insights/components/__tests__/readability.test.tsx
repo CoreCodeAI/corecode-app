@@ -224,7 +224,7 @@ describe('overview signals', () => {
   it('says so when nothing needs attention', async () => {
     renderOverview(views({}))
     expect(
-      await screen.findByText('Nothing needs attention in this range.')
+      await screen.findByText('Nothing needs attention, in this range or now.')
     ).toBeInTheDocument()
   })
 
@@ -239,7 +239,7 @@ describe('overview signals', () => {
       })
     )
     const debt = await screen.findByText('1 customers owe ¥25')
-    const rate = screen.getByText('Failure rate 3%')
+    const rate = screen.getByText('3% of attempts failed')
     // Debt is a danger signal and the failure rate a warning, so debt leads.
     expect(
       debt.compareDocumentPosition(rate) & Node.DOCUMENT_POSITION_FOLLOWING
@@ -306,7 +306,7 @@ describe('overview depth', () => {
       /^Requests fell to 40 in the hour from/
     )
     expect(drop.textContent).toMatch(/against 480 at the same hour before$/)
-    const rate = screen.getByText('Failure rate 3%')
+    const rate = screen.getByText('3% of attempts failed')
     expect(
       drop.compareDocumentPosition(rate) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
@@ -318,7 +318,7 @@ describe('overview depth', () => {
       {}
     )
     expect(
-      await screen.findByText('Nothing needs attention in this range.')
+      await screen.findByText('Nothing needs attention, in this range or now.')
     ).toBeInTheDocument()
     expect(screen.getByText('Too few requests to judge')).toBeInTheDocument()
   })

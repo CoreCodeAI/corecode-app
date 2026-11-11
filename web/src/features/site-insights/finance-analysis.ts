@@ -29,16 +29,24 @@ import {
 } from './analysis'
 import {
   CONCENTRATION_SHARE,
+  COST_STALE_SECONDS,
   DEBT_ALERT_USD,
   GIFT_SHARE_WARN,
   HOURLY_MAX_DAYS,
+  MARGIN_VENDORS,
+  MIN_CHECKOUTS,
   MIN_ORDERS,
+  vendorMargins,
   type InsightsRangeInfo,
+  type VendorMarginRow,
 } from './lib'
 import type {
   EnginePlanValue,
   FinanceHour,
   FinanceInsights,
+  GroupConsumption,
+  OrderMethodFunnel,
+  PlanBookRow,
   UserSpendRow,
 } from './types'
 
@@ -255,7 +263,8 @@ export function giftWatch(data: FinanceInsights | undefined): GiftWatch {
     (data?.bonus_usd ?? 0) +
     (data?.redemption_usd ?? 0) +
     (data?.commission_usd ?? 0) +
-    Math.max(0, data?.adjustment_net_usd ?? 0)
+    Math.max(0, data?.adjustment_net_usd ?? 0) +
+    signupCredit(data)
   const paid = data?.topup_credit_usd ?? 0
   return {
     giftShare:
@@ -265,6 +274,18 @@ export function giftWatch(data: FinanceInsights | undefined): GiftWatch {
     unpaidPerPaid: paid > 0 ? unpaid / paid : null,
     unpaid,
   }
+}
+
+/**
+ * Credit given on check-in (exact) and at sign-up and invitation (counts
+ * times today's settings: estimates), in yuan. 0 on a server without them.
+ */
+export function signupCredit(data: FinanceInsights | undefined): number {
+  return (
+    (data?.checkin_credit_usd ?? 0) +
+    (data?.signup_credit_estimate_usd ?? 0) +
+    (data?.invitee_credit_estimate_usd ?? 0)
+  )
 }
 
 /** The gifted share is past its warning line. */
@@ -347,4 +368,283 @@ export function spendFlags(
     flags.push('concentrated')
   }
   return flags
+}
+
+/** A vendor's margin row with its cost split into accounts and upstreams, yuan. */
+export type MarginRow = VendorMarginRow & {
+  /** The pool's accounts at today's prices over the range. */
+  accountCost: number
+  /** Upstream bills (their quota dollars, one for one) plus fees at the rate. */
+  upstreamCost: number
+}
+
+export type FinanceMargins = {
+  rows: MarginRow[]
+  revenue: number
+  /** Every row's cost plus the upstream cost no row's revenue took. */
+  cost: number
+  margin: number
+  /** margin over revenue; null without revenue. */
+  rate: number | null
+  /** Upstream cost on channels with no customer revenue in the range, yuan. */
+  unattributed: number
+  /** The server sent upstream bills by vendor, so they are subtracted. */
+  upstreamRead: boolean
+  /** Accounts with no recorded price, counted as free. */
+  unpricedAccounts: number
+  /** Accounts in no engine group, so with no vendor: counted as free too. */
+  ungroupedAccounts: number
+  /** Vendors whose oldest channel bill was read over COST_STALE_SECONDS before the range's end. */
+  staleBills: { vendor: string; at: number }[]
+}
+
+/**
+ * Gross margin by vendor: recognized revenue against the pool's account cost
+ * and the billed upstreams' cost. A bill is in that upstream's quota dollars,
+ * compared with revenue one for one; a fee is real US dollars, at the rate.
+ * Without the server's upstream bills, only accounts are subtracted.
+ */
+export function financeMargins(
+  data: FinanceInsights,
+  rate: number
+): FinanceMargins {
+  const rows = new Map<string, MarginRow>(
+    vendorMargins(data, rate).map((row) => [
+      row.vendor,
+      { ...row, accountCost: row.cost, upstreamCost: 0 },
+    ])
+  )
+  const end = data.end_time ?? 0
+  const staleBills: FinanceMargins['staleBills'] = []
+  for (const item of data.vendor_upstream ?? []) {
+    let row = rows.get(item.vendor)
+    if (!row) {
+      row = {
+        vendor: item.vendor,
+        revenue: 0,
+        cost: 0,
+        margin: 0,
+        accounts: 0,
+        unpriced: 0,
+        accountCost: 0,
+        upstreamCost: 0,
+      }
+      rows.set(item.vendor, row)
+    }
+    row.upstreamCost += item.bill_usd + item.fee_usd * rate
+    if (
+      item.oldest_bill_at > 0 &&
+      end - item.oldest_bill_at > COST_STALE_SECONDS
+    ) {
+      staleBills.push({ vendor: item.vendor, at: item.oldest_bill_at })
+    }
+  }
+  const order = (vendor: string) => {
+    const index = MARGIN_VENDORS.indexOf(vendor as never)
+    return index < 0 ? MARGIN_VENDORS.length : index
+  }
+  const list = [...rows.values()]
+    .map((row) => {
+      const cost = row.accountCost + row.upstreamCost
+      return { ...row, cost, margin: row.revenue - cost }
+    })
+    .filter((row) => row.revenue > 0 || row.accounts > 0 || row.cost > 0)
+    .sort((a, b) => order(a.vendor) - order(b.vendor))
+  const unattributed =
+    (data.upstream_unattributed_bill_usd ?? 0) +
+    (data.upstream_unattributed_fee_usd ?? 0) * rate
+  const revenue = list.reduce((sum, row) => sum + row.revenue, 0)
+  const cost = list.reduce((sum, row) => sum + row.cost, 0) + unattributed
+  const margin = revenue - cost
+  return {
+    rows: list,
+    revenue,
+    cost,
+    margin,
+    rate: revenue > 0 ? margin / revenue : null,
+    unattributed,
+    upstreamRead: data.vendor_upstream != null,
+    unpricedAccounts: list.reduce((sum, row) => sum + row.unpriced, 0),
+    ungroupedAccounts: (data.plan_accounts ?? []).reduce(
+      (sum, plan) => sum + (plan.vendor ? 0 : plan.accounts),
+      0
+    ),
+    staleBills,
+  }
+}
+
+/** How a gross margin reads: a loss, thin under 20%, else good. */
+export function marginTone(
+  margin: number,
+  revenue: number
+): 'danger' | 'warning' | 'good' {
+  if (margin < 0) return 'danger'
+  if (revenue > 0 && margin / revenue < 0.2) return 'warning'
+  return 'good'
+}
+
+export type OrderFunnelRow = OrderMethodFunnel & {
+  /** The method's rate in the previous period; null without its checkouts there. */
+  previousRate: number | null
+  /** Enough checkouts (MIN_CHECKOUTS) to color the rate. */
+  judged: boolean
+  /** The rate fell to half the previous period's or less, over MIN_ORDERS checkouts in both. */
+  fell: boolean
+}
+
+/**
+ * Each payment method's checkouts against its own previous period. Most
+ * unpaid checkouts are abandoned, so a rate is judged only against the same
+ * method before, never against 100%.
+ */
+export function orderFunnels(
+  rows: OrderMethodFunnel[] | null | undefined,
+  previous: OrderMethodFunnel[] | null | undefined
+): OrderFunnelRow[] {
+  const before = new Map(
+    (previous ?? []).map((row) => [row.payment_method, row])
+  )
+  return (rows ?? []).map((row) => {
+    const prior = before.get(row.payment_method)
+    const previousRate =
+      prior && prior.created > 0 ? prior.completion_rate : null
+    const fell =
+      !!prior &&
+      previousRate != null &&
+      previousRate > 0 &&
+      row.created >= MIN_ORDERS &&
+      prior.created >= MIN_ORDERS &&
+      row.completion_rate <= previousRate / 2
+    return {
+      ...row,
+      previousRate,
+      judged: row.created >= MIN_CHECKOUTS,
+      fell,
+    }
+  })
+}
+
+export type GroupRow = GroupConsumption & {
+  /** Consumption in the previous period; null without the previous groups. */
+  previousUsd: number | null
+  /** Share change in percentage points as a fraction; null without the previous groups. */
+  shareChange: number | null
+}
+
+/** Each billing group's use beside its previous period, matched by name. */
+export function groupRows(
+  rows: GroupConsumption[] | null | undefined,
+  previous: GroupConsumption[] | null | undefined
+): GroupRow[] {
+  const before =
+    previous == null ? null : new Map(previous.map((row) => [row.group, row]))
+  return (rows ?? []).map((row) => {
+    if (!before) return { ...row, previousUsd: null, shareChange: null }
+    const prior = before.get(row.group)
+    return {
+      ...row,
+      previousUsd: prior?.consumption_usd ?? 0,
+      shareChange: row.share - (prior?.share ?? 0),
+    }
+  })
+}
+
+export type PlanBookTotals = {
+  runningPaid: number
+  runningGifted: number
+  sold: number
+  soldValue: number
+  renewed: number
+  gifted: number
+  expired: number
+  expiring: number
+  expiringValue: number
+  deferred: number
+}
+
+/** The plan book's totals over every plan. */
+export function planBookTotals(rows: PlanBookRow[]): PlanBookTotals {
+  const totals: PlanBookTotals = {
+    runningPaid: 0,
+    runningGifted: 0,
+    sold: 0,
+    soldValue: 0,
+    renewed: 0,
+    gifted: 0,
+    expired: 0,
+    expiring: 0,
+    expiringValue: 0,
+    deferred: 0,
+  }
+  for (const row of rows) {
+    totals.runningPaid += row.running_paid
+    totals.runningGifted += row.running_gifted
+    totals.sold += row.sold
+    totals.soldValue += row.sold_value
+    totals.renewed += row.renewed
+    totals.gifted += row.gifted
+    totals.expired += row.expired
+    totals.expiring += row.expiring_7d
+    totals.expiringValue += row.expiring_7d_value
+    totals.deferred += row.deferred_value
+  }
+  return totals
+}
+
+export type OwedNow = {
+  /** What customers paid for their wallet balances, yuan. */
+  wallets: number
+  /** The price share of running paid plans not yet run, yuan. */
+  plans: number
+  total: number
+  /** Quota dollars left on running paid plans: never-resetting totals plus this period's remainder. */
+  planQuotaLeft: number
+  paidPlans: number
+  unmatched: number
+}
+
+/**
+ * Money taken and not yet earned, now: wallets at their paid value and
+ * running paid plans' unrun share. Null on a server without plan_liability.
+ * A point in time: never compared with the previous period.
+ */
+export function owedNow(data: FinanceInsights | undefined): OwedNow | null {
+  const plans = data?.plan_liability
+  if (!data || !plans) return null
+  const wallets = data.liability_paid_value ?? 0
+  return {
+    wallets,
+    plans: plans.deferred_value,
+    total: wallets + plans.deferred_value,
+    planQuotaLeft: plans.paid_quota_left_usd + plans.paid_period_left_usd,
+    paidPlans: plans.paid_plans,
+    unmatched: plans.unmatched,
+  }
+}
+
+export type ClaudeEarned = {
+  /** Claude's revenue earned over the days gpt-load reported, yuan. */
+  earnedYuan: number
+  /** Revenue earned per yuan customers were charged for Claude; null without their charge. */
+  perCharge: number | null
+}
+
+/**
+ * Claude's revenue earned (root left out) over the days gpt-load reported:
+ * the range's recognized revenue for Claude in proportion to those days.
+ * Null on a server without revenue by vendor.
+ */
+export function claudeEarned(
+  data: FinanceInsights | undefined,
+  coveredDays: number,
+  rangeDays: number
+): ClaudeEarned | null {
+  const row = data?.vendor_revenue?.find((item) => item.vendor === 'claude')
+  if (!row) return null
+  const covered = rangeDays > 0 ? Math.min(1, coveredDays / rangeDays) : 0
+  return {
+    earnedYuan: row.recognized_revenue * covered,
+    perCharge:
+      row.customer_usd > 0 ? row.recognized_revenue / row.customer_usd : null,
+  }
 }

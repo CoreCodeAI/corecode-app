@@ -91,17 +91,17 @@ export function useGrowthVerdict(
   let ratesSentence: string | false = false
   if (registered > 0 && range?.hourly) {
     ratesSentence = t(
-      '{{activation}} have sent a request and {{conversion}} paid so far; accounts hours old are too young to judge.',
+      '{{activation}} have activated and {{conversion}} paid so far; accounts hours old are too young to judge.',
       rates
     )
   } else if (registered > 0 && !judgeable) {
     ratesSentence = t(
-      '{{activation}} sent a request and {{conversion}} paid; too few sign-ups to judge.',
+      '{{activation}} activated and {{conversion}} paid; too few sign-ups to judge.',
       rates
     )
   } else if (registered > 0) {
     ratesSentence = t(
-      '{{activation}} sent a request and {{conversion}} paid.',
+      '{{activation}} activated and {{conversion}} paid.',
       rates
     )
   }

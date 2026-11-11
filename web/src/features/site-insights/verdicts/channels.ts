@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useTranslation } from 'react-i18next'
 
 import {
+  accruingChannels,
   channelTotals,
   costParts,
   paidChannels,
@@ -66,15 +67,38 @@ export function useChannelsVerdict(
         'Paid channels brought {{revenue}}, net {{net}} after their cost.',
         vars
       )
+  // Commission credited to a fee channel is withdrawable money the net
+  // leaves out by the owner's rule, so it is reported, never subtracted.
+  const accruing = accruingChannels(paid)
+  let accrual: string | undefined
+  if (accruing.length > 0) {
+    const amount = fmt.cny(
+      accruing.reduce((sum, row) => sum + (row.commission_accruing ?? 0), 0)
+    )
+    const names = accruing
+      .map((row) => row.channel.username || `#${row.channel.user_id}`)
+      .join(', ')
+    accrual =
+      accruing.length === 1
+        ? t(
+            '{{names}} was still credited {{amount}} of commission while its fee ran.',
+            { names, amount }
+          )
+        : t(
+            '{{names}} were still credited {{amount}} of commission while their fees ran.',
+            { names, amount }
+          )
+  }
   if (range && range.days < SHORT_ROI_DAYS) {
     return {
-      tone: 'default',
+      tone: accrual ? 'warning' : 'default',
       text: join(
         headline,
         t(
           'A range under {{days}} days cannot judge a channel: read 30 days or the contract to date.',
           { days: SHORT_ROI_DAYS }
-        )
+        ),
+        accrual
       ),
     }
   }
@@ -82,8 +106,8 @@ export function useChannelsVerdict(
   const worstNet = worst ? channelEconomics(worst, rate).net : 0
   if (!worst || worstNet >= 0) {
     return {
-      tone: 'good',
-      text: join(headline, t('Every paid channel covers its cost.')),
+      tone: accrual ? 'warning' : 'good',
+      text: join(headline, t('Every paid channel covers its cost.'), accrual),
     }
   }
   const long = !range || range.days >= JUDGE_DAYS
@@ -111,5 +135,5 @@ export function useChannelsVerdict(
   }
   let tone: Tone = 'warning'
   if (totals.net < 0 && long) tone = 'danger'
-  return { tone, text: join(headline, action) }
+  return { tone, text: join(headline, action, accrual) }
 }

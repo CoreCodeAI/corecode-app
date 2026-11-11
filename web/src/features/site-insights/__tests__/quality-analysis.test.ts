@@ -20,9 +20,12 @@ import { describe, expect, it } from 'vitest'
 
 import {
   abnormalStreams,
+  attemptsOf,
   excessFailures,
+  failingTaskModels,
   failingWindow,
   failsAboveSite,
+  failuresListed,
   failureDrivers,
   failureOwners,
   failureShift,
@@ -31,10 +34,12 @@ import {
   modelChange,
   rankByExcess,
   serviceFailureRate,
+  unplacedModels,
+  withRemainder,
   worstHour,
   type QualityModel,
 } from '../quality-analysis'
-import type { QualityHour } from '../types'
+import type { QualityHour, TaskOutcome, TaskOutcomes } from '../types'
 
 function model(name: string, requests: number, errors: number): QualityModel {
   return {
@@ -198,7 +203,116 @@ describe('quality analysis', () => {
         { name: 'timeout', count: 6 },
         { name: 'client_gone', count: 4 },
       ])
-    ).toEqual({ share: 0.1, count: 10, clientGone: 4, total: 100 })
+    ).toEqual({ share: 0.06, count: 6, clientGone: 4, total: 100 })
     expect(abnormalStreams([])).toBeNull()
+  })
+
+  it('files engine limits as ours, refused keys as the upstream’s and no channel as routing', () => {
+    const categories = [
+      { name: 'engine_limit', count: 4 },
+      { name: 'engine_budget', count: 2 },
+      { name: 'upstream_auth', count: 5 },
+      { name: 'no_channel', count: 3 },
+      { name: 'client_error', count: 1 },
+    ]
+    expect(failureOwners(categories)).toEqual([
+      { owner: 'ours', count: 6 },
+      { owner: 'upstream', count: 5 },
+      { owner: 'routing', count: 3 },
+      { owner: 'client', count: 1 },
+    ])
+    // Only the client error leaves the service rate: (15 - 1) / (701 - 1).
+    expect(
+      serviceFailureRate({
+        requests: 701,
+        errors: 15,
+        error_categories: categories,
+      })
+    ).toBe(0.02)
+  })
+
+  it('adds what a cut list leaves out as one row', () => {
+    const items = [
+      { name: 'a', count: 300 },
+      { name: 'b', count: 300 },
+    ]
+    expect(withRemainder(items, 1000, 'Other')).toEqual({
+      items: [...items, { name: 'Other', count: 400 }],
+      left: 400,
+    })
+    expect(withRemainder(items, 600, 'Other')).toEqual({ items, left: 0 })
+    expect(withRemainder(items, null, 'Other')).toEqual({ items, left: 0 })
+    expect(
+      failuresListed({
+        status_codes: [
+          { name: '503', count: 700 },
+          { name: '429', count: 300 },
+        ],
+      })
+    ).toBe(1000)
+    expect(failuresListed({ status_codes: [] })).toBeNull()
+  })
+
+  it('lists the models the map cannot place, busiest first', () => {
+    const rows = [
+      model('streamed', 500, 5),
+      { ...model('all-failed', 300, 300), ttft_p50_ms: 0 },
+      { ...model('tiny', 5, 5), ttft_p50_ms: 0 },
+      { ...model('video', 900, 0), ttft_p50_ms: 0 },
+    ]
+    expect(unplacedModels(rows, 20).map((row) => row.model)).toEqual([
+      'video',
+      'all-failed',
+    ])
+  })
+
+  it('judges task models only on enough finished tasks', () => {
+    const task = (
+      name: string,
+      succeeded: number,
+      failed: number,
+      running = 0
+    ): TaskOutcome => ({
+      model: name,
+      submitted: succeeded + failed + running,
+      succeeded,
+      failed,
+      timed_out: 0,
+      running,
+      stalled: 0,
+      failure_rate: failed / Math.max(1, succeeded + failed),
+      finish_p50_s: 60,
+      finish_p95_s: 120,
+      reasons: null,
+    })
+    const tasks: TaskOutcomes = {
+      total: task('', 0, 0),
+      models: [
+        task('seedance', 70, 30),
+        task('wan', 80, 5),
+        task('few', 5, 5, 100),
+        task('clean', 100, 1),
+      ],
+      channels: null,
+      truncated: false,
+    }
+    expect(failingTaskModels(tasks).map((row) => row.model)).toEqual([
+      'seedance',
+      'wan',
+    ])
+    expect(failingTaskModels(undefined)).toEqual([])
+  })
+
+  it('reads attempts only when the server sends them', () => {
+    const base = {
+      requests: 100,
+      errors: 1,
+    } as unknown as Parameters<typeof attemptsOf>[0]
+    expect(attemptsOf(base)).toBeNull()
+    expect(attemptsOf({ ...base, attempts: 120, attempt_errors: 21 })).toEqual({
+      attempts: 120,
+      failed: 21,
+      rate: 0.175,
+    })
   })
 })

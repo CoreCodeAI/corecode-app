@@ -23,17 +23,14 @@ import { getPaymentMethodName } from '@/features/wallet/lib/billing'
 import type { Tone } from '../components/shared'
 import {
   financeDrivers,
+  financeMargins,
   giftShareHigh,
   giftWatch,
+  orderFunnels,
   ordersComparable,
   signed,
 } from '../finance-analysis'
-import {
-  useChargeFormat,
-  useInsightsFormat,
-  useVendorName,
-  vendorMargins,
-} from '../lib'
+import { useChargeFormat, useInsightsFormat, useVendorName } from '../lib'
 import type { FinanceInsights } from '../types'
 import { join, useChange, worse, type TabVerdict } from './shared'
 
@@ -47,18 +44,33 @@ export function useFinanceVerdict(
   const charge = useChargeFormat(data)
   const vendorName = useVendorName()
   if (!data) return undefined
-  const rows = vendorMargins(data, charge.rate)
-  const revenue = rows.reduce((sum, row) => sum + row.revenue, 0)
-  const margin = revenue - rows.reduce((sum, row) => sum + row.cost, 0)
-  const rate = revenue > 0 ? margin / revenue : 0
+  const margins = financeMargins(data, charge.rate)
+  const revenue = margins.revenue
+  const margin = margins.margin
+  const rate = margins.rate ?? 0
+  const freeAccounts = margins.unpricedAccounts + margins.ungroupedAccounts
   const drivers = financeDrivers(data, previous)
   const gifts = giftWatch(data)
+  const fell = orderFunnels(data.order_methods, previous?.order_methods).filter(
+    (row) => row.fell
+  )
   let tone: Tone = 'good'
   if (margin < 0) tone = 'danger'
   else if (rate < 0.2) tone = 'warning'
+  // Accounts counted as free make the margin read high.
+  if (freeAccounts > 0) tone = worse(tone, 'warning')
   if (data.debt_usd < -1) tone = worse(tone, 'warning')
   if (giftShareHigh(gifts)) tone = worse(tone, 'warning')
+  if (fell.length > 0) tone = worse(tone, 'warning')
   const method = (key: string) => getPaymentMethodName(key, t) || key
+
+  let marginText: string | null = null
+  if (revenue > 0) {
+    const vars = { margin: fmt.cny(margin), rate: fmt.pct(rate) }
+    marginText = margins.upstreamRead
+      ? t('Gross margin {{margin}} ({{rate}}).', vars)
+      : t('Gross margin before upstream bills {{margin}} ({{rate}}).', vars)
+  }
 
   const paid = (() => {
     const vars = {
@@ -144,11 +156,23 @@ export function useFinanceVerdict(
     text: join(
       paid,
       consumed,
+      marginText,
       revenue > 0 &&
-        t('Gross margin {{margin}} ({{rate}}).', {
-          margin: fmt.cny(margin),
-          rate: fmt.pct(rate),
-        }),
+        freeAccounts > 0 &&
+        t(
+          '{{count}} pool accounts have no recorded price and count as free, so the margin reads high.',
+          { count: fmt.num(freeAccounts) }
+        ),
+      ...fell.map((row) =>
+        t(
+          'Checkouts by {{method}} completed {{now}}, down from {{before}}: check the payment page.',
+          {
+            method: method(row.payment_method),
+            now: fmt.pct(row.completion_rate),
+            before: fmt.pct(row.previousRate ?? 0),
+          }
+        )
+      ),
       giftShareHigh(gifts) &&
         t('Gifted credit is {{share}} of customers’ consumption.', {
           share: fmt.pct(gifts.giftShare ?? 0),

@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
+  fireEvent,
   render as renderElement,
   screen,
   waitFor,
@@ -25,13 +26,14 @@ import {
 import type { ReactElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getInsights } from '../../api'
+import { getInsights, saveChannelCosts } from '../../api'
 import type { ChannelInsights, ChannelRow } from '../../types'
 import { ChannelsTab } from '../channels-tab'
 
 vi.mock('../../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api')>()),
   getInsights: vi.fn(),
+  saveChannelCosts: vi.fn(),
 }))
 
 function render(ui: ReactElement) {
@@ -177,5 +179,94 @@ describe('ChannelsTab', () => {
     expect(screen.getByText('25%')).toBeTruthy()
     expect(screen.getByText(/Projected month/)).toBeTruthy()
     await waitFor(() => expect(getInsights).toHaveBeenCalled())
+  })
+
+  it('shows a failed read as missing, never as none, and saves nothing over unread fees', () => {
+    render(
+      <ChannelsTab
+        data={undefined}
+        range={range(30)}
+        sources={{
+          view: { status: 'error', error: 'boom' },
+          previous: { status: 'error' },
+        }}
+      />
+    )
+    expect(screen.queryByText('No data')).toBeNull()
+    expect(screen.queryByText('No channel fees recorded')).toBeNull()
+    expect(screen.getAllByText('Could not be read').length).toBeGreaterThan(0)
+    expect(screen.queryByText('¥0')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+  })
+
+  it('warns about commission on a fee channel and shows the server’s new figures', async () => {
+    vi.mocked(getInsights).mockResolvedValue(insights([row({})]))
+    render(
+      <ChannelsTab
+        data={insights([
+          row({
+            commission_accruing: 120,
+            commission_earned_usd: 150,
+            revenue_since_fee: 1500,
+            fee_start: END - 10 * DAY,
+            clawed_back_usd: 40,
+            gift_dormant_usd: 12,
+            fee_overlap: true,
+          }),
+        ])}
+        range={range(30)}
+      />
+    )
+    expect(
+      screen.getByText(
+        'magpie was credited ¥120 of commission while its fee ran'
+      )
+    ).toBeTruthy()
+    expect(
+      screen.getByText(/Setting its affiliate rate to 0 stops it/)
+    ).toBeTruthy()
+    expect(screen.getByText('From accounts since the fee')).toBeTruthy()
+    expect(screen.getByText('¥1,500')).toBeTruthy()
+    expect(screen.getByText('earned ¥150')).toBeTruthy()
+    expect(screen.getByText('Clawed back')).toBeTruthy()
+    expect(screen.getByText('On disabled accounts')).toBeTruthy()
+    expect(
+      screen.getByText('Revenue includes days before the fee of magpie began')
+    ).toBeTruthy()
+    expect(screen.getByText(/The fee entries of magpie overlap/)).toBeTruthy()
+    await waitFor(() => expect(getInsights).toHaveBeenCalled())
+  })
+
+  it('ends the running fee when a new one is added', async () => {
+    vi.mocked(getInsights).mockResolvedValue(insights([row({})]))
+    vi.mocked(saveChannelCosts).mockResolvedValue(undefined as never)
+    const { container } = render(
+      <ChannelsTab data={insights([row({})])} range={range(30)} />
+    )
+    fireEvent.change(screen.getByRole('combobox'), {
+      target: { value: '306' },
+    })
+    fireEvent.change(container.querySelectorAll('input[type=number]')[0], {
+      target: { value: '600' },
+    })
+    fireEvent.change(container.querySelectorAll('input[type=date]')[0], {
+      target: { value: '2026-11-15' },
+    })
+    expect(
+      screen.getByText(/Adding this ends magpie’s running fee/)
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    await waitFor(() => expect(saveChannelCosts).toHaveBeenCalled())
+    const start = Math.floor(new Date(2026, 10, 15).getTime() / 1000)
+    expect(vi.mocked(saveChannelCosts).mock.calls[0][0]).toEqual([
+      {
+        user_id: 306,
+        monthly_usd: 1000,
+        start: END - 60 * DAY,
+        end: start,
+        note: '',
+      },
+      { user_id: 306, monthly_usd: 600, start, end: 0, note: '' },
+    ])
   })
 })

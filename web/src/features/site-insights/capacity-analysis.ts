@@ -27,6 +27,7 @@ import {
   median,
   rateIsAbove,
 } from './analysis'
+import type { Tone } from './components/shared'
 import {
   HEADROOM_SHARE,
   HOUR_SAMPLE,
@@ -34,7 +35,7 @@ import {
   SPIKE_FLOOR,
   type InsightsRangeInfo,
 } from './lib'
-import type { CapacityHour } from './types'
+import type { CapacityHour, EngineGroup, NamedCount } from './types'
 
 /** The fewest whole days a daily peak trend is fitted over. */
 export const MIN_TREND_DAYS = 5
@@ -67,6 +68,91 @@ export function periodSpan(
   return first.hour - before.hour
 }
 
+/**
+ * Pool-full rejections from this many up turn the verdict red; fewer are a
+ * warning, a stray refusal that does not call for accounts.
+ */
+export const POOL_FULL_DANGER = SPIKE_FLOOR
+
+/**
+ * The peak to read against the pool's slots: the pool's own, or, from a
+ * server before it, the site's on every channel.
+ */
+export function poolPeakOf(row: {
+  peak_concurrency: number
+  pool_peak?: number
+}): number {
+  return row.pool_peak ?? row.peak_concurrency
+}
+
+/** Whether a series carries the pool's own peak, which a server before it lacks. */
+export function hasPoolPeak(hourly: CapacityHour[]): boolean {
+  return hourly.some((row) => row.pool_peak != null)
+}
+
+/**
+ * A peak against the slots. The pool's own peak (own) holds a slot per
+ * request, so reaching the slots is full; the site's, with every channel,
+ * is only flagged past them.
+ */
+export function peakTone(
+  peak: number,
+  slots: number,
+  own: boolean
+): Tone | undefined {
+  if (slots <= 0) return undefined
+  if (own ? peak >= slots : peak > slots) return 'danger'
+  if (peak >= slots * HEADROOM_SHARE) return 'warning'
+  return undefined
+}
+
+/** The engine's own refusals by cause, from a view's error categories. */
+export type EngineRefusals = {
+  /** Every account at its concurrency: the pool was full. */
+  full: number
+  /** A group, global or key concurrency cap, or the key's rate limit. */
+  limit: number
+  /** An account's request rate, quota budget or missing quota reading. */
+  budget: number
+}
+
+export function engineRefusals(
+  categories: NamedCount[] | null | undefined
+): EngineRefusals {
+  const count = (name: string): number =>
+    categories?.find((item) => item.name === name)?.count ?? 0
+  return {
+    full: count('engine_concurrency'),
+    limit: count('engine_limit'),
+    budget: count('engine_budget'),
+  }
+}
+
+/**
+ * Requests in flight in the enabled groups, as the engine counts them, so
+ * the figure covers the same groups as the slots it is read against.
+ */
+export function enabledInFlight(groups: EngineGroup[]): number {
+  return groups.reduce((sum, row) => sum + (row.enabled ? row.in_flight : 0), 0)
+}
+
+/**
+ * The per-account limits of the enabled groups, lowest first: each group's
+ * own where the pool reports it, else the pool's default.
+ */
+export function accountLimits(
+  groups: (EngineGroup & { credential_limit?: number | null })[],
+  fallback: number
+): number[] {
+  const limits = new Set<number>()
+  for (const row of groups) {
+    if (!row.enabled) continue
+    limits.add(row.credential_limit || fallback)
+  }
+  if (limits.size === 0) limits.add(fallback)
+  return [...limits].sort((a, b) => a - b)
+}
+
 /** How close the closed hours came to the pool's slots. */
 export type Headroom = {
   /** Closed hours whose peak reached HEADROOM_SHARE of the slots. */
@@ -90,7 +176,7 @@ export function headroom(
   const result: Headroom = { near: 0, over: 0 }
   for (const row of hourly) {
     if (isOpenHour(row.hour, end)) continue
-    const peak = row.peak_concurrency
+    const peak = poolPeakOf(row)
     if (peak >= slots * HEADROOM_SHARE) result.near += 1
     if (peak > slots) result.over += 1
     if (peak > 0 && (!result.tightest || peak > result.tightest.peak)) {
@@ -138,12 +224,9 @@ export function diagnoseRejections(
     if (count <= 0) continue
     total += count
     hours += 1
-    if (slots > 0 && row.peak_concurrency >= slots * HEADROOM_SHARE) {
-      saturated += count
-    }
-    if (!worst || count > worst.count) {
-      worst = { hour: row.hour, count, peak: row.peak_concurrency }
-    }
+    const peak = poolPeakOf(row)
+    if (slots > 0 && peak >= slots * HEADROOM_SHARE) saturated += count
+    if (!worst || count > worst.count) worst = { hour: row.hour, count, peak }
   }
   if (!worst) return undefined
   let cause: RejectionCause | undefined
@@ -225,7 +308,7 @@ export function localDay(hour: number): number {
   )
 }
 
-/** One whole day's highest hourly peak. */
+/** One whole day's highest hourly peak, the pool's where the server sends it. */
 export type DayPeak = { day: number; peak: number }
 
 /**
@@ -242,7 +325,7 @@ export function dailyPeaks(
     if (isOpenHour(row.hour, end)) continue
     const day = dayOf(row.hour)
     const entry = days.get(day) ?? { peak: 0, hours: 0 }
-    entry.peak = Math.max(entry.peak, row.peak_concurrency)
+    entry.peak = Math.max(entry.peak, poolPeakOf(row))
     entry.hours += 1
     days.set(day, entry)
   }

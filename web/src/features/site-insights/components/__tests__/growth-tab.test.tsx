@@ -21,13 +21,16 @@ import { describe, expect, it } from 'vitest'
 
 import {
   busiestHour,
+  claudeCoverage,
   customerMoves,
+  dayInProgress,
   hourSpan,
   lastFullDay,
   perActiveUser,
   segmentChanges,
   signupBurst,
   stickiness,
+  viewState,
 } from '../../growth-analysis'
 import type { ActivityInsights, GrowthHour, GrowthInsights } from '../../types'
 import { GrowthTab } from '../growth-tab'
@@ -247,5 +250,87 @@ describe('growth tab', () => {
       screen.getByRole('list', { name: 'Sign-ups by day' })
     ).toBeInTheDocument()
     expect(screen.queryByText('What moved sign-ups')).not.toBeInTheDocument()
+  })
+})
+
+describe('missing data and partial days', () => {
+  it('tells loaded, loading and failed apart', () => {
+    expect(viewState({}, { status: 'error' })).toBe('ready')
+    expect(viewState(undefined, { status: 'error' })).toBe('error')
+    expect(viewState(undefined, { status: 'pending' })).toBe('loading')
+    expect(viewState(undefined, undefined)).toBe('loading')
+  })
+
+  it('marks a day that had not ended by the range end', () => {
+    expect(dayInProgress(T0, T0 + D)).toBe(false)
+    expect(dayInProgress(T0, T0 + D - 1)).toBe(true)
+  })
+
+  it('sets Claude’s charge on the engine’s days against its official cost', () => {
+    const base = {
+      active_users: 1,
+      quota_usd: 50,
+      requests: 3,
+      retention: [],
+      top_users: [],
+      top1_share: 0,
+      top3_share: 0,
+      top10_share: 0,
+      engine_cost: {
+        configured: true,
+        cost_usd: 10,
+        requests: 2,
+        daily: [{ day: T0 + D, cost_usd: 10, requests: 2 }],
+      },
+      daily: [
+        {
+          day: T0,
+          dau: 1,
+          wau: 1,
+          requests: 1,
+          quota_usd: 20,
+          claude_quota_usd: 6,
+        },
+        {
+          day: T0 + D,
+          dau: 1,
+          wau: 1,
+          requests: 2,
+          quota_usd: 30,
+          claude_quota_usd: 16,
+        },
+      ],
+    } satisfies ActivityInsights
+    expect(claudeCoverage({ ...base, claude_quota_usd: 22 })).toEqual({
+      charged: 16,
+      official: 10,
+      claudeOnly: true,
+    })
+    // An older server sends no Claude charge: every model's stands in.
+    expect(claudeCoverage(base)).toEqual({
+      charged: 50,
+      official: 10,
+      claudeOnly: false,
+    })
+    expect(
+      claudeCoverage({
+        ...base,
+        engine_cost: { ...base.engine_cost, error: 'down' },
+      })
+    ).toBeNull()
+  })
+
+  it('says the growth view could not be read instead of printing zeros', () => {
+    render(
+      <GrowthTab
+        data={undefined}
+        sources={{ view: { status: 'error' }, previous: { status: 'error' } }}
+      />
+    )
+    expect(screen.getAllByText('Could not be read').length).toBeGreaterThan(0)
+    expect(
+      screen.queryByText('No sign-ups in this range')
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('0')).not.toBeInTheDocument()
   })
 })

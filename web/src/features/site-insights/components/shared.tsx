@@ -56,6 +56,8 @@ export function Panel(props: {
   description?: ReactNode
   /** How the panel's figures are defined, shown from an icon by the title. */
   help?: string
+  /** Why the panel's figures are missing, shown instead of the description. */
+  error?: string
   actions?: ReactNode
   className?: string
   children: ReactNode
@@ -71,10 +73,14 @@ export function Panel(props: {
             {props.title}
             {props.help && <HelpIcon help={props.help} title={props.title} />}
           </h3>
-          {props.description != null && (
-            <p className='text-muted-foreground mt-0.5 text-xs'>
-              {props.description}
-            </p>
+          {props.error ? (
+            <p className='text-destructive mt-0.5 text-xs'>{props.error}</p>
+          ) : (
+            props.description != null && (
+              <p className='text-muted-foreground mt-0.5 text-xs'>
+                {props.description}
+              </p>
+            )
           )}
         </div>
         {props.actions}
@@ -233,6 +239,12 @@ export type MetricDelta = {
 export type MetricItem = {
   label: string
   value: ReactNode
+  /**
+   * The figure's source is loading or failed: the card shows a muted -
+   * instead of value, with no change, trend, meter or tone. Missing is not
+   * zero.
+   */
+  missing?: boolean
   hint?: ReactNode
   tone?: Tone
   /** What the figure means, shown when the label is hovered or focused. */
@@ -600,6 +612,13 @@ export function Sparkline(props: {
   )
 }
 
+// The value's full text, read out where the card cuts it short.
+function valueTitle(value: ReactNode): string | undefined {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number') return String(value)
+  return undefined
+}
+
 export function MetricGrid(props: {
   items: MetricItem[]
   loading?: boolean
@@ -615,69 +634,78 @@ export function MetricGrid(props: {
           props.className
         )}
       >
-        {props.items.map((item) => (
-          <Card
-            key={item.label}
-            data-card-hover='false'
-            className={cn(
-              'bg-muted/20 gap-1 px-3 py-2.5',
-              item.featured && 'col-span-2 sm:col-span-3 lg:col-span-2'
-            )}
-          >
-            <dt className='text-muted-foreground truncate text-xs'>
-              <HelpLabel label={item.label} help={item.help} />
-            </dt>
-            <dd
+        {props.items.map((item) => {
+          // A missing figure draws nothing that reads as a value.
+          const shown = !props.loading && !item.missing
+          return (
+            <Card
+              key={item.label}
+              data-card-hover='false'
               className={cn(
-                'flex min-w-0 items-baseline gap-2 font-semibold tabular-nums',
-                item.featured ? 'text-2xl' : 'text-xl'
+                'bg-muted/20 gap-1 px-3 py-2.5',
+                item.featured && 'col-span-2 sm:col-span-3 lg:col-span-2'
               )}
             >
-              {props.loading ? (
-                <Skeleton className='h-7 w-16' />
-              ) : (
-                <span className={cn('truncate', TONES[item.tone ?? 'default'])}>
-                  {item.value}
-                </span>
-              )}
-              {item.featured && item.delta && !props.loading && (
-                <DeltaBadge delta={item.delta} />
-              )}
-            </dd>
-            {!item.featured && item.delta && !props.loading && (
-              <dd className='-mt-0.5 leading-none'>
-                <DeltaBadge delta={item.delta} />
-              </dd>
-            )}
-            {item.meter && !props.loading && (
-              <dd className='py-0.5'>
-                <Meter
-                  value={item.meter.value * 100}
-                  tone={item.meter.tone}
-                  label={item.meter.label}
-                />
-              </dd>
-            )}
-            {item.featured && item.trend && !props.loading && (
-              <dd className='-mx-0.5'>
-                <Sparkline
-                  points={item.trend}
-                  format={item.trendFormat ?? fmt.num}
-                  label={item.label}
-                  bars={item.trendBars}
-                />
-              </dd>
-            )}
-            {item.hint != null && (
+              <dt className='text-muted-foreground truncate text-xs'>
+                <HelpLabel label={item.label} help={item.help} />
+              </dt>
               <dd
-                className='text-muted-foreground line-clamp-2 text-xs'
-                title={typeof item.hint === 'string' ? item.hint : undefined}
+                className={cn(
+                  'flex min-w-0 items-baseline gap-2 font-semibold tabular-nums',
+                  item.featured ? 'text-2xl' : 'text-xl'
+                )}
               >
-                {item.hint}
+                {props.loading && <Skeleton className='h-7 w-16' />}
+                {!props.loading && item.missing && (
+                  <span className='text-muted-foreground'>-</span>
+                )}
+                {shown && (
+                  <span
+                    className={cn('truncate', TONES[item.tone ?? 'default'])}
+                    title={valueTitle(item.value)}
+                  >
+                    {item.value}
+                  </span>
+                )}
+                {item.featured && item.delta && shown && (
+                  <DeltaBadge delta={item.delta} />
+                )}
               </dd>
-            )}
-          </Card>
-        ))}
+              {!item.featured && item.delta && shown && (
+                <dd className='-mt-0.5 leading-none'>
+                  <DeltaBadge delta={item.delta} />
+                </dd>
+              )}
+              {item.meter && shown && (
+                <dd className='py-0.5'>
+                  <Meter
+                    value={item.meter.value * 100}
+                    tone={item.meter.tone}
+                    label={item.meter.label}
+                  />
+                </dd>
+              )}
+              {item.featured && item.trend && shown && (
+                <dd className='-mx-0.5'>
+                  <Sparkline
+                    points={item.trend}
+                    format={item.trendFormat ?? fmt.num}
+                    label={item.label}
+                    bars={item.trendBars}
+                  />
+                </dd>
+              )}
+              {item.hint != null && (
+                <dd
+                  className='text-muted-foreground line-clamp-2 text-xs'
+                  title={typeof item.hint === 'string' ? item.hint : undefined}
+                >
+                  {item.hint}
+                </dd>
+              )}
+            </Card>
+          )
+        })}
       </dl>
     </TooltipProvider>
   )
@@ -1070,13 +1098,15 @@ export function Breakdown(props: {
   items: NamedCount[] | null | undefined
   label?: (name: string) => string
   empty: string
+  /** The source is loading or failed: shown instead of the empty sentence. Ignored once there are items. */
+  state?: TableState
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const items = props.items ?? []
   const total = items.reduce((sum, item) => sum + item.count, 0)
   if (items.length === 0) {
-    return <p className='text-muted-foreground text-xs'>{props.empty}</p>
+    return <EmptyState state={props.state} empty={props.empty} />
   }
   return (
     <TooltipProvider delay={0}>
@@ -1153,12 +1183,14 @@ export function SimpleTable<T>(props: {
    * would scroll sideways; the table shows from sm up.
    */
   card?: (row: T) => ReactNode
+  /** The source is loading or failed: shown instead of the empty sentence. Ignored once there are rows. */
+  state?: TableState
 }) {
   const { t } = useTranslation()
   const [page, setPage] = useState(0)
   const rows = props.rows ?? []
   if (rows.length === 0) {
-    return <p className='text-muted-foreground text-xs'>{props.empty}</p>
+    return <EmptyState state={props.state} empty={props.empty} />
   }
   const pages = Math.ceil(rows.length / TABLE_PAGE_SIZE)
   // A refresh can shorten the list below the page being read.
@@ -1255,6 +1287,32 @@ export function SimpleTable<T>(props: {
   )
 }
 
+/** A table or breakdown whose source has not given it rows: loading, or failed. */
+export type TableState = 'loading' | 'error'
+
+/**
+ * What a list with no rows says: a skeleton while its source loads, that it
+ * could not be read when the source failed, and only then the empty
+ * sentence, so an unknown never reads as none.
+ */
+function EmptyState(props: { state?: TableState; empty: string }) {
+  const { t } = useTranslation()
+  if (props.state === 'loading') {
+    return (
+      <div role='status' aria-label={t('Loading...')} className='grid gap-2'>
+        <Skeleton className='h-4 w-full' />
+        <Skeleton className='h-4 w-full' />
+      </div>
+    )
+  }
+  if (props.state === 'error') {
+    return (
+      <p className='text-muted-foreground text-xs'>{t('Could not be read')}</p>
+    )
+  }
+  return <p className='text-muted-foreground text-xs'>{props.empty}</p>
+}
+
 /**
  * A count with its rate beside it, in a fixed-width muted column, so both
  * line up when a table is read down.
@@ -1268,11 +1326,18 @@ export function CountRate(props: { count: string; rate: string }) {
   )
 }
 
+/**
+ * A user's name and id. In a table cell, whose text does not wrap, a long
+ * name is cut short with its full text on hover; the id always shows.
+ */
 export function UserLabel(props: { user_id: number; username: string }) {
+  const name = props.username || '-'
   return (
-    <span className='truncate'>
-      {props.username || '-'}{' '}
-      <span className='text-muted-foreground font-mono text-xs'>
+    <span className='inline-flex max-w-full items-baseline gap-1'>
+      <span className='max-w-40 truncate' title={name}>
+        {name}
+      </span>
+      <span className='text-muted-foreground shrink-0 font-mono text-xs'>
         #{props.user_id}
       </span>
     </span>

@@ -33,14 +33,18 @@ import {
   SHORT_ROI_DAYS,
   TONES,
   channelEconomics,
+  joinSentences,
+  tableState,
   useInsightsFormat,
   type InsightsRangeInfo,
+  type InsightsSources,
   type InsightsTab,
 } from '../lib'
 import type { ChannelCost, ChannelInsights, ChannelRow } from '../types'
 import { useChannelsVerdict } from '../verdicts/channels'
 import {
   MIN_NEW_PAYERS,
+  addFeeEntry,
   channelKey,
   channelTotals,
   cohortRate,
@@ -50,10 +54,18 @@ import {
   newAccountShare,
   organicLift,
   paidChannels,
+  preFeeChannels,
   revenuePerPayer,
   roiMuted,
+  sinceFeeShare,
 } from './channels-analysis'
-import { ChannelContractPanel, ChannelCostChart } from './channels-insights'
+import {
+  ChannelContractPanel,
+  ChannelCostChart,
+  CommissionAccrualFindings,
+  SinceFee,
+} from './channels-insights'
+import { SampleNote, StaleNote } from './insight-kit'
 import {
   CountRate,
   MetricGrid,
@@ -62,6 +74,7 @@ import {
   UserLabel,
   Verdict,
   type MetricItem,
+  type TableState,
   type Tone,
 } from './shared'
 
@@ -92,17 +105,22 @@ export function ChannelsTab(props: {
   previous?: ChannelInsights
   range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
+  sources?: InsightsSources
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const label = useSegmentLabel()
   const data = props.data
   const verdict = useChannelsVerdict(data, props.previous, props.range)
+  const viewSource = props.sources?.view
+  const failed = !data && viewSource?.status === 'error'
+  const listState = tableState(viewSource, data?.channels)
   // Without a range, the moment the tab first drew stands for now, so the
   // contract read keeps one query key.
   const [mounted] = useState(() => Math.floor(Date.now() / 1000))
-  const end = props.range?.end ?? mounted
-  const days = props.range?.days
+  const range = props.range
+  const end = range?.end ?? mounted
+  const days = range?.days
   const rate = data?.usd_exchange_rate || 1
   // A segment with no account, payment or fee has nothing to compare.
   const rows = (data?.channels ?? []).filter(
@@ -143,12 +161,41 @@ export function ChannelsTab(props: {
     if (value == null) return 'default'
     return value < 0 ? 'danger' : 'good'
   }
-  const economicsHelp = t(
-    'Money is in yuan. Revenue is what the source’s accounts paid in the range, whenever they signed up. Cost is the channel fee over the range at the site’s exchange rate, and the given credit its accounts spent (gift plans, administrators’ credits, and the unpaid share of each wallet), at list price. A channel with a fee is not charged its commission, shown struck through: its affiliate account only attributes sign-ups. A channel without a fee is charged the commission it earned. Net is revenue less cost; ROI is net over the fee.'
+  const windowsHelp = t(
+    'ROI is net over the fee. The fee counts only the days of the range a fee entry ran; revenue counts every payment in the range from every account the source ever brought, including days before its fee began and accounts brought before the deal. From accounts since the fee and the contract to date read the deal alone.'
   )
-  const cohortHelp = t(
-    'Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.'
+  const economicsHelp = joinSentences(
+    t(
+      'Money is in yuan. Revenue is what the source’s accounts paid in the range, whenever they signed up. Cost is the channel fee over the range at the site’s exchange rate, the commission the source’s accounts’ payments earned any affiliate, and the given credit its accounts spent (gift plans, administrators’ credits, and the unpaid share of each wallet), at list price. A channel paid a fee is not charged commission, shown struck through. Net is revenue less cost.'
+    ),
+    windowsHelp,
+    t(
+      'A refund is recorded only as an administrator’s balance decrease, so a refunded order stays in revenue.'
+    )
   )
+  const cohortHelp = joinSentences(
+    t(
+      'Accounts created in the range, followed up to now. Activated: sent a request. Paid: completed a gateway order.'
+    ),
+    t(
+      'Its payers are not the return table’s: that table counts payments in the range from every account the source ever brought, this one only the range’s sign-ups, including payments after the range.'
+    )
+  )
+  const preFee = range ? preFeeChannels(rows, range.start) : []
+  const sinceFeeRows = paid.filter((row) => row.revenue_since_fee != null)
+  const sinceFee =
+    sinceFeeRows.length > 0
+      ? sinceFeeRows.reduce((sum, row) => sum + (row.revenue_since_fee ?? 0), 0)
+      : null
+  const showsSinceFee = rows.some((row) => sinceFeeShare(row) != null)
+  const showsEarned = rows.some((row) => row.commission_earned_usd != null)
+  const overlapping = rows.filter((row) => row.fee_overlap)
+  const giftV2 = rows.some(
+    (row) => row.clawed_back_usd != null || row.gift_dormant_usd != null
+  )
+  const showsInviteGift = rows.some((row) => row.invite_gift_usd != null)
+  const missing = (item: MetricItem): MetricItem =>
+    failed ? { ...item, missing: true, hint: undefined } : item
   let mutedHint: string | undefined
   if (muted === 'short') {
     mutedHint = t('Not judged over a range under {{days}} days', {
@@ -159,11 +206,19 @@ export function ChannelsTab(props: {
       count: MIN_NEW_PAYERS,
     })
   }
+  let roiHint = mutedHint
+  if (!roiHint && preFee.length > 0) {
+    roiHint = t('Revenue includes days before the fee of {{names}} began', {
+      names: preFee
+        .map((row) => row.channel.username || `#${row.channel.user_id}`)
+        .join(', '),
+    })
+  }
   const roiItem: MetricItem = {
     label: t('ROI'),
     value: totals.fee && !muted ? fmt.pct(totals.net / totals.fee) : '-',
     tone: tone(totals.fee && !muted ? totals.net : null),
-    hint: mutedHint,
+    hint: roiHint,
     help: economicsHelp,
   }
   const cacItem: MetricItem = {
@@ -192,70 +247,94 @@ export function ChannelsTab(props: {
       <Verdict
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text}
-        loading={!data}
+        loading={!data && !failed}
       />
       <MetricGrid
-        loading={!data}
-        items={[
-          {
-            label: t('Channel fees'),
-            featured: true,
-            value: fmt.cny(totals.fee),
-            hint: t(
-              '{{count}} paid channels; the monthly fee prorated over the range',
-              { count: paid.length }
-            ),
-            help: economicsHelp,
-            delta: {
-              current: totals.fee,
-              previous: before?.fee,
-              better: 'neutral',
-            },
-          },
-          {
-            label: t('Revenue from paid channels'),
-            value: fmt.cny(totals.revenue),
-            help: economicsHelp,
-            delta: {
-              current: totals.revenue,
-              previous: before?.revenue,
-              better: 'up',
-            },
-          },
-          {
-            label: t('Net after channel cost'),
-            value: fmt.cny(totals.net),
-            tone: tone(paid.length ? totals.net : null),
-            hint: projects
-              ? t('Projected month: {{net}}', {
-                  net: fmt.cny((totals.net / days) * 30),
-                })
-              : undefined,
-            help: t(
-              'Revenue from the paid channels less their fees and the given credit their accounts spent. The projection runs the range’s daily net over 30 days; it is shown from ranges of 7 days.'
-            ),
-            delta: { current: totals.net, previous: before?.net, better: 'up' },
-          },
-          roiItem,
-          cacItem,
-          {
-            label: t('Fees this month'),
-            value: fmt.cny(fees.accrued * rate),
-            hint: t('of {{monthly}} a month running now', {
-              monthly: fmt.cny(fees.monthly * rate),
-            }),
-            help: t(
-              'Channel fees accrued from the first of this month to now, a thirtieth of each monthly fee a day, at the site’s exchange rate, against the monthly fees of the entries running now.'
-            ),
-            ...(fees.monthly > 0 && {
-              meter: {
-                value: Math.min(fees.accrued / fees.monthly, 1),
-                label: t('Share of this month’s fees accrued'),
+        loading={!data && !failed}
+        items={(
+          [
+            {
+              label: t('Channel fees'),
+              featured: true,
+              value: fmt.cny(totals.fee),
+              hint: t(
+                '{{count}} paid channels; the monthly fee prorated over the range',
+                { count: paid.length }
+              ),
+              help: economicsHelp,
+              delta: {
+                current: totals.fee,
+                previous: before?.fee,
+                better: 'neutral',
               },
-            }),
-          },
-        ]}
+            },
+            {
+              label: t('Revenue from paid channels'),
+              value: fmt.cny(totals.revenue),
+              hint:
+                sinceFee == null
+                  ? undefined
+                  : t('{{amount}} from accounts since the fee', {
+                      amount: fmt.cny(sinceFee),
+                    }),
+              help: economicsHelp,
+              delta: {
+                current: totals.revenue,
+                previous: before?.revenue,
+                better: 'up',
+              },
+            },
+            {
+              label: t('Net after channel cost'),
+              value: fmt.cny(totals.net),
+              tone: tone(paid.length ? totals.net : null),
+              hint: projects
+                ? t('Projected month: {{net}}', {
+                    net: fmt.cny((totals.net / days) * 30),
+                  })
+                : undefined,
+              help: t(
+                'Revenue from the paid channels less their fees and the given credit their accounts spent. The projection runs the range’s daily net over 30 days; it is shown from ranges of 7 days.'
+              ),
+              delta: {
+                current: totals.net,
+                previous: before?.net,
+                better: 'up',
+              },
+            },
+            roiItem,
+            cacItem,
+            {
+              label: t('Fees this month'),
+              value: fmt.cny(fees.accrued * rate),
+              hint: t('of {{monthly}} a month running now', {
+                monthly: fmt.cny(fees.monthly * rate),
+              }),
+              help: t(
+                'Channel fees accrued from the first of this month to now, a thirtieth of each monthly fee a day, at the site’s exchange rate, against the monthly fees of the entries running now.'
+              ),
+              ...(fees.monthly > 0 && {
+                meter: {
+                  value: Math.min(fees.accrued / fees.monthly, 1),
+                  label: t('Share of this month’s fees accrued'),
+                },
+              }),
+            },
+          ] satisfies MetricItem[]
+        ).map(missing)}
       />
+      {props.sources?.previous.status === 'error' && data && (
+        <SampleNote>
+          {t('The previous period could not be read, so no change is shown.')}
+        </SampleNote>
+      )}
+      {range && (
+        <StaleNote
+          staleHours={data?.stale_hours}
+          rangeHours={(range.end - range.start) / 3600}
+        />
+      )}
+      <CommissionAccrualFindings rows={rows} />
       <ChannelContractPanel
         costs={data?.costs ?? []}
         current={rows}
@@ -263,11 +342,18 @@ export function ChannelsTab(props: {
         end={end}
       />
       <ChannelCostChart rows={rows} rate={rate} />
-      <Panel title={t('Channel return')} help={economicsHelp}>
+      <Panel
+        title={t('Channel return')}
+        help={economicsHelp}
+        description={t(
+          'Payments in the range from every account each source ever brought; the sign-up table below follows only the range’s sign-ups.'
+        )}
+      >
         <SimpleTable<ChannelRow>
           rows={rows}
           rowKey={(row) => `${row.segment}-${row.channel.user_id}`}
           empty={t('No data')}
+          state={listState}
           columns={[
             { key: 'source', label: t('Source'), render: label },
             {
@@ -297,13 +383,26 @@ export function ChannelsTab(props: {
                     key: 'new-accounts',
                     label: t('From new accounts'),
                     hint: t(
-                      'The share of revenue paid by accounts the source brought in this range; the rest came from accounts it brought earlier.'
+                      'The share of revenue paid in the range by accounts created in the range; the rest came from accounts the source brought earlier. Not the sign-up table’s payers, which include payments after the range.'
                     ),
                     align: 'right' as const,
                     render: (row: ChannelRow) => {
                       const share = newAccountShare(row)
                       return share == null ? '-' : fmt.pct(share)
                     },
+                  },
+                ]
+              : []),
+            ...(showsSinceFee
+              ? [
+                  {
+                    key: 'since-fee',
+                    label: t('From accounts since the fee'),
+                    hint: t(
+                      'Revenue paid in the range by accounts created on or after the channel’s fee began, with its share of the channel’s revenue; the rest came from accounts it brought before the deal.'
+                    ),
+                    align: 'right' as const,
+                    render: (row: ChannelRow) => <SinceFee row={row} />,
                   },
                 ]
               : []),
@@ -326,24 +425,52 @@ export function ChannelsTab(props: {
             {
               key: 'commission',
               label: t('Commission'),
+              hint: showsEarned
+                ? t(
+                    'Commission the source’s accounts’ payments earned any affiliate, at both levels. Earned: what a channel’s own account was credited, wherever its payers sit.'
+                  )
+                : undefined,
               align: 'right',
               render: (row) => {
-                if (!row.commission_usd) return '-'
+                const earned = row.commission_earned_usd
+                const earnedNote =
+                  row.segment === 'channel' &&
+                  earned != null &&
+                  Math.abs(earned - row.commission_usd) >= 0.01 ? (
+                    <span className='text-muted-foreground ml-1 text-xs'>
+                      {t('earned {{amount}}', { amount: fmt.cny(earned) })}
+                    </span>
+                  ) : null
+                if (!row.commission_usd) {
+                  return earnedNote ? (
+                    <span className='tabular-nums'>- {earnedNote}</span>
+                  ) : (
+                    '-'
+                  )
+                }
                 if (row.fee_usd > 0) {
                   return (
-                    <span className='text-muted-foreground tabular-nums line-through'>
-                      {fmt.cny(row.commission_usd)}
+                    <span className='tabular-nums'>
+                      <span className='text-muted-foreground line-through'>
+                        {fmt.cny(row.commission_usd)}
+                      </span>
+                      {earnedNote}
                     </span>
                   )
                 }
-                return fmt.cny(row.commission_usd)
+                return (
+                  <span className='tabular-nums'>
+                    {fmt.cny(row.commission_usd)}
+                    {earnedNote}
+                  </span>
+                )
               },
             },
             {
               key: 'gift',
               label: t('Gift spent'),
               hint: t(
-                'Given credit the accounts spent in the range, at list price.'
+                'Given credit the accounts spent in the range, at list price. A wallet’s unpaid share is taken hour by hour, from the credits it had received by then.'
               ),
               align: 'right',
               render: (row) => {
@@ -424,6 +551,7 @@ export function ChannelsTab(props: {
           rows={cohortRows}
           rowKey={(row) => channelKey(row)}
           empty={t('No data')}
+          state={listState}
           faded={(row) => row.registered < MIN_COHORT}
           columns={[
             { key: 'source', label: t('Source'), render: label },
@@ -502,19 +630,28 @@ export function ChannelsTab(props: {
       </Panel>
       <Panel
         title={t('Given credit by source')}
-        help={t(
-          'Granted: gift plans and administrators’ balance changes in the range. Spent: given credit used in the range. Unspent: what is left now on running gift plans and in the unpaid share of wallets, which can still be spent.'
-        )}
+        help={
+          giftV2
+            ? t(
+                'Granted: gift plans created in the range and administrators’ balance increases. Clawed back: administrators’ balance decreases, such as a refund or a voided gift farm. Spent: given credit used in the range. Unspent: what is left now on running gift plans and in the unpaid share of wallets on enabled accounts; credit on disabled accounts is shown apart, and deleted accounts are left out. A channel account’s own given credit counts in its own row.'
+              )
+            : t(
+                'Granted: gift plans and administrators’ balance changes in the range. Spent: given credit used in the range. Unspent: what is left now on running gift plans and in the unpaid share of wallets, which can still be spent.'
+              )
+        }
       >
         <SimpleTable<ChannelRow>
           rows={rows.filter(
             (row) =>
               row.granted_usd ||
               row.gift_consumption_usd ||
-              row.gift_outstanding_usd
+              row.gift_outstanding_usd ||
+              row.clawed_back_usd ||
+              row.gift_dormant_usd
           )}
           rowKey={(row) => `${row.segment}-${row.channel.user_id}`}
           empty={t('No data')}
+          state={listState}
           columns={[
             { key: 'source', label: t('Source'), render: label },
             {
@@ -523,12 +660,44 @@ export function ChannelsTab(props: {
               align: 'right',
               render: (row) => fmt.cny(row.granted_usd),
             },
+            ...(giftV2
+              ? [
+                  {
+                    key: 'clawed',
+                    label: t('Clawed back'),
+                    hint: t(
+                      'Administrators’ balance decreases in the range. A refund is recorded only this way, so its order still counts in revenue.'
+                    ),
+                    align: 'right' as const,
+                    render: (row: ChannelRow) =>
+                      row.clawed_back_usd ? fmt.cny(row.clawed_back_usd) : '-',
+                  },
+                ]
+              : []),
             {
               key: 'spent',
               label: t('Spent'),
               align: 'right',
               render: (row) => fmt.cny(row.gift_consumption_usd),
             },
+            ...(showsInviteGift
+              ? [
+                  {
+                    key: 'invite-gift',
+                    label: t('Invite gifts spent'),
+                    hint: t(
+                      'Use covered by given plans on accounts whose only given plan is an invite gift: at least what invite gift plans covered.'
+                    ),
+                    align: 'right' as const,
+                    render: (row: ChannelRow) =>
+                      row.invite_gift_usd
+                        ? t('at least {{amount}}', {
+                            amount: fmt.cny(row.invite_gift_usd),
+                          })
+                        : '-',
+                  },
+                ]
+              : []),
             {
               key: 'unspent',
               label: t('Unspent now'),
@@ -538,6 +707,22 @@ export function ChannelsTab(props: {
               align: 'right',
               render: (row) => fmt.cny(row.gift_outstanding_usd),
             },
+            ...(giftV2
+              ? [
+                  {
+                    key: 'dormant',
+                    label: t('On disabled accounts'),
+                    hint: t(
+                      'Given credit left now on disabled accounts: it comes back if an administrator enables them again.'
+                    ),
+                    align: 'right' as const,
+                    render: (row: ChannelRow) =>
+                      row.gift_dormant_usd
+                        ? fmt.cny(row.gift_dormant_usd)
+                        : '-',
+                  },
+                ]
+              : []),
             {
               key: 'consumption',
               label: t('All use'),
@@ -551,8 +736,10 @@ export function ChannelsTab(props: {
         />
       </Panel>
       <ChannelCostsPanel
-        costs={data?.costs ?? []}
+        costs={data ? (data.costs ?? []) : undefined}
+        state={tableState(viewSource, data?.costs)}
         channels={rows.filter((row) => row.segment === 'channel')}
+        overlapping={overlapping}
       />
     </div>
   )
@@ -563,8 +750,12 @@ export function ChannelsTab(props: {
  * fee is a new entry starting where the old one ends.
  */
 function ChannelCostsPanel(props: {
-  costs: ChannelCost[]
+  /** The stored entries; undefined until read, when nothing can be saved over them. */
+  costs: ChannelCost[] | undefined
+  state?: TableState
   channels: ChannelRow[]
+  /** Channels whose stored entries overlap. */
+  overlapping: ChannelRow[]
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -592,39 +783,55 @@ function ChannelCostsPanel(props: {
     onError: (error) =>
       toast.error(error instanceof Error ? error.message : String(error)),
   })
+  const stored = props.costs
   const amount = Number(monthly)
   const valid =
+    stored != null &&
     userID !== '' &&
     monthly !== '' &&
     Number.isFinite(amount) &&
     amount >= 0 &&
     start !== '' &&
     (end === '' || end >= start)
-  const add = () =>
-    save.mutate([
-      ...props.costs,
-      {
+  const entry: ChannelCost | null = valid
+    ? {
         user_id: Number(userID),
         monthly_usd: amount,
         start: dateSeconds(start),
         // The end date is the last day paid for.
         end: end ? dateSeconds(end) + DAY_SECONDS : 0,
         note,
-      },
-    ])
+      }
+    : null
+  const next = stored && entry ? addFeeEntry(stored, entry) : null
+  const add = () => {
+    if (next) save.mutate(next.costs)
+  }
+  const overlapNames = props.overlapping
+    .map((row) => row.channel.username || `#${row.channel.user_id}`)
+    .join(', ')
 
   return (
     <Panel
       title={t('Channel fees')}
       help={t(
-        'What each channel is paid, in US dollars a month. The fee counts every day from its start to its last day, a thirtieth of the month a day; with no last day it runs until now. When a fee changes, set the old entry’s last day and add a new one.'
+        'What each channel is paid, in US dollars a month. The fee counts every day from its start to its last day, a thirtieth of the month a day; with no last day it runs until now. A channel’s entries do not add up: a new entry replaces the one before from its own start, and adding one sets the running entry’s last day.'
       )}
     >
       <div className='grid gap-3'>
+        {overlapNames && (
+          <p className={`text-xs ${TONES.warning}`}>
+            {t(
+              'The fee entries of {{names}} overlap: each later entry replaces the earlier one from its own start. Delete the earlier entry and add it again with a last day so the list reads as it is counted.',
+              { names: overlapNames }
+            )}
+          </p>
+        )}
         <SimpleTable<ChannelCost>
-          rows={props.costs}
+          rows={stored}
           rowKey={(row, index) => `${row.user_id}-${row.start}-${index}`}
           empty={t('No channel fees recorded')}
+          state={props.state}
           columns={[
             {
               key: 'channel',
@@ -666,9 +873,11 @@ function ChannelCostsPanel(props: {
                   size='icon-sm'
                   aria-label={t('Delete')}
                   disabled={save.isPending}
-                  onClick={() =>
-                    save.mutate(props.costs.filter((cost) => cost !== row))
-                  }
+                  onClick={() => {
+                    if (stored) {
+                      save.mutate(stored.filter((cost) => cost !== row))
+                    }
+                  }}
                 >
                   <Trash2 />
                 </Button>
@@ -737,10 +946,21 @@ function ChannelCostsPanel(props: {
               onChange={(event) => setNote(event.target.value)}
             />
           </label>
-          <Button size='sm' disabled={!valid || save.isPending} onClick={add}>
+          <Button size='sm' disabled={!next || save.isPending} onClick={add}>
             {t('Add')}
           </Button>
         </div>
+        {next && next.closed > 0 && (
+          <p className='text-muted-foreground text-xs'>
+            {t(
+              'Adding this ends {{name}}’s running fee the day before {{date}}.',
+              {
+                name: names.get(Number(userID)) || `#${userID}`,
+                date: fmt.day(dateSeconds(start)),
+              }
+            )}
+          </p>
+        )}
       </div>
     </Panel>
   )

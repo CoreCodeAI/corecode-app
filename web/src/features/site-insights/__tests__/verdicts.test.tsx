@@ -54,9 +54,43 @@ describe('tab verdicts', () => {
     } as unknown as CapacityInsights
     const previous = { requests: 1000 } as CapacityInsights
     const { result } = renderHook(() => useCapacityVerdict(data, previous))
+    // A few stray refusals warn; they do not call for accounts.
+    expect(result.current).toEqual({
+      tone: 'warning',
+      text: '1,200 requests (up 20%). Peak concurrency 30 of 60 slots (50%). 4 turned away with the pool full.',
+    })
+  })
+
+  it('reads the capacity tab’s pool peak against the slots, and the engine’s caps and budgets apart', () => {
+    const data = {
+      requests: 1200,
+      peak_concurrency: 70,
+      pool_peak: 60,
+      error_categories: [
+        { name: 'engine_concurrency', count: 20 },
+        { name: 'engine_limit', count: 3 },
+        { name: 'engine_budget', count: 2 },
+      ],
+      limit_rejection_total: 9,
+      pool: { configured: true, effective_slots: 60 },
+    } as unknown as CapacityInsights
+    const { result } = renderHook(() => useCapacityVerdict(data, undefined))
     expect(result.current).toEqual({
       tone: 'danger',
-      text: '1,200 requests (up 20%). Peak concurrency 30 of 60 slots (50%). 4 turned away with the pool full.',
+      text: "1,200 requests. Pool peak 60 of 60 slots (100%). 20 turned away with the pool full. 3 refused at the engine's own caps: raise the group's limit or the key's cap. 2 refused by accounts' request rate or quota budget: wait for the window or add accounts. 9 attempts refused by per-user limits, retries included.",
+    })
+    const calm = {
+      ...data,
+      pool_peak: 30,
+      error_categories: [{ name: 'engine_limit', count: 3 }],
+      limit_rejection_total: 0,
+    } as unknown as CapacityInsights
+    // The site's 70 on every channel is past the slots; the pool's 30 is not.
+    expect(
+      renderHook(() => useCapacityVerdict(calm, undefined)).result.current
+    ).toEqual({
+      tone: 'warning',
+      text: "1,200 requests. Pool peak 30 of 60 slots (50%). 3 refused at the engine's own caps: raise the group's limit or the key's cap.",
     })
   })
 
@@ -86,7 +120,7 @@ describe('tab verdicts', () => {
     } as unknown as CapacityInsights
     const eligibility = renderHook(() => useCapacityVerdict(short, undefined))
       .result.current
-    expect(eligibility?.tone).toBe('danger')
+    expect(eligibility?.tone).toBe('warning')
     expect(eligibility?.text).toContain(
       'with the peak only 12 of 60 slots: too few accounts were schedulable (cooldowns or spent quota); check the account pool.'
     )
@@ -153,7 +187,7 @@ describe('tab verdicts', () => {
     const { result } = renderHook(() => useGrowthVerdict(data, undefined))
     expect(result.current).toEqual({
       tone: 'warning',
-      text: '50 sign-ups. 20% sent a request and 10% paid.',
+      text: '50 sign-ups. 20% activated and 10% paid.',
     })
   })
 
@@ -179,7 +213,7 @@ describe('tab verdicts', () => {
     const { result } = renderHook(() => useGrowthVerdict(data, previous, range))
     expect(result.current).toEqual({
       tone: 'default',
-      text: '40 sign-ups (to 2×). Driven by LinuxDO (+25). 10% have sent a request and 0% paid so far; accounts hours old are too young to judge.',
+      text: '40 sign-ups (to 2×). Driven by LinuxDO (+25). 10% have activated and 0% paid so far; accounts hours old are too young to judge.',
     })
   })
 
@@ -190,7 +224,7 @@ describe('tab verdicts', () => {
     const { result } = renderHook(() => useGrowthVerdict(data, undefined))
     expect(result.current).toEqual({
       tone: 'default',
-      text: '10 sign-ups. 10% sent a request and 0% paid; too few sign-ups to judge.',
+      text: '10 sign-ups. 10% activated and 0% paid; too few sign-ups to judge.',
     })
   })
 
@@ -247,6 +281,33 @@ describe('tab verdicts', () => {
     } as unknown as QualityInsights
     const { result } = renderHook(() => useQualityVerdict(data, undefined))
     expect(result.current).toEqual({ tone: 'good', text: 'Failure rate 1.6%.' })
+  })
+
+  it('names media tasks failing after submission and requests with no channel', () => {
+    const data = {
+      requests: 1000,
+      error_rate: 0.016,
+      vendors: [],
+      models: [],
+      tasks: {
+        total: {},
+        models: [
+          {
+            model: 'seedance-2.5-720p',
+            submitted: 100,
+            succeeded: 70,
+            failed: 30,
+            failure_rate: 0.3,
+          },
+        ],
+      },
+      refusals: { no_channel: 12, risk_gate: 0 },
+    } as unknown as QualityInsights
+    const { result } = renderHook(() => useQualityVerdict(data, undefined))
+    expect(result.current).toEqual({
+      tone: 'warning',
+      text: 'Failure rate 1.6%. seedance-2.5-720p tasks fail 30% after submission. 12 requests found no channel.',
+    })
   })
 
   it('names the model that drove the failure rate, or says the previous period is too small', () => {
@@ -399,6 +460,43 @@ describe('tab verdicts', () => {
       /^12 sign-ups\. Sign-ups surged at .+: 9, 9× the same hour of the previous period\. To check: 1 addresses shared by several accounts\. Review 10\.0\.0\.9 first: 2 plan buyers, 2 registered within 10 minutes, 2 created in this range, All paid: likely an office or a reseller\. Act on accounts from Users, usage logs and Risk Control\.$/
     )
   })
+  it('leaves shared exits out of the risk verdict, counts every shared address, and names gift-farming inviters', () => {
+    const user = (id: number) => ({
+      user_id: id,
+      username: `u${id}`,
+      requests: 1,
+      paid: false,
+      subscription: true,
+      created_at: 0,
+      balance_usd: 0,
+    })
+    const data = {
+      signups: 5,
+      series_unit: 'hour',
+      signup_series: [],
+      shared_ip_total: 1,
+      shared_exits: 1,
+      shared_ips: [
+        {
+          ip: '10.0.0.7',
+          requests: 40,
+          subscription_buyers: 3,
+          shared_exit: true,
+          users: [user(1), user(2), user(3)],
+        },
+      ],
+      alias_emails: 0,
+      off_whitelist: 0,
+      debtors: [],
+      unpaid_inviters: [
+        { user_id: 9, username: 'boss', accounts: 4, consumption_usd: 12 },
+      ],
+    } as unknown as RiskInsights
+    expect(renderHook(() => useRiskVerdict(data)).result.current).toEqual({
+      tone: 'warning',
+      text: '5 sign-ups. To check: 1 inviters with 3 or more unpaid spenders. Act on accounts from Users, usage logs and Risk Control.',
+    })
+  })
 })
 
 describe('channels verdict', () => {
@@ -486,6 +584,22 @@ describe('channels verdict', () => {
       text: 'No channel has a fee recorded.',
     })
   })
+
+  it('warns when a fee channel is still credited commission, without changing net', () => {
+    const earning = channel(306, 'magpie', {
+      fee_usd: 100,
+      revenue: 1000,
+      commission_usd: 40,
+      commission_accruing: 60,
+    })
+    const { result } = renderHook(() =>
+      useChannelsVerdict(insights([earning]), undefined, range(30))
+    )
+    expect(result.current).toEqual({
+      tone: 'warning',
+      text: 'Paid channels brought ¥1,000, net ¥300 after their cost. Every paid channel covers its cost. magpie was still credited ¥60 of commission while its fee ran.',
+    })
+  })
 })
 
 describe('finance verdict', () => {
@@ -540,6 +654,75 @@ describe('finance verdict', () => {
     expect(result.current?.tone).toBe('warning')
     expect(result.current?.text).toBe(
       'Paid ¥200, earned ¥150. Gifted credit is 40% of customers’ consumption.'
+    )
+  })
+
+  it('says the margin is before upstream bills, and warns on free accounts', () => {
+    const priced = {
+      ...base,
+      start_time: 0,
+      end_time: 30 * 86400,
+      usd_exchange_rate: 7,
+      vendor_revenue: [
+        {
+          vendor: 'claude',
+          customer_usd: 300,
+          share: 1,
+          recognized_revenue: 150,
+        },
+      ],
+      plan_accounts: [
+        { vendor: '', plan: 'Max', tier: '', accounts: 2, eligible: 2 },
+      ],
+    } as FinanceInsights
+    const { result } = renderHook(() => useFinanceVerdict(priced, undefined))
+    expect(result.current?.tone).toBe('warning')
+    expect(result.current?.text).toBe(
+      'Paid ¥200, earned ¥150. Gross margin before upstream bills ¥150 (100%). 2 pool accounts have no recorded price and count as free, so the margin reads high.'
+    )
+    const billed = {
+      ...priced,
+      plan_accounts: [],
+      vendor_upstream: [
+        {
+          vendor: 'claude',
+          bill_usd: 30,
+          fee_usd: 0,
+          costed_revenue_usd: 300,
+          uncosted_revenue_usd: 0,
+          oldest_bill_at: 0,
+          channels: [7],
+        },
+      ],
+    } as FinanceInsights
+    const { result: withBills } = renderHook(() =>
+      useFinanceVerdict(billed, undefined)
+    )
+    expect(withBills.current?.tone).toBe('good')
+    expect(withBills.current?.text).toBe(
+      'Paid ¥200, earned ¥150. Gross margin ¥120 (80%).'
+    )
+  })
+
+  it('warns when a payment method’s checkouts stop completing', () => {
+    const funnel = (paid: number) => ({
+      payment_method: 'alipay',
+      created: 10,
+      paid,
+      failed: 0,
+      expired: 0,
+      pending: 10 - paid,
+      pending_stale: 0,
+      plan_orders: 0,
+      paid_money: paid,
+      completion_rate: paid / 10,
+    })
+    const now = { ...base, order_methods: [funnel(2)] } as FinanceInsights
+    const prior = { ...before, order_methods: [funnel(6)] } as FinanceInsights
+    const { result } = renderHook(() => useFinanceVerdict(now, prior))
+    expect(result.current?.tone).toBe('warning')
+    expect(result.current?.text).toMatch(
+      /completed 20%, down from 60%: check the payment page\.$/
     )
   })
 })
@@ -681,6 +864,46 @@ describe('upstream verdict', () => {
     ).toEqual({
       tone: 'default',
       text: 'No channel served enough requests to compare.',
+    })
+  })
+
+  it('names a channel disabled all range, failing tasks and a bill read from some keys', () => {
+    const data = insights([
+      channel({
+        id: 1,
+        name: 'a',
+        requests: 990,
+        errors: 10,
+        failure_rate: 0.01,
+        cost_source: 'upstream',
+        revenue_usd: 100,
+        cost_usd: 40,
+        key_count: 8,
+        tasks: {
+          channel_id: 1,
+          submitted: 40,
+          succeeded: 30,
+          failed: 10,
+          timed_out: 0,
+          running: 0,
+          stalled: 0,
+          failure_rate: 0.25,
+          finish_p50_s: 60,
+          finish_p95_s: 120,
+          reasons: [],
+        },
+      }),
+      channel({
+        id: 3,
+        name: 'media',
+        status: 3,
+        status_reason: 'quota exhausted',
+      }),
+    ])
+    const { result } = renderHook(() => useUpstreamVerdict(data, undefined))
+    expect(result.current).toEqual({
+      tone: 'danger',
+      text: 'Failure rate 1%. All clear: every channel with at least 100 attempts fails under 2%. a failed 25% of its 40 finished tasks. media was disabled automatically and served nothing in this range. Gross margin on channels with a known cost: 60%, overstated: the bill of a is read from some keys only.',
     })
   })
 })

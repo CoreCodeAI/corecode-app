@@ -23,8 +23,11 @@ import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  accountLimits,
   dailyPeaks,
   diagnoseRejections,
+  enabledInFlight,
+  engineRefusals,
   failureHours,
   headroom,
   peakTrend,
@@ -285,5 +288,117 @@ describe('capacity tab by range', () => {
       screen.getByText('Peak concurrency by weekday and hour')
     ).toBeTruthy()
     expect(screen.getByText('Daily peak concurrency')).toBeTruthy()
+  })
+})
+
+describe('capacity on the pool’s own terms', () => {
+  it('reads the pool’s peak against the slots where the server sends it', () => {
+    const rows = [
+      hour(0, { peak_concurrency: 14, pool_peak: 7, engine_rejections: 4 }),
+      hour(HOUR, { peak_concurrency: 4 }),
+    ]
+    // The site's 14 is past the slots; the pool's 7 is under them.
+    expect(headroom(rows, 10, 3 * HOUR)).toEqual({
+      near: 0,
+      over: 0,
+      tightest: { hour: 0, peak: 7, free: 3 },
+    })
+    expect(diagnoseRejections(rows, 10)?.cause).toBe('eligibility')
+    expect(dailyPeaks(rows, 100 * HOUR, () => 0)).toEqual([])
+  })
+
+  it('splits the engine’s refusals, counts enabled groups, and reads each group’s limit', () => {
+    expect(
+      engineRefusals([
+        { name: 'engine_concurrency', count: 5 },
+        { name: 'engine_limit', count: 2 },
+        { name: 'engine_budget', count: 1 },
+        { name: 'upstream_rate_limit', count: 9 },
+      ])
+    ).toEqual({ full: 5, limit: 2, budget: 1 })
+    expect(engineRefusals(null)).toEqual({ full: 0, limit: 0, budget: 0 })
+    const groups = [
+      group({ id: 1, in_flight: 5 }),
+      group({ id: 2, in_flight: 3, enabled: false }),
+    ]
+    expect(enabledInFlight(groups)).toBe(5)
+    expect(accountLimits(groups, 4)).toEqual([4])
+    expect(
+      accountLimits(
+        [
+          { ...group({ id: 1 }), credential_limit: 8 },
+          group({ id: 3 }),
+          { ...group({ id: 2, enabled: false }), credential_limit: 2 },
+        ],
+        4
+      )
+    ).toEqual([4, 8])
+  })
+
+  it('shows the pool peak beside the site’s, and the engine’s in-flight count', () => {
+    const data = insights()
+    data.in_flight = 99
+    data.pool_peak = 6
+    data.pool_peak_at = 0
+    data.peak_concurrency = 40
+    data.error_categories = [{ name: 'upstream_rate_limit', count: 3 }]
+    data.limit_rejected_users = [{ user_id: 3, username: 'eve', count: 4 }]
+    render(<CapacityTab data={data} vendor='all' />, { wrapper })
+    expect(screen.getByText('Pool peak concurrency')).toBeTruthy()
+    expect(
+      screen.getByText(
+        /^Pool peak 6 at .+, 20% of the 30 pool slots; the site's, every channel, was 40\.$/
+      )
+    ).toBeTruthy()
+    // The engine's 5 + 2 over enabled groups, not this server's 99.
+    expect(screen.getByText('7')).toBeTruthy()
+    expect(screen.queryByText('99')).toBeNull()
+    // Every provider's 429s are not Claude's.
+    expect(screen.queryByText('Claude upstream rate limit')).toBeNull()
+    expect(screen.getAllByText('Upstream rate limit').length).toBeGreaterThan(0)
+    expect(screen.getByText('Refused attempts')).toBeTruthy()
+  })
+
+  it('hides the in-flight meter when the pool cannot be read', () => {
+    const data = insights()
+    data.pool = { ...data.pool, error: 'engine down' }
+    render(<CapacityTab data={data} vendor='all' />, { wrapper })
+    expect(screen.getByText('The engine pool could not be read')).toBeTruthy()
+    expect(screen.getByText('engine down')).toBeTruthy()
+  })
+
+  it('names the engine’s caps and budgets with their own actions', () => {
+    const data = insights()
+    data.error_categories = [
+      { name: 'engine_limit', count: 3 },
+      { name: 'engine_budget', count: 2 },
+    ]
+    render(<CapacityTab data={data} vendor='claude' />, { wrapper })
+    expect(
+      screen.getByText(
+        /raise the group's limit or the key's cap\..*wait for the window to reset or add accounts\./
+      )
+    ).toBeTruthy()
+    expect(
+      screen.getByText('Also 3 at engine caps, 2 at account budgets')
+    ).toBeTruthy()
+  })
+
+  it('says a failed read instead of printing none', () => {
+    render(
+      <CapacityTab
+        data={undefined}
+        vendor='all'
+        sources={{
+          view: { status: 'error', error: 'timeout' },
+          previous: { status: 'error' },
+        }}
+      />,
+      { wrapper }
+    )
+    expect(screen.getAllByText('timeout').length).toBeGreaterThan(0)
+    expect(screen.queryByText('No failed requests in this range')).toBeNull()
+    expect(screen.queryByText('No requests in this range')).toBeNull()
+    expect(screen.getAllByText('Could not be read').length).toBeGreaterThan(0)
   })
 })

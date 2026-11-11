@@ -195,3 +195,30 @@ export function TabLink(props: {
 export function SampleNote(props: { children: ReactNode }) {
   return <p className='text-muted-foreground text-xs'>{props.children}</p>
 }
+
+/**
+ * Says that part of the range is still counted the earlier way while the
+ * rollup rebuilds it: staleHours of the range's hours (the view's
+ * stale_hours). Nothing at 0 or without the field.
+ */
+export function StaleNote(props: {
+  staleHours: number | null | undefined
+  rangeHours: number
+}) {
+  const { t } = useTranslation()
+  const stale = props.staleHours ?? 0
+  if (stale <= 0) return null
+  const total = Math.max(props.rangeHours, stale)
+  return (
+    <p className='text-muted-foreground text-xs'>
+      {stale >= total
+        ? t(
+            'This range is still counted by the earlier definition and is being rebuilt; its figures may change.'
+          )
+        : t(
+            '{{stale}} of the range’s {{total}} hours are still counted by the earlier definition and are being rebuilt; their figures may change.',
+            { stale, total: Math.round(total) }
+          )}
+    </p>
+  )
+}
