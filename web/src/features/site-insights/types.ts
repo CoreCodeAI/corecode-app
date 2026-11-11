@@ -86,6 +86,25 @@ export type EngineAccount = {
   subscription_state?: string
   /** When the subscription next renews; 0 or absent without a date. */
   subscription_period_end_ms?: number
+  /** Usable quota reset credits, one entry per credit; absent from an engine before them. */
+  reset_credits?: EngineResetCredit[]
+}
+
+/**
+ * One quota reset credit. A full Claude credit also clears the overall weekly
+ * limit; a partial one clears the 5-hour and a model's weekly limit only. The
+ * kind is empty when the provider does not say.
+ */
+export type EngineResetCredit = {
+  expires_at_ms?: number | null
+  kind?: 'full' | 'partial' | ''
+}
+
+export type EngineResetResult = {
+  status: string
+  windows_reset: number
+  observation_pending: boolean
+  replayed: boolean
 }
 
 export type EngineGroup = {

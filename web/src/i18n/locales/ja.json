@@ -8047,6 +8047,27 @@
     "Billed per second of generated video.": "生成した動画の秒数に応じて課金されます。",
     "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "1 枚ごとの課金で、出力サイズによって価格が変わります。1024x1024 などの小さいサイズは 1K、3840x2160 などの大きいサイズは 4K です。それ以外のサイズ、およびサイズ未指定のリクエストは 2K で課金されます。",
     "Service Status": "稼働状況",
-    "Live availability of each group, served at /status/.": "各グループの稼働状況。/status/ で公開。"
+    "Live availability of each group, served at /status/.": "各グループの稼働状況。/status/ で公開。",
+    "Reset credits": "リセット券",
+    "Quota reset credits the account holds. A full reset clears the 5-hour and weekly limits; a partial reset clears the 5-hour and a model weekly limit only.": "アカウントが持つクォータのリセット券。全体リセットは 5 時間枠と週間枠を、部分リセットは 5 時間枠とモデル別の週間枠だけをクリアします。",
+    "Full reset": "全体リセット",
+    "Partial reset": "部分リセット",
+    "Clears the 5-hour and weekly limits.": "5 時間枠と週間枠をクリアします。",
+    "Clears the 5-hour and model weekly limits, not the overall weekly limit.": "5 時間枠とモデル別の週間枠をクリアします。週間枠全体はクリアしません。",
+    "The provider does not say which limits it clears.": "どの枠をクリアするかはプロバイダーが示していません。",
+    "No expiry": "有効期限なし",
+    "{{kind}} for #{{id}} {{email}}": "{{kind}}：#{{id}} {{email}}",
+    "Uses the account's earliest-expiring full reset credit, which clears its 5-hour and weekly limits. This cannot be undone.": "このアカウントで期限が最も近い全体リセットを使い、5 時間枠と週間枠をクリアします。元に戻せません。",
+    "Uses the account's earliest-expiring partial reset credit, which clears its 5-hour and model weekly limits; the overall weekly limit stays. This cannot be undone.": "このアカウントで期限が最も近い部分リセットを使い、5 時間枠とモデル別の週間枠をクリアします。週間枠全体は変わりません。元に戻せません。",
+    "Uses one of the account's reset credits. This cannot be undone.": "このアカウントのリセット券を 1 枚使います。元に戻せません。",
+    "Use reset credit": "リセット券を使う",
+    "Quota reset": "クォータをリセットしました",
+    "Quota reset; the new reading follows shortly.": "クォータをリセットしました。新しい値はまもなく反映されます。",
+    "The reset failed.": "リセットに失敗しました。",
+    "No reset credit of this kind is available.": "この種類の使えるリセット券がありません。",
+    "The reset could not be prepared; no credit was used. Try again later.": "リセットの準備に失敗しました。リセット券は使われていません。後でもう一度お試しください。",
+    "The provider rejected the reset credit.": "プロバイダーがリセット券を拒否しました。",
+    "The reset outcome is unknown. Try again to check the same redemption.": "リセットの結果が未確認です。もう一度実行すると同じ引き換えを確認し、重複して使うことはありません。",
+    "The account is suspended.": "このアカウントは停止中です。"
   }
 }

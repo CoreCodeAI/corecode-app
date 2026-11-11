@@ -282,3 +282,88 @@ func TestSetEngineSubscriptionRenewal(t *testing.T) {
 	assert.True(t, enginePoolCache.readAt.IsZero(), "the next pool read asks the engine again")
 	enginePoolCache.mu.Unlock()
 }
+
+func TestEnginePoolCarriesResetCredits(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/group-concurrency" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte(`{"code":0,"data":{"groups":[
+			{"id":7,"channel_id":"claude","enabled":true,"credentials":[
+				{"id":21,"status":"available","account":{"state":"fresh","windows":[],"reset_credits":[
+					{"expires_at_ms":1796940000000,"kind":"full"},{"expires_at_ms":1804579140000,"kind":"partial"}
+				]}},
+				{"id":22,"status":"available","account":{"state":"fresh","windows":[]}},
+				{"id":23,"status":"available","account":null}
+			]}
+		]}}`))
+	}))
+	defer server.Close()
+
+	pool := readEnginePool(server.URL, "reset-credits")
+	require.Empty(t, pool.Error)
+	require.Len(t, pool.Accounts, 3)
+	credits := pool.Accounts[0].ResetCredits
+	require.Len(t, credits, 2)
+	assert.Equal(t, "full", credits[0].Kind)
+	assert.Equal(t, "partial", credits[1].Kind)
+	require.NotNil(t, credits[1].ExpiresAtMS)
+	assert.EqualValues(t, 1804579140000, *credits[1].ExpiresAtMS)
+	for _, account := range pool.Accounts[1:] {
+		assert.NotNil(t, account.ResetCredits, "an engine without reset credits still sends an empty list")
+		assert.Empty(t, account.ResetCredits)
+	}
+}
+
+func TestConsumeEngineResetCredit(t *testing.T) {
+	const key = "9f0f4c32-89d2-4bcb-9e19-052940dc2f17"
+	var gotMethod, gotPath, gotAuth, gotKey string
+	var gotBody map[string]string
+	status, answer := http.StatusOK, `{"code":0,"data":{"status":"succeeded","windows_reset":2,"replayed":false}}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath, gotAuth, gotKey = r.Method, r.URL.Path, r.Header.Get("Authorization"), r.Header.Get("Idempotency-Key")
+		gotBody = nil
+		require.NoError(t, common.DecodeJson(r.Body, &gotBody))
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(answer))
+	}))
+	defer server.Close()
+	previousURL, previousKey := operation_setting.EngineControlURL, operation_setting.EngineControlKey
+	t.Cleanup(func() {
+		operation_setting.EngineControlURL, operation_setting.EngineControlKey = previousURL, previousKey
+	})
+
+	operation_setting.EngineControlURL, operation_setting.EngineControlKey = "", ""
+	_, err := ConsumeEngineResetCredit(t.Context(), 7, 21, "full", key)
+	assert.ErrorIs(t, err, ErrEngineControlNotConfigured)
+
+	operation_setting.EngineControlURL, operation_setting.EngineControlKey = server.URL, "secret"
+	enginePoolCache.mu.Lock()
+	enginePoolCache.readAt = time.Now()
+	enginePoolCache.mu.Unlock()
+	result, err := ConsumeEngineResetCredit(t.Context(), 7, 21, "partial", key)
+	require.NoError(t, err)
+	assert.Equal(t, "succeeded", result.Status)
+	assert.Equal(t, 2, result.WindowsReset)
+	assert.Equal(t, http.MethodPost, gotMethod)
+	assert.Equal(t, "/api/groups/7/credentials/21/reset-credits/consume", gotPath)
+	assert.Equal(t, "Bearer secret", gotAuth)
+	assert.Equal(t, key, gotKey)
+	assert.Equal(t, map[string]string{"kind": "partial"}, gotBody)
+	enginePoolCache.mu.Lock()
+	assert.True(t, enginePoolCache.readAt.IsZero(), "the next pool read shows the credits left")
+	enginePoolCache.mu.Unlock()
+
+	_, err = ConsumeEngineResetCredit(t.Context(), 7, 21, "", key)
+	require.NoError(t, err)
+	assert.Empty(t, gotBody, "without a kind the provider picks the credit")
+
+	status, answer = http.StatusConflict, `{"code":"RESET_CREDIT_UNAVAILABLE","message":"No reset credit is currently available"}`
+	_, err = ConsumeEngineResetCredit(t.Context(), 7, 21, "full", key)
+	var engineErr *EngineHTTPError
+	require.ErrorAs(t, err, &engineErr)
+	assert.Equal(t, http.StatusConflict, engineErr.Status)
+	assert.Equal(t, "RESET_CREDIT_UNAVAILABLE", engineErr.Code)
+	assert.Equal(t, "engine /groups/7/credentials/21/reset-credits/consume returned HTTP 409", err.Error())
+}

@@ -8047,6 +8047,27 @@
     "Billed per second of generated video.": "생성된 영상의 초 단위로 청구됩니다.",
     "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "이미지 1장당 출력 크기에 따라 청구됩니다. 1024x1024 같은 작은 크기는 1K, 3840x2160 같은 큰 크기는 4K이며, 그 밖의 크기와 크기를 지정하지 않은 요청은 2K로 청구됩니다.",
     "Service Status": "서비스 상태",
-    "Live availability of each group, served at /status/.": "그룹별 실시간 가용성, /status/ 에서 제공."
+    "Live availability of each group, served at /status/.": "그룹별 실시간 가용성, /status/ 에서 제공.",
+    "Reset credits": "리셋 크레딧",
+    "Quota reset credits the account holds. A full reset clears the 5-hour and weekly limits; a partial reset clears the 5-hour and a model weekly limit only.": "계정이 보유한 한도 리셋 크레딧입니다. 전체 리셋은 5시간 한도와 주간 한도를, 부분 리셋은 5시간 한도와 모델 주간 한도만 초기화합니다.",
+    "Full reset": "전체 리셋",
+    "Partial reset": "부분 리셋",
+    "Clears the 5-hour and weekly limits.": "5시간 한도와 주간 한도를 초기화합니다.",
+    "Clears the 5-hour and model weekly limits, not the overall weekly limit.": "5시간 한도와 모델 주간 한도를 초기화하며, 전체 주간 한도는 그대로입니다.",
+    "The provider does not say which limits it clears.": "어떤 한도를 초기화하는지 제공자가 알려 주지 않습니다.",
+    "No expiry": "만료 없음",
+    "{{kind}} for #{{id}} {{email}}": "{{kind}}: #{{id}} {{email}}",
+    "Uses the account's earliest-expiring full reset credit, which clears its 5-hour and weekly limits. This cannot be undone.": "이 계정에서 가장 먼저 만료되는 전체 리셋 크레딧을 사용해 5시간 한도와 주간 한도를 초기화합니다. 되돌릴 수 없습니다.",
+    "Uses the account's earliest-expiring partial reset credit, which clears its 5-hour and model weekly limits; the overall weekly limit stays. This cannot be undone.": "이 계정에서 가장 먼저 만료되는 부분 리셋 크레딧을 사용해 5시간 한도와 모델 주간 한도를 초기화합니다. 전체 주간 한도는 그대로입니다. 되돌릴 수 없습니다.",
+    "Uses one of the account's reset credits. This cannot be undone.": "이 계정의 리셋 크레딧 1개를 사용합니다. 되돌릴 수 없습니다.",
+    "Use reset credit": "리셋 크레딧 사용",
+    "Quota reset": "한도를 초기화했습니다",
+    "Quota reset; the new reading follows shortly.": "한도를 초기화했습니다. 새 사용량은 곧 반영됩니다.",
+    "The reset failed.": "리셋에 실패했습니다.",
+    "No reset credit of this kind is available.": "이 종류의 사용 가능한 리셋 크레딧이 없습니다.",
+    "The reset could not be prepared; no credit was used. Try again later.": "리셋을 준비하지 못했습니다. 크레딧은 사용되지 않았습니다. 잠시 후 다시 시도하세요.",
+    "The provider rejected the reset credit.": "제공자가 리셋 크레딧을 거부했습니다.",
+    "The reset outcome is unknown. Try again to check the same redemption.": "리셋 결과를 아직 확인하지 못했습니다. 다시 시도하면 같은 사용 건을 확인하며 중복 사용되지 않습니다.",
+    "The account is suspended.": "이 계정은 정지되었습니다."
   }
 }

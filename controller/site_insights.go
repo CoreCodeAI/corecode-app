@@ -2,6 +2,8 @@ package controller
 
 import (
 	"cmp"
+	"errors"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -383,6 +385,51 @@ func SetEngineSubscriptionRenewal(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, nil)
+}
+
+// ConsumeEngineResetCredit redeems one quota reset credit of an engine
+// account. The body names the kind (full, partial, or empty to let the
+// provider pick) and the client's idempotency key, which a retry after an
+// unknown outcome reuses so the engine answers for the same redemption.
+func ConsumeEngineResetCredit(c *gin.Context) {
+	groupID, groupErr := strconv.Atoi(c.Param("group_id"))
+	credentialID, credentialErr := strconv.Atoi(c.Param("credential_id"))
+	var request struct {
+		Kind           string `json:"kind"`
+		IdempotencyKey string `json:"idempotency_key"`
+	}
+	if groupErr != nil || credentialErr != nil || groupID <= 0 || credentialID <= 0 ||
+		common.DecodeJson(c.Request.Body, &request) != nil ||
+		!slices.Contains([]string{"", "full", "partial"}, request.Kind) || len(request.IdempotencyKey) != 36 {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	result, err := service.ConsumeEngineResetCredit(c.Request.Context(), groupID, credentialID, request.Kind, request.IdempotencyKey)
+	if err == nil {
+		common.ApiSuccess(c, result)
+		return
+	}
+	if errors.Is(err, service.ErrEngineControlNotConfigured) {
+		common.ApiError(c, err)
+		return
+	}
+	var engineErr *service.EngineHTTPError
+	if !errors.As(err, &engineErr) {
+		// No answer from the engine: the redemption may have been sent.
+		common.ApiErrorStatus(c, http.StatusOK, common.NewMessage("The reset outcome is unknown. Try again to check the same redemption."), gin.H{"code": "RESET_CREDIT_OUTCOME_UNKNOWN"})
+		return
+	}
+	message := map[string]string{
+		"RESET_CREDIT_UNAVAILABLE":        "No reset credit of this kind is available.",
+		"RESET_CREDIT_PREPARATION_FAILED": "The reset could not be prepared; no credit was used. Try again later.",
+		"RESET_CREDIT_REJECTED":           "The provider rejected the reset credit.",
+		"RESET_CREDIT_OUTCOME_UNKNOWN":    "The reset outcome is unknown. Try again to check the same redemption.",
+		"CREDENTIAL_SUSPENDED":            "The account is suspended.",
+	}[engineErr.Code]
+	if message == "" {
+		message = "The reset failed."
+	}
+	common.ApiErrorStatus(c, http.StatusOK, common.NewMessage(message), gin.H{"code": engineErr.Code})
 }
 
 // GetPoolUsage returns one provider's use on new-api and gpt-load over the
