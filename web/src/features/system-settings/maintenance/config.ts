@@ -29,6 +29,7 @@ export type HeaderNavModulesConfig = {
   docs: boolean
   about: boolean
   enterprise: boolean
+  status: boolean
   [key: string]: boolean | HeaderNavAccessConfig
 }
 
@@ -53,6 +54,7 @@ export const HEADER_NAV_DEFAULT: HeaderNavModulesConfig = {
   docs: true,
   about: true,
   enterprise: true,
+  status: true,
 }
 
 export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {

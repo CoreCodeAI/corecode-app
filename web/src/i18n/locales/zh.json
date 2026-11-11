@@ -8045,6 +8045,8 @@
     "Priced by usage": "按用量计价",
     "{{price}} / second": "{{price}} / 秒",
     "Billed per second of generated video.": "按生成视频的秒数计费。",
-    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "按张计费，价格随输出尺寸而定。1024x1024 等小尺寸为 1K，3840x2160 等大尺寸为 4K；其他尺寸以及未指定尺寸的请求按 2K 计费。"
+    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "按张计费，价格随输出尺寸而定。1024x1024 等小尺寸为 1K，3840x2160 等大尺寸为 4K；其他尺寸以及未指定尺寸的请求按 2K 计费。",
+    "Service Status": "服务状态",
+    "Live availability of each group, served at /status/.": "各分组的实时可用性，页面在 /status/。"
   }
 }

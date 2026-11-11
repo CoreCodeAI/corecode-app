@@ -8045,6 +8045,8 @@
     "Priced by usage": "사용량 기준 가격",
     "{{price}} / second": "{{price}} / 초",
     "Billed per second of generated video.": "생성된 영상의 초 단위로 청구됩니다.",
-    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "이미지 1장당 출력 크기에 따라 청구됩니다. 1024x1024 같은 작은 크기는 1K, 3840x2160 같은 큰 크기는 4K이며, 그 밖의 크기와 크기를 지정하지 않은 요청은 2K로 청구됩니다."
+    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "이미지 1장당 출력 크기에 따라 청구됩니다. 1024x1024 같은 작은 크기는 1K, 3840x2160 같은 큰 크기는 4K이며, 그 밖의 크기와 크기를 지정하지 않은 요청은 2K로 청구됩니다.",
+    "Service Status": "서비스 상태",
+    "Live availability of each group, served at /status/.": "그룹별 실시간 가용성, /status/ 에서 제공."
   }
 }

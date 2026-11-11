@@ -32,6 +32,7 @@ export type HeaderNavModules = {
   docs: boolean
   about: boolean
   enterprise: boolean
+  status: boolean
   [key: string]: boolean | ModuleAccess
 }
 
@@ -43,6 +44,7 @@ const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
   docs: true,
   about: true,
   enterprise: true,
+  status: true,
 }
 
 const DEFAULTS: Record<HeaderNavModule, ModuleAccess> = {

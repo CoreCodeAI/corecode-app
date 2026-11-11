@@ -8045,6 +8045,8 @@
     "Priced by usage": "Цена по использованию",
     "{{price}} / second": "{{price}} / сек.",
     "Billed per second of generated video.": "Оплата за каждую секунду сгенерированного видео.",
-    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "Оплата за изображение, цена зависит от размера. Малые размеры вроде 1024x1024 — это 1K, большие вроде 3840x2160 — 4K; все остальные размеры и запросы без размера оплачиваются как 2K."
+    "Per image, by output size. Small sizes such as 1024x1024 are 1K and large ones such as 3840x2160 are 4K; every other size, and a request with no size, is billed at 2K.": "Оплата за изображение, цена зависит от размера. Малые размеры вроде 1024x1024 — это 1K, большие вроде 3840x2160 — 4K; все остальные размеры и запросы без размера оплачиваются как 2K.",
+    "Service Status": "Статус сервиса",
+    "Live availability of each group, served at /status/.": "Доступность каждой группы в реальном времени, страница /status/."
   }
 }
