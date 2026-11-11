@@ -16,13 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Link, useSearch } from '@tanstack/react-router'
+import { Link, useLocation, useSearch } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
+import { SESSION_EXPIRED_REASON } from '@/lib/session-expiry'
 
 import { AuthLayout } from '../auth-layout'
 import { TermsFooter } from '../components/terms-footer'
@@ -33,6 +34,13 @@ import { UserAuthForm } from './components/user-auth-form'
 export function SignIn() {
   const { t } = useTranslation()
   const { redirect } = useSearch({ from: '/(auth)/sign-in' })
+  // Read from the address rather than the route's search schema, which sits in
+  // the entry bundle every page downloads first.
+  const sessionExpired = useLocation({
+    select: (location) =>
+      (location.search as { reason?: unknown }).reason ===
+      SESSION_EXPIRED_REASON,
+  })
   const { status } = useStatus()
   const { systemName } = useSystemConfig()
 
@@ -71,6 +79,11 @@ export function SignIn() {
           <h1 className='text-3xl'>
             {t('Sign in to {{name}}', { name: systemName })}
           </h1>
+          {sessionExpired && (
+            <p role='status' className='text-muted-foreground text-sm'>
+              {t('Your session expired. Please sign in again.')}
+            </p>
+          )}
           {showRegisterLink && (
             <p className='text-muted-foreground text-sm'>
               {t("Don't have an account?")}{' '}

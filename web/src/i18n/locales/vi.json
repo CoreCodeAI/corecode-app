@@ -5441,6 +5441,7 @@
     "Session defaults": "Mặc định phiên",
     "Session expired!": "Phiên hết hạn!",
     "Session expired?": "Phiên đã hết hạn?",
+    "Your session expired. Please sign in again.": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
     "Session rule": "Quy tắc phiên",
     "Session rule matched": "Khớp quy tắc phiên",
     "Session rules": "Quy tắc phiên",

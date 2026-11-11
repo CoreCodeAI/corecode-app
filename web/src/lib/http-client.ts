@@ -31,6 +31,7 @@ import {
   getServerErrorMessage,
   safeServerErrorMessage,
 } from '@/lib/server-error-message'
+import { SESSION_EXPIRED_REASON } from '@/lib/session-expiry'
 import { useAuthStore } from '@/stores/auth-store'
 
 declare module 'axios' {
@@ -101,9 +102,10 @@ function redirectToSignIn(): void {
     typeof window !== 'undefined' &&
     window.location.pathname !== '/sign-in'
   ) {
-    // Sign-in checks the target with sanitizeAuthRedirect before using it.
+    // Sign-in checks the target with sanitizeAuthRedirect before using it,
+    // and the reason makes it say why the user is there.
     window.location.replace(
-      `/sign-in?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`
+      `/sign-in?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}&reason=${SESSION_EXPIRED_REASON}`
     )
   }
 }

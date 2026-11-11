@@ -5441,6 +5441,7 @@
     "Session defaults": "Настройки сеанса по умолчанию",
     "Session expired!": "Сессия истекла!",
     "Session expired?": "Сессия истекла?",
+    "Your session expired. Please sign in again.": "Сеанс истёк. Войдите снова.",
     "Session rule": "Правило сессии",
     "Session rule matched": "Совпало правило сессии",
     "Session rules": "Правила сессии",

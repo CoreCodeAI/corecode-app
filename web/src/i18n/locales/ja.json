@@ -5441,6 +5441,7 @@
     "Session defaults": "セッションのデフォルト",
     "Session expired!": "セッションが期限切れです！",
     "Session expired?": "セッションが期限切れになりましたか？",
+    "Your session expired. Please sign in again.": "セッションの有効期限が切れました。もう一度サインインしてください。",
     "Session rule": "セッションルール",
     "Session rule matched": "セッションルールに一致",
     "Session rules": "セッションルール",
