@@ -67,13 +67,13 @@ const options = [
   { value: 'vip', label: 'vip', desc: 'Priority group', ratio: 3 },
 ]
 
-function Harness(props: { initialValue: string }) {
+function Harness(props: { initialValue: string; options?: typeof options }) {
   const [value, setValue] = useState(props.initialValue)
 
   return (
     <I18nextProvider i18n={i18n}>
       <ApiKeyGroupCombobox
-        options={options}
+        options={props.options ?? options}
         value={value}
         onValueChange={setValue}
       />
@@ -220,5 +220,27 @@ describe('API key group combobox Auto effect', () => {
     expect(autoOption.querySelector('[data-auto-group-flow-border]')).toBe(null)
     expect(within(autoOption).getByText('Auto')).toBeInTheDocument()
     setReducedMotion(false)
+  })
+
+  test('lists Auto first even when the server sorts it after other groups', () => {
+    setReducedMotion(false)
+    // Server order: Go sorts map keys by byte, so uppercase names come first.
+    render(
+      <Harness
+        initialValue='Claude-Max'
+        options={[
+          { value: 'Claude-Max', label: 'Claude-Max', desc: 'Max', ratio: 1 },
+          { value: 'Codex', label: 'Codex', desc: 'Codex', ratio: 1 },
+          options[0],
+          options[1],
+        ]}
+      />
+    )
+
+    fireEvent.click(getTrigger())
+    const labels = [
+      ...document.querySelectorAll<HTMLElement>('[data-slot="command-item"]'),
+    ].map((item) => item.getAttribute('data-value'))
+    expect(labels).toEqual(['auto', 'Claude-Max', 'Codex', 'default'])
   })
 })
