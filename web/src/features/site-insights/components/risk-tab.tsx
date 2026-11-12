@@ -25,6 +25,7 @@ import {
   useSharedAddresses,
   useSignupMethodLabel,
 } from '../lib'
+import { usePartialDays } from '../partial-days'
 import type { RiskInsights } from '../types'
 import { useRiskVerdict } from '../verdicts'
 import {
@@ -44,6 +45,7 @@ export function RiskTab(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const partialDay = usePartialDays('risk')
   const verdict = useRiskVerdict(props.data)
   const methodLabel = useSignupMethodLabel()
   const data = props.data
@@ -58,6 +60,11 @@ export function RiskTab(props: {
     insights?.signups ? insights.zero_use_accounts / insights.signups : 0
   const pointTitle = (at: number) =>
     data?.series_unit === 'day' ? fmt.day(at) : fmt.time(at)
+  // Only a series by day has days the range covers in part.
+  const pointPartial = (point: { at: number; count: number }) =>
+    data?.series_unit === 'day'
+      ? partialDay(point.at, [point.count])
+      : undefined
 
   return (
     <div className='grid gap-4'>
@@ -81,6 +88,7 @@ export function RiskTab(props: {
             trend: (data?.signup_series ?? []).map((point) => ({
               title: pointTitle(point.at),
               value: point.count,
+              partial: pointPartial(point),
             })),
             hint: data?.peak_signups.count
               ? t('Busiest {{unit}}: {{count}} at {{time}}', {
@@ -133,6 +141,7 @@ export function RiskTab(props: {
                 ? fmt.day(point.at)
                 : undefined,
             values: [point.count],
+            partial: pointPartial(point),
           }))}
         />
       </Panel>

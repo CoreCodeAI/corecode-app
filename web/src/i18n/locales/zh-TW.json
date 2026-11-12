@@ -8259,6 +8259,9 @@
     "Upcoming resets ({{count}})": "即將到來的重置（{{count}}）",
     "Adds": "增加",
     "What the reset adds to what the account can spend if it spends nothing more before it: for a week the used part of the week, for a 5-hour window the used part of the window as far as the weekly remainder allows.": "假設重置前帳號不再消耗，這次重置能讓帳號多消耗多少：週重置為本週已用部分；5 小時重置為該視窗已用部分，且不超過週剩餘。",
-    "The pool’s quota ahead could not be read: {{error}}": "讀不到號池的未來額度：{{error}}"
+    "The pool’s quota ahead could not be read: {{error}}": "讀不到號池的未來額度：{{error}}",
+    "In progress, through {{time}}": "進行中，截至 {{time}}",
+    "Partial, from {{time}}": "不完整，從 {{time}} 起",
+    "Expected for the whole day": "預計全天"
   }
 }

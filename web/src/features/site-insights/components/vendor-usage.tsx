@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { useChargeFormat, useInsightsFormat } from '../lib'
+import { usePartialDays } from '../partial-days'
 import type { FinanceInsights } from '../types'
 import { ChargeValue, ClaudeEconomics, Figure } from './claude-economics'
 import { BarSeries, Panel, SimpleTable } from './shared'
@@ -121,6 +122,7 @@ function VendorCharge(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const partialDay = usePartialDays('finance')
   const charge = useChargeFormat(props.data)
   const all = props.data?.vendor_models ?? []
   const models = all.filter((model) => model.vendor === props.vendor)
@@ -191,6 +193,9 @@ function VendorCharge(props: {
             key: day.day,
             title: fmt.day(day.day),
             values: [charge.toUSD(day.vendor_usd?.[props.vendor] ?? 0)],
+            partial: partialDay(day.day, [
+              charge.toUSD(day.vendor_usd?.[props.vendor] ?? 0),
+            ]),
           }))}
         />
       </div>

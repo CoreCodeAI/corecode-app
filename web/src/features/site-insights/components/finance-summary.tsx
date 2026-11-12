@@ -24,6 +24,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 import { DEBT_ALERT_USD, useChargeFormat, useInsightsFormat } from '../lib'
+import { usePartialDays } from '../partial-days'
 import type { FinanceInsights } from '../types'
 import {
   DeltaBadge,
@@ -70,6 +71,7 @@ export function FinanceSummary(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const partialDay = usePartialDays('finance')
   const data = props.data
   const previous = props.previous
   const charge = useChargeFormat(data)
@@ -109,6 +111,7 @@ export function FinanceSummary(props: {
               trend={(data?.daily ?? []).map((day) => ({
                 title: fmt.day(day.day),
                 value: day.topup + day.subscription,
+                partial: partialDay(day.day, [day.topup + day.subscription]),
               }))}
               trendFormat={fmt.cny}
               hint={t(
@@ -136,6 +139,9 @@ export function FinanceSummary(props: {
               trend={(data?.daily ?? []).map((day) => ({
                 title: fmt.day(day.day),
                 value: day.recognized_revenue ?? 0,
+                // A plan earns by the hour and a wallet by use, so part of a
+                // day is marked, not projected from requests.
+                partial: partialDay(day.day),
               }))}
               trendFormat={fmt.cny}
               trendBars
