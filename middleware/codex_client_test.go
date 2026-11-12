@@ -73,7 +73,7 @@ func TestCodexOnlyGroupGate(t *testing.T) {
 		{"IDE extension", "codex", "/v1/responses", codexHeaders("codex_vscode/0.164.0-alpha.11.1 (Ubuntu 22.4.0; x86_64) unknown (VS Code; 26.1021.22027)", "codex_vscode"), codexResponsesBody, true},
 		{"desktop app", "codex", "/v1/responses", codexHeaders("Codex Desktop/0.167.0-alpha.3.2 (Mac OS 27.2.0; arm64) unknown (Codex Desktop; 26.1103.60933)", "Codex Desktop"), codexResponsesBody, true},
 		{"desktop app work mode", "codex", "/v1/responses", codexHeaders("Codex Desktop/0.167.0-alpha.3.2 (Windows 10.0.22631; x86_64) unknown (Codex Desktop; 26.1103.60933)", "codex_work_desktop"), codexResponsesBody, true},
-		{"desktop app on Chat Completions", "codex", "/v1/chat/completions", codexHeaders("Codex Desktop/0.167.0-alpha.3.2 (Mac OS 27.2.0; arm64)", "Codex Desktop"), `{"model":"gpt-6.1-sol","messages":[]}`, true},
+		{"compaction", "codex", "/v1/responses/compact", codexHeaders("codex-tui/0.167.0 (Mac OS 26.5.2; arm64)", "codex-tui"), codexResponsesBody, true},
 		{"model list from another client", "codex", "/v1/models", codexHeaders("curl/8.7.1", ""), "", true},
 		{"group without the restriction", "gpt", "/v1/responses", codexHeaders("OpenAI/Python 2.3.0", ""), codexResponsesBody, true},
 		{"gateway forwarding Codex", "codex", "/v1/responses", codexHeaders("axonhub/1.0", "Codex Desktop"), codexResponsesBody, false},
@@ -82,6 +82,8 @@ func TestCodexOnlyGroupGate(t *testing.T) {
 		{"Codex name without a version", "codex", "/v1/responses", codexHeaders("codex-tui", "codex-tui"), codexResponsesBody, false},
 		{"OpenAI SDK", "codex", "/v1/responses", codexHeaders("OpenAI/Python 2.3.0", ""), codexResponsesBody, false},
 		{"Claude Code in a Codex group", "codex", "/v1/messages", claudeCodeCLIHeaders, claudeCodeCLIBody, false},
+		{"Codex headers on Chat Completions", "codex", "/v1/chat/completions", codexHeaders("Codex Desktop/0.167.0-alpha.3.2 (Mac OS 27.2.0; arm64)", "Codex Desktop"), `{"model":"gpt-6.1-sol","messages":[]}`, false},
+		{"Codex headers on a lookalike path", "codex", "/v1/responsesx", codexHeaders("codex-tui/0.167.0 (Mac OS 26.5.2; arm64)", "codex-tui"), codexResponsesBody, false},
 		{"Codex in a Claude Code group", "cc", "/v1/responses", codexHeaders("codex-tui/0.167.0 (Mac OS 26.5.2; arm64)", "codex-tui"), codexResponsesBody, false},
 	}
 	for _, test := range tests {
@@ -92,8 +94,12 @@ func TestCodexOnlyGroupGate(t *testing.T) {
 				return
 			}
 			assert.Equal(t, http.StatusForbidden, recorder.Code)
-			client := map[string]string{"codex": "Codex", "cc": "Claude Code"}[test.group]
-			assert.Contains(t, recorder.Body.String(), "Group "+test.group+" only accepts requests from "+client)
+			if test.group == "codex" && test.headers["Originator"] != "" && codexUserAgentPattern.MatchString(test.headers["User-Agent"]) && codexOriginators[test.headers["Originator"]] {
+				assert.Contains(t, recorder.Body.String(), "Group codex only accepts Codex requests to /v1/responses")
+			} else {
+				client := map[string]string{"codex": "Codex", "cc": "Claude Code"}[test.group]
+				assert.Contains(t, recorder.Body.String(), "Group "+test.group+" only accepts requests from "+client)
+			}
 			assert.Contains(t, recorder.Body.String(), `"code":"access_denied"`)
 		})
 	}
@@ -117,6 +123,7 @@ func TestClientOnlyGroupsAutoCandidates(t *testing.T) {
 		{"Codex drops the Claude Code group", []string{"cc", "codex", "gpt"}, "/v1/responses", codex, codexResponsesBody, []string{"codex", "gpt"}},
 		{"SDK drops the Codex group", []string{"codex", "gpt"}, "/v1/responses", sdk, codexResponsesBody, []string{"gpt"}},
 		{"Claude Code drops the Codex group", []string{"cc", "codex"}, "/v1/messages", claudeCodeCLIHeaders, claudeCodeCLIBody, []string{"cc"}},
+		{"Codex on Chat Completions drops the Codex group", []string{"codex", "gpt"}, "/v1/chat/completions", codex, `{"model":"gpt-6.1-sol","messages":[]}`, []string{"gpt"}},
 		{"SDK with only restricted groups", []string{"cc", "codex"}, "/v1/responses", sdk, codexResponsesBody, nil},
 	}
 	for _, test := range tests {

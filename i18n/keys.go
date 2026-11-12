@@ -21,6 +21,7 @@ const (
 
 	MsgAuthClaudeCodeOnly           = "auth.claude_code_only"
 	MsgAuthCodexOnly                = "auth.codex_only"
+	MsgAuthCodexOnlyResponses       = "auth.codex_only_responses"
 	MsgAuthClaudeCodeVersionTooLow  = "auth.claude_code_version_too_low"
 	MsgAuthClaudeCodeVersionTooHigh = "auth.claude_code_version_too_high"
 
