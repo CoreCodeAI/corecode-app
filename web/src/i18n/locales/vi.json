@@ -8259,6 +8259,9 @@
     "Upcoming resets ({{count}})": "Các lần đặt lại sắp tới ({{count}})",
     "Adds": "Thêm",
     "What the reset adds to what the account can spend if it spends nothing more before it: for a week the used part of the week, for a 5-hour window the used part of the window as far as the weekly remainder allows.": "Phần mà lần đặt lại thêm vào số tiền tài khoản có thể chi nếu trước đó tài khoản không chi thêm: với tuần là phần đã dùng của tuần, với cửa sổ 5 giờ là phần đã dùng của cửa sổ trong phạm vi phần còn lại của tuần.",
-    "The pool’s quota ahead could not be read: {{error}}": "Không đọc được hạn mức sắp tới của pool: {{error}}"
+    "The pool’s quota ahead could not be read: {{error}}": "Không đọc được hạn mức sắp tới của pool: {{error}}",
+    "In progress, through {{time}}": "Đang diễn ra, đến {{time}}",
+    "Partial, from {{time}}": "Một phần, từ {{time}}",
+    "Expected for the whole day": "Dự kiến cả ngày"
   }
 }

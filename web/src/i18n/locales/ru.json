@@ -8259,6 +8259,9 @@
     "Upcoming resets ({{count}})": "Предстоящие сбросы ({{count}})",
     "Adds": "Добавит",
     "What the reset adds to what the account can spend if it spends nothing more before it: for a week the used part of the week, for a 5-hour window the used part of the window as far as the weekly remainder allows.": "Сколько сброс добавляет к тому, что аккаунт может потратить, если до него аккаунт больше ничего не тратит: для недели — израсходованную часть недели, для 5-часового окна — израсходованную часть окна в пределах недельного остатка.",
-    "The pool’s quota ahead could not be read: {{error}}": "Не удалось прочитать будущую квоту пула: {{error}}"
+    "The pool’s quota ahead could not be read: {{error}}": "Не удалось прочитать будущую квоту пула: {{error}}",
+    "In progress, through {{time}}": "Идёт, по {{time}}",
+    "Partial, from {{time}}": "Неполный, с {{time}}",
+    "Expected for the whole day": "Ожидается за весь день"
   }
 }

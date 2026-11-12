@@ -32,6 +32,7 @@ import {
 import { cn } from '@/lib/utils'
 
 import { failureTone, SMALL_SAMPLE, useInsightsFormat } from '../lib'
+import { usePartialDays } from '../partial-days'
 import type { BusinessInsights, QualityInsights, VendorQuality } from '../types'
 import { useQualityVerdict } from '../verdicts'
 import { ModelMap } from './advanced-charts'
@@ -262,6 +263,7 @@ export function QualityTab(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const partialDay = usePartialDays('quality')
   const modelMapLabels = useVendorLabels()
   const verdict = useQualityVerdict(props.data, props.previous)
   const data = props.data
@@ -312,6 +314,7 @@ export function QualityTab(props: {
             trend: daily.map((day) => ({
               title: fmt.day(day.day),
               value: day.requests,
+              partial: partialDay(day.day, [day.requests]),
             })),
             hint: t('{{count}} failed', { count: data?.errors ?? 0 }),
           },
@@ -466,6 +469,7 @@ export function QualityTab(props: {
               key: day.day,
               title: fmt.day(day.day),
               values: [day.read, day.write, day.uncached],
+              partial: partialDay(day.day, [day.read, day.write, day.uncached]),
               extra: [
                 {
                   label: t('Cache read share'),
@@ -498,6 +502,7 @@ export function QualityTab(props: {
               key: day.day,
               title: fmt.day(day.day),
               values: [day.error_rate],
+              partial: partialDay(day.day),
               extra: [
                 { label: t('Failed'), value: fmt.num(day.errors) },
                 { label: t('Requests'), value: fmt.num(day.requests) },

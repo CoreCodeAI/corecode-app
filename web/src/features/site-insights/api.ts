@@ -157,6 +157,22 @@ export async function getUserSpend(hours: UserSpendHours): Promise<UserSpend> {
   return res.data.data
 }
 
+/**
+ * How a typical day's requests spread over its UTC hours: hours[h] is the
+ * share that arrives in hour h. Empty when the server has no recent requests.
+ */
+export type DayProfile = { hours: number[]; days: number }
+
+export async function getDayProfile(): Promise<DayProfile> {
+  const res = await api.get<ApiResponse<DayProfile>>(
+    '/api/site-insights/day-profile'
+  )
+  if (!res.data.success || res.data.data === undefined) {
+    throw createServerError(res.data, 'Failed to load site insights')
+  }
+  return res.data.data
+}
+
 type UserSearchPage = { items: { id: number; username: string }[] }
 
 /** Resolves a user id or an exact username to a user id. */

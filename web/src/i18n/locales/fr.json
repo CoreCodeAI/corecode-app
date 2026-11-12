@@ -8259,6 +8259,9 @@
     "Upcoming resets ({{count}})": "Réinitialisations à venir ({{count}})",
     "Adds": "Ajoute",
     "What the reset adds to what the account can spend if it spends nothing more before it: for a week the used part of the week, for a 5-hour window the used part of the window as far as the weekly remainder allows.": "Ce que la réinitialisation ajoute à ce que le compte peut dépenser s’il ne dépense plus rien avant : pour une semaine, la part utilisée de la semaine ; pour une fenêtre de 5 heures, la part utilisée de la fenêtre dans la limite du reste hebdomadaire.",
-    "The pool’s quota ahead could not be read: {{error}}": "Le quota à venir du pool n’a pas pu être lu : {{error}}"
+    "The pool’s quota ahead could not be read: {{error}}": "Le quota à venir du pool n’a pas pu être lu : {{error}}",
+    "In progress, through {{time}}": "En cours, jusqu’à {{time}}",
+    "Partial, from {{time}}": "Partiel, depuis {{time}}",
+    "Expected for the whole day": "Prévu pour la journée"
   }
 }

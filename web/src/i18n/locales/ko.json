@@ -8259,6 +8259,9 @@
     "Upcoming resets ({{count}})": "예정된 재설정 ({{count}})",
     "Adds": "증가분",
     "What the reset adds to what the account can spend if it spends nothing more before it: for a week the used part of the week, for a 5-hour window the used part of the window as far as the weekly remainder allows.": "재설정 전까지 계정이 더 쓰지 않는다고 할 때, 재설정으로 계정이 쓸 수 있는 금액이 얼마나 늘어나는지입니다. 주간 재설정은 그 주에 사용한 분량, 5시간 창은 주간 잔여 범위 안에서 창의 사용한 분량입니다.",
-    "The pool’s quota ahead could not be read: {{error}}": "풀의 향후 쿼터를 읽을 수 없습니다: {{error}}"
+    "The pool’s quota ahead could not be read: {{error}}": "풀의 향후 쿼터를 읽을 수 없습니다: {{error}}",
+    "In progress, through {{time}}": "진행 중, {{time}}까지",
+    "Partial, from {{time}}": "일부만, {{time}}부터",
+    "Expected for the whole day": "하루 전체 예상"
   }
 }

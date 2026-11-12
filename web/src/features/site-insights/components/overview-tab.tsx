@@ -33,6 +33,7 @@ import {
   useInsightsFormat,
   useSharedAddresses,
 } from '../lib'
+import { usePartialDays } from '../partial-days'
 import type {
   CapacityInsights,
   EngineHorizon,
@@ -78,6 +79,8 @@ export function OverviewTab(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const financeDay = usePartialDays('finance')
+  const qualityDay = usePartialDays('quality')
   const current = useQueries({
     queries: OVERVIEW_VIEWS.map((view) => ({
       ...props.current(view),
@@ -351,6 +354,7 @@ export function OverviewTab(props: {
             trend: (finance?.daily ?? []).map((day) => ({
               title: fmt.day(day.day),
               value: day.topup + day.subscription,
+              partial: financeDay(day.day, [day.topup + day.subscription]),
             })),
             trendFormat: fmt.cny,
             hint: t('{{orders}} orders · {{users}} payers', {
@@ -370,6 +374,7 @@ export function OverviewTab(props: {
             trend: (quality?.daily ?? []).map((day) => ({
               title: fmt.day(day.day),
               value: day.requests,
+              partial: qualityDay(day.day, [day.requests]),
             })),
             hint: t('Consumption {{amount}} at list price', {
               amount: fmt.cny(

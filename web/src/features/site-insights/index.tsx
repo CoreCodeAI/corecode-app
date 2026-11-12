@@ -37,6 +37,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 import {
+  getDayProfile,
   getInsights,
   getPoolOutlook,
   getPoolUsage,
@@ -61,6 +62,7 @@ import {
   writePoolRefresh,
   type InsightsTab,
 } from './lib'
+import { InsightsSpanContext } from './partial-days'
 import type { EngineOutlook, PoolProvider, PoolUsage } from './types'
 
 const route = getRouteApi('/_authenticated/site-insights/')
@@ -178,6 +180,16 @@ export function SiteInsights() {
     queryFn: getPoolOutlook,
     enabled: tab === 'pool' && provider === 'claude',
     refetchInterval: poolRefresh * 1000 || false,
+    meta: { errorToast: false },
+  })
+  // How a typical day's requests spread over its hours, to project the days
+  // a range covers in part. It moves slowly; a server without it only marks
+  // those days.
+  const dayProfile = useQuery({
+    queryKey: ['site-insights', 'day-profile'],
+    queryFn: getDayProfile,
+    staleTime: 60 * 60_000,
+    retry: false,
     meta: { errorToast: false },
   })
   // The finance, growth and quality tabs each show part of the business
@@ -370,63 +382,67 @@ export function SiteInsights() {
                 : t('Failed to load site insights')}
             </p>
           )}
-          {view ? (
-            <InsightsView
-              view={view}
-              data={query.data}
-              previous={previous.data}
-              business={{
-                data: business.data,
-                previous: businessPrevious.data,
-              }}
-              models={{
-                selected: models,
-                onChange: (next) =>
-                  navigate({
-                    search: (prev) => ({
-                      ...prev,
-                      models: next.length > 0 ? next : undefined,
+          <InsightsSpanContext.Provider
+            value={{ now, days: viewDays, hours: dayProfile.data?.hours ?? [] }}
+          >
+            {view ? (
+              <InsightsView
+                view={view}
+                data={query.data}
+                previous={previous.data}
+                business={{
+                  data: business.data,
+                  previous: businessPrevious.data,
+                }}
+                models={{
+                  selected: models,
+                  onChange: (next) =>
+                    navigate({
+                      search: (prev) => ({
+                        ...prev,
+                        models: next.length > 0 ? next : undefined,
+                      }),
                     }),
-                  }),
-              }}
-              pool={{
-                provider,
-                onProvider: (next) =>
-                  navigate({
-                    search: (prev) => ({ ...prev, provider: next }),
-                  }),
-                usage: usage.data,
-                usageError:
-                  usage.error instanceof Error
-                    ? usage.error.message
-                    : undefined,
-                outlook: outlook.data,
-                outlookError:
-                  outlook.error instanceof Error
-                    ? outlook.error.message
-                    : undefined,
-              }}
-              capacity={{
-                vendor: search.vendor ?? 'all',
-                onVendor: (next) =>
-                  navigate({
-                    search: (prev) => ({
-                      ...prev,
-                      vendor: next === 'all' ? undefined : next,
+                }}
+                pool={{
+                  provider,
+                  onProvider: (next) =>
+                    navigate({
+                      search: (prev) => ({ ...prev, provider: next }),
                     }),
-                  }),
-              }}
-            />
-          ) : (
-            <OverviewTab
-              current={(next) => insightsQuery(next, false)}
-              previous={(next) => previousQuery(next, false)}
-              refreshMs={REFRESH_MS}
-              onOpen={(next) =>
-                navigate({ search: (prev) => ({ ...prev, tab: next }) })
-              }
-            />
-          )}
+                  usage: usage.data,
+                  usageError:
+                    usage.error instanceof Error
+                      ? usage.error.message
+                      : undefined,
+                  outlook: outlook.data,
+                  outlookError:
+                    outlook.error instanceof Error
+                      ? outlook.error.message
+                      : undefined,
+                }}
+                capacity={{
+                  vendor: search.vendor ?? 'all',
+                  onVendor: (next) =>
+                    navigate({
+                      search: (prev) => ({
+                        ...prev,
+                        vendor: next === 'all' ? undefined : next,
+                      }),
+                    }),
+                }}
+              />
+            ) : (
+              <OverviewTab
+                current={(next) => insightsQuery(next, false)}
+                previous={(next) => previousQuery(next, false)}
+                refreshMs={REFRESH_MS}
+                onOpen={(next) =>
+                  navigate({ search: (prev) => ({ ...prev, tab: next }) })
+                }
+              />
+            )}
+          </InsightsSpanContext.Provider>
         </div>
       </SectionPageLayout.Content>
     </SectionPageLayout>
