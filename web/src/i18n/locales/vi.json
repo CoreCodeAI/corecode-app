@@ -8959,6 +8959,8 @@
     "Revenue (est.) is consumption’s pro-rata share of the range’s revenue earned: an estimate, not a margin, since the data has no cost by model.": "Doanh thu (ước tính) là phần tương ứng theo tỷ lệ của mức tiêu thụ trong doanh thu thu được của kỳ: đây là ước tính, không phải biên lợi nhuận, vì dữ liệu không có chi phí theo mô hình.",
     "{{rate}} of {{registered}} aged sign-ups": "{{rate}} trên {{registered}} đăng ký đã đủ thời gian theo dõi",
     "Of that, {{granted}} was granted by hand, {{redeemed}} came from redemption codes, {{gift}} from gift plans, {{checkin}} from check-in rewards and {{signup}} from sign-up and invite gifts.": "Trong đó {{granted}} do quản trị viên cấp thủ công, {{redeemed}} từ mã đổi thưởng, {{gift}} từ gói tặng, {{checkin}} từ thưởng điểm danh và {{signup}} từ quà đăng ký và mời.",
-    "Check-in rewards": "Thưởng điểm danh"
+    "Check-in rewards": "Thưởng điểm danh",
+    "Median {{hours}} hours from sign-up to first payment; {{day}} within a day. The range is too short to say how many pay within a week.": "Trung vị từ đăng ký đến lần thanh toán đầu là {{hours}} giờ; {{day}} trong một ngày. Khoảng thời gian quá ngắn để biết tỷ lệ thanh toán trong một tuần.",
+    "Median {{hours}} hours from sign-up to first payment. The range is too short to say how many pay within a day or a week.": "Trung vị từ đăng ký đến lần thanh toán đầu là {{hours}} giờ. Khoảng thời gian quá ngắn để biết tỷ lệ thanh toán trong một ngày hay một tuần."
   }
 }

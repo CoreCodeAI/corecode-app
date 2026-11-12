@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
-import { isOpenHour } from '../analysis'
+import { beforeLogs, isOpenHour } from '../analysis'
 import {
   countsRequestsOnce,
   failureTone,
@@ -412,11 +412,13 @@ export function QualityTab(props: {
             ? t('{{time}} (in progress)', { time: fmt.time(row.hour) })
             : fmt.time(row.hour),
         value: row.requests,
+        missing: beforeLogs(row.hour, 3600, data?.logs_since),
       }))
     : daily.map((day) => ({
         title: fmt.day(day.day),
         value: day.requests,
         partial: partialDay(day.day, [day.requests]),
+        missing: beforeLogs(day.day, 86400, data?.logs_since),
       }))
   const worstModel = ranked.find((row) => failsAboveSite(row, siteRate))
   const noPrevious = previousFailed
@@ -864,6 +866,7 @@ export function QualityTab(props: {
               title: fmt.day(day.day),
               values: [day.read, day.write, day.uncached],
               partial: partialDay(day.day, [day.read, day.write, day.uncached]),
+              missing: beforeLogs(day.day, 86400, data?.logs_since),
               extra: [
                 {
                   label: t('Cache read share'),

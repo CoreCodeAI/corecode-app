@@ -497,6 +497,40 @@ describe('QualityTab round 3', () => {
     expect(screen.getAllByText('No data to compare').length).toBeGreaterThan(0)
   })
 
+  it('reads a day before the logs as no data, not zero', () => {
+    const end = 1_800_000_000
+    const day = (index: number, requests: number) => ({
+      day: end - (3 - index) * 86400,
+      read: requests * 10,
+      write: requests,
+      uncached: requests,
+      read_share: requests ? 0.8 : 0,
+      ttft_p50_ms: requests ? 900 : 0,
+      error_rate: 0,
+      requests,
+      errors: 0,
+    })
+    render(
+      <QualityTab
+        data={{
+          ...quiet,
+          requests: 500,
+          daily: [day(0, 0), day(1, 200), day(2, 300)],
+          logs_since: end - 2 * 86400,
+        }}
+        range={{ start: end - 3 * 86400, end, days: 7, hourly: false }}
+        models={{ selected: [], onChange: vi.fn() }}
+      />
+    )
+    for (const name of ['Input tokens by cache use', 'Daily failure rate']) {
+      const bars = screen
+        .getByRole('list', { name })
+        .querySelectorAll('[tabindex="0"]')
+      expect(bars[0].getAttribute('aria-label')).toContain('No data')
+      expect(bars[1].getAttribute('aria-label')).not.toContain('No data')
+    }
+  })
+
   it('shows root and staff tests apart, and only when the server sends them', () => {
     const { unmount } = render(
       <QualityTab

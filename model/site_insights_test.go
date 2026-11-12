@@ -1678,6 +1678,70 @@ func TestFillInsightHoursRebuildsNewestFirst(t *testing.T) {
 	assert.Equal(t, []int64{newest - 3600, newest}, rebuilt)
 }
 
+// The hour the earliest log falls in is rebuilt only while every log it reads
+// is still there: each id from 1 up to the first log written after the hour's
+// last read. Cleaning deletes by time in batches of no fixed order, so the
+// row with id 1 surviving proves nothing.
+func TestFillInsightHoursRebuildsTheFirstLoggedHour(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			now := time.Now().Unix()
+			first := now - now%3600 - 10*3600
+			alice := registerAffiliateTestUser(t, "alice", "")
+			old := insightHourVersion - 1
+			require.NoError(t, DB.Create(&[]InsightHour{
+				{HourStart: first, Version: old, Data: `{"requests":9}`},
+				{HourStart: first + 3600, Version: old, Data: `{"requests":9}`},
+			}).Error)
+			versions := func() [2]int {
+				var rows []InsightHour
+				require.NoError(t, DB.Where("hour_start IN ?", []int64{first, first + 3600}).Order("hour_start").Find(&rows).Error)
+				require.Len(t, rows, 2)
+				return [2]int{rows[0].Version, rows[1].Version}
+			}
+			entry := func(id int, at int64) *Log {
+				return &Log{Id: id, UserId: alice.Id, Type: LogTypeConsume, CreatedAt: at, ModelName: "claude-opus-5", Quota: 50, Other: `{}`}
+			}
+			allowInsightRebuild(t)
+
+			// The second log was written with the earlier time, as two
+			// requests ending in the same second may be.
+			require.NoError(t, LOG_DB.Create(&[]*Log{entry(1, first+1800), entry(2, first+900), entry(3, first+3600+100)}).Error)
+			_, err := FillInsightHours(1, 1000)
+			require.NoError(t, err)
+			assert.Equal(t, [2]int{old, insightHourVersion}, versions(), "no log yet after the first hour's last read: it is not known whole")
+
+			// A cleaning took the second log and stopped: the first row is
+			// still there and the hour is not whole.
+			require.NoError(t, LOG_DB.Delete(&Log{}, 2).Error)
+			require.NoError(t, LOG_DB.Create(entry(4, first+4*3600)).Error)
+			filled, err := FillInsightHours(1, 1000)
+			require.NoError(t, err)
+			assert.Zero(t, filled)
+			assert.Equal(t, [2]int{old, insightHourVersion}, versions(), "a first hour with a log removed keeps its old row")
+			r := InsightsRange{Start: first, End: first + 2*3600}
+			capacity, err := GetCapacityInsights(r, "")
+			require.NoError(t, err)
+			assert.Equal(t, 1, capacity.StaleHours)
+
+			// With every log there, the first hour is whole.
+			require.NoError(t, LOG_DB.Create(entry(2, first+900)).Error)
+			filled, err = FillInsightHours(1, 1000)
+			require.NoError(t, err)
+			assert.Equal(t, 1, filled)
+			assert.Equal(t, [2]int{insightHourVersion, insightHourVersion}, versions())
+			capacity, err = GetCapacityInsights(r, "")
+			require.NoError(t, err)
+			assert.Zero(t, capacity.StaleHours)
+			assert.EqualValues(t, 2+1, capacity.Requests, "the first hour is counted from its logs")
+			filled, err = FillInsightHours(1, 1000)
+			require.NoError(t, err)
+			assert.Zero(t, filled, "nothing is left to rebuild")
+		})
+	}
+}
+
 // The finance view computes upstream costs from the hours it already loaded:
 // the rollup's user-hour rows are read once per request, not once for the
 // finance figures and again for the upstream view.

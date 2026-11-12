@@ -8959,6 +8959,8 @@
     "Revenue (est.) is consumption’s pro-rata share of the range’s revenue earned: an estimate, not a margin, since the data has no cost by model.": "收入（估算）是消耗按比例分攤的區間已賺收入：這是估算，不是毛利，因為資料沒有按模型的成本。",
     "{{rate}} of {{registered}} aged sign-ups": "{{rate}}（{{registered}} 個已過觀察期的註冊）",
     "Of that, {{granted}} was granted by hand, {{redeemed}} came from redemption codes, {{gift}} from gift plans, {{checkin}} from check-in rewards and {{signup}} from sign-up and invite gifts.": "其中 {{granted}} 是管理員手動發放的，{{redeemed}} 來自兌換碼，{{gift}} 來自贈送方案，{{checkin}} 來自簽到獎勵，{{signup}} 來自註冊和邀請贈送。",
-    "Check-in rewards": "簽到獎勵"
+    "Check-in rewards": "簽到獎勵",
+    "Median {{hours}} hours from sign-up to first payment; {{day}} within a day. The range is too short to say how many pay within a week.": "從註冊到首次付費的中位數為 {{hours}} 小時；{{day}} 在一天內付費。範圍太短，還看不出一週內付費的比例。",
+    "Median {{hours}} hours from sign-up to first payment. The range is too short to say how many pay within a day or a week.": "從註冊到首次付費的中位數為 {{hours}} 小時。範圍太短，還看不出一天內或一週內付費的比例。"
   }
 }

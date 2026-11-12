@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 
-import { alignPrevious } from '../analysis'
+import { alignPrevious, beforeLogs } from '../analysis'
 import {
   countsRequestsOnce,
   failureTone,
@@ -419,6 +419,7 @@ export function DailyFailurePanel(props: { data: QualityInsights }) {
           title: fmt.day(day.day),
           values: [rateBar(day.requests, day.error_rate, 1)],
           partial: partialDay(day.day),
+          missing: beforeLogs(day.day, 86400, props.data.logs_since),
           tone:
             day.requests >= SMALL_SAMPLE
               ? failureTone(day.error_rate)

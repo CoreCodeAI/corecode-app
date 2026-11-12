@@ -390,6 +390,16 @@ describe('capacity on the pool’s own terms', () => {
     expect(screen.getByText('Refused attempts')).toBeTruthy()
   })
 
+  it('names no peak minute for a provider with no request', () => {
+    const data = insights()
+    data.requests = 0
+    data.peak_rpm = 0
+    data.peak_rpm_at = 0
+    render(<CapacityTab data={data} vendor='all' />, { wrapper })
+    expect(screen.getByText('0 failed')).toBeTruthy()
+    expect(screen.queryByText(/peak 0\/min/)).toBeNull()
+  })
+
   it('reads the site’s peak, not the pool’s, when a stale range sends no top-level pool peak', () => {
     const data = insights()
     data.peak_concurrency = 40

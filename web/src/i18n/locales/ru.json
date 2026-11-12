@@ -8959,6 +8959,8 @@
     "Revenue (est.) is consumption’s pro-rata share of the range’s revenue earned: an estimate, not a margin, since the data has no cost by model.": "Выручка (оценка) — пропорциональная доля потребления в выручке периода: это оценка, а не маржа, так как данных о затратах по моделям нет.",
     "{{rate}} of {{registered}} aged sign-ups": "{{rate}} из {{registered}} регистраций старше срока наблюдения",
     "Of that, {{granted}} was granted by hand, {{redeemed}} came from redemption codes, {{gift}} from gift plans, {{checkin}} from check-in rewards and {{signup}} from sign-up and invite gifts.": "Из них {{granted}} начислено вручную, {{redeemed}} — по кодам, {{gift}} — по подаренным тарифам, {{checkin}} — за ежедневные отметки и {{signup}} — подарки за регистрацию и приглашения.",
-    "Check-in rewards": "Награды за отметки"
+    "Check-in rewards": "Награды за отметки",
+    "Median {{hours}} hours from sign-up to first payment; {{day}} within a day. The range is too short to say how many pay within a week.": "Медиана от регистрации до первой оплаты — {{hours}} ч; {{day}} оплатили в течение дня. Период слишком короткий, чтобы судить об оплате в течение недели.",
+    "Median {{hours}} hours from sign-up to first payment. The range is too short to say how many pay within a day or a week.": "Медиана от регистрации до первой оплаты — {{hours}} ч. Период слишком короткий, чтобы судить об оплате в течение дня или недели."
   }
 }

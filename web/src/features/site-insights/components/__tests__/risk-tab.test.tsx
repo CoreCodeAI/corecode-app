@@ -562,10 +562,10 @@ describe('risk tab', () => {
     expect(
       screen.getByText('Domain restriction is off: not checked')
     ).toBeInTheDocument()
+    // The share and the sentence are set apart by a dot that reads the same in
+    // every language, not by a typed full stop.
     expect(
-      screen.getByText('2 of them tried and every request failed.', {
-        exact: false,
-      })
+      screen.getByText(/ · 2 of them tried and every request failed\.$/)
     ).toBeInTheDocument()
     expect(
       screen.getByText(/1 inviters with 3 or more unpaid spenders/)

@@ -8959,6 +8959,8 @@
     "Revenue (est.) is consumption’s pro-rata share of the range’s revenue earned: an estimate, not a margin, since the data has no cost by model.": "収益（推定）は、期間中に得た収益のうち消費の比例配分です。推定値であり利益率ではありません。モデルごとのコストのデータがないためです。",
     "{{rate}} of {{registered}} aged sign-ups": "{{rate}}（判定期間を経た {{registered}} 件の新規登録）",
     "Of that, {{granted}} was granted by hand, {{redeemed}} came from redemption codes, {{gift}} from gift plans, {{checkin}} from check-in rewards and {{signup}} from sign-up and invite gifts.": "そのうち {{granted}} は管理者が手動で付与、{{redeemed}} は引換コード、{{gift}} は贈呈プラン、{{checkin}} はチェックイン報酬、{{signup}} は登録・招待ギフトによるものです。",
-    "Check-in rewards": "チェックイン報酬"
+    "Check-in rewards": "チェックイン報酬",
+    "Median {{hours}} hours from sign-up to first payment; {{day}} within a day. The range is too short to say how many pay within a week.": "登録から初回支払いまでの中央値は {{hours}} 時間、{{day}} が 1 日以内に支払い。範囲が短く、1 週間以内の割合はまだ分かりません。",
+    "Median {{hours}} hours from sign-up to first payment. The range is too short to say how many pay within a day or a week.": "登録から初回支払いまでの中央値は {{hours}} 時間。範囲が短く、1 日以内・1 週間以内の割合はまだ分かりません。"
   }
 }

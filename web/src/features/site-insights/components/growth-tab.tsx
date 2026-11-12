@@ -406,7 +406,7 @@ export function GrowthTab(props: {
       </Panel>
       {(data?.first_payment || data?.payer_activity) && (
         <div className='grid gap-4 lg:grid-cols-2'>
-          <PaymentTimingPanel timing={data?.first_payment} />
+          <PaymentTimingPanel timing={data?.first_payment} days={range?.days} />
           <PayerActivityPanel activity={data?.payer_activity} />
         </div>
       )}

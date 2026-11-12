@@ -8959,6 +8959,8 @@
     "Revenue (est.) is consumption’s pro-rata share of the range’s revenue earned: an estimate, not a margin, since the data has no cost by model.": "Revenu (est.) est la part au prorata de la consommation dans le revenu gagné sur la période : une estimation, pas une marge, car les données n’ont pas de coût par modèle.",
     "{{rate}} of {{registered}} aged sign-ups": "{{rate}} sur {{registered}} inscriptions assez anciennes",
     "Of that, {{granted}} was granted by hand, {{redeemed}} came from redemption codes, {{gift}} from gift plans, {{checkin}} from check-in rewards and {{signup}} from sign-up and invite gifts.": "Dont {{granted}} accordés à la main, {{redeemed}} issus de codes d’échange, {{gift}} de forfaits offerts, {{checkin}} de récompenses de pointage et {{signup}} de cadeaux d’inscription et d’invitation.",
-    "Check-in rewards": "Récompenses de pointage"
+    "Check-in rewards": "Récompenses de pointage",
+    "Median {{hours}} hours from sign-up to first payment; {{day}} within a day. The range is too short to say how many pay within a week.": "Médiane de {{hours}} heures entre l’inscription et le premier paiement ; {{day}} en un jour. La période est trop courte pour dire combien paient en une semaine.",
+    "Median {{hours}} hours from sign-up to first payment. The range is too short to say how many pay within a day or a week.": "Médiane de {{hours}} heures entre l’inscription et le premier paiement. La période est trop courte pour dire combien paient en un jour ou une semaine."
   }
 }
