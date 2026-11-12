@@ -27,6 +27,7 @@ import {
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { getAffiliateCode } from '@/features/auth/lib/storage'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { Home } from '../index'
@@ -77,8 +78,23 @@ beforeEach(() => {
   window.localStorage.clear()
 })
 
+// The document's own load: what the proxy answered with the console.
+function loadedAt(url: string) {
+  vi.spyOn(performance, 'getEntriesByType').mockReturnValue([
+    { name: url } as PerformanceEntry,
+  ])
+}
+
+function stubLocation(search: string) {
+  const replace = vi.fn()
+  vi.stubGlobal('location', { ...window.location, search, replace })
+  return replace
+}
+
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   window.history.replaceState({}, '', '/')
   useAuthStore.getState().auth.reset('idle')
   vi.clearAllMocks()
@@ -108,5 +124,37 @@ describe('Home', () => {
     expect(await screen.findByText('# cached home')).toBeInTheDocument()
     expect(screen.queryByText('Loading...')).toBeNull()
     await waitFor(() => expect(getHomePageContent).toHaveBeenCalled())
+  })
+
+  it('hands an invitation link to the static home page with its code saved', async () => {
+    getHomePageContent.mockResolvedValue({ success: true, data: '' })
+    loadedAt('https://corecode.live/?ref=friend')
+    const replace = stubLocation('?ref=friend')
+    renderHome('?ref=friend')
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/'))
+    expect(getAffiliateCode()).toBe('friend')
+    expect(screen.queryByText('Sign-up page')).toBeNull()
+    expect(screen.queryByText('stock hero')).toBeNull()
+  })
+
+  it('hands a visit from another console page to the static home page', async () => {
+    getHomePageContent.mockResolvedValue({ success: true, data: '' })
+    loadedAt('https://corecode.live/keys')
+    const replace = stubLocation('')
+    renderHome('')
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/'))
+    expect(screen.queryByText('stock hero')).toBeNull()
+  })
+
+  it('renders the home itself where the console was loaded at /', async () => {
+    getHomePageContent.mockResolvedValue({ success: true, data: '' })
+    loadedAt('http://localhost:5173/')
+    const replace = stubLocation('')
+    renderHome('')
+
+    expect(await screen.findByText('stock hero')).toBeInTheDocument()
+    expect(replace).not.toHaveBeenCalled()
   })
 })

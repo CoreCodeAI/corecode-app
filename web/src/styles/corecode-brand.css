@@ -221,3 +221,12 @@ h1 {
 ::selection {
   background-color: color-mix(in oklab, var(--primary) 24%, transparent);
 }
+
+/* Crossing between the console and the static site (home, docs, status) is a
+ * document load; both sides opt in, so it cross-fades instead of flashing.
+ * corecode-infra's site/docs/docs.css carries the same rule. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+}

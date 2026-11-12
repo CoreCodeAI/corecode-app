@@ -31,7 +31,50 @@ import { useAuthStore } from '@/stores/auth-store'
 import { CTA, Features, Hero, HowItWorks, Stats } from './components'
 import { useHomePageContent } from './hooks'
 
+// On corecode.live a static home page sits in front of the console: the
+// proxy (corecode-infra's Caddyfile) answers a document load of `/` itself
+// and sends only invitation links (`?aff=`, `?ref=`) here. That page carries
+// the motion, live status and copy buttons this route's copy of the HTML
+// loses to sanitizing, so a visitor who reaches this route by any other way
+// (a link, a redirect, an invitation) is handed to it with a full load.
+//
+// A document that itself loaded at `/` without an invitation shows the host
+// serves the console there (a dev server, a plain new-api), so there is no
+// static page to hand to and this route renders the home itself. That check
+// also keeps the hand-off from looping.
+function staticHomeServesRoot(): boolean {
+  const entry = performance.getEntriesByType('navigation')[0]
+  if (!entry) return false
+  const url = new URL(entry.name)
+  return url.pathname !== '/' || hasInviteCode(url.search)
+}
+
+function hasInviteCode(search: string): boolean {
+  const params = new URLSearchParams(search)
+  return Boolean(params.get('ref')?.trim() || params.get('aff')?.trim())
+}
+
 export function Home() {
+  if (staticHomeServesRoot()) return <StaticHomeHandOff />
+  return <ConsoleHome />
+}
+
+function StaticHomeHandOff() {
+  useEffect(() => {
+    // The root route saves the code in its own effect, which runs after this
+    // one; save it first so the code survives the load.
+    captureAffiliateCodeFromUrl(window.location.search)
+    window.location.replace('/')
+  }, [])
+  // The header stays while the page loads; it matches the static page's.
+  return (
+    <PublicLayout showMainContainer={false}>
+      <main className='min-h-screen' />
+    </PublicLayout>
+  )
+}
+
+function ConsoleHome() {
   const { i18n, t } = useTranslation()
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const { resolvedTheme } = useTheme()
@@ -42,12 +85,11 @@ export function Home() {
   // An invitation link lands here with ?ref= or ?aff=. Without custom home
   // content the stock hero is not what that visitor came for: send them to
   // sign-up, where the code (already saved by the root route) is applied.
-  const params = new URLSearchParams(window.location.search)
-  const hasInviteCode = Boolean(
-    params.get('ref')?.trim() || params.get('aff')?.trim()
-  )
   const redirectToSignUp =
-    isLoaded && !content && !isAuthenticated && hasInviteCode
+    isLoaded &&
+    !content &&
+    !isAuthenticated &&
+    hasInviteCode(window.location.search)
 
   useEffect(() => {
     if (!redirectToSignUp) return
