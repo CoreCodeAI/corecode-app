@@ -20,7 +20,12 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import type { Contribution } from '../analysis'
-import { segmentChanges, signupBurst } from '../growth-analysis'
+import {
+  DAY_SHARE_DAYS,
+  WEEK_SHARE_DAYS,
+  segmentChanges,
+  signupBurst,
+} from '../growth-analysis'
 import {
   MIN_COHORT,
   useChargeFormat,
@@ -131,6 +136,8 @@ export function SignupDriversPanel(props: {
  */
 export function PaymentTimingPanel(props: {
   timing: PaymentTiming | null | undefined
+  /** The range's length in days; a short one cannot give the shares. */
+  days?: number
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -139,26 +146,40 @@ export function PaymentTimingPanel(props: {
   const small = timing.payers < MIN_COHORT
   const share = (count: number) =>
     timing.payers > 0 ? fmt.pct(count / timing.payers) : '-'
+  const days = props.days ?? WEEK_SHARE_DAYS
+  const hours = fmt.num(timing.median_hours)
+  let description: string
+  if (small) {
+    description = t('{{count}} payers, too few to give a median or shares.', {
+      count: fmt.num(timing.payers),
+    })
+  } else if (days >= WEEK_SHARE_DAYS) {
+    description = t(
+      'Median {{hours}} hours from sign-up to first payment; {{day}} within a day, {{week}} within a week.',
+      {
+        hours,
+        day: share(timing.same_day),
+        week: fmt.pct(timing.within_week),
+      }
+    )
+  } else if (days >= DAY_SHARE_DAYS) {
+    description = t(
+      'Median {{hours}} hours from sign-up to first payment; {{day}} within a day. The range is too short to say how many pay within a week.',
+      { hours, day: share(timing.same_day) }
+    )
+  } else {
+    description = t(
+      'Median {{hours}} hours from sign-up to first payment. The range is too short to say how many pay within a day or a week.',
+      { hours }
+    )
+  }
   return (
     <Panel
       title={t('Time to first payment')}
       help={t(
         'For the sign-ups in the range who have paid: the time from sign-up to their first paid order, by whole days. The median is over payers only; sign-ups who have not paid yet are not in it.'
       )}
-      description={
-        small
-          ? t('{{count}} payers, too few to give a median or shares.', {
-              count: fmt.num(timing.payers),
-            })
-          : t(
-              'Median {{hours}} hours from sign-up to first payment; {{day}} within a day, {{week}} within a week.',
-              {
-                hours: fmt.num(timing.median_hours),
-                day: share(timing.same_day),
-                week: fmt.pct(timing.within_week),
-              }
-            )
-      }
+      description={description}
     >
       {!small && (
         <BarSeries

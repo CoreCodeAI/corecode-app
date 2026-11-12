@@ -8959,6 +8959,8 @@
     "Revenue (est.) is consumption’s pro-rata share of the range’s revenue earned: an estimate, not a margin, since the data has no cost by model.": "Revenue (est.) is consumption’s pro-rata share of the range’s revenue earned: an estimate, not a margin, since the data has no cost by model.",
     "{{rate}} of {{registered}} aged sign-ups": "{{rate}} of {{registered}} aged sign-ups",
     "Of that, {{granted}} was granted by hand, {{redeemed}} came from redemption codes, {{gift}} from gift plans, {{checkin}} from check-in rewards and {{signup}} from sign-up and invite gifts.": "Of that, {{granted}} was granted by hand, {{redeemed}} came from redemption codes, {{gift}} from gift plans, {{checkin}} from check-in rewards and {{signup}} from sign-up and invite gifts.",
-    "Check-in rewards": "Check-in rewards"
+    "Check-in rewards": "Check-in rewards",
+    "Median {{hours}} hours from sign-up to first payment; {{day}} within a day. The range is too short to say how many pay within a week.": "Median {{hours}} hours from sign-up to first payment; {{day}} within a day. The range is too short to say how many pay within a week.",
+    "Median {{hours}} hours from sign-up to first payment. The range is too short to say how many pay within a day or a week.": "Median {{hours}} hours from sign-up to first payment. The range is too short to say how many pay within a day or a week."
   }
 }

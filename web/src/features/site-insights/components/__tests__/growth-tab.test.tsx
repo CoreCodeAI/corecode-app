@@ -414,8 +414,10 @@ describe('the activation cohort and payment timing', () => {
       days_4_7: 2,
       later: 8,
     }
+    // Thirty days give every sign-up but the newest a week to pay.
+    const monthRange = { ...dailyRange, end: T0 + 30 * D + 2 * H, days: 30 }
     render(
-      <GrowthTab data={growth({ first_payment: timing })} range={dailyRange} />
+      <GrowthTab data={growth({ first_payment: timing })} range={monthRange} />
     )
     expect(
       screen.getByText(
@@ -430,6 +432,40 @@ describe('the activation cohort and payment timing', () => {
         /25% of payers paid within a day of signing up, 80% within a week\./
       )
     ).toBeInTheDocument()
+  })
+
+  it('gives no share a short range cannot show', () => {
+    const timing = {
+      payers: 40,
+      median_hours: 0.1,
+      within_day: 1,
+      within_week: 1,
+      same_day: 40,
+      days_1_3: 0,
+      days_4_7: 0,
+      later: 0,
+    }
+    // Two days: a day's share is real, a week's is 100% by construction.
+    const { unmount } = render(
+      <GrowthTab data={growth({ first_payment: timing })} range={dailyRange} />
+    )
+    expect(
+      screen.getByText(
+        'Median 0.1 hours from sign-up to first payment; 100% within a day. The range is too short to say how many pay within a week.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/of payers paid within a day/)).toBeNull()
+    unmount()
+    // One day: neither share says anything.
+    render(
+      <GrowthTab data={growth({ first_payment: timing })} range={hourlyRange} />
+    )
+    expect(
+      screen.getByText(
+        'Median 0.1 hours from sign-up to first payment. The range is too short to say how many pay within a day or a week.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/within a week\./)).toBeNull()
   })
 
   it('gives the count only, and no verdict, when too few have paid', () => {

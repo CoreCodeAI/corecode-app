@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { dominant, type Contribution } from '../analysis'
 import type { Tone } from '../components/shared'
 import {
+  WEEK_SHARE_DAYS,
   customerMoves,
   judgedCohort,
   matureCohort,
@@ -98,8 +99,11 @@ export function useGrowthVerdict(
   const burst = range?.hourly ? signupBurst(data.hourly) : null
   // Payment timing and churn are judged only on a fair sample of payers.
   const timing = data.first_payment
+  // A range under WEEK_SHARE_DAYS has not given its sign-ups a week to pay.
   const paceSentence =
-    timing && timing.payers >= MIN_COHORT
+    timing &&
+    timing.payers >= MIN_COHORT &&
+    (range?.days ?? WEEK_SHARE_DAYS) >= WEEK_SHARE_DAYS
       ? t(
           '{{day}} of payers paid within a day of signing up, {{week}} within a week.',
           {

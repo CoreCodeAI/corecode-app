@@ -192,12 +192,16 @@ export function RiskTab(props: {
       : fmt.pct(share(cohort))
   }
   if (cohort?.failed) {
-    neverUsedHint = joinSentences(
-      neverUsedHint && `${neverUsedHint}.`,
+    // A middle dot, not a full stop: the hint's first part is a figure, and
+    // a typed stop would be the wrong mark in half the languages.
+    neverUsedHint = [
+      neverUsedHint,
       t('{{count}} of them tried and every request failed.', {
         count: fmt.num(cohort.failed),
-      })
-    )
+      }),
+    ]
+      .filter(Boolean)
+      .join(' · ')
   }
   const neverUsedHelp = joinSentences(
     t(

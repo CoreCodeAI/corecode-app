@@ -318,14 +318,20 @@ export function CapacityTab(props: {
       rpm: fmt.num(data.peak_rpm),
       time: fmt.time(data.peak_rpm_at),
     }
-    // Too few requests leave the failure rate to chance.
-    const failures =
-      data.requests >= SMALL_SAMPLE
-        ? t('{{count}} failed ({{rate}}) · peak {{rpm}}/min at {{time}}', {
-            ...values,
-            rate: fmt.pct(data.errors / data.requests),
-          })
-        : t('{{count}} failed · peak {{rpm}}/min at {{time}}', values)
+    // Too few requests leave the failure rate to chance, and a range with no
+    // request has no peak minute to name.
+    let failures = t('{{count}} failed', { count: data.errors })
+    if (data.requests >= SMALL_SAMPLE) {
+      failures = t(
+        '{{count}} failed ({{rate}}) · peak {{rpm}}/min at {{time}}',
+        {
+          ...values,
+          rate: fmt.pct(data.errors / data.requests),
+        }
+      )
+    } else if (data.peak_rpm > 0) {
+      failures = t('{{count}} failed · peak {{rpm}}/min at {{time}}', values)
+    }
     // Tries beside requests, where retries made them differ.
     const attempts =
       data.attempts != null && data.attempts !== data.requests

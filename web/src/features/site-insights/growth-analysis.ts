@@ -123,6 +123,14 @@ export function matureCohort(
 }
 
 /**
+ * The shortest ranges, in days, whose sign-ups have had the time to pay within
+ * a day and within a week. Under them every payer of the range paid inside the
+ * span by construction, so the share would read 100% and say nothing.
+ */
+export const DAY_SHARE_DAYS = 2
+export const WEEK_SHARE_DAYS = 8
+
+/**
  * The cohort that activation and payment rates are judged on, and how many of
  * the range's sign-ups it leaves out as too young. The card and the verdict
  * both read this, so they show the same rate. An hourly range has no matured

@@ -8959,6 +8959,8 @@
     "Revenue (est.) is consumption’s pro-rata share of the range’s revenue earned: an estimate, not a margin, since the data has no cost by model.": "매출(추정)은 기간 중 벌어들인 매출을 소비 비율로 나눈 값입니다. 모델별 원가 데이터가 없으므로 추정치이며 마진이 아닙니다.",
     "{{rate}} of {{registered}} aged sign-ups": "{{rate}} ({{registered}}개의 판정 기간이 지난 가입)",
     "Of that, {{granted}} was granted by hand, {{redeemed}} came from redemption codes, {{gift}} from gift plans, {{checkin}} from check-in rewards and {{signup}} from sign-up and invite gifts.": "그중 {{granted}}는 관리자가 직접 지급했고, {{redeemed}}는 교환 코드, {{gift}}는 증정 요금제, {{checkin}}는 출석 보상, {{signup}}는 가입·초대 선물에서 나왔습니다.",
-    "Check-in rewards": "출석 보상"
+    "Check-in rewards": "출석 보상",
+    "Median {{hours}} hours from sign-up to first payment; {{day}} within a day. The range is too short to say how many pay within a week.": "가입부터 첫 결제까지 중앙값 {{hours}}시간, {{day}}가 하루 안에 결제했습니다. 범위가 짧아 일주일 내 결제 비율은 아직 알 수 없습니다.",
+    "Median {{hours}} hours from sign-up to first payment. The range is too short to say how many pay within a day or a week.": "가입부터 첫 결제까지 중앙값 {{hours}}시간. 범위가 짧아 하루 또는 일주일 내 결제 비율은 아직 알 수 없습니다."
   }
 }
