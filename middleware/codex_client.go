@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
@@ -32,15 +33,32 @@ var codexOriginators = map[string]bool{
 	"codex_work_desktop": true,
 }
 
+// Codex talks to the Responses API only: /v1/responses, its WebSocket upgrade
+// and /v1/responses/compact. A client that sends Codex's headers to Chat
+// Completions is something else, and upstream keeps a conversation on one
+// backend only for Responses requests, so it would also lose its cache.
+const codexResponsesPath = "/v1/responses"
+
+// codexCheckPath names the failed check of a request with Codex's headers on
+// another API.
+const codexCheckPath = "path"
+
+func isCodexResponsesPath(path string) bool {
+	return path == codexResponsesPath || strings.HasPrefix(path, codexResponsesPath+"/")
+}
+
 // detectCodexClient returns the name of the first check the request failed,
-// or "" when it looks like Codex. Only headers are read, so a WebSocket
-// upgrade to /v1/responses is judged the same way as a POST.
+// or "" when it looks like Codex. Only headers and the path are read, so a
+// WebSocket upgrade to /v1/responses is judged the same way as a POST.
 func detectCodexClient(c *gin.Context) string {
 	if !codexUserAgentPattern.MatchString(c.GetHeader("User-Agent")) {
 		return "User-Agent"
 	}
 	if !codexOriginators[c.GetHeader("Originator")] {
 		return "Originator header"
+	}
+	if !isCodexResponsesPath(c.Request.URL.Path) {
+		return codexCheckPath
 	}
 	return ""
 }
@@ -56,9 +74,13 @@ func admitCodex(c *gin.Context, group string, reject bool) bool {
 		logger.LogWarn(c.Request.Context(), "codex only group %s: %s check failed, rejected=false", group, failedCheck)
 		return false
 	}
-	logger.LogWarn(c.Request.Context(), "codex only group %s: %s check failed, rejected=true, user-agent=%q, originator=%q",
-		group, failedCheck, clip(c.GetHeader("User-Agent"), 120), clip(c.GetHeader("Originator"), 40))
+	logger.LogWarn(c.Request.Context(), "codex only group %s: %s check failed, rejected=true, user-agent=%q, originator=%q, path=%q",
+		group, failedCheck, clip(c.GetHeader("User-Agent"), 120), clip(c.GetHeader("Originator"), 40), clip(c.Request.URL.Path, 80))
+	message := i18n.MsgAuthCodexOnly
+	if failedCheck == codexCheckPath {
+		message = i18n.MsgAuthCodexOnlyResponses
+	}
 	abortWithOpenAiMessage(c, http.StatusForbidden,
-		i18n.T(c, i18n.MsgAuthCodexOnly, map[string]any{"Group": group}), types.ErrorCodeAccessDenied)
+		i18n.T(c, message, map[string]any{"Group": group}), types.ErrorCodeAccessDenied)
 	return false
 }
