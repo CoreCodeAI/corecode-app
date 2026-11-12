@@ -323,6 +323,20 @@ export async function updateUserInviter(
   return res.data.data
 }
 
+export async function updateUserAffiliateAddressExemption(
+  userId: number,
+  exempt: boolean
+): Promise<AffiliateAdminView> {
+  const res = await api.put<ApiResponse<AffiliateAdminView>>(
+    `/api/affiliate/admin/users/${userId}/address-exemption`,
+    { exempt }
+  )
+  if (!res.data.success || !res.data.data) {
+    throw createServerError(res.data, 'Failed to save invitation settings')
+  }
+  return res.data.data
+}
+
 export async function updateUserAffCode(
   userId: number,
   affCode: string

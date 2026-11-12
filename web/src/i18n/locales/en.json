@@ -3217,6 +3217,8 @@
     "Invitation quota is insufficient!": "Invitation quota is insufficient!",
     "Invitation settings": "Invitation settings",
     "Invitation settings saved": "Invitation settings saved",
+    "Commission from invitees on their network": "Commission from invitees on their network",
+    "Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.": "Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.",
     "Invitations": "Invitations",
     "Invitations are not available for your account.": "Invitations are not available for your account.",
     "Invite Info": "Invite Info",

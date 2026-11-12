@@ -3217,6 +3217,8 @@
     "Invitation quota is insufficient!": "邀請額度不足！",
     "Invitation settings": "邀請設定",
     "Invitation settings saved": "邀請設定已儲存",
+    "Commission from invitees on their network": "同網路被邀請人也返佣",
+    "Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.": "對與該使用者使用同一網路的被邀請人（例如其本人的另一個帳號）照常返佣。僅在已約定優惠時開啟。",
     "Invitations": "邀請彙總",
     "Invitations are not available for your account.": "你的帳號暫不可邀請用戶。",
     "Invite Info": "邀請資訊",

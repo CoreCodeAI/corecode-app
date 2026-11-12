@@ -3217,6 +3217,8 @@
     "Invitation quota is insufficient!": "Недостаточно квоты за приглашения!",
     "Invitation settings": "Настройки приглашений",
     "Invitation settings saved": "Настройки приглашений сохранены",
+    "Commission from invitees on their network": "Комиссия с приглашённых из той же сети",
+    "Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.": "Начисляет комиссию с приглашённых, которые пользуются той же сетью, что и этот пользователь, например с его второго аккаунта. Не включайте без согласованной скидки.",
     "Invitations": "Приглашения",
     "Invitations are not available for your account.": "Для вашего аккаунта приглашения недоступны.",
     "Invite Info": "Информация о приглашении",

@@ -255,6 +255,9 @@ type adminAffiliateView struct {
 	MaxRate     int    `json:"max_rate"`
 	InviterId   int    `json:"inviter_id"`
 	InviterName string `json:"inviter_name"`
+	// AddressExempt is true when the user earns commission on invitees who
+	// share their address (model.AffiliateAddressExemption).
+	AddressExempt bool `json:"address_exempt"`
 }
 
 func buildAdminAffiliateView(user *model.User) (*adminAffiliateView, error) {
@@ -268,10 +271,15 @@ func buildAdminAffiliateView(user *model.User) (*adminAffiliateView, error) {
 		return nil, err
 	}
 	summary.AffCode = current.AffCode
+	exempt, err := model.AffiliateAddressExempt(user.Id)
+	if err != nil {
+		return nil, err
+	}
 	view := &adminAffiliateView{
 		affiliateSummary: summary,
 		MaxRate:          operation_setting.GetAffiliateSetting().MaxRate,
 		InviterId:        user.InviterId,
+		AddressExempt:    exempt,
 	}
 	if user.InviterId != 0 {
 		if inviter, err := model.GetUserById(user.InviterId, false); err == nil {
@@ -345,6 +353,43 @@ func AdminSetUserAffiliate(c *gin.Context) {
 		"affiliate_rate":    req.Rate,
 		"affiliate_channel": tier != "",
 		"affiliate_tier":    tier,
+	})
+	view, err := buildAdminAffiliateView(user)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, view)
+}
+
+type adminAddressExemptionRequest struct {
+	Exempt bool `json:"exempt"`
+}
+
+// AdminSetUserAffiliateAddressExemption lets a user earn commission on
+// invitees who share their address, or stops it.
+func AdminSetUserAffiliateAddressExemption(c *gin.Context) {
+	user, ok := affiliateManagedUser(c)
+	if !ok {
+		return
+	}
+	var req adminAddressExemptionRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	if err := model.SetAffiliateAddressExemption(user.Id, req.Exempt, c.GetInt("id")); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	action := "allow_commission_from_shared_address"
+	if !req.Exempt {
+		action = "deny_commission_from_shared_address"
+	}
+	recordManageAuditFor(c, user.Id, "user.manage", map[string]any{
+		"username": user.Username,
+		"id":       user.Id,
+		"action":   action,
 	})
 	view, err := buildAdminAffiliateView(user)
 	if err != nil {
