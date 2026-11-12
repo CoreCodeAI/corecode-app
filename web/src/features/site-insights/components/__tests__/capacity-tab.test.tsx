@@ -183,21 +183,28 @@ describe('capacity analysis', () => {
 
   it('weighs engine rejections by the peak of their hour', () => {
     const rows = [
-      hour(0, { peak_concurrency: 9, engine_rejections: 3 }),
-      hour(HOUR, { peak_concurrency: 2, engine_rejections: 5 }),
+      hour(0, { peak_concurrency: 9, engine_rejections: 9 }),
+      hour(HOUR, { peak_concurrency: 2, engine_rejections: 15 }),
       hour(2 * HOUR, { peak_concurrency: 1 }),
     ]
     expect(diagnoseRejections(rows, 10)).toEqual({
-      total: 8,
+      total: 24,
       hours: 2,
-      worst: { hour: HOUR, count: 5, peak: 2 },
-      saturated: 3,
+      worst: { hour: HOUR, count: 15, peak: 2 },
+      saturated: 9,
       cause: 'eligibility',
     })
     expect(diagnoseRejections(rows, 0)?.cause).toBeUndefined()
     expect(diagnoseRejections(rows.slice(2), 10)).toBeUndefined()
-    rows[0].engine_rejections = 5
+    rows[0].engine_rejections = 15
     expect(diagnoseRejections(rows, 10)?.cause).toBe('saturation')
+    // Under POOL_FULL_DANGER rejections a cause is not named.
+    expect(
+      diagnoseRejections(
+        [hour(0, { peak_concurrency: 9, engine_rejections: 3 })],
+        10
+      )?.cause
+    ).toBeUndefined()
   })
 
   it('flags an hour failing far above the previous period’s same hour', () => {
@@ -261,7 +268,7 @@ describe('capacity tab by range', () => {
   it('drops the weekday grid under a week and diagnoses short-pool 429s', () => {
     const data = insights()
     data.hourly = [
-      hour(now - 2 * HOUR, { peak_concurrency: 4, engine_rejections: 6 }),
+      hour(now - 2 * HOUR, { peak_concurrency: 4, engine_rejections: 20 }),
       hour(now - HOUR + 600, { peak_concurrency: 1 }),
     ]
     render(<CapacityTab data={data} vendor='all' range={day} />, { wrapper })
@@ -294,7 +301,7 @@ describe('capacity tab by range', () => {
 describe('capacity on the pool’s own terms', () => {
   it('reads the pool’s peak against the slots where the server sends it', () => {
     const rows = [
-      hour(0, { peak_concurrency: 14, pool_peak: 7, engine_rejections: 4 }),
+      hour(0, { peak_concurrency: 14, pool_peak: 7, engine_rejections: 20 }),
       hour(HOUR, { peak_concurrency: 4 }),
     ]
     // The site's 14 is past the slots; the pool's 7 is under them.
@@ -305,6 +312,19 @@ describe('capacity on the pool’s own terms', () => {
     })
     expect(diagnoseRejections(rows, 10)?.cause).toBe('eligibility')
     expect(dailyPeaks(rows, 100 * HOUR, () => 0)).toEqual([])
+  })
+
+  it('reads the site’s peak per day when the pool’s is not the headline', () => {
+    const rows = Array.from({ length: 24 }, (_, index) =>
+      hour(
+        index * HOUR,
+        index === 0 ? { peak_concurrency: 14, pool_peak: 7 } : {}
+      )
+    )
+    expect(dailyPeaks(rows, 100 * HOUR, () => 0, false)).toEqual([
+      { day: 0, peak: 14 },
+    ])
+    expect(dailyPeaks(rows, 100 * HOUR, () => 0)).toEqual([{ day: 0, peak: 7 }])
   })
 
   it('splits the engine’s refusals, counts enabled groups, and reads each group’s limit', () => {
@@ -333,6 +353,9 @@ describe('capacity on the pool’s own terms', () => {
         4
       )
     ).toEqual([4, 8])
+    expect(
+      accountLimits([{ ...group({ id: 5 }), credential_limit: 0 }], 4)
+    ).toEqual([0])
   })
 
   it('shows the pool peak beside the site’s, and the engine’s in-flight count', () => {
@@ -357,6 +380,15 @@ describe('capacity on the pool’s own terms', () => {
     expect(screen.queryByText('Claude upstream rate limit')).toBeNull()
     expect(screen.getAllByText('Upstream rate limit').length).toBeGreaterThan(0)
     expect(screen.getByText('Refused attempts')).toBeTruthy()
+  })
+
+  it('reads the site’s peak, not the pool’s, when a stale range sends no top-level pool peak', () => {
+    const data = insights()
+    data.peak_concurrency = 40
+    data.hourly = [hour(0, { peak_concurrency: 40, pool_peak: 6 })]
+    render(<CapacityTab data={data} vendor='all' />, { wrapper })
+    expect(screen.queryByText('Pool peak concurrency')).toBeNull()
+    expect(screen.getAllByText('Peak concurrency').length).toBeGreaterThan(0)
   })
 
   it('hides the in-flight meter when the pool cannot be read', () => {

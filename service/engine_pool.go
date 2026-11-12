@@ -123,8 +123,8 @@ type EngineGroup struct {
 	OverrideLimit  *int   `json:"override_limit"`
 	// CredentialLimit is the group's own per-account limit, omitted when the
 	// engine does not report it; the pool's CredentialConcurrency is the
-	// default it inherits.
-	CredentialLimit int            `json:"credential_limit,omitempty"`
+	// default it inherits. An explicit 0 is a real limit, not an unset one.
+	CredentialLimit *int           `json:"credential_limit,omitempty"`
 	Accounts        int            `json:"accounts"`
 	Eligible        int            `json:"eligible"`
 	Slots           int            `json:"slots"`
@@ -210,8 +210,9 @@ type engineGroup struct {
 	Current        int    `json:"current"`
 	OverrideLimit  *int   `json:"override_limit"`
 	EffectiveLimit int    `json:"effective_limit"`
-	// An engine before per-group credential limits sends none.
-	CredentialLimit int            `json:"credential_limit"`
+	// An engine before per-group credential limits sends none; an explicit 0
+	// is a real limit and must not fall back to the pool default.
+	CredentialLimit *int           `json:"credential_limit"`
 	QuotaSupported  bool           `json:"quota_supported"`
 	QuotaEffective  engineBudget   `json:"quota_effective"`
 	Counts          map[string]int `json:"counts"`
@@ -617,7 +618,11 @@ func readEnginePool(base, key string) EnginePool {
 			pool.Accounts = append(pool.Accounts, account)
 		}
 		if group.Enabled {
-			row.Slots = row.Eligible * cmp.Or(group.CredentialLimit, snapshot.CredentialLimit)
+			limit := snapshot.CredentialLimit
+			if group.CredentialLimit != nil {
+				limit = *group.CredentialLimit
+			}
+			row.Slots = row.Eligible * limit
 			if group.EffectiveLimit > 0 {
 				row.Slots = min(row.Slots, group.EffectiveLimit)
 			}

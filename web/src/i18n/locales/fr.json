@@ -8327,7 +8327,6 @@
     "As of {{time}}": "À {{time}}",
     "Driven by {{segment}} ({{change}}).": "Porté par {{segment}} ({{change}}).",
     "Driven by {{segment}} ({{change}}) and {{segment2}} ({{change2}}).": "Porté par {{segment}} ({{change}}) et {{segment2}} ({{change2}}).",
-    "{{share}} of them signed up in the hour from {{time}}: a promotion or a farm.": "{{share}} d’entre eux se sont inscrits dans l’heure de {{time}} : une promotion ou une ferme de comptes.",
     "Consumption {{change}}, mostly {{user}} ({{delta}}).": "Consommation {{change}}, surtout {{user}} ({{delta}}).",
     "Consumption {{change}}, mostly {{user}} ({{delta}}) and {{user2}} ({{delta2}}).": "Consommation {{change}}, surtout {{user}} ({{delta}}) et {{user2}} ({{delta2}}).",
     "{{rate}} so far": "{{rate}} pour l’instant",
@@ -8857,7 +8856,6 @@
     "{{count}} client errors left out": "{{count}} erreurs client exclues",
     "What customers were charged for the requests the channels served; root is left out.": "Ce que les clients ont payé pour les requêtes servies par les canaux ; root est exclu.",
     "Every enabled channel, every automatically disabled one, and any other with traffic or tasks in the range, busiest first.": "Chaque canal actif, chaque canal désactivé automatiquement et tout autre ayant du trafic ou des tâches sur la période, le plus chargé d’abord.",
-    "Bills and fees are set against revenue one for one, with no conversion.": "Factures et forfaits sont comparés au revenu à un pour un, sans conversion.",
     "Revenue is in quota dollars, which customers buy at ¥1 each.": "Le revenu est en dollars de quota, que les clients achètent ¥1 l’unité.",
     "Failures the customer’s own request caused (a 4xx other than 401, 402, 403, 404 and 408) are left out of the rate, as the channel did not cause them; they still count as attempts.": "Les échecs causés par la requête du client (un 4xx autre que 401, 402, 403, 404 et 408) sont exclus du taux, car le canal n’en est pas la cause ; ils comptent toujours comme tentatives.",
     "Revenue with a known cost": "Revenu au coût connu",
@@ -8881,6 +8879,12 @@
     "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "Marge brute des canaux au coût connu : {{rate}}, surestimée : la facture de {{names}} n’est lue que sur une partie des clés.",
     "In progress, through {{time}}": "En cours, jusqu’à {{time}}",
     "Partial, from {{time}}": "Partiel, depuis {{time}}",
-    "Expected for the whole day": "Prévu pour la journée"
+    "Expected for the whole day": "Prévu pour la journée",
+    "Bills and fees are set against revenue one for one here, with no conversion; the finance tab converts a fee at the site’s exchange rate.": "Les factures et les abonnements sont comparés un pour un au revenu ici, sans conversion ; l’onglet finance convertit un abonnement au taux de change du site.",
+    "Fewer than {{count}} new payers in this range: too few to judge a channel’s cost.": "Moins de {{count}} nouveaux payeurs sur cette période : trop peu pour juger le coût d’un canal.",
+    "an address with repeat plan buyers": "une adresse avec des acheteurs de forfait répétés",
+    "Too few sign-ups at least 6 hours old to judge activation or payment.": "Trop peu d’inscriptions datant d’au moins 6 heures pour juger l’activation ou le paiement.",
+    "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.": "{{activation}} des inscriptions datant d’au moins 6 heures ont été activées et {{conversion}} ont payé.",
+    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "{{share}} d’entre elles se sont inscrites dans l’heure à partir de {{time}} : vérifiez la source des inscriptions."
   }
 }

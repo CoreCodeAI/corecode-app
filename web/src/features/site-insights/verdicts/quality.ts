@@ -34,6 +34,7 @@ import {
   hourFlags,
   mixShift,
   rankByExcess,
+  serviceFailureRate,
   siteFailureRate,
   siteTtftP95,
 } from '../quality-analysis'
@@ -72,12 +73,15 @@ export function useQualityVerdict(
       failureTone(vendor.error_rate) !== 'default'
   )
   const judged = data.requests >= SMALL_SAMPLE
-  const failure = judged ? failureTone(data.error_rate) : 'default'
+  // The customers' own bad requests (a 401 or a 404) are not the service's
+  // failures; without the error categories, the raw rate is all there is.
+  const failureRate = serviceFailureRate(data) ?? data.error_rate
+  const failure = judged ? failureTone(failureRate) : 'default'
   let tone: Tone = failure === 'default' && judged ? 'good' : failure
   if (failingVendors.length > 0) tone = worse(tone, 'warning')
   if (claude && claude.ttft_p95_ms > 10000) tone = worse(tone, 'warning')
 
-  const rate = fmt.pct(data.error_rate)
+  const rate = fmt.pct(failureRate)
   const signed = (points: number) =>
     `${points > 0 ? '+' : '−'}${fmt.num(Math.round(Math.abs(points) * 10) / 10)}`
   const shift = failureShift(data, previous)

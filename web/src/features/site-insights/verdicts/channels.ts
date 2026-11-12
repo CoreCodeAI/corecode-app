@@ -22,6 +22,7 @@ import {
   accruingChannels,
   channelTotals,
   costParts,
+  MIN_NEW_PAYERS,
   paidChannels,
   worstPaidChannel,
 } from '../components/channels-analysis'
@@ -97,6 +98,21 @@ export function useChannelsVerdict(
         t(
           'A range under {{days}} days cannot judge a channel: read 30 days or the contract to date.',
           { days: SHORT_ROI_DAYS }
+        ),
+        accrual
+      ),
+    }
+  }
+  // Below MIN_NEW_PAYERS, one customer's payment swings the net: neither a
+  // fee to renegotiate nor a channel that covers its cost can be read off it.
+  if (totals.newPayers < MIN_NEW_PAYERS) {
+    return {
+      tone: accrual ? 'warning' : 'default',
+      text: join(
+        headline,
+        t(
+          'Fewer than {{count}} new payers in this range: too few to judge a channel’s cost.',
+          { count: MIN_NEW_PAYERS }
         ),
         accrual
       ),

@@ -74,9 +74,9 @@ func TestFetchEnginePool(t *testing.T) {
 	assert.Equal(t, 3, pool.EligibleAccounts, "the cooling account and the disabled group's account are not eligible")
 	assert.Equal(t, 5+6, pool.EffectiveSlots, "us-01 reports no limit of its own and takes the default of five; team-01's two accounts take its own three each")
 	require.Len(t, pool.Groups, 3)
-	assert.Zero(t, pool.Groups[0].CredentialLimit)
+	assert.Nil(t, pool.Groups[0].CredentialLimit, "a group the engine does not report takes the default")
 	assert.Equal(t, EngineGroup{ID: 7, Name: "team-01", Channel: "claude", Provider: "claude", Enabled: true, EffectiveLimit: 8, OverrideLimit: pool.Groups[1].OverrideLimit,
-		CredentialLimit: 3, Accounts: 3, Eligible: 2, Slots: 6, Counts: map[string]int{"total": 3, "available": 2, "cooldown": 1},
+		CredentialLimit: common.GetPointer(3), Accounts: 3, Eligible: 2, Slots: 6, Counts: map[string]int{"total": 3, "available": 2, "cooldown": 1},
 		QuotaBudget: true, FiveHourBudget: 90, SevenDayBudget: 95}, pool.Groups[1])
 	assert.Equal(t, 8, *pool.Groups[1].OverrideLimit)
 	assert.Zero(t, pool.Groups[2].Slots, "a disabled group serves nothing")
@@ -367,4 +367,40 @@ func TestConsumeEngineResetCredit(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, engineErr.Status)
 	assert.Equal(t, "RESET_CREDIT_UNAVAILABLE", engineErr.Code)
 	assert.Equal(t, "engine /groups/7/credentials/21/reset-credits/consume returned HTTP 409", err.Error())
+}
+
+// An explicit per-group limit of 0 is what the engine enforces (it admits no
+// request there), so the pool must not replace it with the default of 3.
+func TestFetchEnginePoolExplicitZeroCredentialLimitIsNotDefault(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/group-concurrency":
+			_, _ = w.Write([]byte(`{"code":0,"data":{"observed_at_ms":1000,"credential_limit":3,
+				"groups":[{"id":4,"name":"closed","channel_id":"claude","enabled":true,"current":0,"override_limit":null,
+				  "effective_limit":0,"credential_limit":0,"quota_supported":false,"counts":{"total":4,"available":4},
+				  "credentials":[
+				    {"id":20,"name":"a@y.com","status":"available","five_hour":{},"seven_day":{},"active":0,"sessions":0},
+				    {"id":21,"name":"b@y.com","status":"available","five_hour":{},"seven_day":{},"active":0,"sessions":0},
+				    {"id":22,"name":"c@y.com","status":"available","five_hour":{},"seven_day":{},"active":0,"sessions":0},
+				    {"id":23,"name":"d@y.com","status":"available","five_hour":{},"seven_day":{},"active":0,"sessions":0}]}]}}`))
+		case "/api/group-concurrency/pool-estimate":
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	previousURL, previousKey := operation_setting.EngineControlURL, operation_setting.EngineControlKey
+	t.Cleanup(func() {
+		operation_setting.EngineControlURL, operation_setting.EngineControlKey = previousURL, previousKey
+	})
+	operation_setting.EngineControlURL, operation_setting.EngineControlKey = server.URL, "secret"
+
+	pool := FetchEnginePool()
+	require.Len(t, pool.Groups, 1)
+	require.NotNil(t, pool.Groups[0].CredentialLimit)
+	assert.Zero(t, *pool.Groups[0].CredentialLimit)
+	assert.Equal(t, 4, pool.Groups[0].Eligible)
+	assert.Zero(t, pool.Groups[0].Slots, "four eligible accounts at a limit of 0 hold no slots")
+	assert.Zero(t, pool.EffectiveSlots)
 }

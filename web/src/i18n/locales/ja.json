@@ -8327,7 +8327,6 @@
     "As of {{time}}": "{{time}} 時点",
     "Driven by {{segment}} ({{change}}).": "主因は {{segment}}（{{change}}）。",
     "Driven by {{segment}} ({{change}}) and {{segment2}} ({{change2}}).": "主因は {{segment}}（{{change}}）と {{segment2}}（{{change2}}）。",
-    "{{share}} of them signed up in the hour from {{time}}: a promotion or a farm.": "そのうち {{share}} が {{time}} からの1時間に登録：宣伝か大量登録です。",
     "Consumption {{change}}, mostly {{user}} ({{delta}}).": "消費は{{change}}、主に {{user}}（{{delta}}）。",
     "Consumption {{change}}, mostly {{user}} ({{delta}}) and {{user2}} ({{delta2}}).": "消費は{{change}}、主に {{user}}（{{delta}}）と {{user2}}（{{delta2}}）。",
     "{{rate}} so far": "現時点で {{rate}}",
@@ -8857,7 +8856,6 @@
     "{{count}} client errors left out": "クライアントエラー {{count}} 件を除外",
     "What customers were charged for the requests the channels served; root is left out.": "各チャネルが処理したリクエストに対し顧客へ請求した額。root は除外します。",
     "Every enabled channel, every automatically disabled one, and any other with traffic or tasks in the range, busiest first.": "有効なチャネル、自動無効化されたチャネル、期間内にトラフィックかタスクがあったその他のチャネルを、多い順に表示します。",
-    "Bills and fees are set against revenue one for one, with no conversion.": "請求と月額料金は換算せず、収入と 1 対 1 で比べます。",
     "Revenue is in quota dollars, which customers buy at ¥1 each.": "収入はクォータドル建てで、顧客は 1 ドルを ¥1 で購入します。",
     "Failures the customer’s own request caused (a 4xx other than 401, 402, 403, 404 and 408) are left out of the rate, as the channel did not cause them; they still count as attempts.": "顧客自身のリクエストが原因の失敗（401・402・403・404・408 以外の 4xx）はチャネルのせいではないため失敗率から除きますが、試行には数えます。",
     "Revenue with a known cost": "コストが分かる収入",
@@ -8881,6 +8879,12 @@
     "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "コストが分かるチャネルの粗利：{{rate}}、過大：{{names}} の請求は一部のキーからしか読み取っていません。",
     "In progress, through {{time}}": "進行中、{{time}} まで",
     "Partial, from {{time}}": "一部のみ、{{time}} から",
-    "Expected for the whole day": "1 日全体の見込み"
+    "Expected for the whole day": "1 日全体の見込み",
+    "Bills and fees are set against revenue one for one here, with no conversion; the finance tab converts a fee at the site’s exchange rate.": "ここでは請求額と月額料金を収益と1対1で直接比較し、換算は行いません。財務タブでは月額料金をサイトの為替レートで換算します。",
+    "Fewer than {{count}} new payers in this range: too few to judge a channel’s cost.": "この期間の新規支払いユーザーが {{count}} 人未満のため、チャネルのコストを判断するには不十分です。",
+    "an address with repeat plan buyers": "プランを繰り返し購入したユーザーがいるアドレス",
+    "Too few sign-ups at least 6 hours old to judge activation or payment.": "登録から6時間以上経ったユーザーが少なすぎて、有効化や支払いを判断できません。",
+    "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.": "登録から6時間以上経ったユーザーのうち {{activation}} が有効化、{{conversion}} が支払いました。",
+    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "そのうち {{share}} は {{time}} からの1時間に登録しました。登録経路を確認してください。"
   }
 }

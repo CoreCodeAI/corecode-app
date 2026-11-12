@@ -116,7 +116,7 @@ describe('tab verdicts', () => {
     const short = {
       ...base,
       peak_concurrency: 30,
-      hourly: [hour(0, 30, 0), hour(3600, 12, 4)],
+      hourly: [hour(0, 30, 0), hour(3600, 12, 20)],
     } as unknown as CapacityInsights
     const eligibility = renderHook(() => useCapacityVerdict(short, undefined))
       .result.current
@@ -127,7 +127,7 @@ describe('tab verdicts', () => {
     const full = {
       ...base,
       peak_concurrency: 55,
-      hourly: [hour(0, 20, 0), hour(3600, 55, 4)],
+      hourly: [hour(0, 20, 0), hour(3600, 55, 20)],
     } as unknown as CapacityInsights
     expect(
       renderHook(() => useCapacityVerdict(full, undefined)).result.current?.text
@@ -180,6 +180,24 @@ describe('tab verdicts', () => {
     )
   })
 
+  it('reads the quality failure rate without the customers’ own bad requests', () => {
+    const data = {
+      requests: 1000,
+      errors: 60,
+      error_rate: 0.06,
+      error_categories: [
+        { name: 'upstream_error', count: 10 },
+        { name: 'client_error', count: 50 },
+      ],
+      vendors: [],
+      models: [],
+    } as unknown as QualityInsights
+    const { result } = renderHook(() => useQualityVerdict(data, undefined))
+    expect(result.current?.tone).toBe('good')
+    expect(result.current?.text).toMatch(/^Failure rate 1\.0?\d?%/)
+    expect(result.current?.text).not.toContain('6%')
+  })
+
   it('reads the growth tab without a previous period', () => {
     const data = {
       funnel: { registered: 50, activated: 10, paid: 5, repeat: 1 },
@@ -226,6 +244,74 @@ describe('tab verdicts', () => {
       tone: 'default',
       text: '10 sign-ups. 10% activated and 0% paid; too few sign-ups to judge.',
     })
+  })
+
+  it('judges activation over sign-ups old enough to show it, not the newest hours', () => {
+    // Days 0 to 2 ended at least 6 hours before the range's end; day 3 did not.
+    const day = (index: number, registered: number, activated: number) => ({
+      day: index * 86400,
+      registered,
+      activated,
+      paid: 0,
+    })
+    const data = {
+      funnel: { registered: 100, activated: 28, paid: 0, repeat: 0 },
+      daily: [day(0, 50, 14), day(1, 25, 14), day(2, 0, 0), day(3, 25, 0)],
+    } as unknown as GrowthInsights
+    const range = {
+      start: 0,
+      end: 3 * 86400 + 18 * 3600,
+      days: 4,
+      hourly: false,
+    }
+    const { result } = renderHook(() =>
+      useGrowthVerdict(data, undefined, range)
+    )
+    expect(result.current?.tone).toBe('good')
+    expect(result.current?.text).toContain(
+      '37.3% of sign-ups at least 6 hours old activated and 0% paid.'
+    )
+  })
+
+  it('says too few sign-ups are old enough when the whole cohort is hours old', () => {
+    const data = {
+      funnel: { registered: 30, activated: 0, paid: 0, repeat: 0 },
+      daily: [{ day: 3 * 86400, registered: 30, activated: 0, paid: 0 }],
+    } as unknown as GrowthInsights
+    const range = {
+      start: 0,
+      end: 3 * 86400 + 18 * 3600,
+      days: 4,
+      hourly: false,
+    }
+    const { result } = renderHook(() =>
+      useGrowthVerdict(data, undefined, range)
+    )
+    expect(result.current).toEqual({
+      tone: 'default',
+      text: '30 sign-ups. Too few sign-ups at least 6 hours old to judge activation or payment.',
+    })
+  })
+
+  it('says a sign-up burst’s timing and leaves its cause to the operator', () => {
+    const hour = (index: number, registered: number) => ({
+      hour: index * 3600,
+      registered,
+      activated: 0,
+      paid: 0,
+    })
+    const data = {
+      funnel: { registered: 20, activated: 0, paid: 0, repeat: 0 },
+      hourly: [hour(0, 5), hour(1, 5), hour(2, 5), hour(3, 5)],
+    } as unknown as GrowthInsights
+    const range = { start: 0, end: 4 * 3600, days: 1, hourly: true }
+    const { result } = renderHook(() =>
+      useGrowthVerdict(data, undefined, range)
+    )
+    expect(result.current?.text).toMatch(
+      /25% of them signed up in the hour from .+: check the sign-up source\./
+    )
+    expect(result.current?.text).not.toContain('promotion')
   })
 
   it('names the customer that moved consumption', () => {
@@ -457,9 +543,51 @@ describe('tab verdicts', () => {
       .result.current
     expect(verdict?.tone).toBe('danger')
     expect(verdict?.text).toMatch(
-      /^12 sign-ups\. Sign-ups surged at .+: 9, 9× the same hour of the previous period\. To check: 1 addresses shared by several accounts\. Review 10\.0\.0\.9 first: 2 plan buyers, 2 registered within 10 minutes, 2 created in this range, All paid: likely an office or a reseller\. Act on accounts from Users, usage logs and Risk Control\.$/
+      /^12 sign-ups\. Sign-ups surged at .+: 9, 9× the same hour of the previous period\. To check: 1 addresses shared by several accounts, an address with repeat plan buyers\. Review 10\.0\.0\.9 first: 2 plan buyers, 2 registered within 10 minutes, 2 created in this range, All paid: likely an office or a reseller\. Act on accounts from Users, usage logs and Risk Control\.$/
     )
   })
+  it('never says nothing to check while an address has repeat plan buyers', () => {
+    const data = {
+      signups: 4,
+      signup_series: [],
+      shared_ips: [
+        {
+          ip: '1.2.3.4',
+          requests: 2,
+          subscription_buyers: 2,
+          users: [
+            {
+              user_id: 1,
+              username: 'u1',
+              requests: 1,
+              paid: false,
+              subscription: true,
+              created_at: 0,
+              balance_usd: 0,
+            },
+            {
+              user_id: 2,
+              username: 'u2',
+              requests: 1,
+              paid: false,
+              subscription: true,
+              created_at: 0,
+              balance_usd: 0,
+            },
+          ],
+        },
+      ],
+      alias_emails: 0,
+      off_whitelist: 0,
+      debtors: [],
+    } as unknown as RiskInsights
+    const verdict = renderHook(() => useRiskVerdict(data)).result.current
+    expect(verdict?.tone).toBe('danger')
+    expect(verdict?.text).not.toContain('Nothing to check.')
+    expect(verdict?.text).toContain('To check: ')
+    expect(verdict?.text).toContain('an address with repeat plan buyers')
+  })
+
   it('leaves shared exits out of the risk verdict, counts every shared address, and names gift-farming inviters', () => {
     const user = (id: number) => ({
       user_id: id,
@@ -536,7 +664,11 @@ describe('channels verdict', () => {
     hourly: days <= 3,
   })
   // A $100 fee is ¥700 at the rate.
-  const magpie = channel(306, 'magpie', { fee_usd: 100, revenue: 500 })
+  const magpie = channel(306, 'magpie', {
+    fee_usd: 100,
+    revenue: 500,
+    new_payers: 3,
+  })
 
   it('names the worst paid channel and its fee over 30 days, and reads a total loss as danger', () => {
     const previous = insights([{ ...magpie, revenue: 400 }])
@@ -553,6 +685,7 @@ describe('channels verdict', () => {
     const gifty = channel(7, 'gifty', {
       fee_usd: 10,
       revenue: 100,
+      new_payers: 3,
       gift_consumption_usd: 300,
     })
     const data = insights([{ ...magpie, revenue: 2000 }, gifty])
@@ -575,6 +708,21 @@ describe('channels verdict', () => {
     })
   })
 
+  it('does not renegotiate or call a channel profitable on fewer than 3 new payers', () => {
+    const lossOnOnePayer = channel(306, 'magpie', {
+      fee_usd: 30,
+      revenue: 150,
+      new_payers: 1,
+    })
+    const { result } = renderHook(() =>
+      useChannelsVerdict(insights([lossOnOnePayer]), undefined, range(30))
+    )
+    expect(result.current).toEqual({
+      tone: 'default',
+      text: 'Paid channels brought ¥150, net -¥60 after their cost. Fewer than 3 new payers in this range: too few to judge a channel’s cost.',
+    })
+  })
+
   it('says so when no channel has a fee', () => {
     const { result } = renderHook(() =>
       useChannelsVerdict(insights([channel(1, 'free', {})]), undefined)
@@ -589,6 +737,7 @@ describe('channels verdict', () => {
     const earning = channel(306, 'magpie', {
       fee_usd: 100,
       revenue: 1000,
+      new_payers: 3,
       commission_usd: 40,
       commission_accruing: 60,
     })

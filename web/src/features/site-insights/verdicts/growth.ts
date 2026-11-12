@@ -20,7 +20,12 @@ import { useTranslation } from 'react-i18next'
 
 import { dominant, type Contribution } from '../analysis'
 import type { Tone } from '../components/shared'
-import { customerMoves, segmentChanges, signupBurst } from '../growth-analysis'
+import {
+  customerMoves,
+  matureCohort,
+  segmentChanges,
+  signupBurst,
+} from '../growth-analysis'
 import {
   CONCENTRATION_SHARE,
   MIN_COHORT,
@@ -74,10 +79,16 @@ export function useGrowthVerdict(
   const change = useChange()
   const label = useSignupMethodLabel()
   if (!data) return undefined
-  const { registered, activated, paid } = data.funnel
-  const activation = registered ? activated / registered : 0
-  const conversion = registered ? paid / registered : 0
-  const judgeable = cohortJudgeable(registered, range)
+  const { registered } = data.funnel
+  // Activation and payment are read over the sign-ups old enough to have
+  // shown them; a range's newest hours of sign-ups have not had the time.
+  const aged = matureCohort(data.daily, range)
+  const cohort = aged ?? data.funnel
+  const activation = cohort.registered
+    ? cohort.activated / cohort.registered
+    : 0
+  const conversion = cohort.registered ? cohort.paid / cohort.registered : 0
+  const judgeable = cohortJudgeable(cohort.registered, range)
   let tone: Tone = 'default'
   if (judgeable) tone = activation < ACTIVATION_WARN ? 'warning' : 'good'
   const signed = (value: number) =>
@@ -94,9 +105,18 @@ export function useGrowthVerdict(
       '{{activation}} have activated and {{conversion}} paid so far; accounts hours old are too young to judge.',
       rates
     )
+  } else if (registered > 0 && aged && aged.registered < MIN_COHORT) {
+    ratesSentence = t(
+      'Too few sign-ups at least 6 hours old to judge activation or payment.'
+    )
   } else if (registered > 0 && !judgeable) {
     ratesSentence = t(
       '{{activation}} activated and {{conversion}} paid; too few sign-ups to judge.',
+      rates
+    )
+  } else if (registered > 0 && aged && aged.registered < registered) {
+    ratesSentence = t(
+      '{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.',
       rates
     )
   } else if (registered > 0) {
@@ -135,7 +155,7 @@ export function useGrowthVerdict(
       driverSentence,
       burst &&
         t(
-          '{{share}} of them signed up in the hour from {{time}}: a promotion or a farm.',
+          '{{share}} of them signed up in the hour from {{time}}: check the sign-up source.',
           { share: fmt.pct(burst.share), time: fmt.time(burst.hour) }
         ),
       ratesSentence

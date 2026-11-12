@@ -108,10 +108,11 @@ func ProcessChannelError(c *gin.Context, channelError types.ChannelError, err *t
 // its group serves its model: one error log on channel 0, which the site
 // insights count as a failure the customer saw and keep out of every channel's
 // figures. A model no channel lists at all is the customer's mistake and is
-// not recorded; that check reads the channel cache, so without one every
-// refusal is recorded rather than adding a query.
+// not recorded, so a caller cannot grow the logs table with made-up model
+// names. The check runs with or without the channel cache: the cache-free
+// path is one indexed count on the abilities table, which a refusal can afford.
 func RecordNoChannelErrorLog(c *gin.Context, modelName, group string, statusCode int) {
-	if !constant.ErrorLogEnabled || (common.MemoryCacheEnabled && !model.IsModelListed(modelName)) {
+	if !constant.ErrorLogEnabled || !model.IsModelListed(modelName) {
 		return
 	}
 	other := model.NewLogOther()

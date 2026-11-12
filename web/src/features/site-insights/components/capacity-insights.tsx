@@ -23,6 +23,7 @@ import {
   dailyPeaks,
   failureHours,
   hasPoolPeak,
+  localDay,
   peakTone,
   peakTrend,
   poolPeakOf,
@@ -53,6 +54,8 @@ const NAMED_SPIKES = 3
  * past the slots. The open hour is faded.
  */
 export function HourlyPeakChart(props: {
+  /** Whether the pool's own peak is the headline; the same rule as the tab's. */
+  own: boolean
   hourly: CapacityHour[]
   previous: CapacityHour[] | null | undefined
   span: number | undefined
@@ -66,9 +69,9 @@ export function HourlyPeakChart(props: {
     props.span === undefined
       ? []
       : alignPrevious(props.hourly, props.previous, props.span)
-  const own = hasPoolPeak(props.hourly)
-  // The previous period's hours are compared only on the same definition.
-  const comparable = own === hasPoolPeak(props.previous ?? [])
+  const own = props.own
+  // A previous period without the pool's peak cannot be read against the pool's.
+  const comparable = !own || hasPoolPeak(props.previous ?? [])
   return (
     <BarSeries
       ariaLabel={t('Hourly peak concurrency')}
@@ -88,7 +91,7 @@ export function HourlyPeakChart(props: {
       }
       points={axis.bars(props.hourly, props.end, (row, index) => {
         const previous = comparable ? before[index] : undefined
-        const peak = poolPeakOf(row)
+        const peak = own ? poolPeakOf(row) : row.peak_concurrency
         return {
           values: own ? [peak, row.peak_concurrency] : [peak],
           tone: peakTone(peak, props.slots, own),
@@ -97,7 +100,9 @@ export function HourlyPeakChart(props: {
               ? [
                   {
                     label: t('Same hour, previous period'),
-                    value: fmt.num(poolPeakOf(previous)),
+                    value: fmt.num(
+                      own ? poolPeakOf(previous) : previous.peak_concurrency
+                    ),
                   },
                 ]
               : []),
@@ -284,6 +289,7 @@ export function FailureRatePanel(props: {
  * today's slots at that pace.
  */
 export function PeakTrendPanel(props: {
+  own: boolean
   hourly: CapacityHour[]
   end: number
   slots: number
@@ -291,8 +297,8 @@ export function PeakTrendPanel(props: {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const definitions = useInsightsDefinitions()
-  const own = hasPoolPeak(props.hourly)
-  const days = dailyPeaks(props.hourly, props.end)
+  const own = props.own
+  const days = dailyPeaks(props.hourly, props.end, localDay, own)
   const trend = peakTrend(
     days.map((day) => day.peak),
     props.slots

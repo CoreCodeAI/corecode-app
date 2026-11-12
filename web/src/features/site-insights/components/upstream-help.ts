@@ -42,7 +42,7 @@ export function useUpstreamHelp(): {
   const { t } = useTranslation()
   const definitions = useInsightsDefinitions()
   const compared = t(
-    'Bills and fees are set against revenue one for one, with no conversion.'
+    'Bills and fees are set against revenue one for one here, with no conversion; the finance tab converts a fee at the site’s exchange rate.'
   )
   return {
     units: joinSentences(

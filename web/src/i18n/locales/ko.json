@@ -8327,7 +8327,6 @@
     "As of {{time}}": "{{time}} 기준",
     "Driven by {{segment}} ({{change}}).": "주로 {{segment}}({{change}}) 때문입니다.",
     "Driven by {{segment}} ({{change}}) and {{segment2}} ({{change2}}).": "주로 {{segment}}({{change}})와 {{segment2}}({{change2}}) 때문입니다.",
-    "{{share}} of them signed up in the hour from {{time}}: a promotion or a farm.": "그중 {{share}}가 {{time}}부터 한 시간 안에 가입했습니다: 프로모션 또는 계정 농장입니다.",
     "Consumption {{change}}, mostly {{user}} ({{delta}}).": "소비 {{change}}, 주로 {{user}}({{delta}})입니다.",
     "Consumption {{change}}, mostly {{user}} ({{delta}}) and {{user2}} ({{delta2}}).": "소비 {{change}}, 주로 {{user}}({{delta}})와 {{user2}}({{delta2}})입니다.",
     "{{rate}} so far": "현재 {{rate}}",
@@ -8857,7 +8856,6 @@
     "{{count}} client errors left out": "클라이언트 오류 {{count}}건 제외",
     "What customers were charged for the requests the channels served; root is left out.": "채널이 처리한 요청에 대해 고객에게 청구한 금액입니다. root는 제외합니다.",
     "Every enabled channel, every automatically disabled one, and any other with traffic or tasks in the range, busiest first.": "활성화된 모든 채널, 자동 비활성화된 모든 채널, 기간 내 트래픽이나 작업이 있던 기타 채널을 많은 순으로 표시합니다.",
-    "Bills and fees are set against revenue one for one, with no conversion.": "청구액과 월 요금은 환산 없이 수익과 1:1로 비교합니다.",
     "Revenue is in quota dollars, which customers buy at ¥1 each.": "수익은 쿼터 달러 단위이며 고객은 1달러를 ¥1에 구매합니다.",
     "Failures the customer’s own request caused (a 4xx other than 401, 402, 403, 404 and 408) are left out of the rate, as the channel did not cause them; they still count as attempts.": "고객 요청이 원인인 실패(401, 402, 403, 404, 408을 제외한 4xx)는 채널 탓이 아니므로 실패율에서 제외하지만 시도에는 포함합니다.",
     "Revenue with a known cost": "비용을 아는 수익",
@@ -8881,6 +8879,12 @@
     "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "비용을 아는 채널의 총이익: {{rate}}, 과대: {{names}}의 청구서는 일부 키에서만 읽었습니다.",
     "In progress, through {{time}}": "진행 중, {{time}}까지",
     "Partial, from {{time}}": "일부만, {{time}}부터",
-    "Expected for the whole day": "하루 전체 예상"
+    "Expected for the whole day": "하루 전체 예상",
+    "Bills and fees are set against revenue one for one here, with no conversion; the finance tab converts a fee at the site’s exchange rate.": "여기서는 청구액과 월 요금을 수익과 1:1로 직접 비교하며 환산하지 않습니다. 재무 탭은 월 요금을 사이트 환율로 환산합니다.",
+    "Fewer than {{count}} new payers in this range: too few to judge a channel’s cost.": "이 기간의 신규 결제 사용자가 {{count}}명 미만이라 채널 비용을 판단하기에 부족합니다.",
+    "an address with repeat plan buyers": "플랜을 반복 구매한 사용자가 있는 주소",
+    "Too few sign-ups at least 6 hours old to judge activation or payment.": "가입한 지 6시간이 넘은 사용자가 적어 활성화나 결제를 판단할 수 없습니다.",
+    "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.": "가입한 지 6시간이 넘은 사용자 중 {{activation}}이 활성화되었고 {{conversion}}이 결제했습니다.",
+    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "그중 {{share}}는 {{time}}부터 한 시간 안에 가입했습니다: 가입 경로를 확인하세요."
   }
 }

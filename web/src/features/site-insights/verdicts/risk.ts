@@ -195,6 +195,7 @@ export function useRiskVerdict(
         min: MIN_SIGNAL_COUNT,
       }),
     debtors > 0 && t('{{count}} accounts in debt', { count: debtors }),
+    buyers && t('an address with repeat plan buyers'),
   ].filter((item): item is string => !!item)
   const reasons =
     top && top.risk.score > 0

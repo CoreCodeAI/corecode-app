@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func useInsightsTestDB(t *testing.T, dialect string) {
@@ -1644,4 +1645,25 @@ func TestFillInsightHoursRebuildsNewestFirst(t *testing.T) {
 	var rebuilt []int64
 	require.NoError(t, DB.Model(&InsightHour{}).Where("hour_start >= ? AND version = ?", first, insightHourVersion).Order("hour_start").Pluck("hour_start", &rebuilt).Error)
 	assert.Equal(t, []int64{newest - 3600, newest}, rebuilt)
+}
+
+// The finance view computes upstream costs from the hours it already loaded:
+// the rollup's user-hour rows are read once per request, not once for the
+// finance figures and again for the upstream view.
+func TestFinanceInsightsReadsHourRollupOnce(t *testing.T) {
+	useInsightsTestDB(t, "sqlite")
+	const day1 = int64(1759248000)
+	r := InsightsRange{Start: day1, End: day1 + 2*86400, Offset: 8 * 3600}
+	var userHourReads int
+	const callback = "test:count_user_hour_reads"
+	require.NoError(t, DB.Callback().Query().After("gorm:query").Register(callback, func(tx *gorm.DB) {
+		if tx.Statement.Table == "insight_user_hours" {
+			userHourReads++
+		}
+	}))
+	t.Cleanup(func() { require.NoError(t, DB.Callback().Query().Remove(callback)) })
+
+	_, err := GetFinanceInsights(r)
+	require.NoError(t, err)
+	assert.LessOrEqual(t, userHourReads, 1, "the hour rollup is loaded once for the finance view")
 }

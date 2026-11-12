@@ -478,7 +478,7 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 	if result.Groups, err = readGroupConsumption(r, roots, wallet+subscriptions); err != nil {
 		return nil, err
 	}
-	upstream, err := GetUpstreamInsights(r)
+	upstream, err := upstreamInsightsFromHours(r, hours, stale)
 	if err != nil {
 		return nil, err
 	}

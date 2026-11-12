@@ -21,8 +21,13 @@ For commercial licensing, please contact support@quantumnous.com
 // consumption, and engagement read from the last full day.
 
 import { closedHours, contributions, type Contribution } from './analysis'
-import { MIN_COHORT, type SourceState } from './lib'
-import type { ActivityInsights, FunnelRow, GrowthHour } from './types'
+import { MIN_COHORT, type InsightsRangeInfo, type SourceState } from './lib'
+import type {
+  ActivityInsights,
+  FunnelRow,
+  GrowthHour,
+  GrowthInsights,
+} from './types'
 
 /** Whether a view's figures are here, still loading, or could not be read. */
 export type ViewState = 'ready' | 'loading' | 'error'
@@ -84,6 +89,30 @@ export function dayInProgress(dayStart: number, end: number): boolean {
 
 /** The share of a range's sign-ups in one hour that reads as a burst. */
 export const BURST_SHARE = 0.25
+
+/** Hours a sign-up must be old before its activation and payment can show. */
+export const MATURE_HOURS = 6
+
+/**
+ * The sign-ups of the whole days that ended at least MATURE_HOURS before the
+ * range's end, so that a day of sign-ups hours old does not read as a poor
+ * activation. Null for an hourly range, which has no daily cohorts.
+ */
+export function matureCohort(
+  daily: GrowthInsights['daily'] | null | undefined,
+  range: InsightsRangeInfo | undefined
+): { registered: number; activated: number; paid: number } | null {
+  if (!range || range.hourly || !daily) return null
+  const cutoff = range.end - MATURE_HOURS * 3600
+  const cohort = { registered: 0, activated: 0, paid: 0 }
+  for (const row of daily) {
+    if (row.day + 86400 > cutoff) continue
+    cohort.registered += row.registered
+    cohort.activated += row.activated
+    cohort.paid += row.paid
+  }
+  return cohort
+}
 
 /** How many customers the server lists in top_users. */
 export const TOP_USERS_LISTED = 20

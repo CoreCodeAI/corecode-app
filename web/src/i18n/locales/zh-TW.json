@@ -8327,7 +8327,6 @@
     "As of {{time}}": "截至 {{time}}",
     "Driven by {{segment}} ({{change}}).": "主要來自 {{segment}}（{{change}}）。",
     "Driven by {{segment}} ({{change}}) and {{segment2}} ({{change2}}).": "主要來自 {{segment}}（{{change}}）和 {{segment2}}（{{change2}}）。",
-    "{{share}} of them signed up in the hour from {{time}}: a promotion or a farm.": "其中 {{share}} 集中在 {{time}} 起的一小時內註冊：可能是推廣，也可能是刷號。",
     "Consumption {{change}}, mostly {{user}} ({{delta}}).": "消耗{{change}}，主要是 {{user}}（{{delta}}）。",
     "Consumption {{change}}, mostly {{user}} ({{delta}}) and {{user2}} ({{delta2}}).": "消耗{{change}}，主要是 {{user}}（{{delta}}）和 {{user2}}（{{delta2}}）。",
     "{{rate}} so far": "目前 {{rate}}",
@@ -8857,7 +8856,6 @@
     "{{count}} client errors left out": "已排除 {{count}} 次客戶端錯誤",
     "What customers were charged for the requests the channels served; root is left out.": "各渠道服務的請求向客戶收取的費用；不含 root。",
     "Every enabled channel, every automatically disabled one, and any other with traffic or tasks in the range, busiest first.": "所有啟用的渠道、所有自動停用的渠道，以及範圍內有流量或任務的其他渠道，按繁忙程度排序。",
-    "Bills and fees are set against revenue one for one, with no conversion.": "帳單和月費與收入按一比一直接比較，不做換算。",
     "Revenue is in quota dollars, which customers buy at ¥1 each.": "收入以額度美元計，客戶按每額度美元 ¥1 購買。",
     "Failures the customer’s own request caused (a 4xx other than 401, 402, 403, 404 and 408) are left out of the rate, as the channel did not cause them; they still count as attempts.": "客戶自己請求導致的失敗（除 401、402、403、404、408 外的 4xx）不計入失敗率，因為不是渠道造成的；它們仍計為嘗試。",
     "Revenue with a known cost": "已知成本的收入",
@@ -8881,6 +8879,12 @@
     "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "已知成本渠道的毛利：{{rate}}，偏高：{{names}} 的帳單只讀取了部分金鑰。",
     "In progress, through {{time}}": "進行中，截至 {{time}}",
     "Partial, from {{time}}": "不完整，從 {{time}} 起",
-    "Expected for the whole day": "預計全天"
+    "Expected for the whole day": "預計全天",
+    "Bills and fees are set against revenue one for one here, with no conversion; the finance tab converts a fee at the site’s exchange rate.": "帳單和月費在這裡與收入按一比一直接對比，不做換算；資金頁按站點匯率把月費折算成人民幣。",
+    "Fewer than {{count}} new payers in this range: too few to judge a channel’s cost.": "本時段新付費用戶不足 {{count}} 人：不足以判斷通路成本。",
+    "an address with repeat plan buyers": "一個位址有多次購買方案的用戶",
+    "Too few sign-ups at least 6 hours old to judge activation or payment.": "註冊滿 6 小時的用戶太少，無法判斷啟用或付費。",
+    "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.": "註冊滿 6 小時的用戶中 {{activation}} 已啟用，{{conversion}} 已付費。",
+    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "其中 {{share}} 在 {{time}} 起的一小時內註冊：請核查註冊來源。"
   }
 }

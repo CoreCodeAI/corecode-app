@@ -8327,7 +8327,6 @@
     "As of {{time}}": "На {{time}}",
     "Driven by {{segment}} ({{change}}).": "В основном за счёт {{segment}} ({{change}}).",
     "Driven by {{segment}} ({{change}}) and {{segment2}} ({{change2}}).": "В основном за счёт {{segment}} ({{change}}) и {{segment2}} ({{change2}}).",
-    "{{share}} of them signed up in the hour from {{time}}: a promotion or a farm.": "{{share}} из них зарегистрировались за час с {{time}}: акция или ферма аккаунтов.",
     "Consumption {{change}}, mostly {{user}} ({{delta}}).": "Потребление {{change}}, в основном {{user}} ({{delta}}).",
     "Consumption {{change}}, mostly {{user}} ({{delta}}) and {{user2}} ({{delta2}}).": "Потребление {{change}}, в основном {{user}} ({{delta}}) и {{user2}} ({{delta2}}).",
     "{{rate}} so far": "пока {{rate}}",
@@ -8857,7 +8856,6 @@
     "{{count}} client errors left out": "Исключено ошибок клиента: {{count}}",
     "What customers were charged for the requests the channels served; root is left out.": "Сколько клиенты заплатили за запросы, обслуженные каналами; root не учитывается.",
     "Every enabled channel, every automatically disabled one, and any other with traffic or tasks in the range, busiest first.": "Все включённые каналы, все автоматически отключённые и любые другие с трафиком или задачами за период, сначала самые загруженные.",
-    "Bills and fees are set against revenue one for one, with no conversion.": "Счета и абонплата сопоставляются с выручкой один к одному, без пересчёта.",
     "Revenue is in quota dollars, which customers buy at ¥1 each.": "Выручка в долларах квоты, которые клиенты покупают по ¥1 за штуку.",
     "Failures the customer’s own request caused (a 4xx other than 401, 402, 403, 404 and 408) are left out of the rate, as the channel did not cause them; they still count as attempts.": "Сбои, вызванные запросом самого клиента (4xx, кроме 401, 402, 403, 404 и 408), не входят в долю сбоев, так как канал не виноват; попытками они остаются.",
     "Revenue with a known cost": "Выручка с известной стоимостью",
@@ -8881,6 +8879,12 @@
     "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "Валовая маржа каналов с известной стоимостью: {{rate}}, завышена: счёт {{names}} прочитан только по части ключей.",
     "In progress, through {{time}}": "Идёт, по {{time}}",
     "Partial, from {{time}}": "Неполный, с {{time}}",
-    "Expected for the whole day": "Ожидается за весь день"
+    "Expected for the whole day": "Ожидается за весь день",
+    "Bills and fees are set against revenue one for one here, with no conversion; the finance tab converts a fee at the site’s exchange rate.": "Счета и месячные сборы здесь сопоставляются с выручкой один к одному без пересчёта; вкладка «Финансы» пересчитывает сбор по курсу сайта.",
+    "Fewer than {{count}} new payers in this range: too few to judge a channel’s cost.": "Меньше {{count}} новых плательщиков за период: этого мало, чтобы судить о стоимости канала.",
+    "an address with repeat plan buyers": "адрес с повторными покупателями тарифов",
+    "Too few sign-ups at least 6 hours old to judge activation or payment.": "Слишком мало регистраций старше 6 часов, чтобы судить об активации или оплате.",
+    "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.": "Из регистраций старше 6 часов активировались {{activation}}, оплатили {{conversion}}.",
+    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "{{share}} из них зарегистрировались в час с {{time}}: проверьте источник регистраций."
   }
 }

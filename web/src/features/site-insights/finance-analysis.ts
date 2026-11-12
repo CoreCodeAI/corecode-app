@@ -63,6 +63,8 @@ export const POOL_UNDER_USED = 0.4
 
 /** Past this share of measured capacity, the pool is close to full. */
 export const POOL_OVER_USED = 0.85
+/** Days of matched data before the pool's use may advise on the account count. */
+export const POOL_MIN_DAYS = 7
 
 /**
  * Under this much customer consumption, in yuan, a gifted share is a few
@@ -309,7 +311,8 @@ export type PoolUse = {
 /**
  * The Claude pool's use against its measured weekly capacity. Null unless
  * every plan with accounts has a measured week: an unmeasured plan would
- * leave capacity short and read as over-use.
+ * leave capacity short and read as over-use. Null too under POOL_MIN_DAYS of
+ * matched data, where a few hours of use would read as buy or drop advice.
  */
 export function poolUse(input: {
   plans: EnginePlanValue[] | null | undefined
@@ -319,7 +322,7 @@ export function poolUse(input: {
   costPerDayUSD: number
 }): PoolUse | null {
   const plans = (input.plans ?? []).filter((plan) => plan.accounts > 0)
-  if (plans.length === 0 || input.coveredDays <= 0) return null
+  if (plans.length === 0 || input.coveredDays < POOL_MIN_DAYS) return null
   if (plans.some((plan) => plan.measured <= 0 || plan.week_usd <= 0)) {
     return null
   }

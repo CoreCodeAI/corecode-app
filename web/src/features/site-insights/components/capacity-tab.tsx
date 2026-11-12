@@ -27,7 +27,6 @@ import {
   diagnoseRejections,
   enabledInFlight,
   engineRefusals,
-  hasPoolPeak,
   headroom,
   periodSpan,
   POOL_FULL_DANGER,
@@ -167,8 +166,10 @@ export function CapacityTab(props: {
     ? (props.range.end - props.range.start) / 3600
     : hourly.length
 
-  // The pool's own peak where the server sends it; the site's otherwise.
-  const ownPeak = data?.pool_peak != null || hasPoolPeak(hourly)
+  // The pool's own peak where the server sends it at the top level; the
+  // site's otherwise. A stale range sends none, so it reads as the site's
+  // everywhere (chart, trend and headline alike).
+  const ownPeak = data?.pool_peak != null
   const peak = data ? poolPeakOf(data) : 0
   const peakAt =
     (ownPeak ? data?.pool_peak_at : undefined) ?? data?.peak_at ?? 0
@@ -542,6 +543,7 @@ export function CapacityTab(props: {
         )}
       >
         <HourlyPeakChart
+          own={ownPeak}
           hourly={hourly}
           previous={previous?.hourly}
           span={span}
@@ -552,7 +554,12 @@ export function CapacityTab(props: {
 
       {weekly ? (
         <div className='grid gap-4 lg:grid-cols-2'>
-          <PeakTrendPanel hourly={hourly} end={end} slots={slots} />
+          <PeakTrendPanel
+            own={ownPeak}
+            hourly={hourly}
+            end={end}
+            slots={slots}
+          />
           <Panel
             title={t('Peak concurrency by weekday and hour')}
             help={

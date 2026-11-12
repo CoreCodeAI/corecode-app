@@ -481,6 +481,12 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 	if err != nil {
 		return nil, err
 	}
+	return upstreamInsightsFromHours(r, hours, stale)
+}
+
+// upstreamInsightsFromHours computes the upstream view from hours the caller
+// already loaded over r, so a view that also needs them reads the rollup once.
+func upstreamInsightsFromHours(r InsightsRange, hours []*insightHour, stale int) (*UpstreamInsights, error) {
 	type bucket struct {
 		row          UpstreamModel
 		ttft         histogram

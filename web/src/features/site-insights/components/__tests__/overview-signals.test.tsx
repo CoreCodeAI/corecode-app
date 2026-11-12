@@ -325,3 +325,38 @@ describe('overview with a source missing', () => {
     expect(screen.getByText('Requests failed')).toBeInTheDocument()
   })
 })
+
+describe('overview quality rate', () => {
+  it('names the service failure rate, not one that counts customers’ own bad requests', async () => {
+    const failing = {
+      ...quality,
+      requests: 1000,
+      stale_hours: 0,
+      errors: 60,
+      error_rate: 0.06,
+      error_categories: [
+        { name: 'upstream_error', count: 10 },
+        { name: 'client_error', count: 50 },
+      ],
+    }
+    renderOverview({ quality: failing, risk, pool })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(document.body.textContent).not.toContain('of requests failed')
+  })
+
+  it('still names a failure rate the service caused', async () => {
+    renderOverview({
+      quality: {
+        ...quality,
+        requests: 1000,
+        stale_hours: 0,
+        errors: 60,
+        error_rate: 0.06,
+        error_categories: [{ name: 'upstream_error', count: 60 }],
+      },
+      risk,
+      pool,
+    })
+    expect(await screen.findByText(/of requests failed/)).toBeInTheDocument()
+  })
+})

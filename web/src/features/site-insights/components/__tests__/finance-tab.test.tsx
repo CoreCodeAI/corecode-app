@@ -809,9 +809,9 @@ describe('funds analysis', () => {
     }
     const input = {
       plans: [plan],
-      officialUSD: 36,
-      chargedUSD: 20,
-      coveredDays: 2,
+      officialUSD: 126,
+      chargedUSD: 70,
+      coveredDays: 7,
       costPerDayUSD: 4,
     }
     // $20 a day of capacity, $18 used: 90%.
@@ -823,8 +823,10 @@ describe('funds analysis', () => {
       chargedPerDay: 10,
       advice: 'more',
     })
-    expect(poolUse({ ...input, officialUSD: 10 })?.advice).toBe('fewer')
-    expect(poolUse({ ...input, officialUSD: 20 })?.advice).toBe('fits')
+    expect(poolUse({ ...input, officialUSD: 35 })?.advice).toBe('fewer')
+    expect(poolUse({ ...input, officialUSD: 70 })?.advice).toBe('fits')
+    // Under a week of matched data the advice would rest on minutes or hours.
+    expect(poolUse({ ...input, coveredDays: 6 })).toBeNull()
     expect(
       poolUse({ ...input, plans: [plan, { ...plan, measured: 0 }] })
     ).toBeNull()

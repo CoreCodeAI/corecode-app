@@ -61,13 +61,13 @@ func TestDistributeAnswersUnlistedClaudeModelWithNotFound(t *testing.T) {
 			wantBody          string
 			// recorded is whether the refusal is written as a no_channel
 			// error log. A model no channel lists is the customer's mistake,
-			// told apart only through the channel cache.
+			// with or without the channel cache, so it is never recorded.
 			recorded bool
 		}{
 			{name: "unlisted model on messages", path: "/v1/messages", model: "claude-sonnet-5", wantStatus: http.StatusNotFound,
 				wantBody: `{"type":"error","error":{"type":"not_found_error","message":"model: claude-sonnet-5 (request id: %s)"}}`},
 			{name: "listed model with every channel down", path: "/v1/messages", model: "claude-haiku-5-5", wantStatus: http.StatusServiceUnavailable, recorded: true},
-			{name: "unlisted model on chat completions", path: "/v1/chat/completions", model: "claude-sonnet-5", wantStatus: http.StatusServiceUnavailable, recorded: !memoryCache},
+			{name: "unlisted model on chat completions", path: "/v1/chat/completions", model: "claude-sonnet-5", wantStatus: http.StatusServiceUnavailable},
 			{name: "served model", path: "/v1/messages", model: "claude-opus-5-5", wantStatus: http.StatusNoContent},
 		} {
 			t.Run(fmt.Sprintf("memory_cache=%t/%s", memoryCache, tc.name), func(t *testing.T) {

@@ -147,7 +147,7 @@ export function accountLimits(
   const limits = new Set<number>()
   for (const row of groups) {
     if (!row.enabled) continue
-    limits.add(row.credential_limit || fallback)
+    limits.add(row.credential_limit ?? fallback)
   }
   if (limits.size === 0) limits.add(fallback)
   return [...limits].sort((a, b) => a - b)
@@ -202,7 +202,7 @@ export type RejectionDiagnosis = {
   worst: { hour: number; count: number; peak: number }
   /** Rejections in hours whose peak reached HEADROOM_SHARE of the slots. */
   saturated: number
-  /** Whichever explains at least half of them; undefined without slots. */
+  /** Whichever explains at least half of them; undefined without slots or under POOL_FULL_DANGER rejections. */
   cause?: RejectionCause
 }
 
@@ -229,8 +229,12 @@ export function diagnoseRejections(
     if (!worst || count > worst.count) worst = { hour: row.hour, count, peak }
   }
   if (!worst) return undefined
+  // A cause, and so a buy-or-fix verdict, needs POOL_FULL_DANGER rejections;
+  // a handful is only a count.
   let cause: RejectionCause | undefined
-  if (slots > 0) cause = saturated * 2 >= total ? 'saturation' : 'eligibility'
+  if (slots > 0 && total >= POOL_FULL_DANGER) {
+    cause = saturated * 2 >= total ? 'saturation' : 'eligibility'
+  }
   return { total, hours, worst, saturated, cause }
 }
 
@@ -318,14 +322,18 @@ export type DayPeak = { day: number; peak: number }
 export function dailyPeaks(
   hourly: CapacityHour[],
   end: number,
-  dayOf: (hour: number) => number = localDay
+  dayOf: (hour: number) => number = localDay,
+  own = true
 ): DayPeak[] {
   const days = new Map<number, { peak: number; hours: number }>()
   for (const row of hourly) {
     if (isOpenHour(row.hour, end)) continue
     const day = dayOf(row.hour)
     const entry = days.get(day) ?? { peak: 0, hours: 0 }
-    entry.peak = Math.max(entry.peak, poolPeakOf(row))
+    entry.peak = Math.max(
+      entry.peak,
+      own ? poolPeakOf(row) : row.peak_concurrency
+    )
     entry.hours += 1
     days.set(day, entry)
   }

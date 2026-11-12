@@ -8327,7 +8327,6 @@
     "As of {{time}}": "Tính đến {{time}}",
     "Driven by {{segment}} ({{change}}).": "Chủ yếu do {{segment}} ({{change}}).",
     "Driven by {{segment}} ({{change}}) and {{segment2}} ({{change2}}).": "Chủ yếu do {{segment}} ({{change}}) và {{segment2}} ({{change2}}).",
-    "{{share}} of them signed up in the hour from {{time}}: a promotion or a farm.": "{{share}} trong số đó đăng ký trong giờ từ {{time}}: một đợt quảng bá hoặc tạo tài khoản hàng loạt.",
     "Consumption {{change}}, mostly {{user}} ({{delta}}).": "Mức tiêu thụ {{change}}, chủ yếu do {{user}} ({{delta}}).",
     "Consumption {{change}}, mostly {{user}} ({{delta}}) and {{user2}} ({{delta2}}).": "Mức tiêu thụ {{change}}, chủ yếu do {{user}} ({{delta}}) và {{user2}} ({{delta2}}).",
     "{{rate}} so far": "hiện {{rate}}",
@@ -8857,7 +8856,6 @@
     "{{count}} client errors left out": "Đã loại {{count}} lỗi phía khách",
     "What customers were charged for the requests the channels served; root is left out.": "Số tiền tính cho khách với các yêu cầu các kênh đã phục vụ; không gồm root.",
     "Every enabled channel, every automatically disabled one, and any other with traffic or tasks in the range, busiest first.": "Mọi kênh đang bật, mọi kênh bị tự động tắt và các kênh khác có lưu lượng hoặc tác vụ trong khoảng, bận nhất trước.",
-    "Bills and fees are set against revenue one for one, with no conversion.": "Hóa đơn và phí tháng được so với doanh thu theo tỉ lệ một-một, không quy đổi.",
     "Revenue is in quota dollars, which customers buy at ¥1 each.": "Doanh thu tính bằng đô la hạn mức, khách mua với giá ¥1 mỗi đô.",
     "Failures the customer’s own request caused (a 4xx other than 401, 402, 403, 404 and 408) are left out of the rate, as the channel did not cause them; they still count as attempts.": "Lỗi do chính yêu cầu của khách gây ra (4xx trừ 401, 402, 403, 404 và 408) không tính vào tỉ lệ lỗi vì không do kênh; vẫn tính là lần thử.",
     "Revenue with a known cost": "Doanh thu đã biết chi phí",
@@ -8881,6 +8879,12 @@
     "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "Lãi gộp trên các kênh đã biết chi phí: {{rate}}, bị thổi phồng: hóa đơn của {{names}} chỉ đọc từ một số khóa.",
     "In progress, through {{time}}": "Đang diễn ra, đến {{time}}",
     "Partial, from {{time}}": "Một phần, từ {{time}}",
-    "Expected for the whole day": "Dự kiến cả ngày"
+    "Expected for the whole day": "Dự kiến cả ngày",
+    "Bills and fees are set against revenue one for one here, with no conversion; the finance tab converts a fee at the site’s exchange rate.": "Hóa đơn và phí tháng được so trực tiếp với doanh thu theo tỷ lệ 1:1 ở đây, không quy đổi; tab Tài chính quy đổi phí theo tỷ giá của trang.",
+    "Fewer than {{count}} new payers in this range: too few to judge a channel’s cost.": "Dưới {{count}} người trả tiền mới trong khoảng này: quá ít để đánh giá chi phí kênh.",
+    "an address with repeat plan buyers": "một địa chỉ có người mua gói lặp lại",
+    "Too few sign-ups at least 6 hours old to judge activation or payment.": "Quá ít đăng ký từ 6 giờ trước để đánh giá việc kích hoạt hoặc thanh toán.",
+    "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.": "{{activation}} trong số đăng ký từ 6 giờ trước đã kích hoạt và {{conversion}} đã thanh toán.",
+    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "{{share}} trong số đó đăng ký trong giờ bắt đầu từ {{time}}: hãy kiểm tra nguồn đăng ký."
   }
 }

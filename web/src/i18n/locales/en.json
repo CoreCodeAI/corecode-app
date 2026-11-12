@@ -8327,7 +8327,6 @@
     "As of {{time}}": "As of {{time}}",
     "Driven by {{segment}} ({{change}}).": "Driven by {{segment}} ({{change}}).",
     "Driven by {{segment}} ({{change}}) and {{segment2}} ({{change2}}).": "Driven by {{segment}} ({{change}}) and {{segment2}} ({{change2}}).",
-    "{{share}} of them signed up in the hour from {{time}}: a promotion or a farm.": "{{share}} of them signed up in the hour from {{time}}: a promotion or a farm.",
     "Consumption {{change}}, mostly {{user}} ({{delta}}).": "Consumption {{change}}, mostly {{user}} ({{delta}}).",
     "Consumption {{change}}, mostly {{user}} ({{delta}}) and {{user2}} ({{delta2}}).": "Consumption {{change}}, mostly {{user}} ({{delta}}) and {{user2}} ({{delta2}}).",
     "{{rate}} so far": "{{rate}} so far",
@@ -8857,7 +8856,6 @@
     "{{count}} client errors left out": "{{count}} client errors left out",
     "What customers were charged for the requests the channels served; root is left out.": "What customers were charged for the requests the channels served; root is left out.",
     "Every enabled channel, every automatically disabled one, and any other with traffic or tasks in the range, busiest first.": "Every enabled channel, every automatically disabled one, and any other with traffic or tasks in the range, busiest first.",
-    "Bills and fees are set against revenue one for one, with no conversion.": "Bills and fees are set against revenue one for one, with no conversion.",
     "Revenue is in quota dollars, which customers buy at ¥1 each.": "Revenue is in quota dollars, which customers buy at ¥1 each.",
     "Failures the customer’s own request caused (a 4xx other than 401, 402, 403, 404 and 408) are left out of the rate, as the channel did not cause them; they still count as attempts.": "Failures the customer’s own request caused (a 4xx other than 401, 402, 403, 404 and 408) are left out of the rate, as the channel did not cause them; they still count as attempts.",
     "Revenue with a known cost": "Revenue with a known cost",
@@ -8881,6 +8879,12 @@
     "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.",
     "In progress, through {{time}}": "In progress, through {{time}}",
     "Partial, from {{time}}": "Partial, from {{time}}",
-    "Expected for the whole day": "Expected for the whole day"
+    "Expected for the whole day": "Expected for the whole day",
+    "Bills and fees are set against revenue one for one here, with no conversion; the finance tab converts a fee at the site’s exchange rate.": "Bills and fees are set against revenue one for one here, with no conversion; the finance tab converts a fee at the site’s exchange rate.",
+    "Fewer than {{count}} new payers in this range: too few to judge a channel’s cost.": "Fewer than {{count}} new payers in this range: too few to judge a channel’s cost.",
+    "an address with repeat plan buyers": "an address with repeat plan buyers",
+    "Too few sign-ups at least 6 hours old to judge activation or payment.": "Too few sign-ups at least 6 hours old to judge activation or payment.",
+    "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.": "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.",
+    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "{{share}} of them signed up in the hour from {{time}}: check the sign-up source."
   }
 }

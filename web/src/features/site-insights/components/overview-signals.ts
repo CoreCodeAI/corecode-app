@@ -34,6 +34,7 @@ import {
   MIN_TASKS,
   SMALL_SAMPLE,
 } from '../lib'
+import { categoryOwner, serviceFailureRate } from '../quality-analysis'
 import type {
   CapacityInsights,
   FinanceInsights,
@@ -297,10 +298,15 @@ export function overviewServiceSignals(
       })
     }
 
+    // The service's failures: the customers' own 4xx are left out, as the
+    // quality tab's rate leaves them out; the raw rate is the fallback.
+    const serviceRate = serviceFailureRate(quality) ?? quality.error_rate
+    const clientErrors = (quality.error_categories ?? [])
+      .filter((item) => categoryOwner(item.name) === 'client')
+      .reduce((sum, item) => sum + item.count, 0)
+    const serviceErrors = Math.max(0, quality.errors - clientErrors)
     const rateTone =
-      quality.requests >= SMALL_SAMPLE
-        ? failureTone(quality.error_rate)
-        : 'default'
+      quality.requests >= SMALL_SAMPLE ? failureTone(serviceRate) : 'default'
     if (rateTone === 'danger' || rateTone === 'warning') {
       const once = countsRequestsOnce(quality)
       signals.push({
@@ -308,18 +314,18 @@ export function overviewServiceSignals(
         tone: rateTone,
         title: once
           ? t('{{rate}} of requests failed', {
-              rate: fmt.pct(quality.error_rate),
+              rate: fmt.pct(serviceRate),
             })
           : t('{{rate}} of attempts failed', {
-              rate: fmt.pct(quality.error_rate),
+              rate: fmt.pct(serviceRate),
             }),
         detail: joinSentences(
           once
             ? t('{{count}} requests failed.', {
-                count: fmt.num(quality.errors),
+                count: fmt.num(serviceErrors),
               })
             : t('{{count}} attempts failed.', {
-                count: fmt.num(quality.errors),
+                count: fmt.num(serviceErrors),
               }),
           once && attemptsSentence(t, fmt, capacity)
         ),
