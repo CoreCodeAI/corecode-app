@@ -3217,6 +3217,8 @@
     "Invitation quota is insufficient!": "Недостаточно квоты за приглашения!",
     "Invitation settings": "Настройки приглашений",
     "Invitation settings saved": "Настройки приглашений сохранены",
+    "Commission from invitees on their network": "Комиссия с приглашённых из той же сети",
+    "Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.": "Начисляет комиссию с приглашённых, которые пользуются той же сетью, что и этот пользователь, например с его второго аккаунта. Не включайте без согласованной скидки.",
     "Invitations": "Приглашения",
     "Invitations are not available for your account.": "Для вашего аккаунта приглашения недоступны.",
     "Invite Info": "Информация о приглашении",
@@ -5441,6 +5443,7 @@
     "Session defaults": "Настройки сеанса по умолчанию",
     "Session expired!": "Сессия истекла!",
     "Session expired?": "Сессия истекла?",
+    "Your session expired. Please sign in again.": "Сеанс истёк. Войдите снова.",
     "Session rule": "Правило сессии",
     "Session rule matched": "Совпало правило сессии",
     "Session rules": "Правила сессии",
@@ -5517,6 +5520,7 @@
     "Showing": "Отображать",
     "Showing {{shown}} of {{total}} mappings": "Показано {{shown}} из {{total}} сопоставлений",
     "Showing the last successfully checked release.": "Показаны сведения о выпуске из последней успешной проверки.",
+    "Showing the last results that loaded.": "Показаны результаты последней успешной загрузки.",
     "Shown": "Показано",
     "Shown {{count}} models in model square": "Показано моделей в каталоге: {{count}}",
     "Sidebar": "Боковая панель",
@@ -8874,6 +8878,9 @@
     "{{name}} was disabled automatically {{time}} and served nothing in this range: {{reason}}.": "{{name}} отключён автоматически {{time}} и за этот период ничего не обслужил: {{reason}}.",
     "{{name}} was disabled automatically {{time}} and served nothing in this range.": "{{name}} отключён автоматически {{time}} и за этот период ничего не обслужил.",
     "{{count}} more channels are disabled automatically.": "Ещё {{count}} каналов отключены автоматически.",
-    "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "Валовая маржа каналов с известной стоимостью: {{rate}}, завышена: счёт {{names}} прочитан только по части ключей."
+    "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "Валовая маржа каналов с известной стоимостью: {{rate}}, завышена: счёт {{names}} прочитан только по части ключей.",
+    "In progress, through {{time}}": "Идёт, по {{time}}",
+    "Partial, from {{time}}": "Неполный, с {{time}}",
+    "Expected for the whole day": "Ожидается за весь день"
   }
 }

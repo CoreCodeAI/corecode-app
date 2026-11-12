@@ -48,6 +48,7 @@ import { TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 import { TONES, useInsightsFormat } from '../lib'
+import type { PartialMark } from '../partial-days'
 import type { NamedCount } from '../types'
 
 export function Panel(props: {
@@ -449,6 +450,8 @@ export type TrendPoint = {
   /** The date or hour of the point, shown when it is read. */
   title: string
   value: number
+  /** Set on a day the range covers only in part. */
+  partial?: PartialMark
 }
 
 /**
@@ -456,6 +459,10 @@ export type TrendPoint = {
  * when the values are amounts per day rather than a level. Hovering, or
  * focusing and pressing the arrow keys, marks the point under the pointer
  * and reads out its date and value.
+ *
+ * A day the range covers only in part is drawn dashed. When its whole day
+ * is projected, the line runs to the projection and a hollow dot marks what
+ * has come in so far; a bar shows the rest of the projection as an outline.
  */
 export function Sparkline(props: {
   points: TrendPoint[]
@@ -470,8 +477,11 @@ export function Sparkline(props: {
   const points = props.points
   if (points.length < 2) return null
   const values = points.map((point) => point.value)
-  const max = Math.max(...values)
-  const min = Math.min(0, ...values)
+  const projectedOf = (point: TrendPoint) => point.partial?.projected?.[0]
+  // Where the line runs: a projected day at its projection.
+  const shown = points.map((point) => projectedOf(point) ?? point.value)
+  const max = Math.max(...values, ...shown)
+  const min = Math.min(0, ...values, ...shown)
   const span = max - min || 1
   const last = points.length - 1
   // A line puts its points on the edges; bars put each in its own column,
@@ -480,12 +490,28 @@ export function Sparkline(props: {
     props.bars ? ((index + 0.5) / points.length) * 100 : (index / last) * 100
   const yOf = (value: number) => 28 - ((value - min) / span) * 26
   const column = 100 / points.length
-  const path = values
-    .map(
-      (value, index) =>
-        `${index === 0 ? 'M' : 'L'}${xOf(index).toFixed(2)},${yOf(value).toFixed(2)}`
-    )
-    .join(' ')
+  const at = (index: number) =>
+    `${xOf(index).toFixed(2)},${yOf(shown[index]).toFixed(2)}`
+  // A segment that reaches a partial day is dashed; partial days sit only
+  // at the ends, so the whole days between them form one solid run.
+  let solid = ''
+  let dashed = ''
+  for (let index = 1; index <= last; index++) {
+    const segment = `M${at(index - 1)} L${at(index)} `
+    if (points[index - 1].partial || points[index].partial) dashed += segment
+    else solid += segment
+  }
+  const whole = points
+    .map((point, index) => (point.partial ? -1 : index))
+    .filter((index) => index >= 0)
+  const firstWhole = whole.at(0) ?? 0
+  const lastWhole = whole.at(-1) ?? 0
+  const area =
+    whole.length >= 2
+      ? `M${xOf(firstWhole).toFixed(2)},30 ${whole
+          .map((index) => `L${at(index)}`)
+          .join(' ')} L${xOf(lastWhole).toFixed(2)},30 Z`
+      : ''
   const nearest = (event: PointerEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect()
     const share = (event.clientX - box.left) / Math.max(box.width, 1)
@@ -497,6 +523,7 @@ export function Sparkline(props: {
   const point = active === null ? null : points[active]
   const x = active === null ? 0 : xOf(active)
   const latest = points[last]
+  const pointProjected = point ? projectedOf(point) : undefined
   return (
     <div
       tabIndex={0}
@@ -540,38 +567,83 @@ export function Sparkline(props: {
         className='text-primary block h-8 w-full overflow-visible'
       >
         {props.bars ? (
-          points.map(({ title, value }, index) => (
-            <rect
-              key={title}
-              x={index * column + column * 0.15}
-              width={column * 0.7}
-              y={Math.min(yOf(value), yOf(0))}
-              height={Math.abs(yOf(0) - yOf(value))}
-              className={cn(
-                'fill-current',
-                active === null || active === index
-                  ? 'opacity-70'
-                  : 'opacity-30'
-              )}
-            />
-          ))
+          points.map(({ title, value, partial }, index) => {
+            const projected = projectedOf(points[index])
+            const lit = active === null || active === index
+            const dim = lit ? 'opacity-70' : 'opacity-30'
+            // A partial day's bar is lighter than a whole day's.
+            let fill = dim
+            if (partial) fill = lit ? 'opacity-40' : 'opacity-15'
+            return (
+              <g key={title}>
+                <rect
+                  x={index * column + column * 0.15}
+                  width={column * 0.7}
+                  y={Math.min(yOf(value), yOf(0))}
+                  height={Math.abs(yOf(0) - yOf(value))}
+                  className={cn('fill-current', fill)}
+                />
+                {projected !== undefined && projected > value && (
+                  <rect
+                    data-projected=''
+                    x={index * column + column * 0.15}
+                    width={column * 0.7}
+                    y={yOf(projected)}
+                    height={yOf(value) - yOf(projected)}
+                    fill='none'
+                    stroke='currentColor'
+                    strokeWidth={1}
+                    strokeDasharray='2 2'
+                    vectorEffect='non-scaling-stroke'
+                    className={dim}
+                  />
+                )}
+              </g>
+            )
+          })
         ) : (
           <>
-            <path
-              d={`${path} L100,30 L0,30 Z`}
-              className='fill-current opacity-10'
-            />
-            <path
-              d={path}
-              fill='none'
-              stroke='currentColor'
-              strokeWidth={1.5}
-              vectorEffect='non-scaling-stroke'
-              strokeLinejoin='round'
-            />
+            {area && <path d={area} className='fill-current opacity-10' />}
+            {solid && (
+              <path
+                d={solid}
+                fill='none'
+                stroke='currentColor'
+                strokeWidth={1.5}
+                vectorEffect='non-scaling-stroke'
+                strokeLinejoin='round'
+              />
+            )}
+            {dashed && (
+              <path
+                data-partial=''
+                d={dashed}
+                fill='none'
+                stroke='currentColor'
+                strokeWidth={1.5}
+                strokeDasharray='3 3'
+                vectorEffect='non-scaling-stroke'
+                className='opacity-70'
+              />
+            )}
           </>
         )}
       </svg>
+      {!props.bars &&
+        points.map((each, index) =>
+          projectedOf(each) === undefined ? null : (
+            // What has come in so far, below the projection the line ends at.
+            <span
+              key={each.title}
+              aria-hidden
+              className='border-primary bg-background pointer-events-none absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full border'
+              style={{
+                left: `${xOf(index)}%`,
+                top: `${(yOf(each.value) / 30) * 100}%`,
+              }}
+            />
+          )
+        )}
       {point && (
         <>
           {!props.bars && (
@@ -605,6 +677,13 @@ export function Sparkline(props: {
             <span className='font-medium tabular-nums'>
               {props.format(point.value)}
             </span>
+            {point.partial && (
+              <span className='text-muted-foreground block'>
+                {point.partial.note}
+                {pointProjected !== undefined &&
+                  ` · ${t('Expected for the whole day')} ${props.format(pointProjected)}`}
+              </span>
+            )}
           </span>
         </>
       )}
@@ -728,6 +807,8 @@ export type BarPoint = {
   faded?: boolean
   /** Warning or danger recolors the bar; other tones leave its series colors. */
   tone?: Tone
+  /** Set on a day the range covers only in part. */
+  partial?: PartialMark
 }
 
 export type BarSeriesItem = {
@@ -745,6 +826,11 @@ const SEGMENT_COLORS = [
   'bg-amber-500/60 group-hover/bar:bg-amber-500 group-focus-visible/bar:bg-amber-500',
   'bg-rose-500/60 group-hover/bar:bg-rose-500 group-focus-visible/bar:bg-rose-500',
 ]
+// The rest of a partial day's projected whole: an outline, since it has not
+// happened.
+const PROJECTED_OUTLINE =
+  'border-muted-foreground/60 rounded-t-[3px] border border-b-0 border-dashed'
+
 const MUTED_SEGMENT =
   'bg-muted-foreground/25 group-hover/bar:bg-muted-foreground/45 group-focus-visible/bar:bg-muted-foreground/45'
 
@@ -781,6 +867,9 @@ function niceStep(value: number) {
  * A bar per point with a gridded value axis and a labelled time axis.
  * Hovering or focusing a bar shows each series' value; the tooltip opens
  * at once and follows the pointer from bar to bar.
+ *
+ * A day the range covers only in part is drawn lighter, and the rest of
+ * its projected whole day, when it has one, as a dashed outline on top.
  */
 export function BarSeries(props: {
   points: BarPoint[]
@@ -800,11 +889,15 @@ export function BarSeries(props: {
     props.series[0]?.compact ?? props.series[0]?.format ?? fmt.num
   const sum = (values: number[]) => values.reduce((a, b) => a + b, 0)
   const reference = props.reference
+  // A partial day's projection is the height its outline reaches.
+  const reachOf = (point: BarPoint) => point.partial?.projected ?? point.values
   const max = Math.max(
     0,
     reference?.value ?? 0,
     ...props.points.map((point) =>
-      props.grouped ? Math.max(0, ...point.values) : sum(point.values)
+      props.grouped
+        ? Math.max(0, ...point.values, ...reachOf(point))
+        : Math.max(sum(point.values), sum(reachOf(point)))
     )
   )
   const step = niceStep(max / VALUE_TICKS)
@@ -936,9 +1029,35 @@ export function BarSeries(props: {
                       : colorOf(index),
                     point.faded && 'opacity-50'
                   )
+                const projected = point.partial?.projected
+                // What the whole day is expected to come to: per series
+                // when they are compared, or as one total.
+                let expected: { id: string; label: string; value: string }[] =
+                  []
+                if (projected && props.grouped && projected.length > 1) {
+                  expected = projected.map((value, index) => ({
+                    id: `expected-${index}`,
+                    label: props.series[index]?.label ?? '',
+                    value: formatOf(index)(value),
+                  }))
+                } else if (projected) {
+                  expected = [
+                    {
+                      id: 'expected',
+                      label: t('Expected for the whole day'),
+                      value: formatOf(0)(sum(projected)),
+                    },
+                  ]
+                }
                 const ariaLabel = [
                   title,
+                  ...(point.partial ? [point.partial.note] : []),
                   ...rows.map((row) => `${row.label} ${row.value}`),
+                  ...expected.map((row, index) =>
+                    expected.length > 1 && index === 0
+                      ? `${t('Expected for the whole day')}: ${row.label} ${row.value}`
+                      : `${row.label} ${row.value}`
+                  ),
                   ...(point.extra ?? []).map(
                     (row) => `${row.label} ${row.value}`
                   ),
@@ -971,12 +1090,29 @@ export function BarSeries(props: {
                           {point.values.map((value, index) => (
                             <span
                               key={rows[index].id}
-                              className={cn(
-                                'min-w-0 flex-1 rounded-t-[3px]',
-                                segmentClass(index)
+                              className='flex h-full min-w-0 flex-1 flex-col justify-end'
+                            >
+                              {projected && projected[index] > value && (
+                                <span
+                                  data-projected=''
+                                  className={PROJECTED_OUTLINE}
+                                  style={{
+                                    height: `${((projected[index] - value) / top) * 100}%`,
+                                  }}
+                                />
                               )}
-                              style={{ height: `${(value / top) * 100}%` }}
-                            />
+                              <span
+                                className={cn(
+                                  'rounded-t-[3px]',
+                                  projected &&
+                                    projected[index] > value &&
+                                    'rounded-t-none',
+                                  segmentClass(index),
+                                  point.partial && 'opacity-50'
+                                )}
+                                style={{ height: `${(value / top) * 100}%` }}
+                              />
+                            </span>
                           ))}
                         </span>
                       )}
@@ -987,11 +1123,24 @@ export function BarSeries(props: {
                             key={rows[index].id}
                             className={cn(
                               'w-full first:rounded-b-none last:rounded-t-[3px]',
-                              segmentClass(index)
+                              segmentClass(index),
+                              point.partial && 'opacity-50'
                             )}
                             style={{ height: `${(value / top) * 100}%` }}
                           />
                         ))}
+                      {total > 0 &&
+                        !props.grouped &&
+                        projected &&
+                        sum(projected) > total && (
+                          <span
+                            data-projected=''
+                            className={cn('w-full', PROJECTED_OUTLINE)}
+                            style={{
+                              height: `${((sum(projected) - total) / top) * 100}%`,
+                            }}
+                          />
+                        )}
                       {barLabels && total > 0 && (
                         <span
                           aria-hidden
@@ -1005,7 +1154,19 @@ export function BarSeries(props: {
                       )}
                     </TapTooltipTrigger>
                     <TooltipContent className='block min-w-40 py-2'>
-                      <p className='mb-1.5 font-semibold'>{title}</p>
+                      <p
+                        className={cn(
+                          'font-semibold',
+                          point.partial ? 'mb-0.5' : 'mb-1.5'
+                        )}
+                      >
+                        {title}
+                      </p>
+                      {point.partial && (
+                        <p className='mb-1.5 opacity-80'>
+                          {point.partial.note}
+                        </p>
+                      )}
                       <dl className='grid grid-cols-[1fr_auto] gap-x-4 gap-y-1'>
                         {rows.map((row) => (
                           <div key={row.id} className='contents'>
@@ -1037,6 +1198,31 @@ export function BarSeries(props: {
                             <dt className='opacity-80'>{row.label}</dt>
                             <dd className='text-right tabular-nums'>
                               {row.value}
+                            </dd>
+                          </div>
+                        ))}
+                        {expected.length > 1 && (
+                          <dt className='col-span-2 mt-1 font-medium'>
+                            {t('Expected for the whole day')}
+                          </dt>
+                        )}
+                        {expected.map((row) => (
+                          <div key={row.id} className='contents'>
+                            <dt
+                              className={cn(
+                                'opacity-80',
+                                expected.length === 1 && 'mt-1'
+                              )}
+                            >
+                              {row.label}
+                            </dt>
+                            <dd
+                              className={cn(
+                                'text-right tabular-nums',
+                                expected.length === 1 && 'mt-1'
+                              )}
+                            >
+                              ≈ {row.value}
                             </dd>
                           </div>
                         ))}

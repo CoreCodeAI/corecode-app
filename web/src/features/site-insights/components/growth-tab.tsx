@@ -50,6 +50,7 @@ import {
   type InsightsSources,
   type InsightsTab,
 } from '../lib'
+import { usePartialDays } from '../partial-days'
 import type {
   ActivityInsights,
   BusinessInsights,
@@ -89,6 +90,7 @@ export function GrowthTab(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const partialDay = usePartialDays('growth')
   const verdict = useGrowthVerdict(props.data, props.previous, props.range)
   const label = useSignupMethodLabel()
   const hours = useHourAxis()
@@ -233,6 +235,7 @@ export function GrowthTab(props: {
               : (data?.daily ?? []).map((day) => ({
                   title: fmt.day(day.day),
                   value: day.registered,
+                  partial: partialDay(day.day, [day.registered]),
                 })),
             trendBars: !!hourly,
           },
@@ -323,15 +326,19 @@ export function GrowthTab(props: {
             <BarSeries
               ariaLabel={t('Sign-ups by day')}
               series={signupSeries}
-              points={(data?.daily ?? []).map((day) => ({
-                key: day.day,
-                title: fmt.day(day.day),
-                values: [
+              points={(data?.daily ?? []).map((day) => {
+                const values = [
                   day.paid,
                   Math.max(day.activated - day.paid, 0),
                   Math.max(day.registered - day.activated, 0),
-                ],
-              }))}
+                ]
+                return {
+                  key: day.day,
+                  title: fmt.day(day.day),
+                  values,
+                  partial: partialDay(day.day, values),
+                }
+              })}
             />
           )}
         </Panel>
@@ -408,6 +415,7 @@ export function ActivityTab(props: {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const defs = useInsightsDefinitions()
+  const partialDay = usePartialDays('activity')
   const verdict = useActivityVerdict(props.data, props.previous)
   const data = props.data
   const charge = useChargeFormat(data)
@@ -501,6 +509,7 @@ export function ActivityTab(props: {
     key: day.day,
     title: fmt.day(day.day),
     values: [shown.value(day)],
+    partial: partialDay(day.day, [shown.value(day)]),
     extra: [
       ...(['usd', 'cny', 'engine'] as const)
         .filter((key) => key !== measure && (key !== 'engine' || totalReady))
@@ -575,6 +584,9 @@ export function ActivityTab(props: {
               : daily.map((day) => ({
                   title: fmt.day(day.day),
                   value: day.dau,
+                  // Distinct users do not add up hour by hour, so part of a day
+                  // is marked, not projected.
+                  partial: partialDay(day.day),
                 })),
             trendBars: !!hourly,
             hint: t('DAU {{dau}} · WAU {{wau}} on the last day', {
@@ -731,6 +743,7 @@ export function ActivityTab(props: {
                   key: day.day,
                   title: fmt.day(day.day),
                   values: [day.dau],
+                  partial: partialDay(day.day),
                   extra: [{ label: t('WAU'), value: fmt.num(day.wau) }],
                 }))}
               />
@@ -844,6 +857,7 @@ export function ActivityTab(props: {
                 key: day.day,
                 title: fmt.day(day.day),
                 values: [official?.cost_usd ?? 0],
+                partial: partialDay(day.day, [official?.cost_usd ?? 0]),
                 extra: [
                   claudeCharged
                     ? {

@@ -34,3 +34,38 @@ func TestHourlyVendorQuotaSumsTheModelsOfEachHour(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, map[int64]int64{hour: 700}, media)
 }
+
+func TestDayProfileSharesRequestsByUTCHour(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			// 2027-01-15 00:00 UTC; now is that day's 10:30.
+			const today = int64(1_799_971_200)
+			for _, row := range []QuotaData{
+				{ModelName: "opus", CreatedAt: today - 86400 + 3*3600, Count: 30, Username: "a"},
+				{ModelName: "sonnet", CreatedAt: today - 86400 + 3*3600, Count: 10, Username: "b"},
+				{ModelName: "opus", CreatedAt: today - 2*86400 + 13*3600, Count: 60, Username: "a"},
+				// Today's requests and those before the 14 days are left out.
+				{ModelName: "opus", CreatedAt: today + 3600, Count: 500, Username: "a"},
+				{ModelName: "opus", CreatedAt: today - 15*86400, Count: 700, Username: "a"},
+			} {
+				require.NoError(t, DB.Create(&row).Error)
+			}
+
+			profile, err := GetDayProfile(today + 10*3600 + 1800)
+			require.NoError(t, err)
+			require.Len(t, profile.Hours, 24)
+			assert.Equal(t, 14, profile.Days)
+			assert.InDelta(t, 0.4, profile.Hours[3], 1e-9)
+			assert.InDelta(t, 0.6, profile.Hours[13], 1e-9)
+			assert.Zero(t, profile.Hours[1])
+		})
+	}
+}
+
+func TestDayProfileIsEmptyWithoutRequests(t *testing.T) {
+	useInsightsTestDB(t, "sqlite")
+	profile, err := GetDayProfile(1_799_971_200)
+	require.NoError(t, err)
+	assert.Empty(t, profile.Hours)
+}

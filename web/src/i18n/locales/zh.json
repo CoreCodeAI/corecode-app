@@ -3217,6 +3217,8 @@
     "Invitation quota is insufficient!": "邀请额度不足！",
     "Invitation settings": "邀请设置",
     "Invitation settings saved": "邀请设置已保存",
+    "Commission from invitees on their network": "同网络被邀请人也返佣",
+    "Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.": "对与该用户使用同一网络的被邀请人（例如其本人的另一个账号）照常返佣。仅在已约定优惠时开启。",
     "Invitations": "邀请汇总",
     "Invitations are not available for your account.": "你的账号暂不可邀请用户。",
     "Invite Info": "邀请信息",
@@ -5441,6 +5443,7 @@
     "Session defaults": "会话默认设置",
     "Session expired!": "会话已过期！",
     "Session expired?": "会话已过期？",
+    "Your session expired. Please sign in again.": "登录已过期，请重新登录。",
     "Session rule": "会话规则",
     "Session rule matched": "命中会话规则",
     "Session rules": "会话规则",
@@ -5517,6 +5520,7 @@
     "Showing": "显示第",
     "Showing {{shown}} of {{total}} mappings": "显示 {{shown}} / {{total}} 条映射",
     "Showing the last successfully checked release.": "当前显示上次成功检查的发布信息。",
+    "Showing the last results that loaded.": "当前显示的是上次成功加载的结果。",
     "Shown": "显示",
     "Shown {{count}} models in model square": "已在模型定价页显示 {{count}} 个模型",
     "Sidebar": "侧边栏",
@@ -8874,6 +8878,9 @@
     "{{name}} was disabled automatically {{time}} and served nothing in this range: {{reason}}.": "{{name}} 于 {{time}} 被自动禁用，此范围内未服务任何请求：{{reason}}。",
     "{{name}} was disabled automatically {{time}} and served nothing in this range.": "{{name}} 于 {{time}} 被自动禁用，此范围内未服务任何请求。",
     "{{count}} more channels are disabled automatically.": "另有 {{count}} 个渠道被自动禁用。",
-    "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "已知成本渠道的毛利：{{rate}}，偏高：{{names}} 的账单只读取了部分密钥。"
+    "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "已知成本渠道的毛利：{{rate}}，偏高：{{names}} 的账单只读取了部分密钥。",
+    "In progress, through {{time}}": "进行中，截至 {{time}}",
+    "Partial, from {{time}}": "不完整，从 {{time}} 起",
+    "Expected for the whole day": "预计全天"
   }
 }

@@ -1566,9 +1566,17 @@ func TestOldVersionHoursAreServedThenRebuilt(t *testing.T) {
 				assert.Equal(t, 2, stale)
 			}
 
+			// An older-version row stored minutes ago means a server of the
+			// last release may still be running: the missing hours are filled
+			// and nothing is rebuilt yet.
+			_, err = FillInsightHours(1, 1000)
+			require.NoError(t, err)
+			assert.Equal(t, map[int64]int{logsGone: old, base: old, base + 3600: insightHourVersion}, versions())
+
+			allowInsightRebuild(t)
 			filled, err := FillInsightHours(1, 1000)
 			require.NoError(t, err)
-			assert.Positive(t, filled)
+			assert.Equal(t, 1, filled)
 			assert.Equal(t, map[int64]int{logsGone: old, base: insightHourVersion, base + 3600: insightHourVersion}, versions(),
 				"the hour whose logs are whole is rebuilt; the one whose logs are gone is kept")
 			again, err := GetCapacityInsights(r, "")
@@ -1582,6 +1590,29 @@ func TestOldVersionHoursAreServedThenRebuilt(t *testing.T) {
 			assert.Zero(t, filled, "nothing is left to rebuild")
 		})
 	}
+}
+
+// allowInsightRebuild lifts the wait the rollup task keeps while a server of
+// the last release may still be running.
+func allowInsightRebuild(t *testing.T) {
+	t.Helper()
+	delay, quiet := insightRebuildStartDelay, insightRebuildQuiet
+	insightRebuildStartDelay, insightRebuildQuiet = 0, 0
+	t.Cleanup(func() { insightRebuildStartDelay, insightRebuildQuiet = delay, quiet })
+}
+
+// The rebuild waits out a server of the last release: this process must have
+// run a while, and no older-version row may have been stored lately.
+func TestInsightRebuildWaitsForTheOldServer(t *testing.T) {
+	now := common.StartTime + insightRebuildStartDelay
+	old := insightHourVersion - 1
+	assert.True(t, insightRebuildHeld(nil, now-1), "just started")
+	assert.False(t, insightRebuildHeld(nil, now))
+	assert.True(t, insightRebuildHeld([]InsightHour{{Version: old, CreatedAt: now - insightRebuildQuiet + 1}}, now),
+		"an older server stored a row within the quiet time")
+	assert.False(t, insightRebuildHeld([]InsightHour{{Version: old, CreatedAt: now - insightRebuildQuiet}}, now))
+	assert.False(t, insightRebuildHeld([]InsightHour{{Version: insightHourVersion, CreatedAt: now}}, now),
+		"this version's own rows do not hold it")
 }
 
 // The task rebuilds stale hours newest first, within its limit, after the
@@ -1606,6 +1637,7 @@ func TestFillInsightHoursRebuildsNewestFirst(t *testing.T) {
 	}
 	require.NoError(t, DB.Create(&rows).Error)
 
+	allowInsightRebuild(t)
 	filled, err := FillInsightHours(1, 2)
 	require.NoError(t, err)
 	assert.Equal(t, 2, filled)

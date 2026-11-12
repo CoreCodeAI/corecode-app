@@ -68,7 +68,8 @@ function fallbackCopyToClipboard(text: string): boolean {
 /**
  * Copy text to clipboard with fallback support for HTTP environments
  *
- * @param text - The text to copy
+ * @param text - The text to copy, or a promise of it when it must be fetched
+ *   first; pass the promise before awaiting it
  * @returns Promise that resolves to true if successful, false otherwise
  *
  * @example
@@ -79,10 +80,37 @@ function fallbackCopyToClipboard(text: string): boolean {
  * }
  * ```
  */
-export async function copyToClipboard(text: string): Promise<boolean> {
+export async function copyToClipboard(
+  text: string | Promise<string>
+): Promise<boolean> {
   // Guard for SSR / non-browser environments
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return false
+  }
+
+  if (typeof text !== 'string') {
+    // Safari accepts a clipboard write only during the click, and this text
+    // arrives after an await. Given a promise, the clipboard counts the write
+    // as made during the click.
+    if ('ClipboardItem' in window && navigator.clipboard?.write) {
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/plain': text.then(
+              (value) => new Blob([value], { type: 'text/plain' })
+            ),
+          }),
+        ])
+        return true
+      } catch {
+        // A refused write: write the text once it arrives.
+      }
+    }
+    try {
+      text = await text
+    } catch {
+      return false
+    }
   }
 
   // Try modern clipboard API first (HTTPS required)

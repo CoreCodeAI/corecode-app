@@ -3217,6 +3217,8 @@
     "Invitation quota is insufficient!": "招待クォータが不足しています！",
     "Invitation settings": "招待設定",
     "Invitation settings saved": "招待設定を保存しました",
+    "Commission from invitees on their network": "同じネットワークの招待ユーザーからも報酬",
+    "Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.": "このユーザーと同じネットワークを使う招待ユーザー（本人の別アカウントなど）にも報酬を支払います。割引を合意した場合のみオンにしてください。",
     "Invitations": "招待",
     "Invitations are not available for your account.": "このアカウントでは招待を利用できません。",
     "Invite Info": "招待情報",
@@ -5441,6 +5443,7 @@
     "Session defaults": "セッションのデフォルト",
     "Session expired!": "セッションが期限切れです！",
     "Session expired?": "セッションが期限切れになりましたか？",
+    "Your session expired. Please sign in again.": "セッションの有効期限が切れました。もう一度サインインしてください。",
     "Session rule": "セッションルール",
     "Session rule matched": "セッションルールに一致",
     "Session rules": "セッションルール",
@@ -5517,6 +5520,7 @@
     "Showing": "表示",
     "Showing {{shown}} of {{total}} mappings": "{{total}} 件中 {{shown}} 件のマッピングを表示",
     "Showing the last successfully checked release.": "前回正常に確認できたリリース情報を表示しています。",
+    "Showing the last results that loaded.": "前回正常に読み込めた結果を表示しています。",
     "Shown": "表示",
     "Shown {{count}} models in model square": "モデル広場に {{count}} 件のモデルを表示しました",
     "Sidebar": "サイドバー",
@@ -8874,6 +8878,9 @@
     "{{name}} was disabled automatically {{time}} and served nothing in this range: {{reason}}.": "{{name}} は {{time}} に自動で無効化され、この期間は何も処理していません：{{reason}}。",
     "{{name}} was disabled automatically {{time}} and served nothing in this range.": "{{name}} は {{time}} に自動で無効化され、この期間は何も処理していません。",
     "{{count}} more channels are disabled automatically.": "ほかに {{count}} 個のチャネルが自動で無効化されています。",
-    "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "コストが分かるチャネルの粗利：{{rate}}、過大：{{names}} の請求は一部のキーからしか読み取っていません。"
+    "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "コストが分かるチャネルの粗利：{{rate}}、過大：{{names}} の請求は一部のキーからしか読み取っていません。",
+    "In progress, through {{time}}": "進行中、{{time}} まで",
+    "Partial, from {{time}}": "一部のみ、{{time}} から",
+    "Expected for the whole day": "1 日全体の見込み"
   }
 }

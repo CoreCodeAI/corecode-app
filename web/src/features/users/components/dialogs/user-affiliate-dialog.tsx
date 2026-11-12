@@ -28,6 +28,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import { useInviteeColumns } from '@/features/invitations/hooks/use-invitee-columns'
 import { useCommissionColumns } from '@/features/wallet/components/affiliate-columns'
 import { AffiliatePagedTable } from '@/features/wallet/components/affiliate-paged-table'
@@ -41,6 +42,7 @@ import {
   getUserAffiliateCommissions,
   getUserAffiliateInvitees,
   updateUserAffiliate,
+  updateUserAffiliateAddressExemption,
 } from '../../api'
 import { UserAffCodeEditor } from './user-aff-code-editor'
 import { UserInviterEditor } from './user-inviter-editor'
@@ -92,6 +94,16 @@ export function UserAffiliateDialog(props: UserAffiliateDialogProps) {
   const save = useMutation({
     mutationFn: (body: { rate: number; tier: AffiliateTier }) =>
       updateUserAffiliate(userId, body),
+    onSuccess: (next) => {
+      queryClient.setQueryData(queryKey, next)
+      toast.success(t('Invitation settings saved'))
+    },
+    onError: (error) => handleServerError(error),
+  })
+
+  const exemption = useMutation({
+    mutationFn: (exempt: boolean) =>
+      updateUserAffiliateAddressExemption(userId, exempt),
     onSuccess: (next) => {
       queryClient.setQueryData(queryKey, next)
       toast.success(t('Invitation settings saved'))
@@ -231,6 +243,29 @@ export function UserAffiliateDialog(props: UserAffiliateDialogProps) {
                 ))}
               </RadioGroup>
             </div>
+          </div>
+
+          <div className='flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm'>
+            <span>
+              <span className='block font-medium'>
+                {t('Commission from invitees on their network')}
+              </span>
+              <span
+                id='affiliate-address-exemption-description'
+                className='text-muted-foreground block'
+              >
+                {t(
+                  'Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.'
+                )}
+              </span>
+            </span>
+            <Switch
+              checked={data.address_exempt ?? false}
+              disabled={exemption.isPending}
+              onCheckedChange={(checked) => exemption.mutate(!!checked)}
+              aria-label={t('Commission from invitees on their network')}
+              aria-describedby='affiliate-address-exemption-description'
+            />
           </div>
 
           <div className='flex justify-end'>

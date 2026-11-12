@@ -308,7 +308,8 @@ func affiliateCreditsFor(tx *gorm.DB, inviterId int) ([]affiliateCredit, error) 
 // Consumption counts only up to what the invitee paid; with the program off
 // or an ineligible inviter it still counts, it just earns nothing. Nor does
 // an inviter who shares an address with the invitee (SharesAddress): one
-// person inviting their own accounts would pay themselves commission.
+// person inviting their own accounts would pay themselves commission. A root
+// user can exempt an inviter from that (AffiliateAddressExemption).
 func SettleAffiliateReferral(userId int) (bool, error) {
 	credited := false
 	// Addresses are read before the transaction: the request log may be the
@@ -325,6 +326,13 @@ func SettleAffiliateReferral(userId int) (bool, error) {
 		}
 		now := common.GetTimestamp()
 		for _, credit := range credits {
+			exempt, err := AffiliateAddressExempt(credit.userId)
+			if err != nil {
+				return false, err
+			}
+			if exempt {
+				continue
+			}
 			shared, err := SharesAddress(credit.userId, userId, now)
 			if err != nil {
 				return false, err

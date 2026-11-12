@@ -388,6 +388,8 @@ export interface AffiliateAdminView extends AffiliateSummary {
   max_rate: number
   inviter_id: number
   inviter_name: string
+  /** Earns commission on invitees who share this user's network */
+  address_exempt?: boolean
 }
 
 export interface AffiliateCommission {

@@ -115,7 +115,12 @@ export function ForgotPasswordForm({
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input placeholder='name@example.com' {...field} />
+                <Input
+                  placeholder='name@example.com'
+                  inputMode='email'
+                  autoComplete='email'
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

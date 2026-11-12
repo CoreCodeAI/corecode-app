@@ -32,6 +32,7 @@ import {
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   within,
@@ -356,7 +357,8 @@ async function renderKeysPage(
       </QueryClientProvider>
     </I18nextProvider>
   )
-  await screen.findByText(currentKey.name)
+  if (currentKey.name) await screen.findByText(currentKey.name)
+  else await screen.findByRole('button', { name: 'Open menu' })
   return { post, put, client }
 }
 
@@ -560,10 +562,15 @@ it('reads the list again on the next visit after a change', async () => {
   await waitFor(() => expect(listRequests()).toHaveLength(1))
 })
 
-async function renderEmptyKeysPage() {
+async function renderEmptyKeysPage(
+  listResponse: () => unknown = () => ({
+    success: true,
+    data: { items: [], total: 0 },
+  })
+) {
   vi.mocked(api.get).mockImplementation(async (url) => {
     if (url.startsWith('/api/token/')) {
-      return { data: { success: true, data: { items: [], total: 0 } } }
+      return { data: listResponse() }
     }
     return { data: { success: true, data: { default: { ratio: 1 } } } }
   })
@@ -627,6 +634,25 @@ it.each([
   }
 )
 
+it('shows a retryable load error instead of the create prompt when the first list request fails', async () => {
+  let failing = true
+  await renderEmptyKeysPage(() =>
+    failing
+      ? { success: false, message: 'Database unavailable' }
+      : { success: true, data: { items: [key], total: 1 } }
+  )
+  await screen.findByText('Failed to load API keys')
+  expect(screen.queryByText('No API Keys Found')).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Create API Key' })
+  ).not.toBeInTheDocument()
+
+  failing = false
+  await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await screen.findByText(key.name)
+  expect(screen.queryByText('Failed to load API keys')).not.toBeInTheDocument()
+})
+
 it('names the icon-only copy and row action buttons for assistive technology', async () => {
   await renderKeysPage()
   expect(
@@ -634,4 +660,46 @@ it('names the icon-only copy and row action buttons for assistive technology', a
   ).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Disable' })).toBeInTheDocument()
+})
+
+it('offers to undo a disable from its success toast and re-enables the key', async () => {
+  const { put } = await renderKeysPage(1)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Disable' }))
+  await screen.findByText('Disabled')
+  fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenLastCalledWith('/api/token/?status_only=true', {
+      id: 7,
+      status: 1,
+    })
+  )
+  await screen.findByText('Enabled')
+  expect(put).toHaveBeenCalledTimes(2)
+})
+
+it('offers no undo after enabling a key', async () => {
+  await renderKeysPage(2)
+  await userEvent.click(screen.getByRole('button', { name: 'Enable' }))
+  await screen.findByText('API Key enabled successfully')
+  expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
+})
+
+it('links a key to the usage logs filtered by its name', async () => {
+  await renderKeysPage(1, { name: 'claude code/main' })
+  await userEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+  const item = await screen.findByRole('menuitem', { name: 'View logs' })
+  const href = item.closest('a')?.getAttribute('href') ?? ''
+  const url = new URL(href, 'http://localhost')
+  expect(url.pathname).toBe('/usage-logs/common')
+  expect(url.searchParams.get('token')).toBe('claude code/main')
+})
+
+it('offers no logs link for a key without a name', async () => {
+  await renderKeysPage(1, { name: '' })
+  await userEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+  await screen.findByRole('menuitem', { name: 'Delete' })
+  expect(
+    screen.queryByRole('menuitem', { name: 'View logs' })
+  ).not.toBeInTheDocument()
 })

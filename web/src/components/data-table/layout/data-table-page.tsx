@@ -60,6 +60,7 @@ import {
 import { DataTableToolbar } from '../toolbar/toolbar'
 import { DataTableViewModeToggle } from '../toolbar/view-mode-toggle'
 import { DataTableCardGrid } from './card-grid'
+import { DataTableLoadError } from './data-table-load-error'
 import { MobileCardList } from './mobile-card-list'
 
 /**
@@ -91,6 +92,19 @@ export type DataTablePageProps<TData> = {
    * Refetch / background loading — dims the table without removing rows.
    */
   isFetching?: boolean
+
+  /**
+   * The list query failed. With no rows, an error state with `onRetry`
+   * replaces the table and mobile list; with rows from an earlier load, a
+   * one-line error sits above them.
+   */
+  isError?: boolean
+
+  /** Retry handler for the error state, usually the query's `refetch`. */
+  onRetry?: () => void
+
+  /** Error title. Defaults to "Failed to load". */
+  errorTitle?: string
 
   /**
    * Empty-state title (used for both desktop {@link TableEmpty} and mobile fallback).
@@ -336,8 +350,20 @@ export function DataTablePage<TData>(props: DataTablePageProps<TData>) {
   ) : undefined
 
   const toolbarNode = renderToolbar(props, viewToggle)
-  const mobileNode = renderMobile(props, showMobile, cardViewActive, viewMode)
-  const desktopNode = renderDesktop(props, showMobile, cardViewActive, viewMode)
+  const hasRows = props.table.getRowModel().rows.length > 0
+  const loadFailed = !!props.isError && !props.isLoading
+  const loadErrorNode = loadFailed ? (
+    <DataTableLoadError
+      hasRows={hasRows}
+      title={props.errorTitle}
+      onRetry={props.onRetry}
+    />
+  ) : null
+  const showRows = !loadFailed || hasRows
+  const mobileNode =
+    showRows && renderMobile(props, showMobile, cardViewActive, viewMode)
+  const desktopNode =
+    showRows && renderDesktop(props, showMobile, cardViewActive, viewMode)
   const paginationNode = renderPagination(props)
 
   return (
@@ -351,6 +377,7 @@ export function DataTablePage<TData>(props: DataTablePageProps<TData>) {
         )}
       >
         {toolbarNode}
+        {loadErrorNode}
         {mobileNode}
         {desktopNode}
         {props.afterTable}

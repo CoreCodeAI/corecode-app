@@ -3217,6 +3217,8 @@
     "Invitation quota is insufficient!": "Hạn ngạch mời không đủ!",
     "Invitation settings": "Cài đặt mời",
     "Invitation settings saved": "Đã lưu cài đặt mời",
+    "Commission from invitees on their network": "Hoa hồng từ người được mời cùng mạng",
+    "Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.": "Trả hoa hồng cho người được mời dùng cùng mạng với người dùng này, chẳng hạn tài khoản thứ hai của chính họ. Chỉ bật khi đã thỏa thuận giảm giá.",
     "Invitations": "Lời mời",
     "Invitations are not available for your account.": "Tài khoản của bạn không thể mời người dùng.",
     "Invite Info": "Thông tin mời",
@@ -5441,6 +5443,7 @@
     "Session defaults": "Mặc định phiên",
     "Session expired!": "Phiên hết hạn!",
     "Session expired?": "Phiên đã hết hạn?",
+    "Your session expired. Please sign in again.": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
     "Session rule": "Quy tắc phiên",
     "Session rule matched": "Khớp quy tắc phiên",
     "Session rules": "Quy tắc phiên",
@@ -5517,6 +5520,7 @@
     "Showing": "Đang hiển thị",
     "Showing {{shown}} of {{total}} mappings": "Hiển thị {{shown}} / {{total}} ánh xạ",
     "Showing the last successfully checked release.": "Đang hiển thị thông tin bản phát hành từ lần kiểm tra thành công gần nhất.",
+    "Showing the last results that loaded.": "Đang hiển thị kết quả tải thành công gần nhất.",
     "Shown": "Hiển thị",
     "Shown {{count}} models in model square": "Đã hiển thị {{count}} mô hình trong kho mô hình",
     "Sidebar": "Thanh bên",
@@ -8874,6 +8878,9 @@
     "{{name}} was disabled automatically {{time}} and served nothing in this range: {{reason}}.": "{{name}} bị tự động tắt lúc {{time}} và không phục vụ gì trong khoảng này: {{reason}}.",
     "{{name}} was disabled automatically {{time}} and served nothing in this range.": "{{name}} bị tự động tắt lúc {{time}} và không phục vụ gì trong khoảng này.",
     "{{count}} more channels are disabled automatically.": "Thêm {{count}} kênh đang bị tự động tắt.",
-    "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "Lãi gộp trên các kênh đã biết chi phí: {{rate}}, bị thổi phồng: hóa đơn của {{names}} chỉ đọc từ một số khóa."
+    "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "Lãi gộp trên các kênh đã biết chi phí: {{rate}}, bị thổi phồng: hóa đơn của {{names}} chỉ đọc từ một số khóa.",
+    "In progress, through {{time}}": "Đang diễn ra, đến {{time}}",
+    "Partial, from {{time}}": "Một phần, từ {{time}}",
+    "Expected for the whole day": "Dự kiến cả ngày"
   }
 }

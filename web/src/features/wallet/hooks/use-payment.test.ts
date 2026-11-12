@@ -110,3 +110,35 @@ describe('payment amount routing', () => {
     expect(calls).toEqual(['nowpayments:100'])
   })
 })
+
+describe('Stripe checkout hand-off', () => {
+  // Safari spends the click on the order request and returns null from
+  // window.open; the checkout must still open, in this tab.
+  test('opens Checkout in this tab when the popup is blocked', async () => {
+    vi.spyOn(walletApi, 'requestStripePayment').mockResolvedValue({
+      success: true,
+      message: 'success',
+      data: { pay_link: 'https://checkout.stripe.com/c/pay/cs_test' },
+    } as never)
+    vi.spyOn(window, 'open').mockReturnValue(null)
+    const assign = vi.fn()
+    vi.spyOn(window, 'location', 'get').mockReturnValue({
+      ...window.location,
+      assign,
+    })
+    const { result } = renderHook(() => usePayment())
+
+    let ok = false
+    await act(async () => {
+      ok = await result.current.processPayment(
+        100,
+        PAYMENT_TYPES.STRIPE_WECHAT_PAY
+      )
+    })
+
+    expect(ok).toBe(true)
+    expect(assign).toHaveBeenCalledWith(
+      'https://checkout.stripe.com/c/pay/cs_test'
+    )
+  })
+})

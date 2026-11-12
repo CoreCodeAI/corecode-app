@@ -3217,6 +3217,8 @@
     "Invitation quota is insufficient!": "초대 할당량이 부족합니다!",
     "Invitation settings": "초대 설정",
     "Invitation settings saved": "초대 설정을 저장했습니다",
+    "Commission from invitees on their network": "같은 네트워크의 초대 사용자에게서도 커미션",
+    "Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.": "이 사용자와 같은 네트워크를 쓰는 초대 사용자(본인의 다른 계정 등)에게서도 커미션을 지급합니다. 할인을 합의한 경우에만 켜세요.",
     "Invitations": "초대",
     "Invitations are not available for your account.": "계정에서 초대 기능을 사용할 수 없습니다.",
     "Invite Info": "초대 정보",
@@ -5441,6 +5443,7 @@
     "Session defaults": "세션 기본값",
     "Session expired!": "세션이 만료되었습니다!",
     "Session expired?": "세션이 만료되었나요?",
+    "Your session expired. Please sign in again.": "세션이 만료되었습니다. 다시 로그인하세요.",
     "Session rule": "세션 규칙",
     "Session rule matched": "세션 규칙 일치",
     "Session rules": "세션 규칙",
@@ -5517,6 +5520,7 @@
     "Showing": "표시 중",
     "Showing {{shown}} of {{total}} mappings": "매핑 {{total}}개 중 {{shown}}개 표시",
     "Showing the last successfully checked release.": "마지막으로 성공적으로 확인한 릴리스를 표시합니다.",
+    "Showing the last results that loaded.": "마지막으로 불러온 결과를 표시하고 있습니다.",
     "Shown": "표시됨",
     "Shown {{count}} models in model square": "모델 광장에 모델 {{count}}개 표시됨",
     "Sidebar": "사이드바",
@@ -8874,6 +8878,9 @@
     "{{name}} was disabled automatically {{time}} and served nothing in this range: {{reason}}.": "{{name}}은(는) {{time}}에 자동 비활성화되어 이 기간에 아무것도 처리하지 않았습니다: {{reason}}.",
     "{{name}} was disabled automatically {{time}} and served nothing in this range.": "{{name}}은(는) {{time}}에 자동 비활성화되어 이 기간에 아무것도 처리하지 않았습니다.",
     "{{count}} more channels are disabled automatically.": "그 밖에 {{count}}개 채널이 자동 비활성화되어 있습니다.",
-    "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "비용을 아는 채널의 총이익: {{rate}}, 과대: {{names}}의 청구서는 일부 키에서만 읽었습니다."
+    "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "비용을 아는 채널의 총이익: {{rate}}, 과대: {{names}}의 청구서는 일부 키에서만 읽었습니다.",
+    "In progress, through {{time}}": "진행 중, {{time}}까지",
+    "Partial, from {{time}}": "일부만, {{time}}부터",
+    "Expected for the whole day": "하루 전체 예상"
   }
 }

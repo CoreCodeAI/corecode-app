@@ -266,6 +266,7 @@ func SetApiRouter(router *gin.Engine) {
 				affiliateRootRoute.PUT("/users/:id", controller.AdminSetUserAffiliate)
 				affiliateRootRoute.PUT("/users/:id/code", controller.AdminSetUserAffCode)
 				affiliateRootRoute.PUT("/users/:id/inviter", controller.AdminSetUserInviter)
+				affiliateRootRoute.PUT("/users/:id/address-exemption", controller.AdminSetUserAffiliateAddressExemption)
 				affiliateRootRoute.GET("/users/:id/commissions", controller.AdminGetUserAffiliateCommissions)
 				affiliateRootRoute.GET("/users/:id/invitees", controller.AdminGetUserAffiliateInvitees)
 				affiliateRootRoute.GET("/withdrawals", controller.AdminGetAffiliateWithdrawals)
@@ -483,6 +484,7 @@ func SetApiRouter(router *gin.Engine) {
 			siteInsightsRoute.GET("/pool-usage", controller.GetPoolUsage)
 			siteInsightsRoute.GET("/pool-outlook", controller.GetPoolOutlook)
 			siteInsightsRoute.GET("/user-spend", controller.GetUserSpendInsights)
+			siteInsightsRoute.GET("/day-profile", controller.GetDayProfile)
 		}
 
 		dataRoute := apiRouter.Group("/data")

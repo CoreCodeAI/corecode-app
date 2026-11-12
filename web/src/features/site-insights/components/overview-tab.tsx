@@ -39,6 +39,7 @@ import {
   type InsightsRangeInfo,
   type InsightsTab,
 } from '../lib'
+import { usePartialDays } from '../partial-days'
 import type {
   ActivityInsights,
   CapacityInsights,
@@ -115,6 +116,8 @@ export function OverviewTab(props: {
   const tabLabel = useTabLabel()
   const vendorName = useVendorName()
   const definitions = useInsightsDefinitions()
+  const financeDay = usePartialDays('finance')
+  const qualityDay = usePartialDays('quality')
   const current = useQueries({
     queries: OVERVIEW_VIEWS.map((view) => ({
       ...props.current(view),
@@ -408,10 +411,21 @@ export function OverviewTab(props: {
       value: point.value,
     }))
   let revenueTrend: TrendPoint[] | undefined = (finance?.daily ?? []).map(
-    (day) => ({ title: fmt.day(day.day), value: day.topup + day.subscription })
+    (day) => {
+      const value = day.topup + day.subscription
+      return {
+        title: fmt.day(day.day),
+        value,
+        partial: financeDay(day.day, [value]),
+      }
+    }
   )
   let requestsTrend: TrendPoint[] | undefined = (quality?.daily ?? []).map(
-    (day) => ({ title: fmt.day(day.day), value: day.requests })
+    (day) => ({
+      title: fmt.day(day.day),
+      value: day.requests,
+      partial: qualityDay(day.day, [day.requests]),
+    })
   )
   let signupTrend: TrendPoint[] | undefined
   if (hourly) {

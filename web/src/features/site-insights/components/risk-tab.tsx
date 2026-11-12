@@ -29,6 +29,7 @@ import {
   type InsightsSources,
   type InsightsTab,
 } from '../lib'
+import { usePartialDays } from '../partial-days'
 import type { RiskInsights } from '../types'
 import { useRiskVerdict } from '../verdicts'
 import { largestSurge, useSurgeText } from '../verdicts/risk'
@@ -76,6 +77,7 @@ export function RiskTab(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const partialDay = usePartialDays('risk')
   const hourAxis = useHourAxis()
   const surgeText = useSurgeText()
   const verdict = useRiskVerdict(props.data, props.previous, props.range)
@@ -122,6 +124,11 @@ export function RiskTab(props: {
     (previous?.signup_series ?? []).map((point) => [point.at, point.count])
   )
   const pointTitle = (at: number) => (daily ? fmt.day(at) : fmt.time(at))
+  // Only a series by day has days the range covers in part.
+  const pointPartial = (point: { at: number; count: number }) =>
+    data?.series_unit === 'day'
+      ? partialDay(point.at, [point.count])
+      : undefined
   const sameHourExtra = (at: number) => {
     if (daily || span == null || !previous) return undefined
     const before = previousAt.get(at - span)
@@ -135,6 +142,7 @@ export function RiskTab(props: {
         values: [point.count],
         tone: surgeAt.has(point.at) ? 'danger' : undefined,
         faded: data ? point.at + signupUnit(data) > end : false,
+        partial: pointPartial(point),
       }))
     : hourAxis.bars(
         series.map((point) => ({ hour: point.at, count: point.count })),
@@ -228,6 +236,7 @@ export function RiskTab(props: {
       trend: series.map((point) => ({
         title: pointTitle(point.at),
         value: point.count,
+        partial: pointPartial(point),
       })),
       tone: surge ? 'warning' : undefined,
       hint:

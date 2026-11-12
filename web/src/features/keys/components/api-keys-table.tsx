@@ -241,7 +241,7 @@ export function ApiKeysTable() {
     columnId: '_tokenSearch',
     onColumnFiltersChange,
   })
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     ...apiKeysQueryOptions({
       page: pagination.pageIndex + 1,
       pageSize: pagination.pageSize,
@@ -294,6 +294,9 @@ export function ApiKeysTable() {
       columns={columns}
       isLoading={isLoading}
       isFetching={isFetching}
+      isError={isError}
+      onRetry={() => void refetch()}
+      errorTitle={t('Failed to load API keys')}
       emptyTitle={t('No API Keys Found')}
       emptyDescription={t(
         'No API keys available. Create your first API key to get started.'

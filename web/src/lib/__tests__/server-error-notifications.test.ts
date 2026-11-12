@@ -176,7 +176,9 @@ it('only reports a query failure after retries are exhausted and stays silent wh
       retryDelay: 0,
     })
     .catch(handleServerError)
-  expect(notify.mock.calls.map(([message]) => message)).toEqual(['Offline'])
+  expect(notify.mock.calls.map(([message]) => message)).toEqual([
+    'Please try again later.',
+  ])
   client.clear()
 })
 

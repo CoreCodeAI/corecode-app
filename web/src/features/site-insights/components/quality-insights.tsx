@@ -35,6 +35,7 @@ import {
   type InsightsTab,
   type SourceState,
 } from '../lib'
+import { usePartialDays } from '../partial-days'
 import {
   failureDrivers,
   failureOwners,
@@ -384,6 +385,7 @@ export function DailyFailurePanel(props: { data: QualityInsights }) {
   const fmt = useInsightsFormat()
   const rateFormat = useRateFormat()
   const redLine = useRedLine()
+  const partialDay = usePartialDays('quality')
   const daily = props.data.daily ?? []
   const worstDay = daily
     .filter((day) => day.requests >= SMALL_SAMPLE)
@@ -415,6 +417,7 @@ export function DailyFailurePanel(props: { data: QualityInsights }) {
           key: day.day,
           title: fmt.day(day.day),
           values: [rateBar(day.requests, day.error_rate, 1)],
+          partial: partialDay(day.day),
           tone:
             day.requests >= SMALL_SAMPLE
               ? failureTone(day.error_rate)

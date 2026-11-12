@@ -43,6 +43,7 @@ import {
   type InsightsRangeInfo,
   type SourceState,
 } from '../lib'
+import { usePartialDays } from '../partial-days'
 import type { FinanceInsights } from '../types'
 import {
   DeltaBadge,
@@ -95,6 +96,7 @@ export function FinanceSummary(props: {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const defs = useInsightsDefinitions()
+  const partialDay = usePartialDays('finance')
   const data = props.data
   const previous = props.previous
   const charge = useChargeFormat(data)
@@ -119,6 +121,7 @@ export function FinanceSummary(props: {
     : (data?.daily ?? []).map((day) => ({
         title: fmt.day(day.day),
         value: day.topup + day.subscription,
+        partial: partialDay(day.day, [day.topup + day.subscription]),
       }))
 
   // Over a handful of orders a percentage is noise: the change reads as an
@@ -217,6 +220,9 @@ export function FinanceSummary(props: {
                   : (data?.daily ?? []).map((day) => ({
                       title: fmt.day(day.day),
                       value: day.recognized_revenue ?? 0,
+                      // A plan earns by the hour and a wallet by use, so part
+                      // of a day is marked, not projected from requests.
+                      partial: partialDay(day.day),
                     }))
               }
               trendFormat={fmt.cny}

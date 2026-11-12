@@ -37,6 +37,7 @@ import {
   type InsightsSources,
   type InsightsTab,
 } from '../lib'
+import { usePartialDays } from '../partial-days'
 import type { BusinessInsights, FinanceInsights } from '../types'
 import { useFinanceVerdict } from '../verdicts'
 import { ModelMixPanel, VendorMarginPanel } from './business-panels'
@@ -76,6 +77,7 @@ export function FinanceTab(props: {
   const fmt = useInsightsFormat()
   const defs = useInsightsDefinitions()
   const hourAxis = useHourAxis()
+  const partialDay = usePartialDays('finance')
   const verdict = useFinanceVerdict(props.data, props.previous)
   const data = props.data
   const previous = props.previous
@@ -238,6 +240,7 @@ export function FinanceTab(props: {
               key: day.day,
               title: fmt.day(day.day),
               values: [day.topup, day.subscription],
+              partial: partialDay(day.day, [day.topup, day.subscription]),
               extra: [
                 {
                   label: t('Revenue earned'),

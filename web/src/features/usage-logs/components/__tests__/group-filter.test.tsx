@@ -122,7 +122,7 @@ afterEach(() => {
   }
 })
 
-it('loads personal groups and filters choices without submitting until Search', async () => {
+it('loads personal groups, filters choices while typing and applies the picked one on desktop', async () => {
   const router = await renderFilter()
   const input = screen.getByRole('combobox', { name: 'Group' })
   await userEvent.click(input)
@@ -131,10 +131,9 @@ it('loads personal groups and filters choices without submitting until Search', 
   expect(
     screen.queryByRole('option', { name: 'default' })
   ).not.toBeInTheDocument()
+  expect(router.state.location.search).not.toHaveProperty('group')
   await userEvent.click(screen.getByRole('option', { name: 'premium' }))
   expect(input).toHaveValue('premium')
-  expect(router.state.location.search).not.toHaveProperty('group')
-  await userEvent.click(screen.getByRole('button', { name: 'Search' }))
   await waitFor(() =>
     expect(router.state.location.search).toMatchObject({
       group: 'premium',
@@ -154,7 +153,7 @@ it('loads all groups in the administrator view', async () => {
   expect(api.get).not.toHaveBeenCalledWith('/api/user/self/groups')
 })
 
-it('confirms a keyboard choice before Enter submits the selected group', async () => {
+it('applies a group chosen with the keyboard on desktop', async () => {
   const router = await renderFilter()
   const input = screen.getByRole('combobox', { name: 'Group' })
   await userEvent.click(input)
@@ -162,8 +161,6 @@ it('confirms a keyboard choice before Enter submits the selected group', async (
   await userEvent.keyboard('{ArrowDown}{Enter}')
   expect(input).toHaveValue('default')
   expect(input).toHaveAttribute('aria-expanded', 'false')
-  expect(router.state.location.search).not.toHaveProperty('group')
-  await userEvent.keyboard('{Enter}')
   await waitFor(() =>
     expect(router.state.location.search).toMatchObject({ group: 'default' })
   )
@@ -256,6 +253,7 @@ it('lets mobile users select a long group name inside the filter drawer and subm
   await userEvent.click(option)
   expect(input).toHaveValue(longGroup)
   expect(dialog).toBeVisible()
+  expect(router.state.location.search).not.toHaveProperty('group')
   await userEvent.click(within(dialog).getByRole('button', { name: 'Search' }))
   await waitFor(() =>
     expect(router.state.location.search).toMatchObject({ group: longGroup })

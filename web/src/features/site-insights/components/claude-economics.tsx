@@ -31,6 +31,7 @@ import {
   useChargeFormat,
   useInsightsFormat,
 } from '../lib'
+import { usePartialDays } from '../partial-days'
 import type { FinanceInsights } from '../types'
 import { BarSeries, HelpLabel, Panel, SimpleTable } from './shared'
 
@@ -48,6 +49,7 @@ const COST = 'bg-amber-500'
 export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const partialDay = usePartialDays('finance')
   const data = props.data
   const charge = useChargeFormat(data)
   const engine = data?.engine_cost
@@ -369,6 +371,7 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
                   key: day.day,
                   title: fmt.day(day.day),
                   values: [dayCharged, dayOfficial],
+                  partial: partialDay(day.day, [dayCharged, dayOfficial]),
                   extra: [
                     {
                       label: t('new-api ÷ official'),

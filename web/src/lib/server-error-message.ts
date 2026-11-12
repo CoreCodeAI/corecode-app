@@ -219,6 +219,17 @@ export function getServerErrorMessage(
   const status = getServerErrorStatus(value)
   if (status === 304) return i18next.t('Content not modified!')
   if (status === 204) return i18next.t('Content not found.')
+  // No answer, or a 5xx with no reason: axios' own text ("Network Error",
+  // "Request failed with status code 502") is not for customers. The
+  // wording is the one secure-verification.ts shows for the same failures.
+  const axiosError = sources.find((source) => source.isAxiosError)
+  const transportFailed =
+    status === undefined
+      ? !axiosError?.response && axiosError?.code !== 'ERR_CANCELED'
+      : status >= 500
+  if (axiosError && transportFailed) {
+    return i18next.t('Please try again later.')
+  }
   for (const source of sources) {
     const message = messageText(source.message)
     if (message) return message

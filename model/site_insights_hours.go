@@ -1047,7 +1047,8 @@ func storeInsightHour(hour *insightHour) error {
 // all still there: a request belongs to the hour it started in and its logs
 // are written after that, so an hour that starts at or after the earliest
 // log is whole. An older hour keeps its old row for good, and the views count
-// it in stale_hours.
+// it in stale_hours. The rebuild waits while insightRebuildHeld says a server
+// of the last release may still be running.
 func FillInsightHours(days int64, limit int) (int, error) {
 	now := time.Now().Unix()
 	newest := now - now%3600
@@ -1060,7 +1061,7 @@ func FillInsightHours(days int64, limit int) (int, error) {
 		return 0, err
 	}
 	var have []InsightHour
-	if err := DB.Model(&InsightHour{}).Select("hour_start, version").
+	if err := DB.Model(&InsightHour{}).Select("hour_start, version, created_at").
 		Where("hour_start >= ? AND hour_start <= ?", oldest, newest).Find(&have).Error; err != nil {
 		return 0, err
 	}
@@ -1096,6 +1097,9 @@ func FillInsightHours(days int64, limit int) (int, error) {
 			return filled, err
 		}
 	}
+	if insightRebuildHeld(have, now) {
+		return filled, nil
+	}
 	for start := newest; start >= max(oldest, earliest) && filled < limit; start -= 3600 {
 		if version, ok := stored[start]; !ok || version >= insightHourVersion {
 			continue
@@ -1105,4 +1109,25 @@ func FillInsightHours(days int64, limit int) (int, error) {
 		}
 	}
 	return filled, nil
+}
+
+// A server of the release before this one treats a row of this version as
+// missing and stores the hour again under its own. During a release both run
+// until the old one's last request ends, so rebuilding at once would have the
+// two rewrite the same hours in turn. The rebuild therefore waits for
+// insightRebuildStartDelay after this process started, and for as long as any
+// older-version row was stored within insightRebuildQuiet: only a server that
+// is still running writes those.
+var (
+	insightRebuildStartDelay int64 = 15 * 60
+	insightRebuildQuiet      int64 = 30 * 60
+)
+
+func insightRebuildHeld(rows []InsightHour, now int64) bool {
+	if now-common.StartTime < insightRebuildStartDelay {
+		return true
+	}
+	return slices.ContainsFunc(rows, func(row InsightHour) bool {
+		return row.Version < insightHourVersion && row.CreatedAt > now-insightRebuildQuiet
+	})
 }

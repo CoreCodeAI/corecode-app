@@ -45,6 +45,7 @@ import {
   type InsightsSources,
   type InsightsTab,
 } from '../lib'
+import { usePartialDays } from '../partial-days'
 import {
   abnormalStreams,
   attemptsOf,
@@ -331,6 +332,7 @@ export function QualityTab(props: {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const definitions = useInsightsDefinitions()
+  const partialDay = usePartialDays('quality')
   const modelMapLabels = useVendorLabels()
   const verdict = useQualityVerdict(props.data, props.previous, {
     selected: props.models.selected,
@@ -367,7 +369,11 @@ export function QualityTab(props: {
   const findings = useQualityFindings(data, previous, siteRate, range?.end)
   const requestTrend = hourly
     ? hourly.map((row) => ({ title: fmt.time(row.hour), value: row.requests }))
-    : daily.map((day) => ({ title: fmt.day(day.day), value: day.requests }))
+    : daily.map((day) => ({
+        title: fmt.day(day.day),
+        value: day.requests,
+        partial: partialDay(day.day, [day.requests]),
+      }))
   const worstModel = ranked.find((row) => failsAboveSite(row, siteRate))
   const noPrevious = previousFailed
     ? t('The previous period could not be read.')
@@ -774,6 +780,7 @@ export function QualityTab(props: {
               key: day.day,
               title: fmt.day(day.day),
               values: [day.read, day.write, day.uncached],
+              partial: partialDay(day.day, [day.read, day.write, day.uncached]),
               extra: [
                 {
                   label: t('Cache read share'),

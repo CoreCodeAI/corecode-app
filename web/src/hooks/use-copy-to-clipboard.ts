@@ -56,14 +56,14 @@ export function useCopyToClipboard(options?: UseCopyToClipboardOptions) {
   }, [])
 
   const copyToClipboard = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (text: string | Promise<string>): Promise<boolean> => {
       const resolvedSuccessMessage = successMessage ?? t('Copied to clipboard')
       const resolvedErrorMessage =
         errorMessage ?? t('Failed to copy to clipboard')
       const success = await copyToClipboardUtil(text)
 
       if (success) {
-        setCopiedText(text)
+        setCopiedText(await text)
         if (notify) {
           toast.success(resolvedSuccessMessage)
         }

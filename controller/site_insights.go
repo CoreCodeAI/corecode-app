@@ -477,3 +477,15 @@ func GetUserSpendInsights(c *gin.Context) {
 	}
 	common.ApiSuccess(c, spend)
 }
+
+// GetDayProfile returns how a typical day's requests spread over its UTC
+// hours, which the dashboard uses to mark and project the days a range covers
+// only in part.
+func GetDayProfile(c *gin.Context) {
+	profile, err := model.GetDayProfile(time.Now().Unix())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, profile)
+}

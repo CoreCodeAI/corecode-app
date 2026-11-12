@@ -3217,6 +3217,8 @@
     "Invitation quota is insufficient!": "Invitation quota is insufficient!",
     "Invitation settings": "Invitation settings",
     "Invitation settings saved": "Invitation settings saved",
+    "Commission from invitees on their network": "Commission from invitees on their network",
+    "Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.": "Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.",
     "Invitations": "Invitations",
     "Invitations are not available for your account.": "Invitations are not available for your account.",
     "Invite Info": "Invite Info",
@@ -5441,6 +5443,7 @@
     "Session defaults": "Session defaults",
     "Session expired!": "Session expired!",
     "Session expired?": "Session expired?",
+    "Your session expired. Please sign in again.": "Your session expired. Please sign in again.",
     "Session rule": "Session rule",
     "Session rule matched": "Session rule matched",
     "Session rules": "Session rules",
@@ -5517,6 +5520,7 @@
     "Showing": "Showing",
     "Showing {{shown}} of {{total}} mappings": "Showing {{shown}} of {{total}} mappings",
     "Showing the last successfully checked release.": "Showing the last successfully checked release.",
+    "Showing the last results that loaded.": "Showing the last results that loaded.",
     "Shown": "Shown",
     "Shown {{count}} models in model square": "Shown {{count}} models in model square",
     "Sidebar": "Sidebar",
@@ -8874,6 +8878,9 @@
     "{{name}} was disabled automatically {{time}} and served nothing in this range: {{reason}}.": "{{name}} was disabled automatically {{time}} and served nothing in this range: {{reason}}.",
     "{{name}} was disabled automatically {{time}} and served nothing in this range.": "{{name}} was disabled automatically {{time}} and served nothing in this range.",
     "{{count}} more channels are disabled automatically.": "{{count}} more channels are disabled automatically.",
-    "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only."
+    "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.": "Gross margin on channels with a known cost: {{rate}}, overstated: the bill of {{names}} is read from some keys only.",
+    "In progress, through {{time}}": "In progress, through {{time}}",
+    "Partial, from {{time}}": "Partial, from {{time}}",
+    "Expected for the whole day": "Expected for the whole day"
   }
 }

@@ -39,6 +39,7 @@ import {
   type InsightsSources,
   type InsightsTab,
 } from '../lib'
+import { usePartialDays } from '../partial-days'
 import type { UpstreamChannel, UpstreamInsights } from '../types'
 import {
   attemptsOf,
@@ -515,6 +516,7 @@ function ChannelTable(props: {
 function DailyCharts(props: { data: UpstreamInsights | undefined }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const partialDay = usePartialDays('upstream')
   const name = channelNamer(props.data)
   const series = upstreamDailySeries(
     props.data?.channels ?? [],
@@ -545,6 +547,7 @@ function DailyCharts(props: { data: UpstreamInsights | undefined }) {
             key: day.day,
             title: fmt.day(day.day),
             values: day.attempts,
+            partial: partialDay(day.day, day.attempts),
             extra: labels.map((label, at) => ({
               label: t('{{name}} failed', { name: label }),
               value: fmt.num(day.errors[at]),
@@ -573,6 +576,7 @@ function DailyCharts(props: { data: UpstreamInsights | undefined }) {
             key: day.day,
             title: fmt.day(day.day),
             values: day.failureRates,
+            partial: partialDay(day.day),
           }))}
           series={labels.map((label, at) => ({
             label,
@@ -598,6 +602,7 @@ function DailyCharts(props: { data: UpstreamInsights | undefined }) {
             key: day.day,
             title: fmt.day(day.day),
             values: revenue.values(day),
+            partial: partialDay(day.day, revenue.values(day)),
             extra: revenue.extra(day),
           }))}
           series={revenue.series}

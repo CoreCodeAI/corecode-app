@@ -26,14 +26,10 @@ import { ArrowRight } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { TapTooltip, TapTooltipTrigger } from '@/components/tap-tooltip'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
   getCacheGrade,
   type CacheGrade,
@@ -133,8 +129,9 @@ export function SpendTrendPanel(props: {
         </div>
       }
     >
-      {/* Spacing sits inside each bar's trigger, so every pixel across the
-          chart opens a day, and the provider opens it without a delay. */}
+      {/* Each <li> is its day's trigger, spacing included, so every pixel
+          across the chart opens a day, on a tap as well as on hover, and the
+          provider opens it without a delay. */}
       <TooltipProvider delay={0}>
         <ol
           className='flex min-h-52 flex-1 items-end px-1'
@@ -173,17 +170,17 @@ export function SpendTrendPanel(props: {
                     })
             }
             return (
-              <li key={day.day} className='flex h-full min-w-0 flex-1 flex-col'>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <div
-                        tabIndex={0}
-                        aria-label={barLabel}
-                        className='group/bar focus-visible:ring-ring/50 flex flex-1 items-end rounded-md px-[3px] outline-none focus-visible:ring-3'
-                      />
-                    }
-                  >
+              <TapTooltip key={day.day}>
+                <TapTooltipTrigger
+                  render={
+                    <li
+                      tabIndex={0}
+                      aria-label={barLabel}
+                      className='group/bar focus-visible:ring-ring/50 flex h-full min-w-0 flex-1 flex-col rounded-md outline-none focus-visible:ring-3'
+                    />
+                  }
+                >
+                  <div className='flex flex-1 items-end px-[3px]'>
                     <span
                       className={cn(
                         'w-full rounded-t-[5px] rounded-b-[2px] transition-[height,background-color] duration-300 ease-out',
@@ -191,35 +188,36 @@ export function SpendTrendPanel(props: {
                       )}
                       style={{ height: `${height}%` }}
                     />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <div className='flex flex-col gap-0.5 text-xs'>
-                      <span className='font-medium'>{label}</span>
-                      <span className='tabular-nums'>{amount}</span>
+                  </div>
+                  {/* A phone's column is narrower than a date, so every
+                      other one is hidden, counting back from today, and the
+                      rest spill into their hidden neighbours, not "10...". */}
+                  <span
+                    className={cn(
+                      'text-muted-foreground mt-1.5 truncate text-center text-[10px] tabular-nums max-sm:overflow-visible',
+                      (lastIndex - index) % 2 === 1 && 'invisible sm:visible',
+                      isToday && 'text-foreground font-medium'
+                    )}
+                    aria-hidden
+                  >
+                    {isToday ? t('Today') : label}
+                  </span>
+                </TapTooltipTrigger>
+                <TooltipContent>
+                  <div className='flex flex-col gap-0.5 text-xs'>
+                    <span className='font-medium'>{label}</span>
+                    <span className='tabular-nums'>{amount}</span>
+                    <span className='opacity-70'>
+                      {t('{{value}} requests', { value: requests })}
+                    </span>
+                    {hitRate !== null && (
                       <span className='opacity-70'>
-                        {t('{{value}} requests', { value: requests })}
+                        {t('Cache {{rate}}', { rate: percent(hitRate) })}
                       </span>
-                      {hitRate !== null && (
-                        <span className='opacity-70'>
-                          {t('Cache {{rate}}', { rate: percent(hitRate) })}
-                        </span>
-                      )}
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-                <span
-                  className={cn(
-                    'text-muted-foreground mt-1.5 truncate text-center text-[10px] tabular-nums',
-                    index % 2 === 1 &&
-                      index !== lastIndex &&
-                      'invisible sm:visible',
-                    isToday && 'text-foreground font-medium'
-                  )}
-                  aria-hidden
-                >
-                  {isToday ? t('Today') : label}
-                </span>
-              </li>
+                    )}
+                  </div>
+                </TooltipContent>
+              </TapTooltip>
             )
           })}
         </ol>
