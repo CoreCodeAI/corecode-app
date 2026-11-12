@@ -60,6 +60,11 @@ the deployment relies on.
   which fails on any oxlint finding `web/lint-baseline.json` does not record. Fix new
   findings; leave upstream files' existing ones, since edits there conflict on every
   sync. After an upstream tag merge, run `bun run lint:check -- --update` and commit it.
+- **Console checks run through the package scripts, under bash.** Format with
+  `bun run format` (oxfmt). Prettier is not this repository's formatter and rewrites a
+  file's whole style. The local shell is zsh, where an unquoted variable holding several
+  files or a command prefix is one word, so a verification script that collects either
+  runs under `bash`.
 - **`web/src/styles/` carries the CoreCode theme.** Light and dark only; the theme drawer
   and presets were removed deliberately.
 
