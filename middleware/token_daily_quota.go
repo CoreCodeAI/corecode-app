@@ -21,7 +21,7 @@ import (
 func TokenDailyQuota() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		limit := c.GetInt("token_daily_quota")
-		if limit <= 0 || c.GetBool("token_unlimited_quota") {
+		if limit <= 0 {
 			c.Next()
 			return
 		}

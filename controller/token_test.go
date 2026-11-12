@@ -1101,11 +1101,13 @@ func TestTokenDailyQuotaOnCreateAndUpdate(t *testing.T) {
 		{name: "create with a daily cap", field: 500, want: 500},
 		{name: "create without the field has no cap"},
 		{name: "create with a negative cap has no cap", field: -5},
-		{name: "an unlimited token has no cap", unlimited: true, field: 500},
+		{name: "an unlimited token keeps its daily cap", unlimited: true, field: 500, want: 500},
+		{name: "an unlimited token with a negative cap has no cap", unlimited: true, field: -5},
 		{name: "update without the field keeps the cap", stored: common.GetPointer(500), want: 500},
 		{name: "update changes the cap", stored: common.GetPointer(500), field: 800, want: 800},
 		{name: "update with 0 removes the cap", stored: common.GetPointer(500), field: 0},
-		{name: "turning on unlimited removes the cap", stored: common.GetPointer(500), unlimited: true},
+		{name: "turning on unlimited keeps the cap", stored: common.GetPointer(500), unlimited: true, want: 500},
+		{name: "turning on unlimited with 0 removes the cap", stored: common.GetPointer(500), unlimited: true, field: 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := setupTokenControllerTestDB(t)

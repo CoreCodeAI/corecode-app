@@ -27,8 +27,10 @@ type Token struct {
 	ModelLimits        string  `json:"model_limits" gorm:"type:text"`
 	AllowIps           *string `json:"allow_ips" gorm:"default:''"`
 	UsedQuota          int     `json:"used_quota" gorm:"default:0"` // used quota
-	// DailyQuota caps what a limited token may use per Beijing day; 0 is no
-	// daily cap. It is ignored while UnlimitedQuota is on.
+	// DailyQuota caps what a token may use per Beijing day; 0 is no daily cap.
+	// It is independent of the total: an UnlimitedQuota token with a daily cap
+	// is limited only per day. Use is counted for every token, so turning a cap
+	// on starts from what the token already used today.
 	DailyQuota int `json:"daily_quota" gorm:"default:0"`
 	// DailyUsedQuota is what the token used in the day that ends at
 	// DailyUsedUntil (a Unix time at a Beijing midnight); an earlier

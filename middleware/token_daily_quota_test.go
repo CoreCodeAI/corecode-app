@@ -51,7 +51,9 @@ func TestTokenDailyQuota(t *testing.T) {
 
 	unlimited := *token
 	unlimited.UnlimitedQuota = true
-	assert.Equal(t, http.StatusOK, request(&unlimited).Code, "an unlimited token has no daily cap")
+	assert.Equal(t, http.StatusForbidden, request(&unlimited).Code, "an unlimited token with a daily cap is capped per day")
+	unlimited.DailyQuota = 0
+	assert.Equal(t, http.StatusOK, request(&unlimited).Code, "an unlimited token without a daily cap is not capped")
 
 	require.NoError(t, db.Model(token).Update("daily_used_until", time.Now().Add(-time.Hour).Unix()).Error)
 	assert.Equal(t, http.StatusOK, request(token).Code, "yesterday's use does not count")

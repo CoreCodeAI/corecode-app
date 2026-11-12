@@ -723,3 +723,18 @@ it('shows today’s use against the daily cap, and none from an earlier day', as
   detail = await screen.findByRole('dialog')
   expect(detail).toHaveTextContent('0 / 2')
 })
+
+it('shows the daily cap of a key with no total, and says only the cap applies', async () => {
+  renderQuota({
+    ...key,
+    unlimited_quota: true,
+    daily_quota: 1_000_000,
+    daily_used_quota: 250_000,
+    daily_used_until: now / 1000 + 3600,
+  })
+  await userEvent.click(screen.getByRole('button'))
+  const detail = await screen.findByRole('dialog')
+  expect(detail).toHaveTextContent('Used today / daily quota')
+  expect(detail).toHaveTextContent('0.5 / 2')
+  expect(detail).toHaveTextContent('only its daily quota applies')
+})

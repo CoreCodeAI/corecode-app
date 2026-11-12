@@ -80,7 +80,7 @@ export function ApiKeyQuotaCell(props: ApiKeyQuotaCellProps) {
     details.push({ label: t('Remaining'), value: formattedRemaining })
   }
   const dailyQuota = props.apiKey.daily_quota ?? 0
-  if (!props.apiKey.unlimited_quota && dailyQuota > 0) {
+  if (dailyQuota > 0) {
     const usedToday =
       (props.apiKey.daily_used_until ?? 0) * 1000 > now
         ? Math.max(props.apiKey.daily_used_quota ?? 0, 0)
@@ -101,6 +101,20 @@ export function ApiKeyQuotaCell(props: ApiKeyQuotaCellProps) {
     })
   }
 
+  let description = t(
+    'Total = used + remaining. It is not an initial allocation or a periodic budget; changing the remaining quota changes the total and percentage.'
+  )
+  if (props.apiKey.unlimited_quota) {
+    description =
+      dailyQuota > 0
+        ? t(
+            'This API key has no total quota limit; only its daily quota applies. Requests still require available wallet or subscription quota.'
+          )
+        : t(
+            'This API key has no quota limit. Requests still require available wallet or subscription quota.'
+          )
+  }
+
   return (
     <QuotaDetailsPopover
       title={`${t('Quota')} (${quotaUnit})`}
@@ -110,15 +124,7 @@ export function ApiKeyQuotaCell(props: ApiKeyQuotaCellProps) {
           : triggerLabel
       }
       details={details}
-      description={
-        props.apiKey.unlimited_quota
-          ? t(
-              'This API key has no quota limit. Requests still require available wallet or subscription quota.'
-            )
-          : t(
-              'Total = used + remaining. It is not an initial allocation or a periodic budget; changing the remaining quota changes the total and percentage.'
-            )
-      }
+      description={description}
       className={
         props.variant === 'card' ? 'space-y-2.5' : 'max-w-45 space-y-1.5'
       }
