@@ -54,6 +54,18 @@ func TestEngineRowsKeepOnlyThePoolsRequests(t *testing.T) {
 	assert.Equal(t, rows, engineRows(rows, nil), "with no engine channel known every row is kept")
 }
 
+// An image model is media, not Codex: its users take no share of the Codex
+// pool's cost, even of the part the engine did not name.
+func TestShareEngineCostLeavesMediaOut(t *testing.T) {
+	rows := []model.UserModelSpend{
+		{UserId: 1, ModelName: "gpt-6", Quota: 100},
+		{UserId: 2, ModelName: "gpt-image-2", Quota: 300},
+	}
+	shares, unattributed := shareEngineCost(rows, map[string]*providerCost{model.VendorCodex: {models: map[string]float64{}, total: 4}}, nil)
+	assert.Equal(t, map[int]float64{1: 4}, shares)
+	assert.Zero(t, unattributed)
+}
+
 func TestShareEngineCostWhenEveryModelIsNamed(t *testing.T) {
 	rows := []model.UserModelSpend{
 		{UserId: 1, ModelName: "claude-opus", Quota: 100},

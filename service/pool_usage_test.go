@@ -37,6 +37,9 @@ func TestChannelProviderNamesTheVendorItServes(t *testing.T) {
 	assert.Equal(t, model.VendorGemini, ChannelProvider("antigravity"))
 	assert.Equal(t, "openai", ChannelProvider("openai"), "a channel no vendor names keeps its own name")
 	assert.Equal(t, []string{"gpt-", "codex-"}, model.VendorPrefixes(model.VendorCodex))
+	assert.Equal(t, model.VendorMedia, model.ModelVendor("gpt-image-2"), "gpt- also matches it; the demand query keeps it out of Codex")
+	assert.NotContains(t, PoolProviders, model.VendorMedia, "no engine channel serves media")
+	assert.Equal(t, "zzshu", ChannelProvider("zzshu"))
 }
 
 func TestDemandOverMovesTheLevelThroughTheDay(t *testing.T) {

@@ -35,7 +35,7 @@ func TestFetchEnginePool(t *testing.T) {
 					   "activity":{"last_used_at_ms":9,"last_failure_summary":"rate limited","last_failure_at_ms":10,"success_count":40,"failure_count":1},
 					   "account":{"state":"fresh","observed_at_ms":11,"email":"bob@x.com","plan":"Max","tier":"default_claude_max_5x",
 					     "organization":"bob@x.com's Organization","organization_uuid":"0f6c1a2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b","subscription_status":"active","subscription_state":"estimated","subscription_period_end_ms":1795000000000}}]},
-					{"id":7,"name":"team-01","channel_id":"claude","enabled":true,"current":0,"override_limit":8,"effective_limit":8,"quota_supported":true,
+					{"id":7,"name":"team-01","channel_id":"claude","enabled":true,"current":0,"override_limit":8,"effective_limit":8,"credential_limit":3,"quota_supported":true,
 					 "quota_effective":{"enabled":true,"five_hour_percent":90,"seven_day_percent":95},"counts":{"total":3,"available":2,"cooldown":1},
 					 "credentials":[
 					   {"id":8,"name":"a@y.com","status":"available","five_hour":{"utilization":0.1},"seven_day":{"utilization":0.2},"active":0,"sessions":0,"activity":null,"account":null},
@@ -72,10 +72,11 @@ func TestFetchEnginePool(t *testing.T) {
 	assert.Equal(t, 2, pool.InFlight)
 	require.Len(t, pool.Accounts, 5, "every account of every group, not just the home page's")
 	assert.Equal(t, 3, pool.EligibleAccounts, "the cooling account and the disabled group's account are not eligible")
-	assert.Equal(t, 5+8, pool.EffectiveSlots, "team-01's two accounts give ten slots, capped at its limit of eight")
+	assert.Equal(t, 5+6, pool.EffectiveSlots, "us-01 reports no limit of its own and takes the default of five; team-01's two accounts take its own three each")
 	require.Len(t, pool.Groups, 3)
+	assert.Zero(t, pool.Groups[0].CredentialLimit)
 	assert.Equal(t, EngineGroup{ID: 7, Name: "team-01", Channel: "claude", Provider: "claude", Enabled: true, EffectiveLimit: 8, OverrideLimit: pool.Groups[1].OverrideLimit,
-		Accounts: 3, Eligible: 2, Slots: 8, Counts: map[string]int{"total": 3, "available": 2, "cooldown": 1},
+		CredentialLimit: 3, Accounts: 3, Eligible: 2, Slots: 6, Counts: map[string]int{"total": 3, "available": 2, "cooldown": 1},
 		QuotaBudget: true, FiveHourBudget: 90, SevenDayBudget: 95}, pool.Groups[1])
 	assert.Equal(t, 8, *pool.Groups[1].OverrideLimit)
 	assert.Zero(t, pool.Groups[2].Slots, "a disabled group serves nothing")

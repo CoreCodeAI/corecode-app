@@ -392,6 +392,53 @@ func TestLogTaskConsumptionWithoutSnapshotKeepsRatioMode(t *testing.T) {
 	}, other["content_parts"])
 }
 
+// The submit log records what paid for the task, as a request's consume log
+// does; the quota it logs and the accounting are unchanged.
+func TestLogTaskConsumptionRecordsWhatPaid(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		info relaycommon.RelayInfo
+		want map[string]any
+	}{
+		{"wallet", relaycommon.RelayInfo{BillingSource: BillingSourceWallet},
+			map[string]any{"billing_source": "wallet"}},
+		{"bought plan", relaycommon.RelayInfo{BillingSource: BillingSourceSubscription, SubscriptionId: 41, SubscriptionPlanId: 5},
+			map[string]any{"billing_source": "subscription", "subscription_id": float64(41), "subscription_plan_id": float64(5), "subscription_gift": false}},
+		{"given plan", relaycommon.RelayInfo{BillingSource: BillingSourceSubscription, SubscriptionId: 42, SubscriptionPlanId: 6, SubscriptionGift: true},
+			map[string]any{"billing_source": "subscription", "subscription_id": float64(42), "subscription_plan_id": float64(6), "subscription_gift": true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			truncate(t)
+			const userID, channelID = 43, 43
+			seedUser(t, userID, 10_000)
+			seedChannel(t, channelID)
+			info := tc.info
+			info.UserId = userID
+			info.OriginModelName = "test-model"
+			info.UsingGroup = "default"
+			info.ChannelMeta = &relaycommon.ChannelMeta{ChannelId: channelID}
+			info.TaskRelayInfo = &relaycommon.TaskRelayInfo{Action: "GENERATE"}
+			info.PriceData = types.PriceData{ModelPrice: 0.02, Quota: 100, GroupRatioInfo: types.GroupRatioInfo{GroupRatio: 1}}
+			info.StartTime = time.Now().Add(-7 * time.Second)
+			task := makeTask(userID, channelID, 100, 0, info.BillingSource, info.SubscriptionId)
+
+			log := callLogTaskConsumption(t, &info, task)
+
+			assert.InDelta(t, 7, log.UseTime, 1, "timed from the request's start, as its error logs are")
+			var other map[string]any
+			require.NoError(t, common.UnmarshalJsonStr(log.Other, &other))
+			for key, value := range tc.want {
+				assert.Equal(t, value, other[key], key)
+			}
+			assert.Equal(t, 100, log.Quota)
+			usedQuota, requestCount := getUserUsageAccounting(t, userID)
+			assert.Equal(t, 100, usedQuota)
+			assert.Equal(t, 1, requestCount)
+			assert.Equal(t, 10_000, getUserQuota(t, userID), "logging charges nothing")
+		})
+	}
+}
+
 // Task logs distinguish jobs the client polls from requests whose HTTP call
 // returned the deliverable itself, and flag results the gateway did not keep.
 func TestLogTaskConsumptionMarksInlineResultsAndDiscardedArtifacts(t *testing.T) {
@@ -916,6 +963,10 @@ func TestRefundTaskQuota_Wallet(t *testing.T) {
 	assert.Equal(t, "test-model", log.ModelName)
 	assert.Zero(t, task.Quota)
 	assert.Zero(t, getTaskQuota(t, task.ID))
+	var other map[string]any
+	require.NoError(t, common.UnmarshalJsonStr(log.Other, &other))
+	assert.Equal(t, "wallet", other["billing_source"], "the refund log says what it returns to")
+	assert.NotContains(t, other, "subscription_id")
 }
 
 func TestRefundTaskQuota_Subscription(t *testing.T) {
@@ -953,6 +1004,10 @@ func TestRefundTaskQuota_Subscription(t *testing.T) {
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeRefund, log.Type)
 	assert.Zero(t, getTaskQuota(t, task.ID))
+	var other map[string]any
+	require.NoError(t, common.UnmarshalJsonStr(log.Other, &other))
+	assert.Equal(t, "subscription", other["billing_source"])
+	assert.Equal(t, float64(subID), other["subscription_id"])
 }
 
 func TestRefundTaskQuota_ZeroQuota(t *testing.T) {

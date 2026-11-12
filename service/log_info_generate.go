@@ -241,6 +241,9 @@ func appendBillingInfo(relayInfo *relaycommon.RelayInfo, other *model.LogOther) 
 		}
 		if relayInfo.SubscriptionPlanId != 0 {
 			other.SetPublic("subscription_plan_id", relayInfo.SubscriptionPlanId)
+			// The site insights split given plans from bought ones by this
+			// flag, which outlives the subscription row.
+			other.SetPublic("subscription_gift", relayInfo.SubscriptionGift)
 		}
 		if relayInfo.SubscriptionPlanTitle != "" {
 			other.SetPublic("subscription_plan_title", relayInfo.SubscriptionPlanTitle)

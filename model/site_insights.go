@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/relaykit/types"
 )
 
 // The root dashboard reads bounded ranges and aggregates in Go, like the
@@ -135,6 +136,7 @@ func ratio(part, whole float64) float64 {
 
 // insightLog is the slice of a request log the dashboard reads.
 type insightLog struct {
+	Id               int
 	UserId           int
 	Username         string
 	CreatedAt        int64
@@ -149,6 +151,8 @@ type insightLog struct {
 	Ip               string
 	Other            string
 	ChannelId        int
+	RequestId        string
+	Group            string `gorm:"column:group"`
 }
 
 // insightQuota is one hourly quota_data row.
@@ -236,12 +240,25 @@ func logStatusCode(content string) int {
 
 // Error categories of the capacity and quality views.
 const (
+	// ErrorEngineConcurrency is the engine refusing a request because every
+	// credential of the pool was at its concurrency limit: the pool was full.
 	ErrorEngineConcurrency = "engine_concurrency"
+	// ErrorEngineLimit is the engine refusing a request at a cap set on it
+	// rather than on the credentials: a group's, the global or an access
+	// key's concurrency limit, or an access key's rate or cost limit.
+	ErrorEngineLimit = "engine_limit"
+	// ErrorEngineBudget is the engine refusing a request because the
+	// credentials' request rate or quota budget was spent, or no fresh quota
+	// observation was at hand.
+	ErrorEngineBudget      = "engine_budget"
 	ErrorUpstreamRateLimit = "upstream_rate_limit"
 	ErrorUpstreamOverload  = "upstream_overloaded"
-	ErrorUpstream          = "upstream_error"
-	ErrorClient            = "client_error"
-	ErrorOther             = "other"
+	// ErrorUpstreamAuth is an upstream refusing the channel's key or account
+	// (401, 402 or 403): the channel's fault, not the customer's.
+	ErrorUpstreamAuth = "upstream_auth"
+	ErrorUpstream     = "upstream_error"
+	ErrorClient       = "client_error"
+	ErrorOther        = "other"
 	// ErrorNoChannel is a request no channel could take, recorded on
 	// channel 0 before any attempt (NoChannelErrorContent).
 	ErrorNoChannel = "no_channel"
@@ -254,23 +271,57 @@ func NoChannelErrorContent(statusCode int, group string) string {
 	return "status_code=" + strconv.Itoa(statusCode) + ", " + ErrorNoChannel + ": no available channel in group " + group
 }
 
-// classifyErrorLog sorts an error log by where the request was turned away.
-// The engine's own admission rejection is told apart from Claude's rate
-// limit by its message, because both answer 429.
+// The engine's own 429 messages (corecode-engine internal/gateway), matched
+// exactly: an upstream's rate limit answers 429 too.
+var (
+	engineConcurrencyMessages = []string{"Credential concurrency limit exceeded."}
+	engineLimitMessages       = []string{"Concurrency limit exceeded.", "Access key rate limit exceeded.", "Access key cost limit exceeded."}
+	engineBudgetMessages      = []string{
+		"Credential request rate limit exceeded.",
+		"Credential quota budget exceeded.",
+		"A fresh credential quota observation is required.",
+	}
+)
+
+func containsAny(content string, messages []string) bool {
+	for _, message := range messages {
+		if strings.Contains(content, message) {
+			return true
+		}
+	}
+	return false
+}
+
+// classifyErrorLog sorts an error log by its content alone, as if the
+// upstream had returned it.
 func classifyErrorLog(content string) string {
+	return classifyError(content, logOtherFields{})
+}
+
+// classifyError sorts an error log by where the request was turned away. The
+// engine's own rejections are told apart from an upstream's rate limit by
+// their messages, and an upstream's 401 to 403 from a local one by the log's
+// error type.
+func classifyError(content string, other logOtherFields) string {
 	code := logStatusCode(content)
 	_, rest, _ := strings.Cut(content, ", ")
 	switch {
 	case strings.HasPrefix(rest, ErrorNoChannel+": "):
 		return ErrorNoChannel
-	case strings.Contains(content, "Credential concurrency limit exceeded"):
+	case containsAny(content, engineConcurrencyMessages):
 		return ErrorEngineConcurrency
+	case containsAny(content, engineLimitMessages):
+		return ErrorEngineLimit
+	case containsAny(content, engineBudgetMessages):
+		return ErrorEngineBudget
 	case code == 429:
 		return ErrorUpstreamRateLimit
 	case code == 529 || strings.Contains(strings.ToLower(content), "overloaded"):
 		return ErrorUpstreamOverload
 	case code >= 500:
 		return ErrorUpstream
+	case (code == 401 || code == 402 || code == 403) && other.ErrorType != string(types.ErrorTypeNewAPIError):
+		return ErrorUpstreamAuth
 	case code >= 400:
 		return ErrorClient
 	default:

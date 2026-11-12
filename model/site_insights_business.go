@@ -44,6 +44,9 @@ type BusinessInsights struct {
 	Groups            []NamedCount     `json:"groups"`
 	Clients           []NamedCount     `json:"clients"`
 	ClientsTruncated  bool             `json:"clients_truncated"`
+	// StaleHours counts the range's hours still stored under an older rollup
+	// version, until they are rebuilt; omitted when none.
+	StaleHours int `json:"stale_hours"`
 }
 
 func GetBusinessInsights(r InsightsRange) (*BusinessInsights, error) {
@@ -189,20 +192,21 @@ func GetBusinessInsights(r InsightsRange) (*BusinessInsights, error) {
 	}
 	result.Groups = sortedCounts(groupCounts)
 
-	clients, truncated, err := clientBreakdown(r)
+	clients, truncated, stale, err := clientBreakdown(r)
 	if err != nil {
 		return nil, err
 	}
-	result.Clients, result.ClientsTruncated = clients, truncated
+	result.Clients, result.ClientsTruncated, result.StaleHours = clients, truncated, stale
 	return result, nil
 }
 
 // clientBreakdown counts successful requests by the client product token
 // logs carry since it was added; older logs have none and count as unknown.
-func clientBreakdown(r InsightsRange) ([]NamedCount, bool, error) {
-	hours, err := loadInsightHours(r)
+// It also returns how many of the range's hours are stale.
+func clientBreakdown(r InsightsRange) ([]NamedCount, bool, int, error) {
+	hours, stale, err := loadInsightHoursStale(r)
 	if err != nil {
-		return nil, false, err
+		return nil, false, 0, err
 	}
 	counts := make(map[string]int64)
 	truncated := false
@@ -211,5 +215,5 @@ func clientBreakdown(r InsightsRange) ([]NamedCount, bool, error) {
 		truncated = truncated || hour.summary.Truncated
 	}
 	result := sortedCounts(counts)
-	return result[:min(len(result), 20)], truncated, nil
+	return result[:min(len(result), 20)], truncated, stale, nil
 }

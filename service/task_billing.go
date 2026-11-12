@@ -7,6 +7,7 @@ import (
 	"maps"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -77,16 +78,24 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo, task *model
 		setTaskImageCount(other, info.PriceData.OtherRatios()["image_count"])
 	}
 	appendTaskLogInfo(task, other)
+	appendBillingInfo(info, other)
 	attachQuotaSaturation(c, info, other)
+	// Timed from the request's start, as its failed attempts' error logs are,
+	// so the site insights fold them into one request.
+	var useTime int
+	if !info.StartTime.IsZero() {
+		useTime = int(max(time.Now().Unix()-info.StartTime.Unix(), 0))
+	}
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
-		ChannelId: info.ChannelId,
-		ModelName: info.OriginModelName,
-		TokenName: tokenName,
-		Quota:     info.PriceData.Quota,
-		Content:   logContent,
-		TokenId:   info.TokenId,
-		Group:     info.UsingGroup,
-		Other:     other,
+		ChannelId:      info.ChannelId,
+		ModelName:      info.OriginModelName,
+		TokenName:      tokenName,
+		Quota:          info.PriceData.Quota,
+		Content:        logContent,
+		TokenId:        info.TokenId,
+		UseTimeSeconds: useTime,
+		Group:          info.UsingGroup,
+		Other:          other,
 	})
 	model.UpdateUserUsedQuotaAndRequestCount(info.UserId, info.PriceData.Quota)
 	model.UpdateChannelUsedQuota(info.ChannelId, info.PriceData.Quota)
@@ -180,7 +189,25 @@ func taskBillingOther(task *model.Task) *model.LogOther {
 		other.SetPublic("upstream_model_name", props.UpstreamModelName)
 	}
 	appendTaskLogInfo(task, other)
+	appendTaskBillingSource(task, other)
 	return other
+}
+
+// appendTaskBillingSource records what paid for the task on its settlement
+// and refund logs, in the fields appendBillingInfo writes on the submit log.
+// It is log metadata only; taskAdjustFunding moves the money.
+func appendTaskBillingSource(task *model.Task, other *model.LogOther) {
+	if task.PrivateData.BillingSource != "" {
+		other.SetPublic("billing_source", task.PrivateData.BillingSource)
+	}
+	if !taskIsSubscription(task) {
+		return
+	}
+	other.SetPublic("subscription_id", task.PrivateData.SubscriptionId)
+	if plan, err := model.GetSubscriptionPlanInfoByUserSubscriptionId(task.PrivateData.SubscriptionId); err == nil && plan != nil && plan.PlanId != 0 {
+		other.SetPublic("subscription_plan_id", plan.PlanId)
+		other.SetPublic("subscription_gift", model.IsGiftSubscriptionSource(plan.Source))
+	}
 }
 
 // setTaskImageCount publishes the billed image quantity of an image task as

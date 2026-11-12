@@ -150,6 +150,10 @@ type RiskInsights struct {
 	UnpaidInviters      []InviterSpenders  `json:"unpaid_inviters"`
 	SignupGifts         []NamedCount       `json:"signup_gifts"`
 	GiftBlockInviters   []GiftBlockInviter `json:"gift_block_inviters"`
+	// StaleHours counts the range's hours the unpaid spenders were read from
+	// that are still stored under an older rollup version; omitted when none,
+	// and when the range has no sign-ups, since the rollup is not read then.
+	StaleHours int `json:"stale_hours"`
 }
 
 type riskUserRow struct {
@@ -435,10 +439,11 @@ func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, result *RiskInsi
 	for _, user := range signups {
 		byID[user.Id] = user
 	}
-	hours, err := loadInsightHours(r)
+	hours, stale, err := loadInsightHoursStale(r)
 	if err != nil {
 		return err
 	}
+	result.StaleHours = stale
 	type spend struct{ quota, gift int64 }
 	spent := make(map[int]*spend)
 	for _, hour := range hours {
@@ -484,7 +489,7 @@ func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, result *RiskInsi
 		unpaid = append(unpaid, UnpaidSpender{
 			UserRef:        UserRef{UserID: id, Username: user.Username},
 			ConsumptionUSD: quotaUSD(entry.quota),
-			GiftPlanUSD:    quotaUSD(entry.gift),
+			GiftPlanUSD:    quotaUSD(max(entry.gift, 0)),
 			SignupMethod:   signupMethod(user),
 			Inviter:        UserRef{UserID: user.InviterId},
 			CreatedAt:      user.CreatedAt,

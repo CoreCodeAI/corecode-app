@@ -190,6 +190,9 @@ type ChannelRow struct {
 type ChannelInsights struct {
 	Channels []ChannelRow  `json:"channels"`
 	Costs    []ChannelCost `json:"costs"`
+	// StaleHours counts the range's hours still stored under an older rollup
+	// version, until they are rebuilt; omitted when none.
+	StaleHours int `json:"stale_hours"`
 }
 
 // walletCredit is one credit to a wallet: paid quota with the money paid for
@@ -435,7 +438,7 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 	if err != nil {
 		return nil, err
 	}
-	hours, err := loadInsightHours(r)
+	hours, stale, err := loadInsightHoursStale(r)
 	if err != nil {
 		return nil, err
 	}
@@ -543,7 +546,7 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := &ChannelInsights{Costs: stored}
+	result := &ChannelInsights{Costs: stored, StaleHours: stale}
 	for id, row := range rows {
 		row.Channel.Username = names[id]
 		result.Channels = append(result.Channels, *row)
@@ -560,7 +563,7 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 		for _, quota := range []*float64{&row.ConsumptionUSD, &row.GiftConsumptionUSD, &row.InviteGiftUSD, &row.GrantedUSD,
 			&row.ClawedBackUSD, &row.GiftOutstandingUSD, &row.GiftDormantUSD, &row.CommissionUSD, &row.CommissionEarnedUSD,
 			&row.CommissionAccruingUSD} {
-			*quota = roundTo(*quota/common.QuotaPerUnit, 4)
+			*quota = roundTo(max(*quota, 0)/common.QuotaPerUnit, 4)
 		}
 		row.FeeUSD = roundTo(row.FeeUSD, 2)
 	}

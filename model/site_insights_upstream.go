@@ -109,20 +109,23 @@ func (c *insightChannel) addError(content string) {
 	}
 }
 
+// addConsumption counts a served attempt; its charge goes in through
+// insightHour.addQuota. A task log has no real duration and is left out of
+// the histograms.
 func (c *insightChannel) addConsumption(log insightLog, other logOtherFields, customer bool) {
 	c.row.Requests++
-	if customer {
-		c.row.Quota += int64(log.Quota)
-	} else {
+	if !customer {
 		c.rootRequests++
 	}
 	c.row.PromptTokens += int64(log.PromptTokens)
 	c.row.CacheRead += other.CacheTokens
 	c.row.CacheWrite += other.CacheCreationTokens
 	c.row.CompletionTokens += int64(log.CompletionTokens)
-	c.latency.add(int64(log.UseTime))
-	if log.IsStream && other.Frt > 0 {
-		c.ttft.add(int64(other.Frt))
+	if !other.IsTask {
+		c.latency.add(int64(log.UseTime))
+		if log.IsStream && other.Frt > 0 {
+			c.ttft.add(int64(other.Frt))
+		}
 	}
 	served := strconv.Itoa(log.ChannelId)
 	failedOn := map[string]bool{}
@@ -448,6 +451,9 @@ type UpstreamInsights struct {
 	Hourly    []UpstreamHour    `json:"hourly,omitempty"`
 	Rescues   []UpstreamRescue  `json:"rescues"`
 	Truncated bool              `json:"truncated"`
+	// StaleHours counts the range's hours still stored under an older rollup
+	// version, until they are rebuilt; omitted when none.
+	StaleHours int `json:"stale_hours"`
 }
 
 type upstreamCostRow struct {
@@ -471,7 +477,7 @@ func upstreamHost(baseURL string) string {
 // disabled automatically, or had traffic or tasks in the range; requests that
 // never reached a channel (channel 0) are left out.
 func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
-	hours, err := loadInsightHours(r)
+	hours, stale, err := loadInsightHoursStale(r)
 	if err != nil {
 		return nil, err
 	}
@@ -517,7 +523,7 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 		}
 		return entry
 	}
-	result := &UpstreamInsights{}
+	result := &UpstreamInsights{StaleHours: stale}
 	for _, hour := range hours {
 		result.Truncated = result.Truncated || hour.summary.Truncated
 		day := r.DayStart(hour.start)
@@ -674,7 +680,7 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 			Rescued:          total.row.Rescued,
 			FailureRate:      channelFailureRate(total.row.Requests, total.row.Errors, total.row.ClientErrors),
 			UnmatchedCostUSD: unmatchedCost[channel.Id],
-			RevenueUSD:       float64(total.quotaRevenue) / common.QuotaPerUnit,
+			RevenueUSD:       float64(max(total.quotaRevenue, 0)) / common.QuotaPerUnit,
 			MonthlyFeeUSD:    fees[channel.Id],
 			TTFTP50:          total.ttft.percentile(0.5),
 			TTFTP95:          total.ttft.percentile(0.95),
@@ -723,20 +729,24 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 		row.FailureRate = channelFailureRate(row.Requests, row.Errors, row.ClientErrors)
 		row.TTFTP50 = model.ttft.percentile(0.5)
 		row.LatencyP50 = model.latency.percentile(0.5)
-		row.RevenueUSD = float64(model.quotaRevenue) / common.QuotaPerUnit
+		row.RevenueUSD = float64(max(model.quotaRevenue, 0)) / common.QuotaPerUnit
 		row.CostUSD = costByModel[key]
 		result.Models = append(result.Models, row)
 	}
 	slices.SortFunc(result.Models, func(a, b UpstreamModel) int {
 		return cmp.Or(cmp.Compare(a.Model, b.Model), cmp.Compare(b.Requests, a.Requests), cmp.Compare(a.ChannelID, b.ChannelID))
 	})
+	// A stored hour's revenue may be negative where a task refund outweighed
+	// its charges (addQuota); a sum is stopped at zero only once it is shown.
 	for _, entry := range days {
+		entry.RevenueUSD = max(entry.RevenueUSD, 0)
 		result.Daily = append(result.Daily, *entry)
 	}
 	slices.SortFunc(result.Daily, func(a, b UpstreamDay) int {
 		return cmp.Or(cmp.Compare(a.Day, b.Day), cmp.Compare(a.ChannelID, b.ChannelID))
 	})
 	for _, entry := range hourly {
+		entry.RevenueUSD = max(entry.RevenueUSD, 0)
 		result.Hourly = append(result.Hourly, *entry)
 	}
 	slices.SortFunc(result.Hourly, func(a, b UpstreamHour) int {

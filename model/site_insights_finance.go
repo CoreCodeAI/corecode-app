@@ -23,11 +23,36 @@ const (
 	VendorCodex  = "codex"
 	VendorGrok   = "grok"
 	VendorGemini = "gemini"
-	VendorOther  = "other"
+	// VendorMedia is image and video generation, sold per call through
+	// media suppliers rather than any pool.
+	VendorMedia = "media"
+	VendorOther = "other"
 )
 
+// The first prefix a model matches names its vendor, so the media prefixes
+// come before gpt- and grok-. Each media prefix names models that exist:
+// common.ImageGenerationModels, the task plugins and the media groups.
 var vendorPrefixes = []struct{ prefix, vendor string }{
 	{ClaudeModelPrefix, VendorClaude},
+	{"gpt-image-", VendorMedia},
+	{"dall-e-", VendorMedia},
+	{"sora-", VendorMedia},
+	{"veo-", VendorMedia},
+	{"imagen-", VendorMedia},
+	{"grok-imagine-", VendorMedia},
+	{"seedance-", VendorMedia},
+	{"doubao-seedance-", VendorMedia},
+	{"seedream-", VendorMedia},
+	{"doubao-seedream-", VendorMedia},
+	{"wan-", VendorMedia},
+	{"wan2.", VendorMedia},
+	{"wan3.", VendorMedia},
+	{"wanx", VendorMedia},
+	{"qwen-image", VendorMedia},
+	{"kling-", VendorMedia},
+	{"vidu", VendorMedia},
+	{"MiniMax-Hailuo-", VendorMedia},
+	{"jimeng", VendorMedia},
 	{"gpt-", VendorCodex},
 	{"codex-", VendorCodex},
 	{"grok-", VendorGrok},
@@ -205,6 +230,9 @@ type FinanceInsights struct {
 	UpstreamUnattributedFeeUSD  float64              `json:"upstream_unattributed_fee_usd"`
 	// Groups is customers' use by the group each request was billed in.
 	Groups []GroupConsumption `json:"groups"`
+	// StaleHours counts the range's hours still stored under an older rollup
+	// version, until they are rebuilt; omitted when none.
+	StaleHours int `json:"stale_hours"`
 }
 
 // OrderMethodFunnel is the checkouts opened with one payment method in the
@@ -341,10 +369,11 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 	if err != nil {
 		return nil, err
 	}
-	hours, err := loadInsightHours(r)
+	hours, stale, err := loadInsightHoursStale(r)
 	if err != nil {
 		return nil, err
 	}
+	result.StaleHours = stale
 	var consumed, root int64
 	var gift, wallet float64
 	for _, hour := range hours {
@@ -419,6 +448,9 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A stored hour may be negative where a refund outweighed its charges
+	// (addQuota); a sum is stopped at zero only once it is shown.
+	consumed, root, gift, wallet = max(consumed, 0), max(root, 0), max(gift, 0), max(wallet, 0)
 	result.ConsumptionUSD = quotaUSD(consumed)
 	result.RootConsumptionUSD = quotaUSD(root)
 	result.GiftConsumptionUSD = roundTo(gift/common.QuotaPerUnit, 4)
@@ -452,10 +484,10 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 	}
 	result.VendorUpstream, result.UpstreamUnattributedBillUSD, result.UpstreamUnattributedFeeUSD = vendorUpstreamCosts(upstream)
 	for _, day := range days {
-		day.Topup, day.Subscription, day.ConsumptionUSD = roundTo(day.Topup, 2), roundTo(day.Subscription, 2), roundTo(day.ConsumptionUSD, 4)
-		day.RecognizedRevenue = roundTo(day.RecognizedRevenue, 2)
+		day.Topup, day.Subscription, day.ConsumptionUSD = roundTo(day.Topup, 2), roundTo(day.Subscription, 2), roundTo(max(day.ConsumptionUSD, 0), 4)
+		day.RecognizedRevenue = roundTo(max(day.RecognizedRevenue, 0), 2)
 		day.ClaudeUSD = roundTo(day.ClaudeUSD, 4)
-		day.RootConsumptionUSD = roundTo(day.RootConsumptionUSD, 4)
+		day.RootConsumptionUSD = roundTo(max(day.RootConsumptionUSD, 0), 4)
 		for vendor, usd := range day.VendorUSD {
 			day.VendorUSD[vendor] = roundTo(usd, 4)
 		}
@@ -465,7 +497,7 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 	for _, start := range hourStarts {
 		hour := hourly[start]
 		hour.Topup, hour.Subscription = roundTo(hour.Topup, 2), roundTo(hour.Subscription, 2)
-		hour.ConsumptionUSD, hour.RootConsumptionUSD = roundTo(hour.ConsumptionUSD, 4), roundTo(hour.RootConsumptionUSD, 4)
+		hour.ConsumptionUSD, hour.RootConsumptionUSD = roundTo(max(hour.ConsumptionUSD, 0), 4), roundTo(max(hour.RootConsumptionUSD, 0), 4)
 		result.Hourly = append(result.Hourly, *hour)
 	}
 
