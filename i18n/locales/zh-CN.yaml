@@ -29,6 +29,7 @@ violation.conversation_blocked_quoted: "该对话已被上游模型以违反使�
 violation.client_check_blocked: "近 24 小时内该账号已有 {{.Count}} 次客户端检查请求（如 Claude Code auto 模式在调用工具前发出的检查）被上游拒绝，此类请求暂不转发，不计违规。删除 CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS 和 CLAUDE_CODE_AUTO_MODE_SERVER=0 后开启新会话，auto 模式即改由服务端审查"
 rate_limit.user_concurrency_reached: "你的账号同时进行的请求过多：所有 API 密钥合计最多同时 {{.Max}} 个，请等已有请求完成后再试"
 rate_limit.user_concurrency_next_tier: "你的账号同时进行的请求过多：所有 API 密钥合计最多同时 {{.Max}} 个，请等已有请求完成后再试。累计充值再满 {{.Remaining}} 元，并发上限可提升到 {{.Next}}"
+rate_limit.token_concurrency_reached: "这个 API 密钥同时进行的请求过多：最多同时 {{.Max}} 个，请等已有请求完成后再试"
 distributor.invalid_request: "无效的请求，{{.Error}}"
 distributor.invalid_channel_id: "无效的渠道 Id"
 distributor.channel_disabled: "该渠道已被禁用"

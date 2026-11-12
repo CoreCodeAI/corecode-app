@@ -349,6 +349,12 @@ func UpdateOption(c *gin.Context) {
 			common.ApiError(c, err)
 			return
 		}
+	case "ModelRequestRateLimitUser":
+		err = setting.CheckModelRequestRateLimitUser(option.Value.(string))
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	case "AutomaticDisableStatusCodes":
 		_, err = operation_setting.ParseHTTPStatusCodeRanges(option.Value.(string))
 		if err != nil {
@@ -385,7 +391,7 @@ func UpdateOption(c *gin.Context) {
 			common.ApiError(c, err)
 			return
 		}
-	case "token_setting.user_concurrency_limits":
+	case "token_setting.user_concurrency_limits", "token_setting.user_token_concurrency_limits":
 		err = operation_setting.ValidateUserConcurrencyLimits(option.Value.(string))
 		if err != nil {
 			common.ApiError(c, err)

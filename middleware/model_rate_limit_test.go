@@ -197,3 +197,51 @@ func TestModelRateLimitCountsConfiguredGroupsSeparately(t *testing.T) {
 		})
 	}
 }
+
+// A user's own limit replaces the global and group ones and counts every
+// group's requests together.
+func TestModelRateLimitUserOverride(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	previousEnabled, previousMinutes := setting.ModelRequestRateLimitEnabled, setting.ModelRequestRateLimitDurationMinutes
+	previousTotal, previousSuccess := setting.ModelRequestRateLimitCount, setting.ModelRequestRateLimitSuccessCount
+	previousGroups, previousUsers, previousRedisEnabled := setting.ModelRequestRateLimitGroup, setting.ModelRequestRateLimitUser, common.RedisEnabled
+	t.Cleanup(func() {
+		setting.ModelRequestRateLimitEnabled, setting.ModelRequestRateLimitDurationMinutes = previousEnabled, previousMinutes
+		setting.ModelRequestRateLimitCount, setting.ModelRequestRateLimitSuccessCount = previousTotal, previousSuccess
+		setting.ModelRequestRateLimitGroup, setting.ModelRequestRateLimitUser, common.RedisEnabled = previousGroups, previousUsers, previousRedisEnabled
+	})
+	setting.ModelRequestRateLimitEnabled, setting.ModelRequestRateLimitDurationMinutes = true, 1
+	common.RedisEnabled = false
+	setting.ModelRequestRateLimitCount, setting.ModelRequestRateLimitSuccessCount = 1, 1000
+	setting.ModelRequestRateLimitGroup = map[string][2]int{"a": {1, 1000}}
+
+	overridden := 7200000 + int(modelRateLimitTestUsers.Add(1))
+	other := 7200000 + int(modelRateLimitTestUsers.Add(1))
+	require.NoError(t, setting.UpdateModelRequestRateLimitUserByJSONString(fmt.Sprintf(`{"%d":[3,1000]}`, overridden)))
+	router := gin.New()
+	router.GET("/:user/:group", func(c *gin.Context) {
+		userID, _ := strconv.Atoi(c.Param("user"))
+		c.Set("id", userID)
+		common.SetContextKey(c, constant.ContextKeyTokenGroup, c.Param("group"))
+	}, ModelRequestRateLimit(), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	get := func(user int, group string) int {
+		return performRateLimitRequest(router, fmt.Sprintf("/%d/%s", user, group), "127.0.0.1:1000").Code
+	}
+
+	assert.Equal(t, http.StatusOK, get(overridden, "a"))
+	assert.Equal(t, http.StatusOK, get(overridden, "a"), "past group a's limit of one")
+	assert.Equal(t, http.StatusOK, get(overridden, "c"))
+	assert.Equal(t, http.StatusTooManyRequests, get(overridden, "c"), "one count of three across groups")
+	assert.Equal(t, http.StatusOK, get(other, "c"))
+	assert.Equal(t, http.StatusTooManyRequests, get(other, "c"), "other users keep the global limit")
+}
+
+func TestCheckModelRequestRateLimitUser(t *testing.T) {
+	assert.NoError(t, setting.CheckModelRequestRateLimitUser(`{"3163":[1000,1000]}`))
+	assert.NoError(t, setting.CheckModelRequestRateLimitUser(`{}`))
+	for _, value := range []string{`{"abc":[1,1]}`, `{"0":[1,1]}`, `{"07":[1,1]}`, `{"7":[-1,1]}`, `{"7":[1,0]}`, `[1]`} {
+		assert.Error(t, setting.CheckModelRequestRateLimitUser(value), value)
+	}
+}

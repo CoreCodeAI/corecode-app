@@ -28,6 +28,7 @@ violation.conversation_blocked_quoted: "This conversation was refused by the ups
 violation.client_check_blocked: "The upstream model refused {{.Count}} client checks from this account in the last 24 hours, such as the check Claude Code auto mode sends before a tool call, so they are no longer forwarded for now. They do not count as violations. Remove CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS and CLAUDE_CODE_AUTO_MODE_SERVER=0, then start a new session, and the server reviews auto mode actions instead"
 rate_limit.user_concurrency_reached: "Too many requests in progress on your account: at most {{.Max}} at a time across all of your API keys. Wait for one to finish and try again"
 rate_limit.user_concurrency_next_tier: "Too many requests in progress on your account: at most {{.Max}} at a time across all of your API keys. Wait for one to finish and try again. Top up {{.Remaining}} more in total to raise the limit to {{.Next}}"
+rate_limit.token_concurrency_reached: "Too many requests in progress on this API key: at most {{.Max}} at a time. Wait for one to finish and try again"
 distributor.invalid_request: "Invalid request: {{.Error}}"
 distributor.invalid_channel_id: "Invalid channel ID"
 distributor.channel_disabled: "This channel has been disabled"

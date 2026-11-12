@@ -26,11 +26,14 @@ import (
 var userRequestsInFlight = struct {
 	sync.Mutex
 	counts map[int]int
+	// tokenCounts holds the same per API key, only for the keys of users
+	// whose keys are capped on their own (operation_setting.UserTokenConcurrencyLimit).
+	tokenCounts map[int]int
 	// rejected holds 429s not yet written to the database. Those requests
 	// never reach the request logs, so the root dashboard reads them from
 	// model.UserConcurrencyRejection.
 	rejected map[model.ConcurrencyRejectionKey]int64
-}{counts: map[int]int{}, rejected: map[model.ConcurrencyRejectionKey]int64{}}
+}{counts: map[int]int{}, tokenCounts: map[int]int{}, rejected: map[model.ConcurrencyRejectionKey]int64{}}
 
 const userConcurrencyRejectionFlushInterval = 30 * time.Second
 
@@ -107,7 +110,9 @@ func userConcurrencyMessage(c *gin.Context, limit int, source string, paidTotal 
 
 // UserConcurrencyLimit rejects a request with 429 while its user already has as
 // many requests in flight, over all of the user's tokens, as the user's limit
-// allows (operation_setting.EffectiveUserConcurrencyLimit). A streamed response holds its slot until the stream ends.
+// allows (operation_setting.EffectiveUserConcurrencyLimit), or while its token
+// has as many as each of the user's tokens may (operation_setting.UserTokenConcurrencyLimit).
+// A streamed response holds its slots until the stream ends.
 func UserConcurrencyLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.GetInt(string(constant.ContextKeyUserId))
@@ -124,31 +129,60 @@ func UserConcurrencyLimit() gin.HandlerFunc {
 		}
 		limit, source := operation_setting.EffectiveUserConcurrencyLimit(userID,
 			common.GetContextKeyString(c, constant.ContextKeyUserGroup), paidTotal)
-		if limit == 0 {
+		// A request without a token, such as the playground's, has no key to cap.
+		tokenID := c.GetInt(string(constant.ContextKeyTokenId))
+		tokenLimit := 0
+		if tokenID != 0 {
+			tokenLimit = operation_setting.UserTokenConcurrencyLimit(userID)
+		}
+		if limit == 0 && tokenLimit == 0 {
 			c.Next()
 			return
 		}
 
 		userRequestsInFlight.Lock()
-		if userRequestsInFlight.counts[userID] >= limit {
+		if tokenLimit > 0 && userRequestsInFlight.tokenCounts[tokenID] >= tokenLimit {
+			recordUserConcurrencyRejection(userID, time.Now())
+			userRequestsInFlight.Unlock()
+			c.Header("Retry-After", "1")
+			abortWithOpenAiMessage(c, http.StatusTooManyRequests,
+				i18n.T(c, i18n.MsgTokenConcurrencyLimitReached, map[string]any{"Max": tokenLimit}))
+			return
+		}
+		if limit > 0 && userRequestsInFlight.counts[userID] >= limit {
 			recordUserConcurrencyRejection(userID, time.Now())
 			userRequestsInFlight.Unlock()
 			c.Header("Retry-After", "1")
 			abortWithOpenAiMessage(c, http.StatusTooManyRequests, userConcurrencyMessage(c, limit, source, paidTotal))
 			return
 		}
-		userRequestsInFlight.counts[userID]++
+		if limit > 0 {
+			userRequestsInFlight.counts[userID]++
+		}
+		if tokenLimit > 0 {
+			userRequestsInFlight.tokenCounts[tokenID]++
+		}
 		userRequestsInFlight.Unlock()
-		// Billing scales its trust threshold by this, so a balance cannot be
-		// overdrawn by as many unreserved requests as the limit admits.
-		common.SetContextKey(c, constant.ContextKeyUserConcurrencyLimit, limit)
+		if limit > 0 {
+			// Billing scales its trust threshold by this, so a balance cannot be
+			// overdrawn by as many unreserved requests as the limit admits.
+			common.SetContextKey(c, constant.ContextKeyUserConcurrencyLimit, limit)
+		}
 
 		defer func() {
 			userRequestsInFlight.Lock()
 			defer userRequestsInFlight.Unlock()
-			userRequestsInFlight.counts[userID]--
-			if userRequestsInFlight.counts[userID] <= 0 {
-				delete(userRequestsInFlight.counts, userID)
+			if limit > 0 {
+				userRequestsInFlight.counts[userID]--
+				if userRequestsInFlight.counts[userID] <= 0 {
+					delete(userRequestsInFlight.counts, userID)
+				}
+			}
+			if tokenLimit > 0 {
+				userRequestsInFlight.tokenCounts[tokenID]--
+				if userRequestsInFlight.tokenCounts[tokenID] <= 0 {
+					delete(userRequestsInFlight.tokenCounts, tokenID)
+				}
 			}
 		}()
 		c.Next()
