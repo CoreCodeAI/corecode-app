@@ -8891,6 +8891,11 @@
     "Service failure rate {{rate}}; too few requests before to compare.": "서비스 실패율 {{rate}}. 이전 기간 요청이 적어 비교할 수 없습니다.",
     "Service failure rate {{rate}}, no clear change from before.": "서비스 실패율 {{rate}}, 이전 대비 뚜렷한 변화 없음.",
     "Service failure rate {{rate}} ({{sign}}{{points}} points).": "서비스 실패율 {{rate}} ({{sign}}{{points}}%p).",
-    "Card": "카드"
+    "Card": "카드",
+    "Daily quota ({{currency}})": "일일 한도 ({{currency}})",
+    "0 means no daily limit. Daily use resets at 00:00 Beijing time (UTC+8).": "0은 일일 한도 없음입니다. 일일 사용량은 베이징 시간 0시(UTC+8)에 초기화됩니다.",
+    "Daily quota": "일일 한도",
+    "Used today / daily quota": "오늘 사용량 / 일일 한도",
+    "Daily quota exceeds valid range, maximum is {{max}}": "일일 한도가 유효 범위를 초과했습니다. 최댓값은 {{max}}입니다"
   }
 }

@@ -255,3 +255,59 @@ func TestValidateConcurrencyLimits(t *testing.T) {
 		assert.Error(t, operation_setting.ValidateConcurrencyLimits(value), value)
 	}
 }
+
+// An account that many people share caps each of its keys, so one key cannot
+// take every slot of the account.
+func TestUserTokenConcurrencyLimit(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	withoutConcurrencyTiers(t)
+	setting := operation_setting.GetTokenSetting()
+	previousGroups, previousUsers, previousTokens := setting.ConcurrencyLimits, setting.UserConcurrencyLimits, setting.UserTokenConcurrencyLimits
+	// User 51 may run three at once, two on any one key; user 52 has no
+	// account limit but its keys are capped at one.
+	setting.ConcurrencyLimits = map[string]int{"default": 1}
+	setting.UserConcurrencyLimits = map[string]int{"51": 3}
+	setting.UserTokenConcurrencyLimits = map[string]int{"51": 2, "52": 1}
+	t.Cleanup(func() {
+		setting.ConcurrencyLimits, setting.UserConcurrencyLimits, setting.UserTokenConcurrencyLimits = previousGroups, previousUsers, previousTokens
+	})
+
+	release := make(chan struct{})
+	started := make(chan struct{}, 16)
+	router := userConcurrencyRouter(release, started)
+	get := func(path string) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		return recorder
+	}
+	var inFlight sync.WaitGroup
+	for _, path := range []string{"/51/510/default", "/51/510/default", "/52/520/vip", "/52/521/vip", "/52/0/vip", "/52/0/vip"} {
+		inFlight.Go(func() { assert.Equal(t, http.StatusOK, get(path).Code, path) })
+		<-started
+	}
+
+	full := get("/51/510/default")
+	assert.Equal(t, http.StatusTooManyRequests, full.Code, "the key's own cap")
+	assert.Equal(t, "1", full.Header().Get("Retry-After"))
+	assert.Contains(t, full.Body.String(), "on this API key: at most 2 at a time")
+	assert.Equal(t, http.StatusTooManyRequests, get("/52/520/vip").Code, "a key is capped without an account limit")
+
+	inFlight.Go(func() { assert.Equal(t, http.StatusOK, get("/51/511/default").Code) })
+	<-started
+	overAccount := get("/51/512/default")
+	assert.Equal(t, http.StatusTooManyRequests, overAccount.Code, "the account limit still holds across keys")
+	assert.Contains(t, overAccount.Body.String(), "across all of your API keys")
+
+	userRequestsInFlight.Lock()
+	assert.Equal(t, map[int]int{510: 2, 511: 1, 520: 1, 521: 1}, userRequestsInFlight.tokenCounts, "requests without a key are not counted per key")
+	assert.Equal(t, 3, userRequestsInFlight.counts[51])
+	_, counted := userRequestsInFlight.counts[52]
+	assert.False(t, counted, "an account without a limit is not counted")
+	userRequestsInFlight.Unlock()
+
+	close(release)
+	inFlight.Wait()
+	userRequestsInFlight.Lock()
+	assert.Empty(t, userRequestsInFlight.tokenCounts)
+	userRequestsInFlight.Unlock()
+}

@@ -6,12 +6,13 @@ package i18n
 
 // Errors returned to AI clients
 const (
-	MsgDatabaseError          = "common.database_error"
-	MsgAuthUserBanned         = "auth.user_banned"
-	MsgTokenGetInfoFailed     = "token.get_info_failed"
-	MsgTokenInvalid           = "token.invalid"
-	MsgTokenNotProvided       = "token.not_provided"
-	MsgTokenStatusUnavailable = "token.status_unavailable"
+	MsgDatabaseError            = "common.database_error"
+	MsgAuthUserBanned           = "auth.user_banned"
+	MsgTokenGetInfoFailed       = "token.get_info_failed"
+	MsgTokenInvalid             = "token.invalid"
+	MsgTokenNotProvided         = "token.not_provided"
+	MsgTokenStatusUnavailable   = "token.status_unavailable"
+	MsgTokenDailyQuotaExhausted = "token.daily_quota_exhausted"
 
 	MsgAuthClientIPUnresolved     = "auth.client_ip_unresolved"
 	MsgAuthTokenIPNotAllowed      = "auth.token_ip_not_allowed"
@@ -30,6 +31,7 @@ const (
 
 	MsgUserConcurrencyLimitReached  = "rate_limit.user_concurrency_reached"
 	MsgUserConcurrencyLimitNextTier = "rate_limit.user_concurrency_next_tier"
+	MsgTokenConcurrencyLimitReached = "rate_limit.token_concurrency_reached"
 
 	MsgViolationSuspended                 = "violation.suspended"
 	MsgViolationConversationBlocked       = "violation.conversation_blocked"

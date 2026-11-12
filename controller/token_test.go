@@ -1089,3 +1089,54 @@ func TestAdminUserTokenCreateReturnsUsableKeyAndListOmitsSecrets(t *testing.T) {
 	require.NoError(t, db.Model(&model.Token{}).Where("user_id = ?", peerAdmin.Id).Count(&peerTokens).Error)
 	assert.Zero(t, peerTokens)
 }
+
+func TestTokenDailyQuotaOnCreateAndUpdate(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		stored    *int // nil creates the token through the API
+		unlimited bool
+		field     any // nil omits daily_quota from the request
+		want      int
+	}{
+		{name: "create with a daily cap", field: 500, want: 500},
+		{name: "create without the field has no cap"},
+		{name: "create with a negative cap has no cap", field: -5},
+		{name: "an unlimited token has no cap", unlimited: true, field: 500},
+		{name: "update without the field keeps the cap", stored: common.GetPointer(500), want: 500},
+		{name: "update changes the cap", stored: common.GetPointer(500), field: 800, want: 800},
+		{name: "update with 0 removes the cap", stored: common.GetPointer(500), field: 0},
+		{name: "turning on unlimited removes the cap", stored: common.GetPointer(500), unlimited: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupTokenControllerTestDB(t)
+			body := map[string]any{"name": "daily", "expired_time": -1, "unlimited_quota": tc.unlimited, "remain_quota": 1000, "status": common.TokenStatusEnabled}
+			if tc.field != nil {
+				body["daily_quota"] = tc.field
+			}
+			var recorder *httptest.ResponseRecorder
+			if tc.stored == nil {
+				var ctx *gin.Context
+				ctx, recorder = newAuthenticatedContext(t, http.MethodPost, "/api/token/", body, 1)
+				AddToken(ctx)
+			} else {
+				token := seedToken(t, db, 1, "daily", "daily-key")
+				require.NoError(t, db.Model(token).Updates(map[string]any{"unlimited_quota": false, "daily_quota": *tc.stored}).Error)
+				body["id"] = token.Id
+				var ctx *gin.Context
+				ctx, recorder = newAuthenticatedContext(t, http.MethodPut, "/api/token/", body, 1)
+				UpdateToken(ctx)
+			}
+			response := decodeAPIResponse(t, recorder)
+			require.True(t, response.Success, response.Message)
+			var saved model.Token
+			require.NoError(t, db.Where("name = ?", "daily").First(&saved).Error)
+			assert.Equal(t, tc.want, saved.DailyQuota)
+		})
+	}
+
+	setupTokenControllerTestDB(t)
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/",
+		map[string]any{"name": "daily", "expired_time": -1, "remain_quota": 1000, "daily_quota": maxTokenQuota() + 1}, 1)
+	AddToken(ctx)
+	assert.False(t, decodeAPIResponse(t, recorder).Success, "a cap above the largest quota is rejected")
+}

@@ -209,3 +209,37 @@ describe('API key user quota query form mapping', () => {
     }
   )
 })
+
+describe('API key daily quota form mapping', () => {
+  const values = getApiKeyFormDefaultValues(false)
+
+  test('sends a limited key its daily cap in quota units', () => {
+    const payload = transformFormDataToPayload({
+      ...values,
+      unlimited_quota: false,
+      remain_quota_dollars: 100,
+      daily_quota_dollars: 2,
+    })
+    expect(payload.daily_quota).toBe(1_000_000)
+  })
+
+  test.each([
+    ['zero', { unlimited_quota: false, daily_quota_dollars: 0 }],
+    ['negative', { unlimited_quota: false, daily_quota_dollars: -3 }],
+    ['empty', { unlimited_quota: false, daily_quota_dollars: undefined }],
+    ['unlimited', { unlimited_quota: true, daily_quota_dollars: 2 }],
+  ])('sends no daily cap for a %s value', (_label, change) => {
+    expect(
+      transformFormDataToPayload({ ...values, ...change }).daily_quota
+    ).toBe(0)
+  })
+
+  test('shows a stored cap, and none for keys without one', () => {
+    const limited = { ...baseApiKey, unlimited_quota: false }
+    expect(
+      transformApiKeyToFormDefaults({ ...limited, daily_quota: 1_000_000 })
+        .daily_quota_dollars
+    ).toBe(2)
+    expect(transformApiKeyToFormDefaults(limited).daily_quota_dollars).toBe(0)
+  })
+})

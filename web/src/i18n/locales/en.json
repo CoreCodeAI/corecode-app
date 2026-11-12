@@ -8891,6 +8891,11 @@
     "Service failure rate {{rate}}; too few requests before to compare.": "Service failure rate {{rate}}; too few requests before to compare.",
     "Service failure rate {{rate}}, no clear change from before.": "Service failure rate {{rate}}, no clear change from before.",
     "Service failure rate {{rate}} ({{sign}}{{points}} points).": "Service failure rate {{rate}} ({{sign}}{{points}} points).",
-    "Card": "Card"
+    "Card": "Card",
+    "Daily quota ({{currency}})": "Daily quota ({{currency}})",
+    "0 means no daily limit. Daily use resets at 00:00 Beijing time (UTC+8).": "0 means no daily limit. Daily use resets at 00:00 Beijing time (UTC+8).",
+    "Daily quota": "Daily quota",
+    "Used today / daily quota": "Used today / daily quota",
+    "Daily quota exceeds valid range, maximum is {{max}}": "Daily quota exceeds valid range, maximum is {{max}}"
   }
 }

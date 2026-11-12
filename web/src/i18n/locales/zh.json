@@ -8891,6 +8891,11 @@
     "Service failure rate {{rate}}; too few requests before to compare.": "服务失败率 {{rate}}；上一周期请求太少，无法比较。",
     "Service failure rate {{rate}}, no clear change from before.": "服务失败率 {{rate}}，与上一周期相比无明显变化。",
     "Service failure rate {{rate}} ({{sign}}{{points}} points).": "服务失败率 {{rate}}（{{sign}}{{points}} 个百分点）。",
-    "Card": "银行卡"
+    "Card": "银行卡",
+    "Daily quota ({{currency}})": "每日额度（{{currency}}）",
+    "0 means no daily limit. Daily use resets at 00:00 Beijing time (UTC+8).": "填 0 表示不限每日额度。每日用量在北京时间 0 点重置。",
+    "Daily quota": "每日额度",
+    "Used today / daily quota": "今日已用 / 每日额度",
+    "Daily quota exceeds valid range, maximum is {{max}}": "每日额度超出有效范围，最大为 {{max}}"
   }
 }

@@ -20,6 +20,10 @@ type TokenSetting struct {
 	// UserConcurrencyLimits overrides the group limit for single users, keyed
 	// by user id. 0 lifts the limit for that user.
 	UserConcurrencyLimits map[string]int `json:"user_concurrency_limits"`
+	// UserTokenConcurrencyLimits caps each API key of a user on its own, keyed
+	// by user id, so one key of an account that many people share cannot take
+	// every slot of the account's limit. Absent or 0 leaves the keys uncapped.
+	UserTokenConcurrencyLimits map[string]int `json:"user_token_concurrency_limits"`
 	// ConcurrencyTiers raise the group limit by what a user has paid in
 	// total through payment gateways, in the payment currency. The highest
 	// tier reached applies when it is above the group limit.
@@ -35,10 +39,11 @@ type ConcurrencyTier struct {
 
 // 默认配置
 var tokenSetting = TokenSetting{
-	MaxUserTokens:         1000, // 默认每用户最多 1000 个令牌
-	ConcurrencyLimits:     map[string]int{},
-	UserConcurrencyLimits: map[string]int{},
-	ConcurrencyTiers:      []ConcurrencyTier{{MinPaid: 1000, Limit: 10}, {MinPaid: 10000, Limit: 20}},
+	MaxUserTokens:              1000, // 默认每用户最多 1000 个令牌
+	ConcurrencyLimits:          map[string]int{},
+	UserConcurrencyLimits:      map[string]int{},
+	UserTokenConcurrencyLimits: map[string]int{},
+	ConcurrencyTiers:           []ConcurrencyTier{{MinPaid: 1000, Limit: 10}, {MinPaid: 10000, Limit: 20}},
 }
 
 func init() {
@@ -100,6 +105,12 @@ func UserConcurrencyOverride(userID int) (int, bool) {
 	return max(limit, 0), ok
 }
 
+// UserTokenConcurrencyLimit returns how many requests each API key of a user
+// may have in flight; 0 means the keys are not capped on their own.
+func UserTokenConcurrencyLimit(userID int) int {
+	return max(GetTokenSetting().UserTokenConcurrencyLimits[strconv.Itoa(userID)], 0)
+}
+
 // EffectiveUserConcurrencyLimit resolves a user's limit: a per-user override
 // first, then the higher of the group's limit and the tier the user's paid
 // total reaches. 0 means unlimited; a group without a limit stays unlimited.
@@ -141,8 +152,9 @@ func ValidateConcurrencyLimits(value string) error {
 }
 
 // ValidateUserConcurrencyLimits checks the JSON value of
-// token_setting.user_concurrency_limits: an object of positive user ids to
-// non-negative whole numbers.
+// token_setting.user_concurrency_limits and
+// token_setting.user_token_concurrency_limits: an object of positive user ids
+// to non-negative whole numbers.
 func ValidateUserConcurrencyLimits(value string) error {
 	var limits map[string]int
 	if err := common.UnmarshalJsonStr(value, &limits); err != nil {

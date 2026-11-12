@@ -190,10 +190,14 @@ func ModelRequestRateLimit() func(c *gin.Context) {
 		}
 
 		// 获取分组的限流配置。配置了独立限流的分组按用户和分组单独计数，
-		// 其余分组共用该用户的全局计数
-		subject := strconv.Itoa(c.GetInt("id"))
-		groupTotalCount, groupSuccessCount, found := setting.GetGroupRateLimit(group)
-		if found {
+		// 其余分组共用该用户的全局计数。单独给用户设的限流优先于分组，
+		// 该用户所有分组共用一个计数。
+		userID := c.GetInt("id")
+		subject := strconv.Itoa(userID)
+		if userTotalCount, userSuccessCount, found := setting.GetUserRateLimit(userID); found {
+			totalMaxCount = userTotalCount
+			successMaxCount = userSuccessCount
+		} else if groupTotalCount, groupSuccessCount, found := setting.GetGroupRateLimit(group); found {
 			totalMaxCount = groupTotalCount
 			successMaxCount = groupSuccessCount
 			subject += ":" + group

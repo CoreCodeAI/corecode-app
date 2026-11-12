@@ -37,11 +37,30 @@ type tokenRequest struct {
 	AutoGroups tokenAutoGroupsInput `json:"auto_groups"`
 	// 指针区分“未传”和显式 false：新建时未传即开启，更新时未传则保留原值。
 	AllowUserQuotaQuery *bool `json:"allow_user_quota_query"`
+	// DailyQuota is a pointer for the same reason: a console released before
+	// the field does not send it, and an update from it keeps the stored cap.
+	// 0 or a negative value is no daily cap.
+	DailyQuota *int `json:"daily_quota"`
 }
 
 type tokenResponse struct {
 	*model.Token
 	AutoGroups []string `json:"auto_groups"`
+}
+
+// validTokenDailyQuota normalizes a token's daily cap: an unlimited token and
+// a value of 0 or below have none. It writes the error response and returns
+// false for a cap above the largest token quota.
+func validTokenDailyQuota(c *gin.Context, token *model.Token) bool {
+	if token.UnlimitedQuota || token.DailyQuota < 0 {
+		token.DailyQuota = 0
+	}
+	maxQuotaValue := maxTokenQuota()
+	if token.DailyQuota > maxQuotaValue {
+		common.ApiErrorT(c, "Daily quota exceeds valid range, maximum is {{max}}", map[string]any{"max": logger.FormatQuota(maxQuotaValue)})
+		return false
+	}
+	return true
 }
 
 func maxTokenQuota() int {
@@ -309,6 +328,9 @@ func AddToken(c *gin.Context) {
 	params := tokenAuditParams(c)
 	params["name"] = request.Name
 	request.Token.AllowUserQuotaQuery = request.AllowUserQuotaQuery == nil || *request.AllowUserQuotaQuery
+	if request.DailyQuota != nil {
+		request.Token.DailyQuota = *request.DailyQuota
+	}
 	token := createUserToken(c, c.GetInt("id"), request.Token, request.AutoGroups.Groups)
 	if token == nil {
 		return
@@ -343,6 +365,9 @@ func createUserToken(c *gin.Context, userId int, token model.Token, autoGroups [
 			common.ApiErrorT(c, "Quota value exceeds valid range, maximum is {{max}}", map[string]any{"max": logger.FormatQuota(maxQuotaValue)})
 			return nil
 		}
+	}
+	if !validTokenDailyQuota(c, &token) {
+		return nil
 	}
 	// 检查用户令牌数量是否已达上限
 	maxTokens := operation_setting.GetMaxUserTokens()
@@ -379,6 +404,7 @@ func createUserToken(c *gin.Context, userId int, token model.Token, autoGroups [
 		ExpiredTime:         token.ExpiredTime,
 		RemainQuota:         token.RemainQuota,
 		UnlimitedQuota:      token.UnlimitedQuota,
+		DailyQuota:          token.DailyQuota,
 		ModelLimitsEnabled:  token.ModelLimitsEnabled,
 		ModelLimits:         token.ModelLimits,
 		AllowIps:            token.AllowIps,
@@ -464,6 +490,12 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.ExpiredTime = token.ExpiredTime
 		cleanToken.RemainQuota = token.RemainQuota
 		cleanToken.UnlimitedQuota = token.UnlimitedQuota
+		if request.DailyQuota != nil {
+			cleanToken.DailyQuota = *request.DailyQuota
+		}
+		if !validTokenDailyQuota(c, cleanToken) {
+			return
+		}
 		cleanToken.ModelLimitsEnabled = token.ModelLimitsEnabled
 		cleanToken.ModelLimits = token.ModelLimits
 		cleanToken.AllowIps = token.AllowIps
@@ -499,6 +531,7 @@ func UpdateToken(c *gin.Context) {
 			{"expired_time", previous.ExpiredTime != cleanToken.ExpiredTime},
 			{"remain_quota", previous.RemainQuota != cleanToken.RemainQuota},
 			{"unlimited_quota", previous.UnlimitedQuota != cleanToken.UnlimitedQuota},
+			{"daily_quota", previous.DailyQuota != cleanToken.DailyQuota},
 			{"model_limits_enabled", previous.ModelLimitsEnabled != cleanToken.ModelLimitsEnabled},
 			{"model_limits", previous.ModelLimits != cleanToken.ModelLimits},
 			{"allow_ips", (previous.AllowIps == nil) != (cleanToken.AllowIps == nil) ||
