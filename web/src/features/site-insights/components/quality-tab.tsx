@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
+import { isOpenHour } from '../analysis'
 import {
   countsRequestsOnce,
   failureTone,
@@ -368,7 +369,13 @@ export function QualityTab(props: {
   )
   const findings = useQualityFindings(data, previous, siteRate, range?.end)
   const requestTrend = hourly
-    ? hourly.map((row) => ({ title: fmt.time(row.hour), value: row.requests }))
+    ? hourly.map((row) => ({
+        title:
+          range?.end != null && isOpenHour(row.hour, range.end)
+            ? t('{{time}} (in progress)', { time: fmt.time(row.hour) })
+            : fmt.time(row.hour),
+        value: row.requests,
+      }))
     : daily.map((day) => ({
         title: fmt.day(day.day),
         value: day.requests,

@@ -438,6 +438,25 @@ export function serviceFailureRate(
   return Math.max(0, data.errors - client) / requests
 }
 
+/**
+ * The service's own requests and failures, customers' bad requests left out
+ * of both, in the shape failureShift compares. Null without the categories.
+ */
+export function serviceRow(
+  data: Pick<QualityInsights, 'requests' | 'errors' | 'error_categories'>
+): { requests: number; errors: number; error_rate: number } | null {
+  const rate = serviceFailureRate(data)
+  if (rate == null) return null
+  const client = (data.error_categories ?? [])
+    .filter((item) => categoryOwner(item.name) === 'client')
+    .reduce((sum, item) => sum + item.count, 0)
+  return {
+    requests: data.requests - client,
+    errors: Math.max(0, data.errors - client),
+    error_rate: rate,
+  }
+}
+
 // Stream ends that finished as the protocol expects.
 const NORMAL_ENDS = new Set(['eof', 'done', 'handler_stop'])
 // Stream ends where the client went away or stopped; not the service's doing.

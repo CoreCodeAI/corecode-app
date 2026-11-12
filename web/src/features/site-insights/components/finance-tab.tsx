@@ -18,8 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import { getPaymentMethodName } from '@/features/wallet/lib/billing'
-
 import {
   bestWholeDay,
   financeHours,
@@ -36,6 +34,7 @@ import {
   type InsightsRangeInfo,
   type InsightsSources,
   type InsightsTab,
+  paymentMethodLabel,
 } from '../lib'
 import { usePartialDays } from '../partial-days'
 import type { BusinessInsights, FinanceInsights } from '../types'
@@ -304,9 +303,8 @@ export function FinanceTab(props: {
           {!failed && (
             <ShareDonut
               loading={!data}
-              slices={paymentSlices(
-                data?.methods,
-                (method) => getPaymentMethodName(method, t) || method
+              slices={paymentSlices(data?.methods, (method) =>
+                paymentMethodLabel(method, t)
               )}
               format={fmt.cny}
               ariaLabel={t('Revenue by payment method')}
@@ -324,9 +322,7 @@ export function FinanceTab(props: {
               {
                 key: 'method',
                 label: t('Payment Method'),
-                render: (row) =>
-                  getPaymentMethodName(row.payment_method, t) ||
-                  row.payment_method,
+                render: (row) => paymentMethodLabel(row.payment_method, t),
               },
               {
                 key: 'count',

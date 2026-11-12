@@ -22,8 +22,6 @@ For commercial licensing, please contact support@quantumnous.com
 
 import type { TFunction } from 'i18next'
 
-import { getPaymentMethodName } from '@/features/wallet/lib/billing'
-
 import type { Finding } from '../analysis'
 import {
   countsRequestsOnce,
@@ -33,6 +31,7 @@ import {
   MIN_ORDERS,
   MIN_TASKS,
   SMALL_SAMPLE,
+  paymentMethodLabel,
 } from '../lib'
 import { categoryOwner, serviceFailureRate } from '../quality-analysis'
 import type {
@@ -377,7 +376,7 @@ export function overviewServiceSignals(
         ),
         worst &&
           t('Lowest: {{method}}, {{rate}}.', {
-            method: getPaymentMethodName(worst.payment_method, t),
+            method: paymentMethodLabel(worst.payment_method, t),
             rate: fmt.pct(worst.completion_rate),
           })
       ),

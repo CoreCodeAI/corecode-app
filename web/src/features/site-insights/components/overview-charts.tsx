@@ -18,7 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import { getPaymentMethodName } from '@/features/wallet/lib/billing'
 import { cn } from '@/lib/utils'
 
 import {
@@ -34,6 +33,7 @@ import {
   VENDOR_ORDER,
   joinSentences,
   type SourceState,
+  paymentMethodLabel,
 } from '../lib'
 import {
   POOL_PROVIDERS,
@@ -255,9 +255,8 @@ export function ShareCharts(props: {
   const charges = [...vendorCharges(props.finance)]
     .sort(([a], [b]) => byVendorOrder(a, b))
     .map(([vendor, usd]) => vendorSlice(vendor, usd))
-  const revenue = paymentSlices(
-    props.finance?.methods,
-    (method) => getPaymentMethodName(method, t) || method
+  const revenue = paymentSlices(props.finance?.methods, (method) =>
+    paymentMethodLabel(method, t)
   )
 
   const qualityFailed = failedWithout(props.sources?.quality, props.quality)

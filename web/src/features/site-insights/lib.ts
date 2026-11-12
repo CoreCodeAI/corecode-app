@@ -16,9 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import { formatPaymentMoney } from '@/features/wallet/lib'
+import { getPaymentMethodName } from '@/features/wallet/lib/billing'
 import { toIntlLocale } from '@/i18n/languages'
 import { useAuthStore } from '@/stores/auth-store'
 import { useSystemConfigStore } from '@/stores/system-config-store'
@@ -822,4 +824,30 @@ export function channelEconomics(row: ChannelRow, rate: number) {
     roi: fee > 0 ? net / fee : null,
     cac: fee > 0 && row.new_payers > 0 ? fee / row.new_payers : null,
   }
+}
+
+/**
+ * A payment method's name as the page prints it. Stripe's own methods name
+ * the gateway and the method; the rest take the wallet's names.
+ */
+export function paymentMethodLabel(method: string, t: TFunction): string {
+  const viaStripe: Record<string, string> = {
+    stripe_alipay: t('Alipay'),
+    stripe_wechat_pay: t('WeChat Pay'),
+    stripe_card: t('Card'),
+  }
+  if (viaStripe[method]) return `Stripe · ${viaStripe[method]}`
+  if (method === 'nowpayments') return 'NOWPayments'
+  return getPaymentMethodName(method, t) || method
+}
+
+/** A pool status that needs an operator, as the account pool tab names it. */
+export function attentionLabel(status: string, t: TFunction): string {
+  const labels: Record<string, string> = {
+    reauthorization_required: t('Needs reauthorization'),
+    suspended: t('Suspended'),
+    blacklisted: t('Blacklisted'),
+    quota_observation_unavailable: t('No quota reading'),
+  }
+  return labels[status] ?? status
 }

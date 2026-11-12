@@ -8885,6 +8885,12 @@
     "an address with repeat plan buyers": "플랜을 반복 구매한 사용자가 있는 주소",
     "Too few sign-ups at least 6 hours old to judge activation or payment.": "가입한 지 6시간이 넘은 사용자가 적어 활성화나 결제를 판단할 수 없습니다.",
     "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.": "가입한 지 6시간이 넘은 사용자 중 {{activation}}이 활성화되었고 {{conversion}}이 결제했습니다.",
-    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "그중 {{share}}는 {{time}}부터 한 시간 안에 가입했습니다: 가입 경로를 확인하세요."
+    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "그중 {{share}}는 {{time}}부터 한 시간 안에 가입했습니다: 가입 경로를 확인하세요.",
+    "Service failure rate {{rate}}.": "서비스 실패율 {{rate}}.",
+    "Service failure rate {{rate}} over {{count}} requests, too few to judge.": "서비스 실패율 {{rate}}, 요청 {{count}}건으로 판단하기에 너무 적습니다.",
+    "Service failure rate {{rate}}; too few requests before to compare.": "서비스 실패율 {{rate}}. 이전 기간 요청이 적어 비교할 수 없습니다.",
+    "Service failure rate {{rate}}, no clear change from before.": "서비스 실패율 {{rate}}, 이전 대비 뚜렷한 변화 없음.",
+    "Service failure rate {{rate}} ({{sign}}{{points}} points).": "서비스 실패율 {{rate}} ({{sign}}{{points}}%p).",
+    "Card": "카드"
   }
 }

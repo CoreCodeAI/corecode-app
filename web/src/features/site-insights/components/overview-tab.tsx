@@ -38,6 +38,7 @@ import {
   useVendorName,
   type InsightsRangeInfo,
   type InsightsTab,
+  attentionLabel,
 } from '../lib'
 import { usePartialDays } from '../partial-days'
 import type {
@@ -228,7 +229,10 @@ export function OverviewTab(props: {
           count: attention.length,
         }),
         detail: attention
-          .map((account) => `#${account.credential_id} ${account.status}`)
+          .map(
+            (account) =>
+              `#${account.credential_id} ${attentionLabel(account.status, t)}`
+          )
           .join(', '),
         tab: 'pool',
       })

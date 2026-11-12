@@ -8885,6 +8885,12 @@
     "an address with repeat plan buyers": "một địa chỉ có người mua gói lặp lại",
     "Too few sign-ups at least 6 hours old to judge activation or payment.": "Quá ít đăng ký từ 6 giờ trước để đánh giá việc kích hoạt hoặc thanh toán.",
     "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.": "{{activation}} trong số đăng ký từ 6 giờ trước đã kích hoạt và {{conversion}} đã thanh toán.",
-    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "{{share}} trong số đó đăng ký trong giờ bắt đầu từ {{time}}: hãy kiểm tra nguồn đăng ký."
+    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "{{share}} trong số đó đăng ký trong giờ bắt đầu từ {{time}}: hãy kiểm tra nguồn đăng ký.",
+    "Service failure rate {{rate}}.": "Tỷ lệ lỗi dịch vụ {{rate}}.",
+    "Service failure rate {{rate}} over {{count}} requests, too few to judge.": "Tỷ lệ lỗi dịch vụ {{rate}} trên {{count}} yêu cầu, quá ít để đánh giá.",
+    "Service failure rate {{rate}}; too few requests before to compare.": "Tỷ lệ lỗi dịch vụ {{rate}}; kỳ trước quá ít yêu cầu để so sánh.",
+    "Service failure rate {{rate}}, no clear change from before.": "Tỷ lệ lỗi dịch vụ {{rate}}, không thay đổi rõ so với trước.",
+    "Service failure rate {{rate}} ({{sign}}{{points}} points).": "Tỷ lệ lỗi dịch vụ {{rate}} ({{sign}}{{points}} điểm).",
+    "Card": "Thẻ"
   }
 }

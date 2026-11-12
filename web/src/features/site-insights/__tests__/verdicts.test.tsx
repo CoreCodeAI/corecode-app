@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { joinSentences } from '../lib'
+import { attentionLabel, joinSentences, paymentMethodLabel } from '../lib'
 import type {
   ActivityInsights,
   CapacityInsights,
@@ -194,8 +194,48 @@ describe('tab verdicts', () => {
     } as unknown as QualityInsights
     const { result } = renderHook(() => useQualityVerdict(data, undefined))
     expect(result.current?.tone).toBe('good')
-    expect(result.current?.text).toMatch(/^Failure rate 1\.0?\d?%/)
+    // Named as the card of that rate is, so it cannot be read against the
+    // raw failure rate card beside it.
+    expect(result.current?.text).toMatch(/^Service failure rate 1\.0?\d?%/)
     expect(result.current?.text).not.toContain('6%')
+  })
+
+  it('compares the service failure rate with the same rate before', () => {
+    const period = (errors: number, client: number) =>
+      ({
+        requests: 10_000,
+        errors,
+        error_rate: errors / 10_000,
+        error_categories: [
+          { name: 'upstream_error', count: errors - client },
+          { name: 'client_error', count: client },
+        ],
+        vendors: [],
+        models: [],
+      }) as unknown as QualityInsights
+    // Raw rate 6% then 3%; the service's own 1% then 1.5%: the change named
+    // is the service's, +0.5 points, not the raw rate's −3.
+    const { result } = renderHook(() =>
+      useQualityVerdict(period(250, 100), period(600, 500))
+    )
+    expect(result.current?.text).toMatch(
+      /^Service failure rate 1\.5% \(\+0\.5 points\)\./
+    )
+  })
+
+  it('names payment methods and pool statuses instead of their keys', () => {
+    const t = ((key: string) => key) as never
+    expect(paymentMethodLabel('stripe_wechat_pay', t)).toBe(
+      'Stripe · WeChat Pay'
+    )
+    expect(paymentMethodLabel('stripe_alipay', t)).toBe('Stripe · Alipay')
+    expect(paymentMethodLabel('nowpayments', t)).toBe('NOWPayments')
+    expect(paymentMethodLabel('alipay', t)).toBe('Alipay')
+    expect(paymentMethodLabel('something_new', t)).toBe('something_new')
+    expect(attentionLabel('quota_observation_unavailable', t)).toBe(
+      'No quota reading'
+    )
+    expect(attentionLabel('unheard_of', t)).toBe('unheard_of')
   })
 
   it('reads the growth tab without a previous period', () => {
