@@ -18,14 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import { getPaymentMethodName } from '@/features/wallet/lib/billing'
-
 import { dominant, type Contribution } from '../analysis'
 import {
   useInsightsFormat,
   useVendorName,
   type InsightsRangeInfo,
   type InsightsTab,
+  paymentMethodLabel,
 } from '../lib'
 import type {
   CapacityInsights,
@@ -178,8 +177,7 @@ export function WhatChanged(props: {
     total !== 0 && Math.sign(part.change) === Math.sign(total)
       ? fmt.pct(part.change / total)
       : undefined
-  const methodName = (method: string) =>
-    getPaymentMethodName(method, t) || method
+  const methodName = (method: string) => paymentMethodLabel(method, t)
   const name = (key: string) => key
 
   const blocks = []

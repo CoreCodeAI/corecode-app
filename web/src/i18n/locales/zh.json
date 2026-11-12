@@ -8885,6 +8885,12 @@
     "an address with repeat plan buyers": "一个地址有多次购买套餐的用户",
     "Too few sign-ups at least 6 hours old to judge activation or payment.": "注册满 6 小时的用户太少，无法判断激活或付费。",
     "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.": "注册满 6 小时的用户中 {{activation}} 已激活，{{conversion}} 已付费。",
-    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "其中 {{share}} 在 {{time}} 起的一小时内注册：请核查注册来源。"
+    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "其中 {{share}} 在 {{time}} 起的一小时内注册：请核查注册来源。",
+    "Service failure rate {{rate}}.": "服务失败率 {{rate}}。",
+    "Service failure rate {{rate}} over {{count}} requests, too few to judge.": "服务失败率 {{rate}}，仅 {{count}} 次请求，样本太少无法判断。",
+    "Service failure rate {{rate}}; too few requests before to compare.": "服务失败率 {{rate}}；上一周期请求太少，无法比较。",
+    "Service failure rate {{rate}}, no clear change from before.": "服务失败率 {{rate}}，与上一周期相比无明显变化。",
+    "Service failure rate {{rate}} ({{sign}}{{points}} points).": "服务失败率 {{rate}}（{{sign}}{{points}} 个百分点）。",
+    "Card": "银行卡"
   }
 }

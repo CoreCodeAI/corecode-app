@@ -34,7 +34,7 @@ import {
   hourFlags,
   mixShift,
   rankByExcess,
-  serviceFailureRate,
+  serviceRow,
   siteFailureRate,
   siteTtftP95,
 } from '../quality-analysis'
@@ -74,8 +74,11 @@ export function useQualityVerdict(
   )
   const judged = data.requests >= SMALL_SAMPLE
   // The customers' own bad requests (a 401 or a 404) are not the service's
-  // failures; without the error categories, the raw rate is all there is.
-  const failureRate = serviceFailureRate(data) ?? data.error_rate
+  // failures. When the server tells them apart, the verdict speaks of the
+  // service failure rate, as the card of that name does, and compares it with
+  // the same rate before; without the categories the raw rate is all there is.
+  const service = serviceRow(data)
+  const failureRate = service?.error_rate ?? data.error_rate
   const failure = judged ? failureTone(failureRate) : 'default'
   let tone: Tone = failure === 'default' && judged ? 'good' : failure
   if (failingVendors.length > 0) tone = worse(tone, 'warning')
@@ -84,27 +87,62 @@ export function useQualityVerdict(
   const rate = fmt.pct(failureRate)
   const signed = (points: number) =>
     `${points > 0 ? '+' : '−'}${fmt.num(Math.round(Math.abs(points) * 10) / 10)}`
-  const shift = failureShift(data, previous)
-  let headline = t('Failure rate {{rate}}.', { rate })
+  const serviceBefore = previous ? serviceRow(previous) : null
+  let shift = failureShift(data, previous)
+  if (service) {
+    shift = serviceBefore
+      ? failureShift(service, serviceBefore)
+      : { kind: 'none' }
+  }
+  const moved =
+    (shift.kind === 'flat' || shift.kind === 'moved') &&
+    Math.abs(shift.points) >= 0.1
+  const points =
+    shift.kind === 'flat' || shift.kind === 'moved'
+      ? {
+          sign: shift.points > 0 ? '+' : '−',
+          points: fmt.num(Math.round(Math.abs(shift.points) * 10) / 10),
+        }
+      : { sign: '', points: '' }
+  const count = fmt.num(data.requests)
+  let headline = service
+    ? t('Service failure rate {{rate}}.', { rate })
+    : t('Failure rate {{rate}}.', { rate })
   if (!judged) {
-    headline = t(
-      'Failure rate {{rate}} over {{count}} requests, too few to judge.',
-      { rate, count: fmt.num(data.requests) }
-    )
+    headline = service
+      ? t(
+          'Service failure rate {{rate}} over {{count}} requests, too few to judge.',
+          { rate, count }
+        )
+      : t('Failure rate {{rate}} over {{count}} requests, too few to judge.', {
+          rate,
+          count,
+        })
   } else if (shift.kind === 'small') {
-    headline = t('Failure rate {{rate}}; too few requests before to compare.', {
-      rate,
-    })
-  } else if (shift.kind === 'flat' && Math.abs(shift.points) >= 0.1) {
-    headline = t('Failure rate {{rate}}, no clear change from before.', {
-      rate,
-    })
-  } else if (shift.kind === 'moved' && Math.abs(shift.points) >= 0.1) {
-    headline = t('Failure rate {{rate}} ({{sign}}{{points}} points).', {
-      rate,
-      sign: shift.points > 0 ? '+' : '−',
-      points: fmt.num(Math.round(Math.abs(shift.points) * 10) / 10),
-    })
+    headline = service
+      ? t(
+          'Service failure rate {{rate}}; too few requests before to compare.',
+          { rate }
+        )
+      : t('Failure rate {{rate}}; too few requests before to compare.', {
+          rate,
+        })
+  } else if (shift.kind === 'flat' && moved) {
+    headline = service
+      ? t('Service failure rate {{rate}}, no clear change from before.', {
+          rate,
+        })
+      : t('Failure rate {{rate}}, no clear change from before.', { rate })
+  } else if (shift.kind === 'moved' && moved) {
+    headline = service
+      ? t('Service failure rate {{rate}} ({{sign}}{{points}} points).', {
+          rate,
+          ...points,
+        })
+      : t('Failure rate {{rate}} ({{sign}}{{points}} points).', {
+          rate,
+          ...points,
+        })
   }
 
   let driver: string | null = null

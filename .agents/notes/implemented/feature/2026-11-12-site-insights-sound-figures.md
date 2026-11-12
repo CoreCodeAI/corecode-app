@@ -53,6 +53,17 @@ Thresholds live in `lib.ts` so a tab and the overview agree. A rate over too few
 
 A card whose source is loading or failed shows a dash and no change; a table says it is loading or could not be read; a failed side query is named where its figures would be. The overview does not say nothing needs attention until every source and comparison has loaded. Requests, failure rate, revenue and peak each state what they count.
 
+### After the release
+
+Reading the released page on production data turned up four label defects, fixed in a console-only follow-up:
+
+- The quality verdict printed the service failure rate under the name "failure rate", beside a card of that name showing the raw rate, and gave the raw rate's change. It now says "service failure rate" and compares it with the same rate of the previous period.
+- Payment methods Stripe added (`stripe_alipay`, `stripe_wechat_pay`, `stripe_card`) and `nowpayments` printed as their keys. `paymentMethodLabel` in `lib.ts` names them.
+- The overview's pool signal printed an account's status key. It uses the account pool tab's names.
+- The quality tab's request trend did not mark the open hour as in progress.
+
+Left as they are: stream-end names (`eof`, `client_gone`) and risk-gate stage names (`hard_regex`, `refusal_cache`) print as the identifiers the help text and the risk-gate settings use. Growth counts 9 fewer sign-ups over 7 days than risk and the overview, because risk counts accounts deleted since and growth does not; each tab's help says which. The model map does not answer a tap on a phone.
+
 ### Decisions the owner made
 
 - Currency symbols stay. One quota dollar sells for one yuan, so the audit's findings about `¥` against `$` were skipped and no conversion was added.

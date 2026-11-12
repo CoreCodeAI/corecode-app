@@ -8885,6 +8885,12 @@
     "an address with repeat plan buyers": "une adresse avec des acheteurs de forfait répétés",
     "Too few sign-ups at least 6 hours old to judge activation or payment.": "Trop peu d’inscriptions datant d’au moins 6 heures pour juger l’activation ou le paiement.",
     "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.": "{{activation}} des inscriptions datant d’au moins 6 heures ont été activées et {{conversion}} ont payé.",
-    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "{{share}} d’entre elles se sont inscrites dans l’heure à partir de {{time}} : vérifiez la source des inscriptions."
+    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "{{share}} d’entre elles se sont inscrites dans l’heure à partir de {{time}} : vérifiez la source des inscriptions.",
+    "Service failure rate {{rate}}.": "Taux d’échec du service {{rate}}.",
+    "Service failure rate {{rate}} over {{count}} requests, too few to judge.": "Taux d’échec du service {{rate}} sur {{count}} requêtes, trop peu pour juger.",
+    "Service failure rate {{rate}}; too few requests before to compare.": "Taux d’échec du service {{rate}} ; trop peu de requêtes avant pour comparer.",
+    "Service failure rate {{rate}}, no clear change from before.": "Taux d’échec du service {{rate}}, sans changement net.",
+    "Service failure rate {{rate}} ({{sign}}{{points}} points).": "Taux d’échec du service {{rate}} ({{sign}}{{points}} points).",
+    "Card": "Carte"
   }
 }

@@ -18,8 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import { getPaymentMethodName } from '@/features/wallet/lib/billing'
-
 import type { Tone } from '../components/shared'
 import {
   financeDrivers,
@@ -30,7 +28,12 @@ import {
   ordersComparable,
   signed,
 } from '../finance-analysis'
-import { useChargeFormat, useInsightsFormat, useVendorName } from '../lib'
+import {
+  useChargeFormat,
+  useInsightsFormat,
+  useVendorName,
+  paymentMethodLabel,
+} from '../lib'
 import type { FinanceInsights } from '../types'
 import { join, useChange, worse, type TabVerdict } from './shared'
 
@@ -62,7 +65,7 @@ export function useFinanceVerdict(
   if (data.debt_usd < -1) tone = worse(tone, 'warning')
   if (giftShareHigh(gifts)) tone = worse(tone, 'warning')
   if (fell.length > 0) tone = worse(tone, 'warning')
-  const method = (key: string) => getPaymentMethodName(key, t) || key
+  const method = (key: string) => paymentMethodLabel(key, t)
 
   let marginText: string | null = null
   if (revenue > 0) {

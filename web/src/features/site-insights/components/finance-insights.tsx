@@ -18,8 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import { getPaymentMethodName } from '@/features/wallet/lib/billing'
-
 import type { Finding } from '../analysis'
 import {
   financeDrivers,
@@ -45,6 +43,7 @@ import {
   type InsightsSources,
   type InsightsTab,
   type SourceState,
+  paymentMethodLabel,
 } from '../lib'
 import type { FinanceInsights, PlanBookRow } from '../types'
 import { Drivers, Findings, type DriverRow } from './insight-kit'
@@ -102,7 +101,7 @@ export function FinanceDriversPanel(props: {
     .slice(0, DRIVER_ROWS)
     .map((part) => ({
       key: part.key,
-      label: getPaymentMethodName(part.key, t) || part.key,
+      label: paymentMethodLabel(part.key, t),
       change: signed(part.change, fmt.cny),
       share: share(part.change, drivers.revenue.change),
       tone: part.change < 0 ? 'warning' : 'good',
@@ -292,7 +291,7 @@ export function OrdersPanel(props: {
     : undefined
   const fell = (rows ?? []).filter((row) => row.fell)
   const stale = (rows ?? []).reduce((sum, row) => sum + row.pending_stale, 0)
-  const method = (key: string) => getPaymentMethodName(key, t) || key
+  const method = (key: string) => paymentMethodLabel(key, t)
   const description = joinSentences(
     ...fell.map((row) =>
       t(

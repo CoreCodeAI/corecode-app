@@ -8885,6 +8885,12 @@
     "an address with repeat plan buyers": "an address with repeat plan buyers",
     "Too few sign-ups at least 6 hours old to judge activation or payment.": "Too few sign-ups at least 6 hours old to judge activation or payment.",
     "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.": "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.",
-    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "{{share}} of them signed up in the hour from {{time}}: check the sign-up source."
+    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.",
+    "Service failure rate {{rate}}.": "Service failure rate {{rate}}.",
+    "Service failure rate {{rate}} over {{count}} requests, too few to judge.": "Service failure rate {{rate}} over {{count}} requests, too few to judge.",
+    "Service failure rate {{rate}}; too few requests before to compare.": "Service failure rate {{rate}}; too few requests before to compare.",
+    "Service failure rate {{rate}}, no clear change from before.": "Service failure rate {{rate}}, no clear change from before.",
+    "Service failure rate {{rate}} ({{sign}}{{points}} points).": "Service failure rate {{rate}} ({{sign}}{{points}} points).",
+    "Card": "Card"
   }
 }

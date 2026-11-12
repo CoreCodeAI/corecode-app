@@ -8885,6 +8885,12 @@
     "an address with repeat plan buyers": "адрес с повторными покупателями тарифов",
     "Too few sign-ups at least 6 hours old to judge activation or payment.": "Слишком мало регистраций старше 6 часов, чтобы судить об активации или оплате.",
     "{{activation}} of sign-ups at least 6 hours old activated and {{conversion}} paid.": "Из регистраций старше 6 часов активировались {{activation}}, оплатили {{conversion}}.",
-    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "{{share}} из них зарегистрировались в час с {{time}}: проверьте источник регистраций."
+    "{{share}} of them signed up in the hour from {{time}}: check the sign-up source.": "{{share}} из них зарегистрировались в час с {{time}}: проверьте источник регистраций.",
+    "Service failure rate {{rate}}.": "Доля сбоев сервиса {{rate}}.",
+    "Service failure rate {{rate}} over {{count}} requests, too few to judge.": "Доля сбоев сервиса {{rate}} на {{count}} запросов — слишком мало для вывода.",
+    "Service failure rate {{rate}}; too few requests before to compare.": "Доля сбоев сервиса {{rate}}; ранее слишком мало запросов для сравнения.",
+    "Service failure rate {{rate}}, no clear change from before.": "Доля сбоев сервиса {{rate}}, явных изменений нет.",
+    "Service failure rate {{rate}} ({{sign}}{{points}} points).": "Доля сбоев сервиса {{rate}} ({{sign}}{{points}} п.п.).",
+    "Card": "Карта"
   }
 }
