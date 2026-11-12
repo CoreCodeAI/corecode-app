@@ -132,6 +132,19 @@ func TestSelfInvitedCommissionDatabaseMatrix(t *testing.T) {
 			assert.Empty(t, affiliateTestCredits(t, own.Id), "no commission on an account that shares the inviter's address")
 			assert.Equal(t, []affiliateTestCredit{{inviter.Id, 1, 10, int64(5 * affiliateDollar)}}, affiliateTestCredits(t, friend.Id))
 
+			// A root user exempts the inviter: the account's later use earns
+			// commission, and revoking the exemption stops it again.
+			require.NoError(t, SetAffiliateAddressExemption(inviter.Id, true, 1))
+			require.NoError(t, SetAffiliateAddressExemption(inviter.Id, true, 1), "granting twice is a no-op")
+			consumeAffiliateTestQuota(t, own.Id, 20)
+			settleAffiliateTestUser(t, own.Id)
+			exempted := affiliateTestCredit{inviter.Id, 1, 10, int64(2 * affiliateDollar)}
+			assert.Equal(t, []affiliateTestCredit{exempted}, affiliateTestCredits(t, own.Id))
+			require.NoError(t, SetAffiliateAddressExemption(inviter.Id, false, 1))
+			consumeAffiliateTestQuota(t, own.Id, 10)
+			settleAffiliateTestUser(t, own.Id)
+			assert.Equal(t, []affiliateTestCredit{exempted}, affiliateTestCredits(t, own.Id), "no commission once the exemption is revoked")
+
 			// Behind a shared exit the address is no evidence, and the
 			// commission is paid.
 			for i := range sharedExitUsers {
@@ -139,7 +152,7 @@ func TestSelfInvitedCommissionDatabaseMatrix(t *testing.T) {
 			}
 			consumeAffiliateTestQuota(t, own.Id, 10)
 			settleAffiliateTestUser(t, own.Id)
-			assert.Equal(t, []affiliateTestCredit{{inviter.Id, 1, 10, int64(1 * affiliateDollar)}}, affiliateTestCredits(t, own.Id))
+			assert.Equal(t, []affiliateTestCredit{exempted, {inviter.Id, 1, 10, int64(1 * affiliateDollar)}}, affiliateTestCredits(t, own.Id))
 		})
 	}
 }

@@ -3217,6 +3217,8 @@
     "Invitation quota is insufficient!": "Quota d’invitation insuffisant !",
     "Invitation settings": "Paramètres d'invitation",
     "Invitation settings saved": "Paramètres d'invitation enregistrés",
+    "Commission from invitees on their network": "Commission sur les invités du même réseau",
+    "Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.": "Verse la commission sur les invités qui utilisent le même réseau que cet utilisateur, comme son propre second compte. Laissez désactivé sauf si la remise a été convenue.",
     "Invitations": "Parrainages",
     "Invitations are not available for your account.": "Les invitations ne sont pas disponibles pour votre compte.",
     "Invite Info": "Informations sur l'invitation",

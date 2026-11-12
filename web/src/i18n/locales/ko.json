@@ -3217,6 +3217,8 @@
     "Invitation quota is insufficient!": "초대 할당량이 부족합니다!",
     "Invitation settings": "초대 설정",
     "Invitation settings saved": "초대 설정을 저장했습니다",
+    "Commission from invitees on their network": "같은 네트워크의 초대 사용자에게서도 커미션",
+    "Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.": "이 사용자와 같은 네트워크를 쓰는 초대 사용자(본인의 다른 계정 등)에게서도 커미션을 지급합니다. 할인을 합의한 경우에만 켜세요.",
     "Invitations": "초대",
     "Invitations are not available for your account.": "계정에서 초대 기능을 사용할 수 없습니다.",
     "Invite Info": "초대 정보",

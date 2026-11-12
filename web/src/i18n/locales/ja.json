@@ -3217,6 +3217,8 @@
     "Invitation quota is insufficient!": "招待クォータが不足しています！",
     "Invitation settings": "招待設定",
     "Invitation settings saved": "招待設定を保存しました",
+    "Commission from invitees on their network": "同じネットワークの招待ユーザーからも報酬",
+    "Pays commission on invitees who use the same network as this user, such as their own second account. Leave off unless the discount was agreed.": "このユーザーと同じネットワークを使う招待ユーザー（本人の別アカウントなど）にも報酬を支払います。割引を合意した場合のみオンにしてください。",
     "Invitations": "招待",
     "Invitations are not available for your account.": "このアカウントでは招待を利用できません。",
     "Invite Info": "招待情報",

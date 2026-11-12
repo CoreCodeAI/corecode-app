@@ -5,6 +5,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // One person with many accounts shows up as accounts that share an address:
@@ -254,4 +255,32 @@ func SetSubscriptionAddressExemption(userId int, exempt bool, adminId int) error
 		return err
 	}
 	return DB.Create(&SubscriptionAddressExemption{UserId: userId, CreatedBy: adminId, CreatedAt: common.GetTimestamp()}).Error
+}
+
+// AffiliateAddressExemption lets one inviter earn commission on invitees who
+// share their address. A partner the owner agreed to discount invites their
+// own second account and earns their rate on what it pays for; a root user
+// grants it here, for that inviter alone.
+type AffiliateAddressExemption struct {
+	UserId    int   `json:"user_id" gorm:"primaryKey;autoIncrement:false"`
+	CreatedBy int   `json:"created_by"`
+	CreatedAt int64 `json:"created_at"`
+}
+
+// AffiliateAddressExempt reports whether an inviter earns commission on
+// invitees who share their address.
+func AffiliateAddressExempt(userId int) (bool, error) {
+	var count int64
+	err := DB.Model(&AffiliateAddressExemption{}).Where("user_id = ?", userId).Count(&count).Error
+	return count > 0, err
+}
+
+// SetAffiliateAddressExemption grants or revokes the exemption; granting it
+// twice keeps the first grant.
+func SetAffiliateAddressExemption(userId int, exempt bool, adminId int) error {
+	if !exempt {
+		return DB.Where("user_id = ?", userId).Delete(&AffiliateAddressExemption{}).Error
+	}
+	return DB.Clauses(clause.OnConflict{DoNothing: true}).
+		Create(&AffiliateAddressExemption{UserId: userId, CreatedBy: adminId, CreatedAt: common.GetTimestamp()}).Error
 }

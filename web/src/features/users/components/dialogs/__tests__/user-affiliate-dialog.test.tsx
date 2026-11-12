@@ -251,3 +251,25 @@ it('replaces the invite code and shows the new link', async () => {
     )
   )
 })
+
+it('lets the user earn commission on invitees on their network', async () => {
+  const put = vi.spyOn(api, 'put').mockResolvedValue({
+    data: { success: true, data: { ...view, address_exempt: true } },
+  })
+  const user = userEvent.setup()
+  renderDialog()
+
+  const exemption = await screen.findByRole('switch', {
+    name: 'Commission from invitees on their network',
+  })
+  expect(exemption).not.toBeChecked()
+  await user.click(exemption)
+
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith(
+      '/api/affiliate/admin/users/9/address-exemption',
+      { exempt: true }
+    )
+  )
+  await waitFor(() => expect(exemption).toBeChecked())
+})
