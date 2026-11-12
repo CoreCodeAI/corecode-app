@@ -37,6 +37,7 @@ export function AuthBrandMark(props: AuthBrandMarkProps) {
   return (
     <Link
       to='/'
+      reloadDocument
       className={cn(
         'flex w-fit items-center gap-2.5 transition-opacity hover:opacity-80',
         props.className

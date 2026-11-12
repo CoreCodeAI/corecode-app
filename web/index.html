@@ -129,6 +129,17 @@
         } catch (e) {}
       })()
     </script>
+    <!-- On corecode.live, / is the static home page in front of the console
+         (src/features/home). Its links load it as a document, so fetch it
+         when the pointer rests on one and the load is instant. Browsers
+         without speculation rules ignore this. -->
+    <script type="speculationrules">
+      {
+        "prefetch": [
+          { "where": { "href_matches": "/" }, "eagerness": "moderate" }
+        ]
+      }
+    </script>
     <!--umami-->
     <!--Google Analytics-->
   </head>
