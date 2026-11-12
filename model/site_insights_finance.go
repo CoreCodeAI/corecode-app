@@ -80,7 +80,7 @@ func ModelVendor(model string) string {
 	return VendorOther
 }
 
-// VendorModel is what new-api charged for one model over the range, root
+// VendorModel is what new-api charged for one model over the range, staff
 // included, as for Claude.
 type VendorModel struct {
 	Vendor   string  `json:"vendor"`
@@ -91,7 +91,7 @@ type VendorModel struct {
 
 // VendorRevenue is the revenue earned on one vendor's models: the range's
 // recognized revenue shared out by the vendor's part of what customers, not
-// root, consumed at list price. Revenue per list-price dollar is not known by
+// staff, consumed at list price. Revenue per list-price dollar is not known by
 // model, so every vendor earns the site's average; it is an estimate.
 type VendorRevenue struct {
 	Vendor            string  `json:"vendor"`
@@ -108,19 +108,19 @@ type FinanceDay struct {
 	Subscription      float64 `json:"subscription"`
 	ConsumptionUSD    float64 `json:"consumption_usd"`
 	RecognizedRevenue float64 `json:"recognized_revenue"`
-	// ClaudeUSD is what new-api charged for Claude models, root included:
+	// ClaudeUSD is what new-api charged for Claude models, staff included:
 	// corecode-engine's official-price cost it is compared with covers
-	// root's requests too.
+	// staff's requests too.
 	ClaudeUSD float64 `json:"claude_usd"`
-	// RootConsumptionUSD is root's own requests at list price: internal use,
+	// RootConsumptionUSD is staff's own requests at list price: internal use,
 	// which ConsumptionUSD leaves out.
 	RootConsumptionUSD float64 `json:"root_consumption_usd"`
-	// VendorUSD is the day's charge by vendor (ModelVendor), root included.
+	// VendorUSD is the day's charge by vendor (ModelVendor), staff included.
 	VendorUSD map[string]float64 `json:"vendor_usd"`
 }
 
 // FinanceHour is one hour of the FinanceDay fields of the same names: cash
-// by order time, and list-price consumption of customers and of root.
+// by order time, and list-price consumption of customers and of staff.
 type FinanceHour struct {
 	Hour               int64   `json:"hour"`
 	Topup              float64 `json:"topup"`
@@ -158,7 +158,7 @@ type QuotaAdjustment struct {
 // all money ever paid that the range earned: a plan earns its price evenly
 // over the time it runs, and the wallet earns as it is spent, each unit at
 // the price its owner paid on average for every unit the wallet was credited
-// (walletPrice). Consumption counts customers only; root's own requests are
+// (walletPrice). Consumption counts customers only; staff's own requests are
 // RootConsumptionUSD. GiftConsumptionUSD is the part of consumption no
 // payment covers: given plans, and the unpaid share of each wallet, top-up
 // bonus included. An order counts when it was paid (complete_time), or when
@@ -176,7 +176,7 @@ type FinanceInsights struct {
 	ConsumptionUSD     float64       `json:"consumption_usd"`
 	RootConsumptionUSD float64       `json:"root_consumption_usd"`
 	GiftConsumptionUSD float64       `json:"gift_consumption_usd"`
-	// ClaudeUSD is the range's Claude charge, root included (FinanceDay).
+	// ClaudeUSD is the range's Claude charge, staff included (FinanceDay).
 	ClaudeUSD float64 `json:"claude_usd"`
 	// VendorModels is the range's charge by model, largest first; each
 	// vendor's charge is the sum of its models.
@@ -207,6 +207,12 @@ type FinanceInsights struct {
 	BonusUSD            float64           `json:"bonus_usd"`
 	TopupCreditUSD      float64           `json:"topup_credit_usd"`
 	AdjustmentLogsFound bool              `json:"adjustment_logs_found"`
+	// AdjustmentsTotal counts every manual adjustment in the range.
+	// Adjustments lists the newest adjustmentListLimit of them, so
+	// AdjustmentsTruncated says the list is cut; AdjustmentNetUSD sums the
+	// successful ones in the whole range, listed or not.
+	AdjustmentsTotal     int64 `json:"adjustments_total"`
+	AdjustmentsTruncated bool  `json:"adjustments_truncated"`
 	// CheckinCreditUSD is the credit check-ins awarded in the range.
 	// SignupBonuses and InviteeBonuses count the sign-up and invitation
 	// rewards logged in the range; their amount is not recorded, so the
@@ -233,6 +239,17 @@ type FinanceInsights struct {
 	// StaleHours counts the range's hours still stored under an older rollup
 	// version, until they are rebuilt; omitted when none.
 	StaleHours int `json:"stale_hours"`
+	// Truncated says an hour of the range was cut by its row cap, so the
+	// revenue and consumption of that hour are short.
+	Truncated bool `json:"truncated"`
+	// PaidUseUSD is customers' consumption that was not gifted credit over
+	// the range, and PaidUsePerDayUSD that over RangeDays. The runway is
+	// LiabilityPaidValue (the paid balances customers hold now, in the payment
+	// currency) plus PaidPlanQuotaLeftUSD, over PaidUsePerDayUSD.
+	PaidUseUSD           float64 `json:"paid_use_usd"`
+	RangeDays            float64 `json:"range_days"`
+	PaidUsePerDayUSD     float64 `json:"paid_use_per_day_usd"`
+	PaidPlanQuotaLeftUSD float64 `json:"paid_plan_quota_left_usd"`
 }
 
 // OrderMethodFunnel is the checkouts opened with one payment method in the
@@ -377,6 +394,7 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 	var consumed, root int64
 	var gift, wallet float64
 	for _, hour := range hours {
+		result.Truncated = result.Truncated || hour.summary.Truncated
 		root += hour.summary.RootQuota
 		day := days[r.DayStart(hour.start)]
 		if day != nil {
@@ -407,14 +425,14 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 	}
 	var claude int64
 	models := make(map[string]*VendorModel)
-	var roots []int
-	if err := DB.Model(&User{}).Unscoped().Where("role >= ?", common.RoleRootUser).Pluck("id", &roots).Error; err != nil {
+	var staff []int
+	if err := DB.Model(&User{}).Unscoped().Where("role >= ?", customerRoleBound).Pluck("id", &staff).Error; err != nil {
 		return nil, err
 	}
 	customer := make(map[string]int64)
 	for _, row := range quota {
 		vendor := ModelVendor(row.ModelName)
-		if !slices.Contains(roots, row.UserID) {
+		if !slices.Contains(staff, row.UserID) {
 			customer[vendor] += int64(row.Quota)
 		}
 		model := models[row.ModelName]
@@ -475,7 +493,7 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 	slices.SortFunc(result.VendorRevenue, func(a, b VendorRevenue) int {
 		return cmp.Or(cmp.Compare(b.RecognizedRevenue, a.RecognizedRevenue), cmp.Compare(a.Vendor, b.Vendor))
 	})
-	if result.Groups, err = readGroupConsumption(r, roots, wallet+subscriptions); err != nil {
+	if result.Groups, err = readGroupConsumption(r, staff, wallet+subscriptions); err != nil {
 		return nil, err
 	}
 	upstream, err := upstreamInsightsFromHours(r, hours, stale)
@@ -527,6 +545,13 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 	if result.OrderMethods, err = readOrderFunnel(r, now); err != nil {
 		return nil, err
 	}
+	// The runway is the paid balance over paid use per day, both on paid money.
+	// Paid use leaves out the gifted part of consumption; the plan quota is what
+	// paid plans have left now, the period part included.
+	result.PaidUseUSD = roundTo(max(result.ConsumptionUSD-result.GiftConsumptionUSD, 0), 4)
+	result.RangeDays = roundTo(float64(r.End-r.Start)/86400, 4)
+	result.PaidUsePerDayUSD = ratio(result.PaidUseUSD, result.RangeDays)
+	result.PaidPlanQuotaLeftUSD = roundTo(result.PlanLiability.PaidQuotaLeftUSD+result.PlanLiability.PaidPeriodLeftUSD, 4)
 	return result, nil
 }
 
@@ -654,9 +679,9 @@ func readOrderFunnel(r InsightsRange, now int64) ([]OrderMethodFunnel, error) {
 	return result, nil
 }
 
-// readGroupConsumption sums customers' quota_data by billing group, root
+// readGroupConsumption sums customers' quota_data by billing group, staff
 // left out, and shares revenue (the range's recognized revenue) by it.
-func readGroupConsumption(r InsightsRange, roots []int, revenue float64) ([]GroupConsumption, error) {
+func readGroupConsumption(r InsightsRange, staff []int, revenue float64) ([]GroupConsumption, error) {
 	var rows []struct {
 		UseGroup   string
 		UserId     int
@@ -677,7 +702,7 @@ func readGroupConsumption(r InsightsRange, roots []int, revenue float64) ([]Grou
 	quota := make(map[string]int64)
 	var total int64
 	for _, row := range rows {
-		if slices.Contains(roots, row.UserId) {
+		if slices.Contains(staff, row.UserId) {
 			continue
 		}
 		group := groups[row.UseGroup]
@@ -824,10 +849,10 @@ func fillGivenCredit(r InsightsRange, result *FinanceInsights) error {
 }
 
 // fillBalances states the current balances of every customer, and what was
-// paid for them at each wallet's price. The root account is left out: its
-// balance is the operator's, not money owed.
+// paid for them at each wallet's price. Staff accounts are left out: their
+// balances are the operator's, not money owed.
 func fillBalances(result *FinanceInsights, prices map[int]walletPrice) error {
-	customers := func() *gorm.DB { return DB.Model(&User{}).Where("role < ?", common.RoleRootUser) }
+	customers := func() *gorm.DB { return DB.Model(&User{}).Where("role < ?", customerRoleBound) }
 	var totals struct {
 		Liability      int64
 		LiabilityUsers int64
@@ -925,16 +950,9 @@ func readWalletPrices(end int64) (map[int]walletPrice, error) {
 		entry.paid += order.Amount*int64(common.QuotaPerUnit) + order.BonusQuota
 		entry.bonus += order.BonusQuota
 	}
-	var logs []AuditLog
-	if err := LOG_DB.Model(&AuditLog{}).
-		Where("created_at < ? AND success = ? AND action IN ?", end, true,
-			[]string{"user.quota_add", "user.quota_subtract", "user.quota_override"}).
-		Find(&logs).Error; err != nil {
-		return nil, err
-	}
-	for _, log := range logs {
-		if log.Other.Op == nil {
-			continue
+	if err := eachQuotaAdjustment(0, end, func(log AuditLog) {
+		if !log.Success || log.Other.Op == nil {
+			return
 		}
 		params := log.Other.Op.Params
 		target, ok := auditInt(params, "target_user_id")
@@ -943,6 +961,8 @@ func readWalletPrices(end int64) (map[int]walletPrice, error) {
 		if ok && hasBefore && hasAfter {
 			creditOf(int(target)).given += after - before
 		}
+	}); err != nil {
+		return nil, err
 	}
 	var redeemed []struct {
 		UsedUserId int
@@ -1046,18 +1066,49 @@ func auditString(fields AuditFields, key string) string {
 	return value
 }
 
+// quotaAdjustmentActions are the audit actions that change a user's quota by
+// hand: the adjustments the funds view counts.
+var quotaAdjustmentActions = []string{"user.quota_add", "user.quota_subtract", "user.quota_override"}
+
+// adjustmentListLimit bounds the adjustments the funds view lists, newest
+// first; the totals still cover every adjustment in the range.
+const adjustmentListLimit = 500
+
+// adjustmentBatch bounds the audit rows held in memory by one read.
+const adjustmentBatch = 1000
+
+// eachQuotaAdjustment calls fn with every manual quota adjustment logged in
+// [start, end), oldest first. It reads only the columns fn uses, in batches
+// keyed by id, so a long range does not hold every log at once.
+func eachQuotaAdjustment(start, end int64, fn func(AuditLog)) error {
+	lastID := 0
+	for {
+		var batch []AuditLog
+		if err := LOG_DB.Model(&AuditLog{}).Select("id, success, other").
+			Where("id > ? AND created_at >= ? AND created_at < ? AND action IN ?", lastID, start, end, quotaAdjustmentActions).
+			Order("id").Limit(adjustmentBatch).Find(&batch).Error; err != nil {
+			return err
+		}
+		for _, log := range batch {
+			fn(log)
+		}
+		if len(batch) < adjustmentBatch {
+			return nil
+		}
+		lastID = batch[len(batch)-1].Id
+	}
+}
+
 func fillQuotaAdjustments(r InsightsRange, result *FinanceInsights) error {
 	var logs []AuditLog
 	err := LOG_DB.Model(&AuditLog{}).
-		Where("created_at >= ? AND created_at < ? AND action IN ?", r.Start, r.End,
-			[]string{"user.quota_add", "user.quota_subtract", "user.quota_override"}).
-		Order("id desc").Limit(500).Find(&logs).Error
+		Where("created_at >= ? AND created_at < ? AND action IN ?", r.Start, r.End, quotaAdjustmentActions).
+		Order("id desc").Limit(adjustmentListLimit).Find(&logs).Error
 	if err != nil {
 		return err
 	}
 	result.AdjustmentLogsFound = len(logs) > 0
 	result.Adjustments = make([]QuotaAdjustment, 0, len(logs))
-	var net int64
 	for _, log := range logs {
 		adjustment := QuotaAdjustment{CreatedAt: log.CreatedAt, Operator: log.Username, Success: log.Success}
 		if log.Other.Op != nil {
@@ -1073,13 +1124,27 @@ func fillQuotaAdjustments(r InsightsRange, result *FinanceInsights) error {
 				adjustment.HasSnapshot = true
 				adjustment.BeforeUSD, adjustment.AfterUSD = quotaUSD(before), quotaUSD(after)
 				adjustment.DeltaUSD = quotaUSD(after - before)
-				if log.Success {
-					net += after - before
-				}
 			}
 		}
 		result.Adjustments = append(result.Adjustments, adjustment)
 	}
+	// The net and the count cover the whole range, not only the listed rows.
+	var net, count int64
+	if err := eachQuotaAdjustment(r.Start, r.End, func(log AuditLog) {
+		count++
+		if !log.Success || log.Other.Op == nil {
+			return
+		}
+		before, hasBefore := auditInt(log.Other.Op.Params, "from")
+		after, hasAfter := auditInt(log.Other.Op.Params, "to")
+		if hasBefore && hasAfter {
+			net += after - before
+		}
+	}); err != nil {
+		return err
+	}
 	result.AdjustmentNetUSD = quotaUSD(net)
+	result.AdjustmentsTotal = count
+	result.AdjustmentsTruncated = count > adjustmentListLimit
 	return nil
 }

@@ -203,7 +203,7 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
             dot={CHARGE}
             label={t('new-api Claude charge')}
             help={t(
-              'What new-api deducted for Claude models at its own ratios, over the days gpt-load reported, root included. In dollars at the site’s exchange rate; the yuan new-api counted is in brackets.'
+              'What new-api deducted for Claude models at its own ratios, over the days gpt-load reported, root and staff included. In dollars at the site’s exchange rate; the yuan new-api counted is in brackets.'
             )}
             value={
               <ChargeValue usd={fmt.usd(charged)} yuan={fmt.cny(chargedYuan)} />
@@ -289,7 +289,7 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
               formula={[CHARGE, COST]}
               label={t('Earned ÷ account cost')}
               help={t(
-                'Claude’s revenue earned over the days gpt-load reported, root’s use and given credit left out, divided by the account cost of the same days: whether the accounts pay for themselves. Below 1×, red. The usage multiple beside it divides new-api’s Claude charge instead, root, gifted balance and plan use included: how much use the accounts carry, not what they earn.'
+                'Claude’s revenue earned over the days gpt-load reported, root and staff’s use and given credit left out, divided by the account cost of the same days: whether the accounts pay for themselves. Below 1×, red. The usage multiple beside it divides new-api’s Claude charge instead, root and staff, gifted balance and plan use included: how much use the accounts carry, not what they earn.'
               )}
               value={ratio(earnedPerCost)}
               tone={
@@ -313,7 +313,7 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
               formula={[CHARGE, COST]}
               label={t('new-api ÷ account cost')}
               help={t(
-                'A usage multiple: new-api’s Claude charge in dollars, root, gifted balance and plan use included, divided by the account cost of the same days. It reads how much use the accounts carry, not what they earn; Gross margin by vendor sets revenue earned against the same cost.'
+                'A usage multiple: new-api’s Claude charge in dollars, root and staff, gifted balance and plan use included, divided by the account cost of the same days. It reads how much use the accounts carry, not what they earn; Gross margin by vendor sets revenue earned against the same cost.'
               )}
               value={ratio(chargedPerCost)}
               hint={
@@ -604,7 +604,7 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
                         'What a month of one account earns, the new-api value per month times Claude’s revenue earned per yuan charged, divided by the plan’s monthly price: how many times one account earns back its price.'
                       )
                     : t(
-                        'The new-api value per month divided by the plan’s monthly price: charge, not revenue, so root, gifted and plan use count as if paid.'
+                        'The new-api value per month divided by the plan’s monthly price: charge, not revenue, so root and staff, gifted and plan use count as if paid.'
                       ),
                 align: 'right',
                 render: (row) => {

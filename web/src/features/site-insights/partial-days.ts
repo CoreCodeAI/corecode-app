@@ -20,7 +20,7 @@ import { createContext, useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { InsightsView } from './api'
-import { useInsightsFormat } from './lib'
+import { rangeStart, useInsightsFormat } from './lib'
 
 /**
  * A range runs from a moment N days before its end to the moment it was
@@ -87,7 +87,9 @@ export function usePartialDays(view: InsightsView) {
   const span = useContext(InsightsSpanContext)
   return (day: number, values?: number[]): PartialMark | undefined => {
     if (!span) return undefined
-    const start = span.now - span.days(view) * 86400
+    // The range starts on the hour, as the server floors it, so its first
+    // day is partly inside it by the hours that count.
+    const start = rangeStart(span.now, span.days(view))
     const end = day + 86400
     const from = Math.max(day, start)
     const to = Math.min(end, span.now)

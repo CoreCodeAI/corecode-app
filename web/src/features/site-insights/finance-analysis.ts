@@ -21,6 +21,7 @@ For commercial licensing, please contact support@quantumnous.com
 // pay ¥1 each for, so yuan; engine cost and account prices are US dollars.
 
 import {
+  beforeLogs,
   closedHours,
   contributions,
   dominant,
@@ -33,6 +34,7 @@ import {
   DEBT_ALERT_USD,
   GIFT_SHARE_WARN,
   HOURLY_MAX_DAYS,
+  loggedDays,
   MARGIN_VENDORS,
   MIN_CHECKOUTS,
   MIN_ORDERS,
@@ -50,7 +52,20 @@ import type {
   UserSpendRow,
 } from './types'
 
+const HOUR = 3600
 const DAY = 86400
+
+/**
+ * Whether the hour or the day that starts at start lies before the logs
+ * begin: a bucket with no data, drawn as a gap rather than a zero.
+ */
+export function bucketBeforeLogs(
+  start: number,
+  span: 'hour' | 'day',
+  logsSince: number | null | undefined
+): boolean {
+  return beforeLogs(start, span === 'hour' ? HOUR : DAY, logsSince)
+}
 
 /** Unpaid credit issued past this share of paid credit needs a look. */
 export const UNPAID_CREDIT_WARN = 0.5
@@ -83,7 +98,7 @@ export function financeRange(
   if (range) return range
   const end = data?.end_time ?? 0
   const start = data?.start_time ?? end
-  const days = Math.max(0, (end - start) / DAY)
+  const days = Math.max(0, Math.round((end - start) / DAY))
   return { start, end, days, hourly: days > 0 && days <= HOURLY_MAX_DAYS }
 }
 
@@ -151,7 +166,7 @@ export function signed(
 }
 
 export type FinanceDrivers = {
-  /** new-api's charge at list price, root included, in yuan. */
+  /** new-api's charge at list price, root and staff included, in yuan. */
   consumption: { current: number; previous: number; change: number }
   /** The one or two models, else vendors, that drove the consumption change. */
   consumptionBy: { kind: 'model' | 'vendor'; parts: Contribution[] }
@@ -164,7 +179,7 @@ export type FinanceDrivers = {
 
 /**
  * What moved between the periods: consumption by model and vendor (from
- * vendor_models, root included on both sides) and revenue by payment
+ * vendor_models, root and staff included on both sides) and revenue by payment
  * method. Undefined without a previous period to compare with.
  */
 export function financeDrivers(
@@ -236,18 +251,47 @@ export function monthProjection(
   }
 }
 
+/** A range shorter than this many days is too short to measure a runway. */
+export const RUNWAY_MIN_DAYS = 3
+
 /**
- * Days of customers' paid use their balance covers: the balance over the
- * paid part of their consumption per day. Null without paid use to divide by.
+ * Why a runway is a dash: the range is short, the server lacks a figure the
+ * runway needs, or there is no paid use to divide by.
  */
-export function balanceRunway(
+export type RunwayGap = 'short' | 'missing' | 'no_use'
+
+export type Runway =
+  | { days: number; gap: null }
+  | { days: null; gap: RunwayGap }
+
+/**
+ * Days customers' paid balances and paid plans' quota left cover at the
+ * range's paid use per day. Both sides count paid money only, so the runway
+ * does not read gift credit as runway. Paid use is spread over the logged
+ * days of the range, so days before the logs begin do not dilute it. A
+ * server that sends neither the paid balance nor the plan quota gives no
+ * runway: a figure from one side alone would understate it.
+ */
+export function runwayOf(
   data: FinanceInsights | undefined,
-  days: number
-): number | null {
-  if (!data || days <= 0) return null
-  const paid = data.consumption_usd - (data.gift_consumption_usd ?? 0)
-  if (paid <= 0) return null
-  return Math.max(0, data.liability_usd) / (paid / days)
+  range: InsightsRangeInfo
+): Runway {
+  if (!data) return { days: null, gap: 'missing' }
+  if (range.days < RUNWAY_MIN_DAYS) return { days: null, gap: 'short' }
+  const paidBalance = data.liability_paid_value
+  const planQuota =
+    data.paid_plan_quota_left_usd ?? owedNow(data)?.planQuotaLeft
+  const logged = loggedDays(range, data.logs_since)
+  if (paidBalance == null || planQuota == null || logged <= 0) {
+    return { days: null, gap: 'missing' }
+  }
+  const paidUse =
+    data.paid_use_usd ?? data.consumption_usd - (data.gift_consumption_usd ?? 0)
+  if (paidUse <= 0) return { days: null, gap: 'no_use' }
+  return {
+    days: Math.max(0, paidBalance + planQuota) / (paidUse / logged),
+    gap: null,
+  }
 }
 
 export type GiftWatch = {
@@ -633,7 +677,7 @@ export type ClaudeEarned = {
 }
 
 /**
- * Claude's revenue earned (root left out) over the days gpt-load reported:
+ * Claude's revenue earned (root and staff left out) over the days gpt-load reported:
  * the range's recognized revenue for Claude in proportion to those days.
  * Null on a server without revenue by vendor.
  */

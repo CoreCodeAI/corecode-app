@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 import type { Finding } from '../analysis'
 import {
   financeDrivers,
+  financeRange,
   giftShareHigh,
   giftWatch,
   groupRows,
@@ -36,10 +37,12 @@ import {
   GIFT_SHARE_WARN,
   joinSentences,
   MIN_CHECKOUTS,
+  previousBeforeLogs,
   tableState,
   TONES,
   useInsightsDefinitions,
   useInsightsFormat,
+  type InsightsRangeInfo,
   type InsightsSources,
   type InsightsTab,
   type SourceState,
@@ -111,7 +114,7 @@ export function FinanceDriversPanel(props: {
     <Panel
       title={t('What moved')}
       help={t(
-        'Each part’s change against the previous period of the same length, largest first, with its share of the total change. Consumption is new-api’s charge at list price by model, root included, in yuan. Revenue is the money paid by payment method.'
+        'Each part’s change against the previous period of the same length, largest first, with its share of the total change. Consumption is new-api’s charge at list price by model, root and staff included, in yuan. Revenue is the money paid by payment method.'
       )}
     >
       <div className='grid gap-4 sm:grid-cols-2'>
@@ -152,6 +155,8 @@ export function FinanceDriversPanel(props: {
 export function GiftWatchPanel(props: {
   data: FinanceInsights | undefined
   previous?: FinanceInsights
+  /** The page's range, for whether the previous period predates the logs. */
+  range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
   source?: SourceState
 }) {
@@ -161,6 +166,13 @@ export function GiftWatchPanel(props: {
   const signupRead = props.data?.checkin_credit_usd != null
   const now = giftWatch(props.data)
   const before = props.previous ? giftWatch(props.previous) : undefined
+  // A previous period wholly before the logs has nothing to compare with.
+  const noPrevious =
+    !!props.data &&
+    previousBeforeLogs(
+      financeRange(props.data, props.range),
+      props.data.logs_since
+    )
   const ratioHigh =
     now.unpaidPerPaid != null && now.unpaidPerPaid > UNPAID_CREDIT_WARN
   const findings: Finding[] = []
@@ -201,10 +213,10 @@ export function GiftWatchPanel(props: {
       help={
         signupRead
           ? t(
-              'Gifted share is the gifted part of customers’ consumption (given plans and the unpaid share of each wallet) over all of it, root left out; under ¥100 of consumption it is not judged. Unpaid credit per paid is top-up bonus, redemption codes, referral commission, net manual additions, check-in credit and sign-up and invitee bonuses (those two estimated at today’s settings) issued in the range, over the top-up credit customers paid for. Amber past 30% and 50%.'
+              'Gifted share is the gifted part of customers’ consumption (given plans and the unpaid share of each wallet) over all of it, root and staff left out; under ¥100 of consumption it is not judged. Unpaid credit per paid is top-up bonus, redemption codes, referral commission, net manual additions, check-in credit and sign-up and invitee bonuses (those two estimated at today’s settings) issued in the range, over the top-up credit customers paid for. Amber past 30% and 50%.'
             )
           : t(
-              'Gifted share is the gifted part of customers’ consumption (given plans and the unpaid share of each wallet) over all of it, root left out; under ¥100 of consumption it is not judged. Unpaid credit per paid is bonus, redemption codes, referral commission and net manual additions issued in the range, over the top-up credit customers paid for. Amber past 30% and 50%.'
+              'Gifted share is the gifted part of customers’ consumption (given plans and the unpaid share of each wallet) over all of it, root and staff left out; under ¥100 of consumption it is not judged. Unpaid credit per paid is bonus, redemption codes, referral commission and net manual additions issued in the range, over the top-up credit customers paid for. Amber past 30% and 50%.'
             )
       }
     >
@@ -225,6 +237,7 @@ export function GiftWatchPanel(props: {
                       previous: before?.giftShare ?? undefined,
                       better: 'down',
                       points: true,
+                      missing: noPrevious,
                     },
               hint:
                 now.giftShare == null
@@ -246,6 +259,7 @@ export function GiftWatchPanel(props: {
                       current: now.unpaidPerPaid,
                       previous: before?.unpaidPerPaid ?? undefined,
                       better: 'down',
+                      missing: noPrevious,
                     },
               hint:
                 now.unpaidPerPaid == null
@@ -558,7 +572,9 @@ export function GroupConsumptionPanel(props: {
           'Each group the requests were billed in, customers only. Consumption is after the group’s ratio; at list price divides it by today’s ratio, so a group sold cheaper shows how much use it carried. Change is in percentage points of share against the previous period. Requests logged before groups were recorded show as not recorded.'
         ),
         defs.listCharge,
-        defs.estimatedRevenue
+        t(
+          'Revenue (est.) is consumption’s pro-rata share of the range’s revenue earned: an estimate, not a margin, since the data has no cost by group.'
+        )
       )}
     >
       <SimpleTable
@@ -619,6 +635,9 @@ export function GroupConsumptionPanel(props: {
           {
             key: 'rev',
             label: t('Revenue (est.)'),
+            hint: t(
+              'Consumption’s pro-rata share of revenue earned, an estimate, not a margin.'
+            ),
             align: 'right',
             render: (row) => fmt.cny(row.revenue_estimate),
           },

@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next'
 
 import {
   joinSentences,
+  rangeSpan,
   tableState,
   useHourAxis,
   useInsightsFormat,
@@ -35,6 +36,7 @@ import { useRiskVerdict } from '../verdicts'
 import { largestSurge, useSurgeText } from '../verdicts/risk'
 import {
   clusteredUserIds,
+  exitsOf,
   hasRepeatBuyers,
   materialDebtors,
   MIN_SIGNAL_COUNT,
@@ -43,10 +45,12 @@ import {
   riskRangeStart,
   riskSurges,
   sharedCounts,
+  sharedExitSource,
   signalDelta,
   signupUnit,
   suspectInviters,
   unpaidSpend,
+  usesGiftPart,
 } from './risk-analysis'
 import {
   AliasClusterPanel,
@@ -90,9 +94,13 @@ export function RiskTab(props: {
   const listState = tableState(viewSource, data)
   const clusters = useSharedAddresses(data)
   const previousClusters = useSharedAddresses(previous)
-  const shared = sharedCounts(data, clusters)
+  const topExits = useSharedAddresses(sharedExitSource(data))
+  const previousTopExits = useSharedAddresses(sharedExitSource(previous))
+  const exits = exitsOf(data, clusters, topExits)
+  const previousExits = exitsOf(previous, previousClusters, previousTopExits)
+  const shared = sharedCounts(data, clusters, exits)
   const previousShared = previous
-    ? sharedCounts(previous, previousClusters)
+    ? sharedCounts(previous, previousClusters, previousExits)
     : undefined
   const repeatBuyers = hasRepeatBuyers(clusters)
   const limitedBuyers = clusters.some((cluster) => cluster.shared_exit != null)
@@ -119,7 +127,7 @@ export function RiskTab(props: {
   const surges = data ? riskSurges(data, previous, props.range) : []
   const surgeAt = new Map(surges.map((surge) => [surge.at, surge]))
   const surge = largestSurge(surges)
-  const span = props.range ? props.range.end - props.range.start : undefined
+  const span = props.range ? rangeSpan(props.range) : undefined
   const previousAt = new Map(
     (previous?.signup_series ?? []).map((point) => [point.at, point.count])
   )
@@ -206,7 +214,7 @@ export function RiskTab(props: {
   )
 
   const debtors = materialDebtors(data?.debtors)
-  const clustered = clusteredUserIds(clusters)
+  const clustered = clusteredUserIds([...clusters, ...exits])
   const spend = unpaidSpend(data)
   const previousSpend = unpaidSpend(previous)
   const inviters = suspectInviters(data)
@@ -246,7 +254,7 @@ export function RiskTab(props: {
       help:
         data?.deleted_signups != null
           ? t(
-              'Accounts created in the range, root left out, deleted accounts included.'
+              'Accounts created in the range, root and staff left out, deleted accounts included.'
             )
           : undefined,
     },
@@ -320,10 +328,15 @@ export function RiskTab(props: {
       missing: failed,
       hint: spendHint,
       tone: inviters.unpaid > 0 ? 'warning' : 'default',
-      help: t(
-        'New accounts of the range that consumed in it and have never paid. An inviter with {{min}} or more of them turns this amber.',
-        { min: MIN_SIGNAL_COUNT }
-      ),
+      help: usesGiftPart(data)
+        ? t(
+            'New accounts of the range that consumed in it and have never paid. An inviter with {{min}} or more of them and some gift credit turns this amber; credit an administrator granted by hand does not count.',
+            { min: MIN_SIGNAL_COUNT }
+          )
+        : t(
+            'New accounts of the range that consumed in it and have never paid. An inviter with {{min}} or more of them turns this amber.',
+            { min: MIN_SIGNAL_COUNT }
+          ),
       delta: signalDelta(spend.unpaid, previousSpend?.unpaid),
     })
   }
@@ -358,6 +371,7 @@ export function RiskTab(props: {
       <SharedAddressPanel
         data={data}
         clusters={clusters}
+        exits={exits}
         start={data ? riskRangeStart(data, props.range) : undefined}
         state={listState}
       />

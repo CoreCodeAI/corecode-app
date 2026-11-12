@@ -4,8 +4,6 @@ import (
 	"cmp"
 	"slices"
 
-	"github.com/QuantumNous/new-api/common"
-
 	"gorm.io/gorm"
 )
 
@@ -49,11 +47,59 @@ type GrowthInsights struct {
 	// topped up the wallet too: how many trial buyers converted.
 	SubscriptionBuyers  int64 `json:"subscription_buyers"`
 	SubscriptionToTopup int64 `json:"subscription_to_topup"`
+	// FirstPayment is how long the cohort's payers took to pay for the first
+	// time, counted from sign-up. A payment made after the range's end is not
+	// counted, so the timing is over the same window as PayerActivity.
+	FirstPayment PaymentTiming `json:"first_payment"`
+	// PayerActivity follows every account that paid before the range's end
+	// through the last two weeks of the range.
+	PayerActivity PayerActivity `json:"payer_activity"`
 }
+
+// PaymentTiming is the time from sign-up to first payment over the cohort's
+// payers. MedianHours is the median of those times, in hours. The four counts
+// split the payers by whole days since sign-up (0 is the same day, then 1 to 3,
+// 4 to 7, and later), and sum to Payers. WithinDay is the share of payers in
+// SameDay; WithinWeek the share in SameDay, Days1To3 and Days4To7.
+type PaymentTiming struct {
+	Payers      int64   `json:"payers"`
+	MedianHours float64 `json:"median_hours"`
+	WithinDay   float64 `json:"within_day"`
+	WithinWeek  float64 `json:"within_week"`
+	SameDay     int64   `json:"same_day"`
+	Days1To3    int64   `json:"days_1_3"`
+	Days4To7    int64   `json:"days_4_7"`
+	Later       int64   `json:"later"`
+}
+
+// PayerActivity counts the accounts that paid before the range's end. Active
+// used quota in the last 14 days of the range; Lapsed used quota in the 14
+// days before those and none in the last 14. Top lists the largest earlier
+// spenders among the lapsed payers.
+type PayerActivity struct {
+	Payers int64         `json:"payers"`
+	Active int64         `json:"active"`
+	Lapsed int64         `json:"lapsed"`
+	Top    []LapsedPayer `json:"top"`
+}
+
+// LapsedPayer is a lapsed payer with the quota used in the window before the
+// last 14 days.
+type LapsedPayer struct {
+	UserRef
+	QuotaUSD float64 `json:"quota_usd"`
+}
+
+// lapsedPayerDays is the length of each of the two windows PayerActivity
+// compares; lapsedPayersListed is how many lapsed payers it names.
+const (
+	lapsedPayerDays    = 14
+	lapsedPayersListed = 5
+)
 
 func GetGrowthInsights(r InsightsRange) (*GrowthInsights, error) {
 	users, err := readRiskUsers(func(tx *gorm.DB) *gorm.DB {
-		return tx.Where("created_at >= ? AND created_at < ? AND role < ?", r.Start, r.End, common.RoleRootUser)
+		return tx.Where("created_at >= ? AND created_at < ? AND role < ?", r.Start, r.End, customerRoleBound)
 	})
 	if err != nil {
 		return nil, err
@@ -66,6 +112,7 @@ func GetGrowthInsights(r InsightsRange) (*GrowthInsights, error) {
 	if err != nil {
 		return nil, err
 	}
+	firstPaid := firstPaidTimes(orders)
 	cohort := make(map[int]bool, len(ids))
 	for _, id := range ids {
 		cohort[id] = true
@@ -84,6 +131,7 @@ func GetGrowthInsights(r InsightsRange) (*GrowthInsights, error) {
 			toppedUp[order.UserId] = true
 		}
 	}
+	payDelays := make([]int64, 0, len(ids))
 
 	result := &GrowthInsights{Funnel: FunnelRow{Segment: "all"}}
 	sources := make(map[string]*FunnelRow)
@@ -148,7 +196,17 @@ func GetGrowthInsights(r InsightsRange) (*GrowthInsights, error) {
 				result.SubscriptionToTopup++
 			}
 		}
+		// A payment after the range's end is not part of the range's timing.
+		if first, ok := firstPaid[user.Id]; ok && first < r.End {
+			payDelays = append(payDelays, max(first-user.CreatedAt, 0))
+		}
 	}
+	result.FirstPayment = firstPaymentTiming(payDelays)
+	activity, err := readPayerActivity(r, firstPaid)
+	if err != nil {
+		return nil, err
+	}
+	result.PayerActivity = activity
 	for _, row := range sources {
 		result.BySource = append(result.BySource, *row)
 	}
@@ -163,6 +221,127 @@ func GetGrowthInsights(r InsightsRange) (*GrowthInsights, error) {
 	for _, start := range hourStarts {
 		result.Hourly = append(result.Hourly, *hourly[start])
 	}
+	return result, nil
+}
+
+// firstPaidTimes maps each account that paid money to the time of its first
+// paid order. A top-up and a plan bought with money both count; an order for
+// no money does not. Growth and channels share it.
+func firstPaidTimes(orders []paidOrder) map[int]int64 {
+	first := make(map[int]int64)
+	for _, order := range orders {
+		if order.Money <= 0 {
+			continue
+		}
+		if at, ok := first[order.UserId]; !ok || order.CreateTime < at {
+			first[order.UserId] = order.CreateTime
+		}
+	}
+	return first
+}
+
+// firstPaymentTiming summarises the seconds from sign-up to first payment, one
+// per payer.
+func firstPaymentTiming(delays []int64) PaymentTiming {
+	timing := PaymentTiming{Payers: int64(len(delays))}
+	if len(delays) == 0 {
+		return timing
+	}
+	slices.Sort(delays)
+	mid := len(delays) / 2
+	median := float64(delays[mid])
+	if len(delays)%2 == 0 {
+		median = float64(delays[mid-1]+delays[mid]) / 2
+	}
+	timing.MedianHours = roundTo(median/3600, 1)
+	for _, delay := range delays {
+		switch days := delay / 86400; {
+		case days == 0:
+			timing.SameDay++
+		case days <= 3:
+			timing.Days1To3++
+		case days <= 7:
+			timing.Days4To7++
+		default:
+			timing.Later++
+		}
+	}
+	timing.WithinDay = ratio(float64(timing.SameDay), float64(timing.Payers))
+	timing.WithinWeek = ratio(float64(timing.SameDay+timing.Days1To3+timing.Days4To7), float64(timing.Payers))
+	return timing
+}
+
+// readPayerActivity classifies the customers in firstPaid who paid before the
+// range's end by the quota they used in the last lapsedPayerDays of the range
+// and in the lapsedPayerDays before those. It reads the user-hour rollup for
+// those 28 days, not the logs, and looks roles up among the payers only.
+func readPayerActivity(r InsightsRange, firstPaid map[int]int64) (PayerActivity, error) {
+	result := PayerActivity{Top: []LapsedPayer{}}
+	var payers []int
+	for id, first := range firstPaid {
+		if first < r.End {
+			payers = append(payers, id)
+		}
+	}
+	staff := make(map[int]bool)
+	for chunk := range slices.Chunk(payers, sharedAddressChunk) {
+		var ids []int
+		if err := DB.Model(&User{}).Unscoped().Where("id IN ? AND role >= ?", chunk, customerRoleBound).Pluck("id", &ids).Error; err != nil {
+			return result, err
+		}
+		for _, id := range ids {
+			staff[id] = true
+		}
+	}
+	lastFrom := insightHourKey(r.End - lapsedPayerDays*86400)
+	hours, err := loadInsightHours(InsightsRange{Start: insightHourKey(r.End - 2*lapsedPayerDays*86400), End: r.End})
+	if err != nil {
+		return result, err
+	}
+	earlier := make(map[int]int64)
+	active := make(map[int]bool)
+	for _, hour := range hours {
+		for userID, user := range hour.users {
+			if user.Quota <= 0 {
+				continue
+			}
+			if hour.start >= lastFrom {
+				active[userID] = true
+			} else {
+				earlier[userID] += user.Quota
+			}
+		}
+	}
+	lapsed := []LapsedPayer{}
+	for _, id := range payers {
+		if staff[id] {
+			continue
+		}
+		result.Payers++
+		switch {
+		case active[id]:
+			result.Active++
+		case earlier[id] > 0:
+			result.Lapsed++
+			lapsed = append(lapsed, LapsedPayer{UserRef: UserRef{UserID: id}, QuotaUSD: quotaUSD(earlier[id])})
+		}
+	}
+	slices.SortFunc(lapsed, func(a, b LapsedPayer) int {
+		return cmp.Or(cmp.Compare(b.QuotaUSD, a.QuotaUSD), cmp.Compare(a.UserID, b.UserID))
+	})
+	lapsed = lapsed[:min(len(lapsed), lapsedPayersListed)]
+	ids := make([]int, 0, len(lapsed))
+	for _, payer := range lapsed {
+		ids = append(ids, payer.UserID)
+	}
+	names, err := usernamesByID(ids)
+	if err != nil {
+		return result, err
+	}
+	for i := range lapsed {
+		lapsed[i].Username = names[lapsed[i].UserID]
+	}
+	result.Top = lapsed
 	return result, nil
 }
 
@@ -203,10 +382,11 @@ type UserSpend struct {
 }
 
 // ActivityInsights reads the hourly quota_data aggregates, customers only:
-// root's rows are left out of every figure, as on the capacity and funds
-// views, and its consumption is RootQuotaUSD. A user is active in a span when
-// a request of theirs came back with usage (tokens or a charge); Requests
-// counts every logged request, those without usage included.
+// staff's rows are left out of every figure, as on the capacity and funds
+// views, and their consumption is RootQuotaUSD, a name kept from when only root
+// was staff. A user is active in a span when a request of theirs came back
+// with usage (tokens or a charge); Requests counts every logged request, those
+// without usage included.
 // ClaudeQuotaUSD is the part of QuotaUSD charged for Claude models. Hourly is
 // every UTC hour of a range up to insightsHourlySpan.
 type ActivityInsights struct {
@@ -224,7 +404,10 @@ type ActivityInsights struct {
 	Top10Share     float64           `json:"top10_share"`
 }
 
-const retentionDays = 14
+// retentionDays is how many days after sign-up retention reports. The cohorts
+// are read from the range's own activity, so a 30-day range has every day it
+// reports without a further read.
+const retentionDays = 30
 
 func GetActivityInsights(r InsightsRange) (*ActivityInsights, error) {
 	// WAU on the first day needs the six days before it.
@@ -245,16 +428,20 @@ func GetActivityInsights(r InsightsRange) (*ActivityInsights, error) {
 		hourly[start] = &ActivityHour{Hour: start}
 		activeByHour[start] = make(map[int]bool)
 	}
-	roots, err := RootUserIDs()
+	staff, err := StaffUserIDs()
 	if err != nil {
 		return nil, err
 	}
 	spend := make(map[int]*UserSpend)
 	active := make(map[int]bool)
 	var total, claude, rootQuota int64
+	// quota_data rows are keyed at their hour's start, so the hour a range
+	// starts in is counted whole: the first row that counts is the one at
+	// that hour's start, not at the range's start.
+	firstHour := insightHourKey(r.Start)
 	for _, row := range rows {
-		if slices.Contains(roots, row.UserID) {
-			if row.CreatedAt >= r.Start {
+		if slices.Contains(staff, row.UserID) {
+			if row.CreatedAt >= firstHour {
 				rootQuota += int64(row.Quota)
 			}
 			continue
@@ -267,7 +454,7 @@ func GetActivityInsights(r InsightsRange) (*ActivityInsights, error) {
 			}
 			activeByDay[day][row.UserID] = true
 		}
-		if row.CreatedAt < r.Start {
+		if row.CreatedAt < firstHour {
 			continue
 		}
 		if used {
@@ -360,7 +547,7 @@ func retentionCohorts(r InsightsRange, activeByDay map[int64]map[int]bool) ([]Re
 		CreatedAt int64
 	}
 	if err := DB.Model(&User{}).Select("id, created_at").
-		Where("created_at >= ? AND created_at < ? AND role < ?", start, r.End, common.RoleRootUser).Find(&users).Error; err != nil {
+		Where("created_at >= ? AND created_at < ? AND role < ?", start, r.End, customerRoleBound).Find(&users).Error; err != nil {
 		return nil, err
 	}
 	members := make(map[int64][]int)

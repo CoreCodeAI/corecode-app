@@ -27,6 +27,7 @@ import { runRate, type Contribution } from '../analysis'
 import {
   HOUR_SAMPLE,
   MIN_TASKS,
+  loggedDays,
   SHORT_ROI_DAYS,
   SMALL_SAMPLE,
   TONES,
@@ -86,6 +87,8 @@ export function UpstreamHourlyCharts(props: {
     props.range
   )
   const end = props.range?.end ?? Number.POSITIVE_INFINITY
+  // An hour before the logs has no attempts to read: drawn missing.
+  const logsSince = props.data?.logs_since
   const labels = [
     ...series.named.map(name),
     ...(series.hasOther ? [t('Other channels')] : []),
@@ -109,14 +112,19 @@ export function UpstreamHourlyCharts(props: {
       >
         <BarSeries
           ariaLabel={t('Attempts by channel')}
-          points={axis.bars(series.hours, end, (hour) => ({
-            values: hour.attempts,
-            tone: inIncident(hour.hour) ? 'danger' : undefined,
-            extra: labels.map((label, at) => ({
-              label: t('{{name}} failed', { name: label }),
-              value: fmt.num(hour.errors[at]),
-            })),
-          }))}
+          points={axis.bars(
+            series.hours,
+            end,
+            (hour) => ({
+              values: hour.attempts,
+              tone: inIncident(hour.hour) ? 'danger' : undefined,
+              extra: labels.map((label, at) => ({
+                label: t('{{name}} failed', { name: label }),
+                value: fmt.num(hour.errors[at]),
+              })),
+            }),
+            logsSince
+          )}
           series={labels.map((label, at) => ({
             label,
             compact: fmt.num,
@@ -137,23 +145,28 @@ export function UpstreamHourlyCharts(props: {
         <BarSeries
           grouped
           ariaLabel={t('Failure rate by channel')}
-          points={axis.bars(series.hours, end, (hour) => ({
-            values: hour.failureRates.map((rate, at) =>
-              hour.attempts[at] >= HOUR_SAMPLE ? rate : 0
-            ),
-            extra: labels.flatMap((label, at) =>
-              hour.attempts[at] > 0 && hour.attempts[at] < HOUR_SAMPLE
-                ? [
-                    {
-                      label,
-                      value: t('{{count}} attempts, too few for a rate', {
-                        count: hour.attempts[at],
-                      }),
-                    },
-                  ]
-                : []
-            ),
-          }))}
+          points={axis.bars(
+            series.hours,
+            end,
+            (hour) => ({
+              values: hour.failureRates.map((rate, at) =>
+                hour.attempts[at] >= HOUR_SAMPLE ? rate : 0
+              ),
+              extra: labels.flatMap((label, at) =>
+                hour.attempts[at] > 0 && hour.attempts[at] < HOUR_SAMPLE
+                  ? [
+                      {
+                        label,
+                        value: t('{{count}} attempts, too few for a rate', {
+                          count: hour.attempts[at],
+                        }),
+                      },
+                    ]
+                  : []
+              ),
+            }),
+            logsSince
+          )}
           series={labels.map((label, at) => ({
             label,
             format: fmt.pct,
@@ -174,10 +187,15 @@ export function UpstreamHourlyCharts(props: {
         <BarSeries
           grouped
           ariaLabel={t('Revenue and cost')}
-          points={axis.bars(series.hours, end, (hour) => ({
-            values: revenue.values(hour),
-            extra: revenue.extra(hour),
-          }))}
+          points={axis.bars(
+            series.hours,
+            end,
+            (hour) => ({
+              values: revenue.values(hour),
+              extra: revenue.extra(hour),
+            }),
+            logsSince
+          )}
           series={revenue.series}
         />
       </Panel>
@@ -352,9 +370,8 @@ export function UpstreamRunRate(props: {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const help = useUpstreamHelp()
-  const days = props.range
-    ? Math.max(0, (props.range.end - props.range.start) / 86400)
-    : 0
+  // Scaled over the days the logs cover: an hour before them has no data.
+  const days = props.range ? loggedDays(props.range, props.data?.logs_since) : 0
   if (!props.data || days <= 0) return null
   const totals = upstreamTotals(props.data)
   if (totals.attempts === 0 && totals.cost === 0) return null

@@ -21,7 +21,12 @@ For commercial licensing, please contact support@quantumnous.com
 // consumption, and engagement read from the last full day.
 
 import { closedHours, contributions, type Contribution } from './analysis'
-import { MIN_COHORT, type InsightsRangeInfo, type SourceState } from './lib'
+import {
+  MIN_COHORT,
+  rangeSpan,
+  type InsightsRangeInfo,
+  type SourceState,
+} from './lib'
 import type {
   ActivityInsights,
   FunnelRow,
@@ -93,6 +98,9 @@ export const BURST_SHARE = 0.25
 /** Hours a sign-up must be old before its activation and payment can show. */
 export const MATURE_HOURS = 6
 
+/** Sign-up counts for a cohort: the accounts, and how many of them activated or paid. */
+export type Cohort = { registered: number; activated: number; paid: number }
+
 /**
  * The sign-ups of the whole days that ended at least MATURE_HOURS before the
  * range's end, so that a day of sign-ups hours old does not read as a poor
@@ -101,7 +109,7 @@ export const MATURE_HOURS = 6
 export function matureCohort(
   daily: GrowthInsights['daily'] | null | undefined,
   range: InsightsRangeInfo | undefined
-): { registered: number; activated: number; paid: number } | null {
+): Cohort | null {
   if (!range || range.hourly || !daily) return null
   const cutoff = range.end - MATURE_HOURS * 3600
   const cohort = { registered: 0, activated: 0, paid: 0 }
@@ -112,6 +120,32 @@ export function matureCohort(
     cohort.paid += row.paid
   }
   return cohort
+}
+
+/**
+ * The cohort that activation and payment rates are judged on, and how many of
+ * the range's sign-ups it leaves out as too young. The card and the verdict
+ * both read this, so they show the same rate. An hourly range has no matured
+ * days: it judges every sign-up, and its rates read as so far.
+ */
+export function judgedCohort(
+  funnel: FunnelRow,
+  daily: GrowthInsights['daily'] | null | undefined,
+  range: InsightsRangeInfo | undefined
+): { cohort: Cohort; young: number } {
+  const cohort = matureCohort(daily, range) ?? funnel
+  return {
+    cohort,
+    young: Math.max(funnel.registered - cohort.registered, 0),
+  }
+}
+
+/** The previous period of a range, as the window its days are read from. */
+export function previousWindow(range: InsightsRangeInfo): {
+  start: number
+  end: number
+} {
+  return { start: range.start - rangeSpan(range), end: range.start }
 }
 
 /** How many customers the server lists in top_users. */
@@ -163,11 +197,6 @@ export function busiestHour<T extends { hour: number }>(
     if (value(row) > 0 && (!top || value(row) > value(top))) top = row
   }
   return top
-}
-
-/** The length of a range in whole hours, so its hour keys line up with the previous period's. */
-export function hourSpan(range: { start: number; end: number }): number {
-  return Math.round((range.end - range.start) / 3600) * 3600
 }
 
 type TopUser = ActivityInsights['top_users'][number]

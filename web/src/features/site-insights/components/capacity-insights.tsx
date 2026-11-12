@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import { alignPrevious } from '../analysis'
+import { alignPrevious, beforeLogs } from '../analysis'
 import {
   dailyPeaks,
   failureHours,
@@ -46,6 +46,7 @@ import { BarSeries, Panel } from './shared'
 const FORECAST_MAX_DAYS = 365
 // Spiking hours named in the failure panel's sentence.
 const NAMED_SPIKES = 3
+const DAY_SECONDS = 86400
 
 /**
  * Each hour's peak concurrency against today's slots, with the previous
@@ -61,6 +62,8 @@ export function HourlyPeakChart(props: {
   span: number | undefined
   end: number
   slots: number
+  /** Where the logs begin: earlier hours are drawn missing. */
+  logsSince?: number | null
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -89,27 +92,32 @@ export function HourlyPeakChart(props: {
           ? { value: props.slots, label: t("Today's pool slots") }
           : undefined
       }
-      points={axis.bars(props.hourly, props.end, (row, index) => {
-        const previous = comparable ? before[index] : undefined
-        const peak = own ? poolPeakOf(row) : row.peak_concurrency
-        return {
-          values: own ? [peak, row.peak_concurrency] : [peak],
-          tone: peakTone(peak, props.slots, own),
-          extra: [
-            ...(previous
-              ? [
-                  {
-                    label: t('Same hour, previous period'),
-                    value: fmt.num(
-                      own ? poolPeakOf(previous) : previous.peak_concurrency
-                    ),
-                  },
-                ]
-              : []),
-            { label: t('Requests'), value: fmt.num(row.requests) },
-          ],
-        }
-      })}
+      points={axis.bars(
+        props.hourly,
+        props.end,
+        (row, index) => {
+          const previous = comparable ? before[index] : undefined
+          const peak = own ? poolPeakOf(row) : row.peak_concurrency
+          return {
+            values: own ? [peak, row.peak_concurrency] : [peak],
+            tone: peakTone(peak, props.slots, own),
+            extra: [
+              ...(previous
+                ? [
+                    {
+                      label: t('Same hour, previous period'),
+                      value: fmt.num(
+                        own ? poolPeakOf(previous) : previous.peak_concurrency
+                      ),
+                    },
+                  ]
+                : []),
+              { label: t('Requests'), value: fmt.num(row.requests) },
+            ],
+          }
+        },
+        props.logsSince
+      )}
     />
   )
 }
@@ -199,6 +207,8 @@ export function FailureRatePanel(props: {
   end: number
   /** What a request is on the view's server, joined to the help. */
   definition?: string
+  /** Where the logs begin: earlier hours are drawn missing. */
+  logsSince?: number | null
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -255,30 +265,35 @@ export function FailureRatePanel(props: {
       <BarSeries
         ariaLabel={t('Hourly failure rate')}
         series={[{ label: t('Failure rate'), format: fmt.pct }]}
-        points={axis.bars(hours, props.end, (hour) => ({
-          values: [hour.rate ?? 0],
-          tone: hour.spike ? 'danger' : undefined,
-          extra: [
-            ...(hour.previousRate !== null
-              ? [
-                  {
-                    label: t('Same hour, previous period'),
-                    value: fmt.pct(hour.previousRate),
-                  },
-                ]
-              : []),
-            { label: t('Failed'), value: fmt.num(hour.errors) },
-            {
-              label: t('Requests'),
-              value:
-                hour.rate === null
-                  ? t('{{count}}, too few for a rate', {
-                      count: fmt.num(hour.requests),
-                    })
-                  : fmt.num(hour.requests),
-            },
-          ],
-        }))}
+        points={axis.bars(
+          hours,
+          props.end,
+          (hour) => ({
+            values: [hour.rate ?? 0],
+            tone: hour.spike ? 'danger' : undefined,
+            extra: [
+              ...(hour.previousRate !== null
+                ? [
+                    {
+                      label: t('Same hour, previous period'),
+                      value: fmt.pct(hour.previousRate),
+                    },
+                  ]
+                : []),
+              { label: t('Failed'), value: fmt.num(hour.errors) },
+              {
+                label: t('Requests'),
+                value:
+                  hour.rate === null
+                    ? t('{{count}}, too few for a rate', {
+                        count: fmt.num(hour.requests),
+                      })
+                    : fmt.num(hour.requests),
+              },
+            ],
+          }),
+          props.logsSince
+        )}
       />
     </Panel>
   )
@@ -293,14 +308,20 @@ export function PeakTrendPanel(props: {
   hourly: CapacityHour[]
   end: number
   slots: number
+  /** Where the logs begin: a day before them is drawn missing. */
+  logsSince?: number | null
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const definitions = useInsightsDefinitions()
   const own = props.own
   const days = dailyPeaks(props.hourly, props.end, localDay, own)
+  // A day before the logs is drawn missing and left out of the fitted line,
+  // so the trend is not pulled down by days with no data.
   const trend = peakTrend(
-    days.map((day) => day.peak),
+    days
+      .filter((day) => !beforeLogs(day.day, DAY_SECONDS, props.logsSince))
+      .map((day) => day.peak),
     props.slots
   )
   const rate = trend ? fmt.num(Math.round(trend.slope * 10) / 10) : ''
@@ -354,6 +375,7 @@ export function PeakTrendPanel(props: {
           title: fmt.day(day.day),
           values: [day.peak],
           tone: peakTone(day.peak, props.slots, own),
+          missing: beforeLogs(day.day, DAY_SECONDS, props.logsSince),
         }))}
       />
     </Panel>

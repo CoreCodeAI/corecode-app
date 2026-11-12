@@ -22,10 +22,10 @@ import { alignPrevious } from '../analysis'
 import {
   busiestHour,
   customerMoves,
-  hourSpan,
   type CustomerMove,
 } from '../growth-analysis'
 import {
+  rangeSpan,
   TONES,
   useChargeFormat,
   useHourAxis,
@@ -50,6 +50,8 @@ export function HourlyActivePanel(props: {
   rows: ActivityHour[]
   previous?: ActivityInsights
   range: InsightsRangeInfo
+  /** Where the logs begin: an hour before them has no data. */
+  logsSince?: number | null
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -57,7 +59,7 @@ export function HourlyActivePanel(props: {
   const before = alignPrevious(
     props.rows,
     props.previous?.hourly,
-    hourSpan(props.range)
+    rangeSpan(props.range)
   )
   const busiest = busiestHour(
     props.rows,
@@ -82,20 +84,25 @@ export function HourlyActivePanel(props: {
       <BarSeries
         ariaLabel={t('Active users by hour')}
         series={[{ label: t('Active users') }]}
-        points={hours.bars(props.rows, props.range.end, (row, index) => ({
-          values: [row.active_users],
-          extra: [
-            { label: t('Requests'), value: fmt.num(row.requests) },
-            ...(before[index]
-              ? [
-                  {
-                    label: t('Same hour, previous period'),
-                    value: fmt.num(before[index].active_users),
-                  },
-                ]
-              : []),
-          ],
-        }))}
+        points={hours.bars(
+          props.rows,
+          props.range.end,
+          (row, index) => ({
+            values: [row.active_users],
+            extra: [
+              { label: t('Requests'), value: fmt.num(row.requests) },
+              ...(before[index]
+                ? [
+                    {
+                      label: t('Same hour, previous period'),
+                      value: fmt.num(before[index].active_users),
+                    },
+                  ]
+                : []),
+            ],
+          }),
+          props.logsSince
+        )}
       />
     </Panel>
   )
@@ -108,6 +115,8 @@ export function HourlyConsumptionPanel(props: {
   previous?: ActivityInsights
   range: InsightsRangeInfo
   totals: string
+  /** Where the logs begin: an hour before them has no data. */
+  logsSince?: number | null
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -116,7 +125,7 @@ export function HourlyConsumptionPanel(props: {
   const before = alignPrevious(
     props.rows,
     props.previous?.hourly,
-    hourSpan(props.range)
+    rangeSpan(props.range)
   )
   const busiest = busiestHour(
     props.rows,
@@ -150,21 +159,26 @@ export function HourlyConsumptionPanel(props: {
             compact: fmt.usdCompact,
           },
         ]}
-        points={hours.bars(props.rows, props.range.end, (row, index) => ({
-          values: [charge.toUSD(row.quota_usd)],
-          extra: [
-            { label: t('new-api, ¥'), value: fmt.cny(row.quota_usd) },
-            { label: t('Requests'), value: fmt.num(row.requests) },
-            ...(before[index]
-              ? [
-                  {
-                    label: t('Same hour, previous period'),
-                    value: fmt.usd(charge.toUSD(before[index].quota_usd)),
-                  },
-                ]
-              : []),
-          ],
-        }))}
+        points={hours.bars(
+          props.rows,
+          props.range.end,
+          (row, index) => ({
+            values: [charge.toUSD(row.quota_usd)],
+            extra: [
+              { label: t('new-api, ¥'), value: fmt.cny(row.quota_usd) },
+              { label: t('Requests'), value: fmt.num(row.requests) },
+              ...(before[index]
+                ? [
+                    {
+                      label: t('Same hour, previous period'),
+                      value: fmt.usd(charge.toUSD(before[index].quota_usd)),
+                    },
+                  ]
+                : []),
+            ],
+          }),
+          props.logsSince
+        )}
       />
     </Panel>
   )

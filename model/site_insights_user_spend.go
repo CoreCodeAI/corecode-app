@@ -20,8 +20,8 @@ type UserModelSpend struct {
 }
 
 // ReadUserModelSpend sums the consume logs in [start, end) by user, model,
-// group and channel. Root is included: its requests cost gpt-load as much as
-// anyone's.
+// group and channel. Staff (administrators and root) are included: their
+// requests cost gpt-load as much as anyone's, and the caller counts them apart.
 func ReadUserModelSpend(start, end int64) ([]UserModelSpend, error) {
 	var rows []UserModelSpend
 	err := LOG_DB.Model(&Log{}).
@@ -57,10 +57,16 @@ func EngineChannelIDs(engineURL string) (map[int]bool, error) {
 	return ids, nil
 }
 
-// RootUserIDs lists the root accounts, deleted ones included.
-func RootUserIDs() ([]int, error) {
+// customerRoleBound is the first role that is not a customer. Staff are
+// administrators and root, and every customer view leaves them out; a view
+// that shows their traffic says so apart. A customer's role is below it.
+const customerRoleBound = common.RoleAdminUser
+
+// StaffUserIDs lists the staff accounts (administrators and root), deleted
+// ones included. Those are the users the customer views leave out.
+func StaffUserIDs() ([]int, error) {
 	var ids []int
-	err := DB.Model(&User{}).Unscoped().Where("role >= ?", common.RoleRootUser).Pluck("id", &ids).Error
+	err := DB.Model(&User{}).Unscoped().Where("role >= ?", customerRoleBound).Pluck("id", &ids).Error
 	return ids, err
 }
 

@@ -68,7 +68,7 @@ export function UserSpendPanel(props: { onOpen?: (tab: InsightsTab) => void }) {
       title={t('Consumption by user')}
       description={<UserSpendSummary data={data} />}
       help={t(
-        'Customers with use in the window, most new-api value first, up to 100; root’s own use is not listed. new-api value is what new-api charged at its own prices, in yuan, with dollars at the site’s exchange rate under it. gpt-load value is what the same requests cost at official prices. gpt-load does not know which user sent a request, so each model’s cost is shared among that model’s users by their new-api charge with the group ratio taken out. Total paid is every wallet top-up the customer ever paid, in yuan, with plans bought listed under it. Balance is the wallet now.'
+        'Customers with use in the window, most new-api value first, up to 100; root’s and staff’s own use is not listed. new-api value is what new-api charged at its own prices, in yuan, with dollars at the site’s exchange rate under it. gpt-load value is what the same requests cost at official prices. gpt-load does not know which user sent a request, so each model’s cost is shared among that model’s users by their new-api charge with the group ratio taken out. Total paid is every wallet top-up the customer ever paid, in yuan, with plans bought listed under it. Balance is the wallet now.'
       )}
     >
       <div className='grid gap-3'>
@@ -220,11 +220,14 @@ function UserSpendSummary(props: { data: UserSpend | undefined }) {
   if (data.root_quota_usd > 0 || data.root_engine_usd > 0) {
     parts.push(
       engineRead
-        ? t('Root’s own use, {{quota}} and {{engine}}, is not listed.', {
-            quota: fmt.cny(data.root_quota_usd),
-            engine: fmt.usd(data.root_engine_usd),
-          })
-        : t('Root’s own use, {{quota}}, is not listed.', {
+        ? t(
+            'Root’s and staff’s own use, {{quota}} and {{engine}}, is not listed.',
+            {
+              quota: fmt.cny(data.root_quota_usd),
+              engine: fmt.usd(data.root_engine_usd),
+            }
+          )
+        : t('Root’s and staff’s own use, {{quota}}, is not listed.', {
             quota: fmt.cny(data.root_quota_usd),
           })
     )

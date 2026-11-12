@@ -62,9 +62,13 @@ export const OVERVIEW_VIEWS = [
 /** A range of this many days or fewer reads by the hour. */
 export const HOURLY_MAX_DAYS = 3
 
+const HOUR_SECONDS = 3600
+const DAY_SECONDS = 86400
+
 /**
- * The range a tab reads, in unix seconds. Its last hour is still filling
- * when end is now.
+ * The range a tab reads, in unix seconds. Its first hour counts whole, so
+ * start is the top of an hour; its last hour is still filling when end is
+ * now.
  */
 export type InsightsRangeInfo = {
   start: number
@@ -72,6 +76,91 @@ export type InsightsRangeInfo = {
   days: number
   /** days <= HOURLY_MAX_DAYS: series are drawn per hour. */
   hourly: boolean
+}
+
+/** The top of the UTC hour a unix time falls in. */
+export function hourStart(unix: number): number {
+  return Math.floor(unix / HOUR_SECONDS) * HOUR_SECONDS
+}
+
+/**
+ * Where a range of days ending at now starts: the top of the hour it starts
+ * in, so "24 hours" is the same span on every tab. That hour counts whole,
+ * and the range's hours run from it to the hour now is in.
+ */
+export function rangeStart(now: number, days: number): number {
+  return hourStart(now - days * DAY_SECONDS)
+}
+
+/**
+ * A range's length in seconds, whole days. The previous period has the same
+ * length, so it is not range.end - range.start, which runs past the days by
+ * the part of the hour the range starts in.
+ */
+export function rangeSpan(range: Pick<InsightsRangeInfo, 'days'>): number {
+  return range.days * DAY_SECONDS
+}
+
+/** The hours a range's series hold: its first hour through the one now is in. */
+export function rangeHours(range: Pick<InsightsRangeInfo, 'days'>): number {
+  return range.days * 24 + 1
+}
+
+/**
+ * The previous period of a range, as query bounds: the same span, ending
+ * where the range starts, so the two share no hour.
+ */
+export function previousRange(
+  range: Pick<InsightsRangeInfo, 'start' | 'days'>
+): {
+  start_time: number
+  end_time: number
+} {
+  return { start_time: range.start - rangeSpan(range), end_time: range.start }
+}
+
+/**
+ * Whether the range reaches before the logs begin, so part of it has no
+ * data. Zero means the log table is empty: its zeros are true zeros, so
+ * nothing is before the logs then.
+ */
+export function rangeReachesBeforeLogs(
+  range: Pick<InsightsRangeInfo, 'start'>,
+  logsSince: number | null | undefined
+): boolean {
+  return logsSince != null && logsSince > 0 && range.start < logsSince
+}
+
+/**
+ * Whether the previous period of a range has no data to compare with: the
+ * logs begin inside it or after its start, so part or all of it is before
+ * them. A partly logged period would read as a false change, so it is
+ * "no data to compare" too.
+ */
+export function previousBeforeLogs(
+  range: Pick<InsightsRangeInfo, 'start' | 'days'>,
+  logsSince: number | null | undefined
+): boolean {
+  return (
+    logsSince != null &&
+    logsSince > 0 &&
+    logsSince > range.start - rangeSpan(range)
+  )
+}
+
+/**
+ * The days of a range that have logs, for a per-day average: a day the logs
+ * begin in counts whole. Without logs_since, every day of the range does.
+ */
+export function loggedDays(
+  range: InsightsRangeInfo,
+  logsSince: number | null | undefined
+): number {
+  if (logsSince == null || logsSince <= 0) return range.days
+  const covered = Math.ceil(
+    (range.end - Math.max(range.start, logsSince)) / DAY_SECONDS
+  )
+  return Math.min(range.days, Math.max(0, covered))
 }
 
 // Thresholds the tabs color by and the overview raises signals at, so a
@@ -238,7 +327,8 @@ export function useHourAxis(): HourAxis & {
   bars: <T extends { hour: number }>(
     rows: T[] | null | undefined,
     end: number,
-    build: (row: T, index: number) => HourBar
+    build: (row: T, index: number) => HourBar,
+    logsSince?: number | null
   ) => BarPoint[]
 } {
   const fmt = useInsightsFormat()
@@ -249,7 +339,8 @@ export function useHourAxis(): HourAxis & {
   }
   return {
     ...axis,
-    bars: (rows, end, build) => hourBars(rows, end, build, axis),
+    bars: (rows, end, build, logsSince) =>
+      hourBars(rows, end, build, axis, logsSince),
   }
 }
 
@@ -504,9 +595,9 @@ export function useInsightsDefinitions() {
       'Attempts count every try on a channel: a request retried on another channel is one request and two attempts.'
     ),
     customers: t(
-      "Customers are every account but root, the site's own, so the operator's tests are left out."
+      "Customers are every account but root and staff, so the operator's tests are left out."
     ),
-    everyone: t("Everyone includes root, the site's own account."),
+    everyone: t('Everyone includes root and staff.'),
     sitePeak: t(
       "The site's peak is the most requests in flight at once on every channel: the pool, paid upstreams and the media supplier."
     ),
@@ -719,8 +810,10 @@ export function vendorMargins(
   data: FinanceInsights,
   rate: number
 ): VendorMarginRow[] {
+  // The range's whole days: its start is floored to the hour, so the raw span
+  // runs past them by the part of an hour.
   const days = Math.max(
-    ((data.end_time ?? 0) - (data.start_time ?? 0)) / 86400,
+    Math.round(((data.end_time ?? 0) - (data.start_time ?? 0)) / 86400),
     0
   )
   const rows = new Map<string, VendorMarginRow>()

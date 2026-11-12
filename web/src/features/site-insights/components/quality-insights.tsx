@@ -31,6 +31,7 @@ import {
   useHourAxis,
   useInsightsFormat,
   useTabLabel,
+  useVendorName,
   type InsightsRangeInfo,
   type InsightsTab,
   type SourceState,
@@ -45,7 +46,7 @@ import {
   type HourFlag,
   type QualityModel,
 } from '../quality-analysis'
-import type { QualityHour, QualityInsights } from '../types'
+import type { QualityHour, QualityInsights, VendorFailure } from '../types'
 import { Drivers, SampleNote } from './insight-kit'
 import { BarSeries, Breakdown, Panel } from './shared'
 
@@ -253,7 +254,7 @@ export function FailureDriversPanel(props: {
         now: fmt.pct(props.data.error_rate),
       })}
       help={t(
-        'Each model’s failed requests over all requests, now against the previous period, in points; the rows add up to the change of the failure rate. Root’s requests count, as in the headline.'
+        'Each model’s failed requests over all requests, now against the previous period, in points; the rows add up to the change of the failure rate. Root and staff tests are left out, as in the headline.'
       )}
     >
       {small ? (
@@ -319,7 +320,7 @@ export function FailureOwnersPanel(props: {
     <Panel
       title={t('Whose failures')}
       description={t(
-        'Customers only, root left out; the headline counts everyone.'
+        'Customers only, as in the headline; root and staff are left out.'
       )}
       help={
         corrected
@@ -477,5 +478,56 @@ export function UnplacedModels(props: {
         ))}
       </ul>
     </div>
+  )
+}
+
+/**
+ * Each vendor's failed tries by message, so a vendor's failures read apart
+ * from the site's list (the site's reasons mix every vendor). Empty when no
+ * vendor failed; the caller leaves the panel out on a server without the
+ * per-vendor reasons.
+ */
+export function VendorFailuresPanel(props: { vendors: VendorFailure[] }) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const vendorName = useVendorName()
+  const vendors = props.vendors.filter((vendor) => vendor.failed_tries > 0)
+  if (vendors.length === 0) return null
+  return (
+    <Panel
+      title={t('Failure reasons by vendor')}
+      help={t(
+        'Each vendor’s failed tries by message, customers only. The top ten messages are kept for each vendor; the rest are summed as other reasons. Image and video failures are the media requests that failed, whether or not a task was created.'
+      )}
+    >
+      <div className='grid gap-4 lg:grid-cols-2'>
+        {vendors.map((vendor) => {
+          const items =
+            vendor.other_reasons > 0
+              ? [
+                  ...(vendor.reasons ?? []),
+                  { name: t('Other reasons'), count: vendor.other_reasons },
+                ]
+              : vendor.reasons
+          return (
+            <div
+              key={vendor.vendor}
+              className='grid min-w-0 content-start gap-1'
+            >
+              <h4 className='text-xs font-medium'>
+                {t('{{vendor}}: {{tries}} failed tries', {
+                  vendor: vendorName(vendor.vendor),
+                  tries: fmt.num(vendor.failed_tries),
+                })}
+              </h4>
+              <Breakdown
+                items={items}
+                empty={t('No failed tries in this range')}
+              />
+            </div>
+          )
+        })}
+      </div>
+    </Panel>
   )
 }

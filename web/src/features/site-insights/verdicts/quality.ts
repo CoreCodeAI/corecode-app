@@ -61,6 +61,14 @@ export function useQualityVerdict(
     (vendor) => vendor.ttft_p50_ms > 0
   )
   const claude = vendors.find((vendor) => vendor.vendor === 'claude')
+  // GPT's first-token tail is named the way Claude's is, but only once its
+  // p95 is past 10 seconds on a sample that can carry a tail.
+  const gpt = vendors.find(
+    (vendor) =>
+      vendor.vendor === 'codex' &&
+      vendor.requests >= SMALL_SAMPLE &&
+      vendor.ttft_p95_ms > 10000
+  )
   const failing = rankByExcess(data.models, siteRate).filter(
     (row) =>
       failsAboveSite(row, siteRate) && failureTone(row.error_rate) !== 'default'
@@ -83,6 +91,7 @@ export function useQualityVerdict(
   let tone: Tone = failure === 'default' && judged ? 'good' : failure
   if (failingVendors.length > 0) tone = worse(tone, 'warning')
   if (claude && claude.ttft_p95_ms > 10000) tone = worse(tone, 'warning')
+  if (gpt) tone = worse(tone, 'warning')
 
   const rate = fmt.pct(failureRate)
   const signed = (points: number) =>
@@ -227,6 +236,11 @@ export function useQualityVerdict(
         t('Claude first token {{p50}} at p50, {{p95}} at p95.', {
           p50: fmt.measuredMs(claude.ttft_p50_ms),
           p95: fmt.measuredMs(claude.ttft_p95_ms),
+        }),
+      gpt &&
+        t('GPT first token {{p50}} at p50, {{p95}} at p95.', {
+          p50: fmt.measuredMs(gpt.ttft_p50_ms),
+          p95: fmt.measuredMs(gpt.ttft_p95_ms),
         }),
       mix &&
         t(

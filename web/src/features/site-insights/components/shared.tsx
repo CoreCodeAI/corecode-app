@@ -235,6 +235,11 @@ export type MetricDelta = {
   better: 'up' | 'down' | 'neutral'
   /** Compare shares by percentage points instead of relative change. */
   points?: boolean
+  /**
+   * The previous period lies before the logs begin: it has no data, so
+   * there is nothing to compare with, whatever its zeros say.
+   */
+  missing?: boolean
 }
 
 export type MetricItem = {
@@ -400,6 +405,13 @@ export function DeltaBadge(props: { delta: MetricDelta }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const delta = props.delta
+  if (delta.missing) {
+    return (
+      <span className='text-muted-foreground text-xs font-normal whitespace-nowrap'>
+        {t('No data to compare')}
+      </span>
+    )
+  }
   if (delta.previous === undefined) return null
   if (!delta.points && delta.previous === 0) {
     if (delta.current === 0) return null
@@ -452,6 +464,11 @@ export type TrendPoint = {
   value: number
   /** Set on a day the range covers only in part. */
   partial?: PartialMark
+  /**
+   * Before the logs begin: drawn as a gap, read out as no data. The value is
+   * ignored.
+   */
+  missing?: boolean
 }
 
 /**
@@ -476,12 +493,14 @@ export function Sparkline(props: {
   const [active, setActive] = useState<number | null>(null)
   const points = props.points
   if (points.length < 2) return null
-  const values = points.map((point) => point.value)
+  const live = points.filter((point) => !point.missing)
+  const values = live.map((point) => point.value)
   const projectedOf = (point: TrendPoint) => point.partial?.projected?.[0]
   // Where the line runs: a projected day at its projection.
   const shown = points.map((point) => projectedOf(point) ?? point.value)
-  const max = Math.max(...values, ...shown)
-  const min = Math.min(0, ...values, ...shown)
+  const reach = live.map((point) => projectedOf(point) ?? point.value)
+  const max = live.length > 0 ? Math.max(...values, ...reach) : 1
+  const min = live.length > 0 ? Math.min(0, ...values, ...reach) : 0
   const span = max - min || 1
   const last = points.length - 1
   // A line puts its points on the edges; bars put each in its own column,
@@ -497,12 +516,14 @@ export function Sparkline(props: {
   let solid = ''
   let dashed = ''
   for (let index = 1; index <= last; index++) {
+    // A gap before the logs: nothing is drawn across it.
+    if (points[index - 1].missing || points[index].missing) continue
     const segment = `M${at(index - 1)} L${at(index)} `
     if (points[index - 1].partial || points[index].partial) dashed += segment
     else solid += segment
   }
   const whole = points
-    .map((point, index) => (point.partial ? -1 : index))
+    .map((point, index) => (point.partial || point.missing ? -1 : index))
     .filter((index) => index >= 0)
   const firstWhole = whole.at(0) ?? 0
   const lastWhole = whole.at(-1) ?? 0
@@ -532,7 +553,7 @@ export function Sparkline(props: {
         label: props.label,
         first: points[0].title,
         last: latest.title,
-        value: props.format(latest.value),
+        value: latest.missing ? t('No data') : props.format(latest.value),
       })}
       // A finger dragging across reads point after point; a vertical drag
       // still scrolls the page.
@@ -567,7 +588,8 @@ export function Sparkline(props: {
         className='text-primary block h-8 w-full overflow-visible'
       >
         {props.bars ? (
-          points.map(({ title, value, partial }, index) => {
+          points.map(({ title, value, partial, missing }, index) => {
+            if (missing) return null
             const projected = projectedOf(points[index])
             const lit = active === null || active === index
             const dim = lit ? 'opacity-70' : 'opacity-30'
@@ -631,7 +653,7 @@ export function Sparkline(props: {
       </svg>
       {!props.bars &&
         points.map((each, index) =>
-          projectedOf(each) === undefined ? null : (
+          each.missing || projectedOf(each) === undefined ? null : (
             // What has come in so far, below the projection the line ends at.
             <span
               key={each.title}
@@ -646,7 +668,7 @@ export function Sparkline(props: {
         )}
       {point && (
         <>
-          {!props.bars && (
+          {!props.bars && !point.missing && (
             <>
               <span
                 aria-hidden
@@ -675,7 +697,7 @@ export function Sparkline(props: {
           >
             <span className='text-muted-foreground'>{point.title}</span>{' '}
             <span className='font-medium tabular-nums'>
-              {props.format(point.value)}
+              {point.missing ? t('No data') : props.format(point.value)}
             </span>
             {point.partial && (
               <span className='text-muted-foreground block'>
@@ -809,6 +831,11 @@ export type BarPoint = {
   tone?: Tone
   /** Set on a day the range covers only in part. */
   partial?: PartialMark
+  /**
+   * Before the logs begin: no bar, read out as no data. The values are
+   * ignored, so a missing hour is never zero.
+   */
+  missing?: boolean
 }
 
 export type BarSeriesItem = {
@@ -889,16 +916,19 @@ export function BarSeries(props: {
     props.series[0]?.compact ?? props.series[0]?.format ?? fmt.num
   const sum = (values: number[]) => values.reduce((a, b) => a + b, 0)
   const reference = props.reference
-  // A partial day's projection is the height its outline reaches.
-  const reachOf = (point: BarPoint) => point.partial?.projected ?? point.values
+  // A partial day's projection is the height its outline reaches. A missing
+  // point has no height.
+  const reachOf = (point: BarPoint) =>
+    point.missing ? [] : (point.partial?.projected ?? point.values)
   const max = Math.max(
     0,
     reference?.value ?? 0,
-    ...props.points.map((point) =>
-      props.grouped
-        ? Math.max(0, ...point.values, ...reachOf(point))
-        : Math.max(sum(point.values), sum(reachOf(point)))
-    )
+    ...props.points.map((point) => {
+      const values = point.missing ? [] : point.values
+      return props.grouped
+        ? Math.max(0, ...values, ...reachOf(point))
+        : Math.max(sum(values), sum(reachOf(point)))
+    })
   )
   const step = niceStep(max / VALUE_TICKS)
   const top = max > 0 ? Math.ceil(max / step) * step : 1
@@ -995,14 +1025,22 @@ export function BarSeries(props: {
               aria-label={props.ariaLabel}
             >
               {props.points.map((point, pointIndex) => {
-                const total = sum(point.values)
-                const rows = point.values.map((value, index) => ({
-                  id: `series-${index}`,
-                  label: props.series[index]?.label ?? '',
-                  value: formatOf(index)(value),
-                  dot: dotOf(index),
-                }))
-                if (stacked) {
+                const missing = point.missing === true
+                const total = missing ? 0 : sum(point.values)
+                const rows: {
+                  id: string
+                  label: string
+                  value: string
+                  dot: string
+                }[] = missing
+                  ? []
+                  : point.values.map((value, index) => ({
+                      id: `series-${index}`,
+                      label: props.series[index]?.label ?? '',
+                      value: formatOf(index)(value),
+                      dot: dotOf(index),
+                    }))
+                if (!missing && stacked) {
                   rows.push({
                     id: 'total',
                     label: t('Total'),
@@ -1010,7 +1048,7 @@ export function BarSeries(props: {
                     dot: '',
                   })
                 }
-                if (reference) {
+                if (!missing && reference) {
                   rows.push({
                     id: 'reference',
                     label: reference.label,
@@ -1051,6 +1089,7 @@ export function BarSeries(props: {
                 }
                 const ariaLabel = [
                   title,
+                  ...(missing ? [t('No data')] : []),
                   ...(point.partial ? [point.partial.note] : []),
                   ...rows.map((row) => `${row.label} ${row.value}`),
                   ...expected.map((row, index) =>
@@ -1193,7 +1232,12 @@ export function BarSeries(props: {
                             </dd>
                           </div>
                         ))}
-                        {(point.extra ?? []).map((row) => (
+                        {missing && (
+                          <dt className='col-span-2 opacity-80'>
+                            {t('No data')}
+                          </dt>
+                        )}
+                        {(missing ? [] : (point.extra ?? [])).map((row) => (
                           <div key={row.label} className='contents'>
                             <dt className='opacity-80'>{row.label}</dt>
                             <dd className='text-right tabular-nums'>

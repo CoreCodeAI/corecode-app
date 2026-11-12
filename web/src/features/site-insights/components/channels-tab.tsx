@@ -34,7 +34,10 @@ import {
   TONES,
   channelEconomics,
   joinSentences,
+  rangeHours,
+  rangeReachesBeforeLogs,
   tableState,
+  useInsightsDefinitions,
   useInsightsFormat,
   type InsightsRangeInfo,
   type InsightsSources,
@@ -109,6 +112,7 @@ export function ChannelsTab(props: {
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const defs = useInsightsDefinitions()
   const label = useSegmentLabel()
   const data = props.data
   const verdict = useChannelsVerdict(data, props.previous, props.range)
@@ -171,7 +175,8 @@ export function ChannelsTab(props: {
     windowsHelp,
     t(
       'A refund is recorded only as an administrator’s balance decrease, so a refunded order stays in revenue.'
-    )
+    ),
+    defs.customers
   )
   const cohortHelp = joinSentences(
     t(
@@ -179,7 +184,8 @@ export function ChannelsTab(props: {
     ),
     t(
       'Its payers are not the return table’s: that table counts payments in the range from every account the source ever brought, this one only the range’s sign-ups, including payments after the range.'
-    )
+    ),
+    defs.customers
   )
   const preFee = range ? preFeeChannels(rows, range.start) : []
   const sinceFeeRows = paid.filter((row) => row.revenue_since_fee != null)
@@ -240,7 +246,12 @@ export function ChannelsTab(props: {
         },
       }),
   }
-  const projects = days != null && days >= SHORT_ROI_DAYS
+  // The given credit spent is read from the logged hours only, so a range that
+  // reaches before the logs would divide a shorter spend by the whole month.
+  const projects =
+    days != null &&
+    days >= SHORT_ROI_DAYS &&
+    !(range && rangeReachesBeforeLogs(range, data?.logs_since))
 
   return (
     <div className='grid gap-4'>
@@ -331,7 +342,7 @@ export function ChannelsTab(props: {
       {range && (
         <StaleNote
           staleHours={data?.stale_hours}
-          rangeHours={(range.end - range.start) / 3600}
+          rangeHours={rangeHours(range)}
         />
       )}
       <CommissionAccrualFindings rows={rows} />

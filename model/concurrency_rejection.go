@@ -67,11 +67,12 @@ type UserCount struct {
 }
 
 // ReadUserConcurrencyRejections returns the limit's 429s in [start, end) by
-// hour and the users turned away most, root excluded.
+// hour and the users turned away most, staff (administrators and root)
+// excluded.
 func ReadUserConcurrencyRejections(start, end int64) ([]CountPoint, []UserCount, error) {
 	var rows []UserConcurrencyRejection
 	if err := DB.Where("hour_start >= ? AND hour_start < ?", start-start%3600, end).
-		Where("user_id NOT IN (?)", DB.Model(&User{}).Unscoped().Select("id").Where("role >= ?", common.RoleRootUser)).
+		Where("user_id NOT IN (?)", DB.Model(&User{}).Unscoped().Select("id").Where("role >= ?", common.RoleAdminUser)).
 		Find(&rows).Error; err != nil {
 		return nil, nil, err
 	}

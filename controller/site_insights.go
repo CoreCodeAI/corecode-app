@@ -2,6 +2,7 @@ package controller
 
 import (
 	"cmp"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -20,7 +21,8 @@ import (
 
 // The root dashboard's views. Each reads start_time and end_time (unix
 // seconds, end exclusive) and tz_offset (minutes east of UTC), and rejects a
-// span longer than its own bound.
+// span longer than its own bound. The range starts on the hour it is sent in
+// (model.ResolveInsightsRange); its end is used as sent.
 
 func insightsRange(c *gin.Context, maxDays int64) (model.InsightsRange, bool) {
 	start, _ := strconv.ParseInt(c.Query("start_time"), 10, 64)
@@ -37,6 +39,9 @@ func insightsRange(c *gin.Context, maxDays int64) (model.InsightsRange, bool) {
 	return r, ok
 }
 
+// serveInsights answers with the view's result and logs_since, the earliest
+// request log the rollups read: an hour before it has no data. logs_since is
+// added beside the view's own fields, so no view's struct carries it.
 func serveInsights[T any](c *gin.Context, maxDays int64, read func(model.InsightsRange) (T, error)) {
 	r, ok := insightsRange(c, maxDays)
 	if !ok {
@@ -47,7 +52,29 @@ func serveInsights[T any](c *gin.Context, maxDays int64, read func(model.Insight
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, result)
+	logsSince, err := model.InsightLogsSince()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	body, err := common.Marshal(result)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	var fields map[string]json.RawMessage
+	if err := common.Unmarshal(body, &fields); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if fields == nil {
+		fields = map[string]json.RawMessage{}
+	}
+	if fields["logs_since"], err = common.Marshal(logsSince); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, fields)
 }
 
 // LiveUserConcurrency is one user's requests in flight on this instance.
@@ -71,7 +98,7 @@ type UserConcurrencyOverride struct {
 }
 
 // CapacityResponse adds the requests in flight on this process, the per-user
-// limit's rejections and the engine pool to the logs view. Root is left out
+// limit's rejections and the engine pool to the logs view. Staff are left out
 // of all of them.
 type CapacityResponse struct {
 	*model.CapacityInsights
@@ -130,7 +157,7 @@ func GetCapacityInsights(c *gin.Context) {
 		}
 		for id, count := range inFlight {
 			user := users[id]
-			if user.Role >= common.RoleRootUser {
+			if user.Role >= common.RoleAdminUser {
 				continue
 			}
 			response.InFlight += count
@@ -480,9 +507,9 @@ func GetUserSpendInsights(c *gin.Context) {
 
 // GetDayProfile returns how a typical day's requests spread over its UTC
 // hours, which the dashboard uses to mark and project the days a range covers
-// only in part.
+// only in part. It is read once per hour.
 func GetDayProfile(c *gin.Context) {
-	profile, err := model.GetDayProfile(time.Now().Unix())
+	profile, err := model.CachedDayProfile(time.Now().Unix())
 	if err != nil {
 		common.ApiError(c, err)
 		return

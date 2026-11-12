@@ -29,6 +29,19 @@ export function isOpenHour(hour: number, end: number): boolean {
   return hour + HOUR > end
 }
 
+/**
+ * Whether the bucket that starts at start and lasts length seconds ends
+ * before the logs begin, so it has no data rather than zero. Absent or zero
+ * logsSince (no logs known, or an empty table) marks nothing.
+ */
+export function beforeLogs(
+  start: number,
+  length: number,
+  logsSince: number | null | undefined
+): boolean {
+  return logsSince != null && logsSince > 0 && start + length <= logsSince
+}
+
 /** The rows whose hour has ended by the range's end. */
 export function closedHours<T extends { hour: number }>(
   rows: T[],
@@ -253,13 +266,15 @@ export type HourBar = {
 
 /**
  * Hourly rows as bar points: keyed and titled by hour, the axis labelled
- * where the viewer's day starts, the open hour faded.
+ * where the viewer's day starts, the open hour faded, and an hour before the
+ * logs begin missing rather than zero.
  */
 export function hourBars<T extends { hour: number }>(
   rows: T[] | null | undefined,
   end: number,
   build: (row: T, index: number) => HourBar,
-  axis: HourAxis
+  axis: HourAxis,
+  logsSince?: number | null
 ): BarPoint[] {
   return (rows ?? []).map((row, index) => {
     const bar = build(row, index)
@@ -271,6 +286,7 @@ export function hourBars<T extends { hour: number }>(
       extra: bar.extra,
       tone: bar.tone,
       faded: isOpenHour(row.hour, end),
+      missing: beforeLogs(row.hour, HOUR, logsSince),
     }
   })
 }

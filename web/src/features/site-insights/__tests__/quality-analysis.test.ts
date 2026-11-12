@@ -21,6 +21,7 @@ import { describe, expect, it } from 'vitest'
 import {
   abnormalStreams,
   attemptsOf,
+  clientErrorsOf,
   excessFailures,
   failingTaskModels,
   failingWindow,
@@ -32,8 +33,11 @@ import {
   hourFlags,
   mixShift,
   modelChange,
+  nearlyFailingModels,
+  preTaskFailures,
   rankByExcess,
   serviceFailureRate,
+  serviceRow,
   unplacedModels,
   withRemainder,
   worstHour,
@@ -314,5 +318,63 @@ describe('quality analysis', () => {
       failed: 21,
       rate: 0.175,
     })
+  })
+})
+
+describe('quality round 3 helpers', () => {
+  const categories = [
+    { name: 'client_error', count: 10 },
+    { name: 'upstream_error', count: 2 },
+  ]
+
+  it('counts the client errors the service failure rate leaves out', () => {
+    expect(clientErrorsOf({ error_categories: categories })).toBe(10)
+    expect(clientErrorsOf({ error_categories: null })).toBe(0)
+    // The rate itself is unchanged: (12 - 10) over (300 - 10).
+    const data = { requests: 300, errors: 12, error_categories: categories }
+    expect(serviceFailureRate(data)).toBeCloseTo(2 / 290)
+    expect(serviceRow(data)).toMatchObject({ requests: 290, errors: 2 })
+  })
+
+  it('takes media requests that failed before a task out of the failures', () => {
+    expect(
+      preTaskFailures(
+        { requests: 520, errors: 223 },
+        { submitted: 248, failed: 1 }
+      )
+    ).toEqual({
+      requests: 520,
+      failed: 223,
+      submitted: 248,
+      taskFailed: 1,
+      before: 223,
+    })
+    // A task that failed after submission writes no error log, so it is not
+    // subtracted from the failed requests.
+    expect(
+      preTaskFailures({ requests: 5, errors: 0 }, { submitted: 3, failed: 1 })
+        ?.before
+    ).toBe(0)
+    expect(
+      preTaskFailures({ requests: 0, errors: 0 }, { submitted: 0, failed: 0 })
+    ).toBeNull()
+    expect(preTaskFailures(undefined, { submitted: 0, failed: 0 })).toBeNull()
+  })
+
+  it('names models that failed at least 90% of a fair sample, most requests first', () => {
+    const rows = [
+      model('a-19', 19, 19),
+      model('b-25', 25, 20),
+      model('c-20', 20, 20),
+      model('d-22', 22, 20),
+      model('e-22', 22, 22),
+    ]
+    // Equal requests fall back to the name, as the other model lists do.
+    expect(nearlyFailingModels(rows).map((row) => row.model)).toEqual([
+      'd-22',
+      'e-22',
+      'c-20',
+    ])
+    expect(nearlyFailingModels(null)).toEqual([])
   })
 })

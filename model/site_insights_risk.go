@@ -62,22 +62,36 @@ type AliasCluster struct {
 }
 
 // UnpaidSpender is a sign-up of the range that consumed credit and never
-// paid: everything it spent was given. ConsumptionUSD is its consumption in
-// the range at list price, GiftPlanUSD the part given plans covered.
+// paid a gateway or bought a plan with money. ConsumptionUSD is its
+// consumption in the range at list price, split by where the credit came
+// from: GrantedUSD the credit an administrator granted by hand, RedeemedUSD
+// the redemption codes it used, GiftPlanUSD the part given plans covered, and
+// CheckinUSD the daily check-in rewards, which credit the wallet too, and
+// SignupGiftUSD the rest, which sign-up and invite gifts account for.
 type UnpaidSpender struct {
 	UserRef
 	ConsumptionUSD float64 `json:"consumption_usd"`
+	GrantedUSD     float64 `json:"granted_usd"`
+	RedeemedUSD    float64 `json:"redeemed_usd"`
 	GiftPlanUSD    float64 `json:"gift_plan_usd"`
+	CheckinUSD     float64 `json:"checkin_usd"`
+	SignupGiftUSD  float64 `json:"signup_gift_usd"`
 	SignupMethod   string  `json:"signup_method"`
 	Inviter        UserRef `json:"inviter"`
 	CreatedAt      int64   `json:"created_at"`
 }
 
-// InviterSpenders is an inviter of unpaid spenders.
+// InviterSpenders is an inviter of unpaid spenders. ConsumptionUSD is all of
+// their invitees' unpaid consumption; GiftUSD the gifted part of it (gift
+// plans and sign-up gifts), the only part the list is ranked by. GiftAccounts
+// counts the invitees who spent any of that gifted part: an invitee an
+// administrator credited by hand is in Accounts and not in GiftAccounts.
 type InviterSpenders struct {
 	UserRef
 	Accounts       int64   `json:"accounts"`
+	GiftAccounts   int64   `json:"gift_accounts"`
 	ConsumptionUSD float64 `json:"consumption_usd"`
+	GiftUSD        float64 `json:"gift_usd"`
 }
 
 // GiftBlockInviter is an inviter whose invitees' sign-up gifts were withheld
@@ -96,18 +110,23 @@ const riskMatureAge = 6 * 3600
 // riskSharedIPLimit bounds the shared addresses sent, after ranking.
 const riskSharedIPLimit = 50
 
+// riskSharedExitLimit bounds the shared exits sent, after ranking. The count
+// of all exits is SharedExits.
+const riskSharedExitLimit = 20
+
 // RiskInsights collects the signals of abusive sign-ups and shared accounts.
 //
 // Sign-ups include accounts deleted since (DeletedSignups of them), so a farm
-// that was cleaned up still shows; root is left out. ZeroUseAccounts counts
-// sign-ups with no successful request, ZeroUseFailed those of them whose
+// that was cleaned up still shows. Staff (role administrator and up) are left
+// out of every figure here, as they are of the customer views. ZeroUseAccounts
+// counts sign-ups with no successful request, ZeroUseFailed those of them whose
 // requests in the range all failed. SignupsMature counts the sign-ups created
 // at least riskMatureAge before the range's end, ZeroUseMature and
 // ZeroUseFailedMature the same of them, so the never-used share compares
 // cohorts of a fair age.
 //
 // AliasEmails counts sign-ups whose address delivers to the same inbox as
-// another account's (case, a plus tag and Gmail's dots ignored), and
+// another customer's (case, a plus tag and Gmail's dots ignored), and
 // AliasPatternEmails those whose address has a plus tag or a dotted Gmail
 // local part, which the alias restriction refuses. OffWhitelist counts
 // email sign-ups off the domain allowlist while the restriction is on
@@ -116,11 +135,14 @@ const riskSharedIPLimit = 50
 // SharedIPs is ranked by risk before the cut: addresses that are not shared
 // exits first, then by plan buyers, members created in the range and size.
 // SharedIPTotal counts every shared address, SharedExits those that are
-// exits.
+// exits; SharedExitTop lists the top exits, ranked the same way.
 //
 // SignupSpenders counts sign-ups that consumed in the range, UnpaidSpenders
-// those of them that never paid, with UnpaidSpendUSD their consumption.
-// SignupGifts counts the invite sign-up gift's outcomes in the range.
+// those of them that never paid, with UnpaidSpendUSD their consumption. The
+// Unpaid parts split that consumption by source and sum to it.
+// UnpaidHandFunded counts the unpaid spenders whose granted part is more than
+// half their consumption. SignupGifts counts the invite sign-up gift's
+// outcomes in the range.
 type RiskInsights struct {
 	Signups             int64              `json:"signups"`
 	DeletedSignups      int64              `json:"deleted_signups"`
@@ -137,6 +159,7 @@ type RiskInsights struct {
 	SharedIPs           []SharedIP         `json:"shared_ips"`
 	SharedIPTotal       int                `json:"shared_ip_total"`
 	SharedExits         int                `json:"shared_exits"`
+	SharedExitTop       []SharedIP         `json:"shared_exit_top"`
 	Debtors             []BalanceUser      `json:"debtors"`
 	ZeroUseAccounts     int64              `json:"zero_use_accounts"`
 	ZeroUseFailed       int64              `json:"zero_use_failed"`
@@ -146,6 +169,12 @@ type RiskInsights struct {
 	SignupSpenders      int64              `json:"signup_spenders"`
 	UnpaidSpenders      int64              `json:"unpaid_spenders"`
 	UnpaidSpendUSD      float64            `json:"unpaid_spend_usd"`
+	UnpaidGrantedUSD    float64            `json:"unpaid_granted_usd"`
+	UnpaidRedeemedUSD   float64            `json:"unpaid_redeemed_usd"`
+	UnpaidGiftPlanUSD   float64            `json:"unpaid_gift_plan_usd"`
+	UnpaidCheckinUSD    float64            `json:"unpaid_checkin_usd"`
+	UnpaidSignupGiftUSD float64            `json:"unpaid_signup_gift_usd"`
+	UnpaidHandFunded    int64              `json:"unpaid_hand_funded"`
 	UnpaidSpenderTop    []UnpaidSpender    `json:"unpaid_spender_top"`
 	UnpaidInviters      []InviterSpenders  `json:"unpaid_inviters"`
 	SignupGifts         []NamedCount       `json:"signup_gifts"`
@@ -154,6 +183,9 @@ type RiskInsights struct {
 	// that are still stored under an older rollup version; omitted when none,
 	// and when the range has no sign-ups, since the rollup is not read then.
 	StaleHours int `json:"stale_hours"`
+	// Truncated says an hour the unpaid spenders were read from was cut by its
+	// row cap, so their consumption is short.
+	Truncated bool `json:"truncated"`
 }
 
 type riskUserRow struct {
@@ -276,7 +308,7 @@ func canonicalEmail(email string) string {
 
 func GetRiskInsights(r InsightsRange) (*RiskInsights, error) {
 	signups, err := readRiskUsers(func(tx *gorm.DB) *gorm.DB {
-		return tx.Unscoped().Where("created_at >= ? AND created_at < ? AND role < ?", r.Start, r.End, common.RoleRootUser)
+		return tx.Unscoped().Where("created_at >= ? AND created_at < ? AND role < ?", r.Start, r.End, customerRoleBound)
 	})
 	if err != nil {
 		return nil, err
@@ -361,13 +393,21 @@ func GetRiskInsights(r InsightsRange) (*RiskInsights, error) {
 			}
 		}
 	}
-	if err := fillUnpaidSpenders(r, signups, result); err != nil {
+	staffIDs, err := StaffUserIDs()
+	if err != nil {
 		return nil, err
 	}
-	if err := fillSignupGifts(r, result); err != nil {
+	staff := make(map[int]bool, len(staffIDs))
+	for _, id := range staffIDs {
+		staff[id] = true
+	}
+	if err := fillUnpaidSpenders(r, signups, staff, result); err != nil {
 		return nil, err
 	}
-	if err := fillSharedIPs(r, result); err != nil {
+	if err := fillSignupGifts(r, staff, result); err != nil {
+		return nil, err
+	}
+	if err := fillSharedIPs(r, staff, result); err != nil {
 		return nil, err
 	}
 	balances := &FinanceInsights{}
@@ -378,8 +418,8 @@ func GetRiskInsights(r InsightsRange) (*RiskInsights, error) {
 	return result, nil
 }
 
-// fillAliasClusters counts the sign-ups whose inbox another account, of any
-// time, shares.
+// fillAliasClusters counts the sign-ups whose inbox another customer, of any
+// time, shares. Staff addresses are not read.
 func fillAliasClusters(signups []riskUserRow, result *RiskInsights) error {
 	wanted := make(map[string]bool)
 	for _, user := range signups {
@@ -396,7 +436,8 @@ func fillAliasClusters(signups []riskUserRow, result *RiskInsights) error {
 		Username string
 		Email    string
 	}
-	if err := DB.Model(&User{}).Unscoped().Select("id, username, email").Where("email <> ''").Find(&accounts).Error; err != nil {
+	if err := DB.Model(&User{}).Unscoped().Select("id, username, email").
+		Where("email <> '' AND role < ?", customerRoleBound).Find(&accounts).Error; err != nil {
 		return err
 	}
 	groups := make(map[string][]UserRef)
@@ -426,10 +467,17 @@ func fillAliasClusters(signups []riskUserRow, result *RiskInsights) error {
 	return nil
 }
 
-// fillUnpaidSpenders finds the sign-ups that consumed in the range and never
-// paid through a gateway, from the hourly rollup: gift farmers that share no
-// address still show here. A sign-up of the range consumed nothing before it.
-func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, result *RiskInsights) error {
+// fillUnpaidSpenders finds the customers who consumed in the range and never
+// paid, from the hourly rollup: gift farmers that share no address still show
+// here. A customer paid when it has a gateway top-up or a plan order with
+// money. A sign-up of the range consumed nothing before it.
+//
+// Each spender's consumption is split by where its credit came from, in this
+// order: the gift plan use the rollup records exactly; of the wallet part, the
+// credit an administrator granted by hand up to the granted amount, then the
+// redemption codes, and the rest, which sign-up and invite gifts account for.
+// Only the gift part, gift plan and sign-up gifts, judges an inviter.
+func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, staff map[int]bool, result *RiskInsights) error {
 	result.UnpaidSpenderTop = []UnpaidSpender{}
 	result.UnpaidInviters = []InviterSpenders{}
 	if len(signups) == 0 {
@@ -447,6 +495,7 @@ func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, result *RiskInsi
 	type spend struct{ quota, gift int64 }
 	spent := make(map[int]*spend)
 	for _, hour := range hours {
+		result.Truncated = result.Truncated || hour.summary.Truncated
 		for _, user := range hour.users {
 			if _, ok := byID[user.UserId]; !ok {
 				continue
@@ -475,37 +524,84 @@ func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, result *RiskInsi
 	if err != nil {
 		return err
 	}
+	// A plan order also writes a top-up row with no credit; a plan bought with
+	// money is a payment whatever the top-up rows say.
+	// A plan bought from the wallet is paid with credit, not money.
+	boughtPlan, err := pluckUserIDs(DB, &SubscriptionOrder{}, ids, "status = ? AND money > 0 AND (payment_provider IS NULL OR payment_provider <> ?)",
+		common.TopUpStatusSuccess, PaymentProviderBalance)
+	if err != nil {
+		return err
+	}
+	var unpaidIDs []int
+	for _, id := range ids {
+		if !paid[id] && !boughtPlan[id] {
+			unpaidIDs = append(unpaidIDs, id)
+		}
+	}
+	granted, err := readHandGrants(r.End, unpaidIDs)
+	if err != nil {
+		return err
+	}
+	redeemed, err := readRedeemedCodes(r.End, unpaidIDs)
+	if err != nil {
+		return err
+	}
+	checkins, err := readCheckinCredit(r.End, unpaidIDs)
+	if err != nil {
+		return err
+	}
 	var unpaid []UnpaidSpender
 	inviters := make(map[int]*InviterSpenders)
 	inviterQuota := make(map[int]int64)
-	var total int64
-	for _, id := range ids {
-		if paid[id] {
-			continue
-		}
+	inviterGift := make(map[int]int64)
+	var total spendSources
+	var totalQuota int64
+	for _, id := range unpaidIDs {
 		user := byID[id]
 		entry := spent[id]
-		total += entry.quota
+		sources := splitUnpaidSpend(entry.quota, entry.gift, granted[id], redeemed[id])
+		// Check-in rewards credit the wallet too, but they are not a gift to
+		// the inviter: they are taken out of the rest before it is counted.
+		sources.checkin = min(sources.signupGift, max(checkins[id], 0))
+		sources.signupGift -= sources.checkin
+		total.add(sources)
+		totalQuota += entry.quota
+		if 2*sources.granted > entry.quota {
+			result.UnpaidHandFunded++
+		}
 		unpaid = append(unpaid, UnpaidSpender{
 			UserRef:        UserRef{UserID: id, Username: user.Username},
 			ConsumptionUSD: quotaUSD(entry.quota),
-			GiftPlanUSD:    quotaUSD(max(entry.gift, 0)),
+			GrantedUSD:     quotaUSD(sources.granted),
+			RedeemedUSD:    quotaUSD(sources.redeemed),
+			GiftPlanUSD:    quotaUSD(sources.giftPlan),
+			CheckinUSD:     quotaUSD(sources.checkin),
+			SignupGiftUSD:  quotaUSD(sources.signupGift),
 			SignupMethod:   signupMethod(user),
 			Inviter:        UserRef{UserID: user.InviterId},
 			CreatedAt:      user.CreatedAt,
 		})
-		if user.InviterId > 0 {
+		if user.InviterId > 0 && !staff[user.InviterId] {
 			inviter := inviters[user.InviterId]
 			if inviter == nil {
 				inviter = &InviterSpenders{UserRef: UserRef{UserID: user.InviterId}}
 				inviters[user.InviterId] = inviter
 			}
 			inviter.Accounts++
+			if sources.giftPlan+sources.signupGift > 0 {
+				inviter.GiftAccounts++
+			}
 			inviterQuota[user.InviterId] += entry.quota
+			inviterGift[user.InviterId] += sources.giftPlan + sources.signupGift
 		}
 	}
 	result.UnpaidSpenders = int64(len(unpaid))
-	result.UnpaidSpendUSD = quotaUSD(total)
+	result.UnpaidSpendUSD = quotaUSD(totalQuota)
+	result.UnpaidGrantedUSD = quotaUSD(total.granted)
+	result.UnpaidRedeemedUSD = quotaUSD(total.redeemed)
+	result.UnpaidGiftPlanUSD = quotaUSD(total.giftPlan)
+	result.UnpaidCheckinUSD = quotaUSD(total.checkin)
+	result.UnpaidSignupGiftUSD = quotaUSD(total.signupGift)
 	slices.SortFunc(unpaid, func(a, b UnpaidSpender) int {
 		return cmp.Or(cmp.Compare(b.ConsumptionUSD, a.ConsumptionUSD), cmp.Compare(a.UserID, b.UserID))
 	})
@@ -513,10 +609,11 @@ func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, result *RiskInsi
 	ranked := make([]InviterSpenders, 0, len(inviters))
 	for _, inviter := range inviters {
 		inviter.ConsumptionUSD = quotaUSD(inviterQuota[inviter.UserID])
+		inviter.GiftUSD = quotaUSD(inviterGift[inviter.UserID])
 		ranked = append(ranked, *inviter)
 	}
 	slices.SortFunc(ranked, func(a, b InviterSpenders) int {
-		return cmp.Or(cmp.Compare(b.Accounts, a.Accounts), cmp.Compare(b.ConsumptionUSD, a.ConsumptionUSD), cmp.Compare(a.UserID, b.UserID))
+		return cmp.Or(cmp.Compare(b.Accounts, a.Accounts), cmp.Compare(b.GiftUSD, a.GiftUSD), cmp.Compare(a.UserID, b.UserID))
 	})
 	ranked = ranked[:min(len(ranked), insightsTopN)]
 	nameIDs := make([]int, 0, len(ranked)+len(unpaid))
@@ -543,17 +640,142 @@ func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, result *RiskInsi
 	return nil
 }
 
+// spendSources is consumption in quota units, split by where the credit came
+// from. The parts sum to the consumption they split.
+type spendSources struct {
+	granted, redeemed, giftPlan, checkin, signupGift int64
+}
+
+func (s *spendSources) add(other spendSources) {
+	s.granted += other.granted
+	s.redeemed += other.redeemed
+	s.giftPlan += other.giftPlan
+	s.checkin += other.checkin
+	s.signupGift += other.signupGift
+}
+
+// splitUnpaidSpend splits an account's consumption: the gift plan part the
+// rollup recorded first, then of the wallet part the hand grant up to the
+// granted amount, then the redeemed codes, and the rest. Bought plans that a
+// wallet paid for count as wallet part: their credit came from the same
+// sources.
+func splitUnpaidSpend(quota, gift, granted, redeemed int64) spendSources {
+	quota = max(quota, 0)
+	giftPlan := min(max(gift, 0), quota)
+	wallet := quota - giftPlan
+	fromGrant := min(wallet, max(granted, 0))
+	fromCodes := min(wallet-fromGrant, max(redeemed, 0))
+	return spendSources{granted: fromGrant, redeemed: fromCodes, giftPlan: giftPlan, signupGift: wallet - fromGrant - fromCodes}
+}
+
+// handGrantActions are the audit actions that set an account's quota by hand.
+var handGrantActions = []string{"user.quota_add", "user.quota_subtract", "user.quota_override"}
+
+// handGrantPage bounds one read of the audit log: the rows are read in pages
+// keyed by id, since the target account is only in the JSON params.
+const handGrantPage = 1000
+
+// readHandGrants returns, for each of ids, the credit an administrator set by
+// hand before end: the successful quota audit rows, each counted as the change
+// its snapshot records. It reads every such row before end once, in pages, so
+// one page is in memory at a time.
+func readHandGrants(end int64, ids []int) (map[int]int64, error) {
+	granted := make(map[int]int64)
+	if len(ids) == 0 {
+		return granted, nil
+	}
+	wanted := make(map[int]bool, len(ids))
+	for _, id := range ids {
+		wanted[id] = true
+	}
+	var last int
+	for {
+		var page []AuditLog
+		if err := LOG_DB.Model(&AuditLog{}).Select("id, success, other").
+			Where("id > ? AND created_at < ? AND action IN ?", last, end, handGrantActions).
+			Order("id asc").Limit(handGrantPage).Find(&page).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range page {
+			last = row.Id
+			if !row.Success || row.Other.Op == nil {
+				continue
+			}
+			params := row.Other.Op.Params
+			target, _ := auditInt(params, "target_user_id")
+			before, hasBefore := auditInt(params, "from")
+			after, hasAfter := auditInt(params, "to")
+			if !wanted[int(target)] || !hasBefore || !hasAfter {
+				continue
+			}
+			granted[int(target)] += after - before
+		}
+		if len(page) < handGrantPage {
+			return granted, nil
+		}
+	}
+}
+
+// readCheckinCredit returns, for each of ids, the quota its daily check-in
+// rewards credited before end.
+func readCheckinCredit(end int64, ids []int) (map[int]int64, error) {
+	credited := make(map[int]int64)
+	for chunk := range slices.Chunk(ids, sharedAddressChunk) {
+		var rows []struct {
+			UserId int
+			Total  int64
+		}
+		if err := DB.Model(&Checkin{}).Select("user_id, SUM(quota_awarded) AS total").
+			Where("user_id IN ? AND created_at < ?", chunk, end).Group("user_id").
+			Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			credited[row.UserId] += row.Total
+		}
+	}
+	return credited, nil
+}
+
+// readRedeemedCodes returns, for each of ids, the quota of the redemption codes
+// it redeemed before end. Codes are read including deleted ones, since a
+// deleted code still credited the wallet.
+func readRedeemedCodes(end int64, ids []int) (map[int]int64, error) {
+	redeemed := make(map[int]int64)
+	for chunk := range slices.Chunk(ids, sharedAddressChunk) {
+		var rows []struct {
+			UsedUserId int
+			Quota      int64
+		}
+		if err := DB.Unscoped().Model(&Redemption{}).Select("used_user_id, quota").
+			Where("used_user_id IN ? AND redeemed_time > 0 AND redeemed_time < ?", chunk, end).
+			Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			redeemed[row.UsedUserId] += row.Quota
+		}
+	}
+	return redeemed, nil
+}
+
 // fillSignupGifts counts the invite sign-up gift's outcomes in the range and
 // names the inviters whose invitees the anti-farm checks refused most.
-// email_signup is a policy exclusion, not a block.
-func fillSignupGifts(r InsightsRange, result *RiskInsights) error {
+// email_signup is a policy exclusion, not a block. Staff, as invitee or as
+// inviter, are left out.
+func fillSignupGifts(r InsightsRange, staff map[int]bool, result *RiskInsights) error {
 	var outcomes []struct {
 		InviterId int
 		Status    string
 		Total     int64
 	}
-	if err := DB.Model(&AffiliateSignupGift{}).Select("inviter_id, status, COUNT(*) AS total").
-		Where("created_at >= ? AND created_at < ?", r.Start, r.End).Group("inviter_id, status").Find(&outcomes).Error; err != nil {
+	query := DB.Model(&AffiliateSignupGift{}).Select("inviter_id, status, COUNT(*) AS total").
+		Where("created_at >= ? AND created_at < ?", r.Start, r.End)
+	if len(staff) > 0 {
+		staffIDs := slices.Sorted(maps.Keys(staff))
+		query = query.Where("user_id NOT IN ? AND inviter_id NOT IN ?", staffIDs, staffIDs)
+	}
+	if err := query.Group("inviter_id, status").Find(&outcomes).Error; err != nil {
 		return err
 	}
 	statuses := make(map[string]int64)
@@ -598,11 +820,11 @@ func fillSignupGifts(r InsightsRange, result *RiskInsights) error {
 	return nil
 }
 
-// fillSharedIPs groups the addresses accounts used in the range: request
+// fillSharedIPs groups the addresses customers used in the range: request
 // logs, sign-in and key audit entries, console sessions and plan orders. It
-// keeps those used by more than one account and ranks them by risk before
-// the cut.
-func fillSharedIPs(r InsightsRange, result *RiskInsights) error {
+// keeps those used by more than one customer and ranks them by risk before
+// the cut. Staff use is left out, so an address is shared by customers only.
+func fillSharedIPs(r InsightsRange, staff map[int]bool, result *RiskInsights) error {
 	type addressUse struct {
 		UserId   int
 		Ip       string
@@ -638,6 +860,9 @@ func fillSharedIPs(r InsightsRange, result *RiskInsights) error {
 
 	byIP := make(map[string]map[int]int64)
 	for _, use := range uses {
+		if staff[use.UserId] {
+			continue
+		}
 		if byIP[use.Ip] == nil {
 			byIP[use.Ip] = make(map[int]int64)
 		}
@@ -656,6 +881,7 @@ func fillSharedIPs(r InsightsRange, result *RiskInsights) error {
 		}
 	}
 	result.SharedIPs = []SharedIP{}
+	result.SharedExitTop = []SharedIP{}
 	if len(byIP) == 0 {
 		return nil
 	}
@@ -684,7 +910,7 @@ func fillSharedIPs(r InsightsRange, result *RiskInsights) error {
 			limited[id] = true
 		}
 	}
-	exits, err := sharedExits(ips, min(r.End, common.GetTimestamp()))
+	exits, err := sharedExits(ips, min(r.End, common.GetTimestamp()), staff)
 	if err != nil {
 		return err
 	}
@@ -713,9 +939,6 @@ func fillSharedIPs(r InsightsRange, result *RiskInsights) error {
 		slices.SortFunc(cluster.Users, func(a, b RiskUser) int {
 			return cmp.Or(cmp.Compare(b.Requests, a.Requests), cmp.Compare(a.UserID, b.UserID))
 		})
-		if cluster.SharedExit {
-			result.SharedExits++
-		}
 		clusters = append(clusters, cluster)
 	}
 	slices.SortFunc(clusters, func(a, b SharedIP) int {
@@ -723,8 +946,21 @@ func fillSharedIPs(r InsightsRange, result *RiskInsights) error {
 			cmp.Compare(b.NewMembers, a.NewMembers), cmp.Compare(len(b.Users), len(a.Users)),
 			cmp.Compare(b.Requests, a.Requests), cmp.Compare(a.IP, b.IP))
 	})
+	// Exits sort after the review addresses, each group in the same rank, so
+	// the two lists are cut separately.
+	reviews := make([]SharedIP, 0, len(clusters))
+	exitList := make([]SharedIP, 0, len(clusters))
+	for _, cluster := range clusters {
+		if cluster.SharedExit {
+			exitList = append(exitList, cluster)
+		} else {
+			reviews = append(reviews, cluster)
+		}
+	}
+	result.SharedExits = len(exitList)
 	result.SharedIPTotal = len(clusters)
-	result.SharedIPs = clusters[:min(len(clusters), riskSharedIPLimit)]
+	result.SharedIPs = reviews[:min(len(reviews), riskSharedIPLimit)]
+	result.SharedExitTop = exitList[:min(len(exitList), riskSharedExitLimit)]
 	return nil
 }
 

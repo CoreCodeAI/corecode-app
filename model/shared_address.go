@@ -65,8 +65,9 @@ const sharedAddressChunk = 500
 
 // sharedExits applies sharedExit with no parties to many addresses as of at,
 // with a few grouped queries in place of several per address, and returns the
-// addresses that are shared exits.
-func sharedExits(ips []string, at int64) (map[string]bool, error) {
+// addresses that are shared exits. Staff are not counted, as the risk view
+// leaves them out.
+func sharedExits(ips []string, at int64, staff map[int]bool) (map[string]bool, error) {
 	exits := make(map[string]bool)
 	since := at - sharedAddressWindowSeconds
 	users := make(map[string]map[int]bool, len(ips))
@@ -75,18 +76,21 @@ func sharedExits(ips []string, at int64) (map[string]bool, error) {
 		Ip     string
 	}
 	for chunk := range slices.Chunk(ips, sharedAddressChunk) {
-		var requesters []struct {
-			Ip         string
-			Requesters int64
-		}
-		if err := LOG_DB.Model(&Log{}).Select("ip, COUNT(DISTINCT user_id) AS requesters").
+		var requesters []pair
+		if err := LOG_DB.Model(&Log{}).Select("user_id, ip").
 			Where("ip IN ? AND created_at > ? AND created_at <= ?", chunk, at-sharedExitWindowSeconds, at).
-			Group("ip").Find(&requesters).Error; err != nil {
+			Group("user_id, ip").Find(&requesters).Error; err != nil {
 			return nil, err
 		}
+		requestersByIP := make(map[string]int)
 		for _, row := range requesters {
-			if row.Requesters >= sharedExitUsers {
-				exits[row.Ip] = true
+			if !staff[row.UserId] {
+				requestersByIP[row.Ip]++
+			}
+		}
+		for ip, count := range requestersByIP {
+			if count >= sharedExitUsers {
+				exits[ip] = true
 			}
 		}
 		var pairs, found []pair
@@ -109,6 +113,9 @@ func sharedExits(ips []string, at int64) (map[string]bool, error) {
 		}
 		pairs = append(pairs, found...)
 		for _, use := range pairs {
+			if staff[use.UserId] {
+				continue
+			}
 			if users[use.Ip] == nil {
 				users[use.Ip] = make(map[int]bool)
 			}

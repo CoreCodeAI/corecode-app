@@ -17,23 +17,31 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import type { ReactNode } from 'react'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   busiestHour,
   claudeCoverage,
   customerMoves,
   dayInProgress,
-  hourSpan,
+  judgedCohort,
   lastFullDay,
+  matureCohort,
   perActiveUser,
+  previousWindow,
   segmentChanges,
   signupBurst,
   stickiness,
   viewState,
 } from '../../growth-analysis'
+import { rangeSpan } from '../../lib'
 import type { ActivityInsights, GrowthHour, GrowthInsights } from '../../types'
 import { GrowthTab } from '../growth-tab'
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: (props: { children: ReactNode }) => <a href='#'>{props.children}</a>,
+}))
 
 const H = 3600
 const D = 86400
@@ -171,7 +179,14 @@ describe('growth analysis', () => {
     expect(busiestHour(rows, T0 + 2 * H + 600, (row) => row.value)?.hour).toBe(
       T0 + H
     )
-    expect(hourSpan({ start: T0, end: T0 + D + 120 })).toBe(D)
+    // The previous period is the same whole span, ending where this one starts.
+    expect(rangeSpan({ days: 1 })).toBe(D)
+    expect(
+      previousWindow({ start: T0, end: T0 + D + 120, days: 1, hourly: false })
+    ).toEqual({
+      start: T0 - D,
+      end: T0,
+    })
     expect(
       perActiveUser({ quota_usd: 30, active_users: 3 } as ActivityInsights)
     ).toBe(10)
@@ -332,5 +347,169 @@ describe('missing data and partial days', () => {
       screen.queryByText('No sign-ups in this range')
     ).not.toBeInTheDocument()
     expect(screen.queryByText('0')).not.toBeInTheDocument()
+  })
+})
+
+describe('the activation cohort and payment timing', () => {
+  const dailyRange = {
+    start: T0,
+    end: T0 + 2 * D + 2 * H,
+    days: 2,
+    hourly: false,
+  }
+  const hourlyRange = { ...dailyRange, days: 1, hourly: true }
+  const funnel = {
+    segment: 'all',
+    registered: 40,
+    activated: 25,
+    paid: 5,
+    repeat: 0,
+  }
+  // The newest day has not had six hours to mature, so it is left out.
+  const matured = [
+    { day: T0, registered: 20, activated: 5, paid: 1 },
+    { day: T0 + D, registered: 20, activated: 20, paid: 4 },
+  ]
+
+  it('leaves the newest day out of the matured cohort and counts it', () => {
+    expect(matureCohort(matured, dailyRange)).toEqual({
+      registered: 20,
+      activated: 5,
+      paid: 1,
+    })
+    expect(judgedCohort(funnel, matured, dailyRange)).toMatchObject({
+      cohort: { registered: 20, activated: 5, paid: 1 },
+      young: 20,
+    })
+    // An hourly range has no matured days: every sign-up is judged so far.
+    expect(judgedCohort(funnel, matured, hourlyRange).young).toBe(0)
+  })
+
+  it('judges the activation card on the cohort the verdict judges', () => {
+    render(
+      <GrowthTab data={growth({ funnel, daily: matured })} range={dailyRange} />
+    )
+    // 5 of 20 matured sign-ups activated: 25%, under the warning line, so the
+    // count reads amber. The raw 25 of 40 (62%) would have read as fine.
+    expect(
+      screen
+        .getAllByText('25')
+        .some((node) => node.classList.contains('text-amber-600'))
+    ).toBe(true)
+    expect(
+      screen.getByText(
+        /25% of sign-ups at least 6 hours old activated and 5% paid\./
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('reads the median and the shares of a fair sample of payers', () => {
+    const timing = {
+      payers: 40,
+      median_hours: 30.5,
+      within_day: 0.25,
+      within_week: 0.8,
+      same_day: 10,
+      days_1_3: 20,
+      days_4_7: 2,
+      later: 8,
+    }
+    render(
+      <GrowthTab data={growth({ first_payment: timing })} range={dailyRange} />
+    )
+    expect(
+      screen.getByText(
+        /^Median 30\.5 hours from sign-up to first payment; 25% within a day, 80% within a week\.$/
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('list', { name: 'Time to first payment' })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /25% of payers paid within a day of signing up, 80% within a week\./
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('gives the count only, and no verdict, when too few have paid', () => {
+    render(
+      <GrowthTab
+        data={growth({
+          first_payment: {
+            payers: 5,
+            median_hours: 3,
+            within_day: 0.8,
+            within_week: 1,
+            same_day: 4,
+            days_1_3: 1,
+            days_4_7: 0,
+            later: 0,
+          },
+        })}
+        range={dailyRange}
+      />
+    )
+    expect(
+      screen.getByText('5 payers, too few to give a median or shares.')
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('list', { name: 'Time to first payment' })
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/within a day of signing up/)).toBeNull()
+  })
+
+  it('names the payers gone quiet, their share and the largest, as links', () => {
+    render(
+      <GrowthTab
+        data={growth({
+          payer_activity: {
+            payers: 40,
+            active: 15,
+            lapsed: 10,
+            top: [{ user_id: 7, username: 'alice', quota_usd: 12.5 }],
+          },
+        })}
+        range={dailyRange}
+      />
+    )
+    expect(
+      screen.getAllByText(
+        /10 payers have gone quiet: 40% of the 25 who used quota in the last 28 days\./
+      ).length
+    ).toBeGreaterThan(0)
+    expect(screen.getByText('alice')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /alice/ })).toBeInTheDocument()
+  })
+
+  it('shows no payment panels from an older server', () => {
+    render(<GrowthTab data={growth()} range={dailyRange} />)
+    expect(screen.queryByText('Time to first payment')).toBeNull()
+    expect(screen.queryByText('Payers gone quiet')).toBeNull()
+  })
+
+  it('reads a sign-up day before the logs as no data, not zero', () => {
+    render(
+      <GrowthTab
+        data={growth({ funnel, daily: matured, logs_since: T0 + D })}
+        range={dailyRange}
+      />
+    )
+    const bars = screen
+      .getByRole('list', { name: 'Sign-ups by day' })
+      .querySelectorAll('[tabindex="0"]')
+    expect(bars[0].getAttribute('aria-label')).toContain('No data')
+    expect(bars[1].getAttribute('aria-label')).not.toContain('No data')
+  })
+
+  it('compares sign-up counts before the logs, since they come from the accounts', () => {
+    render(
+      <GrowthTab
+        data={growth({ funnel, daily: matured, logs_since: T0 })}
+        previous={growth()}
+        range={dailyRange}
+      />
+    )
+    expect(screen.queryByText('No data to compare')).toBeNull()
   })
 })

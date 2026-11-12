@@ -28,8 +28,17 @@ import {
   useTabLabel,
   type InsightsTab,
 } from '../lib'
-import { finishedTasks, tasksJudged } from '../quality-analysis'
-import type { QualityRefusals, TaskOutcome, TaskOutcomes } from '../types'
+import {
+  finishedTasks,
+  preTaskFailures,
+  tasksJudged,
+} from '../quality-analysis'
+import type {
+  QualityRefusals,
+  TaskOutcome,
+  TaskOutcomes,
+  VendorQuality,
+} from '../types'
 import { SampleNote } from './insight-kit'
 import { Breakdown, Panel, SimpleTable } from './shared'
 
@@ -66,6 +75,8 @@ function OpenTab(props: {
  */
 export function TaskOutcomesPanel(props: {
   tasks: TaskOutcomes
+  /** The media vendor's requests in the range; its failures before a task are the ones the tasks do not account for. */
+  media?: VendorQuality | null
   onOpen?: (tab: InsightsTab) => void
 }) {
   const { t } = useTranslation()
@@ -73,6 +84,7 @@ export function TaskOutcomesPanel(props: {
   const finish = useFinishTime()
   const total = props.tasks.total
   const rows = (props.tasks.models ?? []).filter((row) => row.submitted > 0)
+  const preTask = preTaskFailures(props.media, total)
   const rateText = (row: TaskOutcome) =>
     finishedTasks(row) > 0 ? fmt.pct(row.failure_rate) : '—'
   let summary: string | undefined
@@ -105,6 +117,20 @@ export function TaskOutcomesPanel(props: {
       actions={<OpenTab tab='upstream' onOpen={props.onOpen} />}
     >
       <div className='grid gap-2'>
+        {preTask && preTask.before > 0 && (
+          <p className='text-muted-foreground text-xs'>
+            {t(
+              'Failed before a task was created: {{before}}. Media requests failed {{failed}} of {{requests}}; tasks failed {{taskFailed}} of {{submitted}} submitted.',
+              {
+                before: fmt.num(preTask.before),
+                failed: fmt.num(preTask.failed),
+                requests: fmt.num(preTask.requests),
+                taskFailed: fmt.num(preTask.taskFailed),
+                submitted: fmt.num(preTask.submitted),
+              }
+            )}
+          </p>
+        )}
         {total.stalled > 0 && (
           <p className={cn('text-xs', TONES.warning)}>
             {t(
@@ -252,7 +278,7 @@ export function RefusalsPanel(props: {
     <Panel
       title={t('Refused before a channel')}
       help={t(
-        'No channel: customers’ requests (root left out) that no channel of their group serves; they are already in the requests and failures above. Risk gate: requests the risk gate blocked, every user’s, observe-mode hits left out; they never became requests, so they are not in the figures above. Neither follows the model filter.'
+        'No channel: customers’ requests (root and staff left out) that no channel of their group serves; they are already in the requests and failures above. Risk gate: requests the risk gate blocked, every user’s, observe-mode hits left out; they never became requests, so they are not in the figures above. Neither follows the model filter.'
       )}
     >
       <div className='grid gap-4 sm:grid-cols-2'>

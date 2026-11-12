@@ -16,20 +16,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import type { Contribution } from '../analysis'
 import { segmentChanges, signupBurst } from '../growth-analysis'
 import {
+  MIN_COHORT,
+  useChargeFormat,
   useInsightsFormat,
   useSignupMethodLabel,
   type InsightsRangeInfo,
   type InsightsTab,
 } from '../lib'
-import type { GrowthInsights } from '../types'
+import type { GrowthInsights, PayerActivity, PaymentTiming } from '../types'
 import { signupDrivers } from '../verdicts/growth'
 import { Drivers, Findings, type DriverRow, type Finding } from './insight-kit'
-import { Panel } from './shared'
+import { BarSeries, Panel, SimpleTable, UserLabel } from './shared'
+
+const LINK = 'text-primary font-medium hover:underline'
 
 /**
  * Which sign-up methods and referral segments moved sign-ups against the
@@ -114,6 +119,152 @@ export function SignupDriversPanel(props: {
           </div>
         )}
       </div>
+    </Panel>
+  )
+}
+
+/**
+ * How long the range's paying sign-ups took to pay for the first time: the
+ * median, the shares within a day and a week, and a bar per span of days.
+ * Under MIN_COHORT payers it gives the count only, since a share of a few
+ * people reads as a trend.
+ */
+export function PaymentTimingPanel(props: {
+  timing: PaymentTiming | null | undefined
+}) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const timing = props.timing
+  if (!timing) return null
+  const small = timing.payers < MIN_COHORT
+  const share = (count: number) =>
+    timing.payers > 0 ? fmt.pct(count / timing.payers) : '-'
+  return (
+    <Panel
+      title={t('Time to first payment')}
+      help={t(
+        'For the sign-ups in the range who have paid: the time from sign-up to their first paid order, by whole days. The median is over payers only; sign-ups who have not paid yet are not in it.'
+      )}
+      description={
+        small
+          ? t('{{count}} payers, too few to give a median or shares.', {
+              count: fmt.num(timing.payers),
+            })
+          : t(
+              'Median {{hours}} hours from sign-up to first payment; {{day}} within a day, {{week}} within a week.',
+              {
+                hours: fmt.num(timing.median_hours),
+                day: share(timing.same_day),
+                week: fmt.pct(timing.within_week),
+              }
+            )
+      }
+    >
+      {!small && (
+        <BarSeries
+          ariaLabel={t('Time to first payment')}
+          series={[{ label: t('Payers') }]}
+          points={[
+            {
+              key: 'same',
+              title: t('Same day'),
+              values: [timing.same_day],
+              extra: [{ label: t('Share'), value: share(timing.same_day) }],
+            },
+            {
+              key: 'days-1-3',
+              title: t('Days 1 to 3'),
+              values: [timing.days_1_3],
+              extra: [{ label: t('Share'), value: share(timing.days_1_3) }],
+            },
+            {
+              key: 'days-4-7',
+              title: t('Days 4 to 7'),
+              values: [timing.days_4_7],
+              extra: [{ label: t('Share'), value: share(timing.days_4_7) }],
+            },
+            {
+              key: 'later',
+              title: t('Later'),
+              values: [timing.later],
+              extra: [{ label: t('Share'), value: share(timing.later) }],
+            },
+          ]}
+        />
+      )}
+    </Panel>
+  )
+}
+
+/**
+ * The payers who used quota before the range's last two weeks and none in
+ * them: their count, the share of recent payers they are, and the largest of
+ * them, each linked to its account in Users.
+ */
+export function PayerActivityPanel(props: {
+  activity: PayerActivity | null | undefined
+}) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const charge = useChargeFormat(undefined)
+  const activity = props.activity
+  if (!activity) return null
+  const recent = activity.active + activity.lapsed
+  const small = recent < MIN_COHORT
+  return (
+    <Panel
+      title={t('Payers gone quiet')}
+      help={t(
+        'Payers who paid before the range ends and used quota in the 14 days before its last 14, but none in those last 14 days. Staff are left out. Ranked by the quota they used before going quiet.'
+      )}
+      description={
+        small
+          ? t(
+              '{{count}} payers have gone quiet; too few recent payers to give a share.',
+              { count: fmt.num(activity.lapsed) }
+            )
+          : t(
+              '{{count}} payers have gone quiet: {{share}} of the {{recent}} who used quota in the last 28 days.',
+              {
+                count: fmt.num(activity.lapsed),
+                share: fmt.pct(activity.lapsed / recent),
+                recent: fmt.num(recent),
+              }
+            )
+      }
+    >
+      <SimpleTable
+        rows={activity.top}
+        rowKey={(row) => row.user_id}
+        empty={t('No payer has gone quiet in this range')}
+        columns={[
+          {
+            key: 'user',
+            label: t('User'),
+            render: (row) =>
+              row.username ? (
+                <Link
+                  to='/users'
+                  search={{ filter: row.username }}
+                  className={LINK}
+                >
+                  <UserLabel user_id={row.user_id} username={row.username} />
+                </Link>
+              ) : (
+                <UserLabel user_id={row.user_id} username={row.username} />
+              ),
+          },
+          {
+            key: 'before',
+            label: t('Used before'),
+            hint: t(
+              'The quota the payer used in the 14 days before the last 14 days of the range.'
+            ),
+            align: 'right',
+            render: (row) => charge.usd(charge.toUSD(row.quota_usd)),
+          },
+        ]}
+      />
     </Panel>
   )
 }

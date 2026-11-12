@@ -428,14 +428,23 @@ export function failureOwners(
 export function serviceFailureRate(
   data: Pick<QualityInsights, 'requests' | 'errors' | 'error_categories'>
 ): number | null {
-  const categories = data.error_categories
-  if (!categories) return null
-  const client = categories
-    .filter((item) => categoryOwner(item.name) === 'client')
-    .reduce((sum, item) => sum + item.count, 0)
+  if (!data.error_categories) return null
+  const client = clientErrorsOf(data)
   const requests = data.requests - client
   if (requests <= 0) return null
   return Math.max(0, data.errors - client) / requests
+}
+
+/**
+ * The client errors (4xx, upstream 400s included) the service failure rate
+ * leaves out of both counts. Zero without categories.
+ */
+export function clientErrorsOf(
+  data: Pick<QualityInsights, 'error_categories'>
+): number {
+  return (data.error_categories ?? [])
+    .filter((item) => categoryOwner(item.name) === 'client')
+    .reduce((sum, item) => sum + item.count, 0)
 }
 
 /**
@@ -447,9 +456,7 @@ export function serviceRow(
 ): { requests: number; errors: number; error_rate: number } | null {
   const rate = serviceFailureRate(data)
   if (rate == null) return null
-  const client = (data.error_categories ?? [])
-    .filter((item) => categoryOwner(item.name) === 'client')
-    .reduce((sum, item) => sum + item.count, 0)
+  const client = clientErrorsOf(data)
   return {
     requests: data.requests - client,
     errors: Math.max(0, data.errors - client),
@@ -579,4 +586,52 @@ export function mediaModels(data: QualityInsights): Set<string> {
     if (row.vendor === 'media') names.add(row.model)
   }
   return names
+}
+
+/**
+ * Media requests that failed before any task was created: every failed media
+ * request. A task that fails after the supplier accepted it writes no error
+ * log, so it is not among them. Null without media requests. The two counts
+ * have different denominators (requests in the range, tasks submitted in it),
+ * so the caller states both.
+ */
+export function preTaskFailures(
+  media: { requests: number; errors: number } | null | undefined,
+  tasks: { submitted: number; failed: number }
+): {
+  requests: number
+  failed: number
+  submitted: number
+  taskFailed: number
+  before: number
+} | null {
+  if (!media || media.requests <= 0) return null
+  return {
+    requests: media.requests,
+    failed: media.errors,
+    submitted: tasks.submitted,
+    taskFailed: tasks.failed,
+    before: media.errors,
+  }
+}
+
+/** A model failing at least this share of its requests is nearly all failed. */
+export const NEARLY_FAILED = 0.9
+
+/**
+ * Models whose requests nearly all failed over a fair sample (HOUR_SAMPLE
+ * requests, the fewest a rate rests on), most requests first. Models with
+ * no task row are included, so a model failing outright is named even when
+ * the task table does not list it.
+ */
+export function nearlyFailingModels<T extends RateRow & { model: string }>(
+  models: T[] | null | undefined
+): T[] {
+  return (models ?? [])
+    .filter(
+      (row) =>
+        row.requests >= HOUR_SAMPLE &&
+        errorsOf(row) >= NEARLY_FAILED * row.requests
+    )
+    .sort((a, b) => b.requests - a.requests || a.model.localeCompare(b.model))
 }

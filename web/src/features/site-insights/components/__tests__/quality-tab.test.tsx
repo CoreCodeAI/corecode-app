@@ -18,10 +18,15 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { QualityInsights, TaskOutcome, VendorQuality } from '../../types'
 import { QualityTab } from '../quality-tab'
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: (props: { children: ReactNode }) => <a href='#'>{props.children}</a>,
+}))
 
 function figures(overrides: Partial<VendorQuality>): VendorQuality {
   return {
@@ -223,7 +228,7 @@ describe('QualityTab diagnosis', () => {
     )
     expect(
       screen.getByText(
-        'Customers only, root left out; the headline counts everyone.'
+        'Customers only, as in the headline; root and staff are left out.'
       )
     ).toBeInTheDocument()
     expect(screen.getByText('Service failure rate')).toBeInTheDocument()
@@ -412,3 +417,252 @@ describe('QualityTab round 2', () => {
     expect(onChange).toHaveBeenCalledWith([])
   })
 })
+
+describe('QualityTab round 3', () => {
+  const quiet = { ...data, status_codes: [], error_reasons: [] }
+  const tries = {
+    ...quiet,
+    errors: 12,
+    status_codes: [
+      { name: '503', count: 10 },
+      { name: '400', count: 4 },
+    ],
+    error_reasons: [
+      { name: 'Our servers are currently overloaded', count: 14 },
+    ],
+  } satisfies QualityInsights
+  const task = {
+    submitted: 248,
+    succeeded: 247,
+    failed: 1,
+    timed_out: 0,
+    running: 0,
+    stalled: 0,
+    failure_rate: 0.004,
+    finish_p50_s: 690,
+    finish_p95_s: 3200,
+    reasons: null,
+  }
+  const media = (model: string, requests: number, errors: number) => ({
+    model,
+    vendor: 'media',
+    requests,
+    errors,
+    error_rate: errors / requests,
+    ttft_p50_ms: 0,
+    ttft_p95_ms: 0,
+    latency_p50_s: 0,
+    latency_p95_s: 0,
+    cache_share: 0,
+  })
+
+  it('says the breakdowns count failed tries and gives their total', () => {
+    const { unmount } = render(
+      <QualityTab
+        data={{ ...tries, failed_tries: 14 }}
+        models={{ selected: [], onChange: vi.fn() }}
+      />
+    )
+    expect(
+      screen.getAllByText('14 failed tries for 12 failed requests.')
+    ).toHaveLength(2)
+    unmount()
+    // Without the server's total, the status codes are summed to the same figure.
+    render(
+      <QualityTab data={tries} models={{ selected: [], onChange: vi.fn() }} />
+    )
+    expect(
+      screen.getAllByText('14 failed tries for 12 failed requests.')
+    ).toHaveLength(2)
+  })
+
+  it('says a previous period before the logs has no data to compare with', () => {
+    const end = 1_800_000_000
+    render(
+      <QualityTab
+        data={{
+          ...quiet,
+          requests: 500,
+          cache_share: 0.95,
+          logs_since: end - 3 * 86400,
+        }}
+        previous={{ ...quiet, requests: 0, cache_share: 0 }}
+        range={{ start: end - 7 * 86400, end, days: 7, hourly: false }}
+        models={{ selected: [], onChange: vi.fn() }}
+      />
+    )
+    // Zero requests before the logs are not a new figure, nor a rise in cache share.
+    expect(screen.queryByText('New this period')).toBeNull()
+    expect(screen.queryByText('95.0 pt')).toBeNull()
+    expect(screen.getAllByText('No data to compare').length).toBeGreaterThan(0)
+  })
+
+  it('shows root and staff tests apart, and only when the server sends them', () => {
+    const { unmount } = render(
+      <QualityTab
+        data={{ ...quiet, staff_requests: 7, staff_errors: 2 }}
+        models={{ selected: [], onChange: vi.fn() }}
+      />
+    )
+    expect(
+      screen.getByText(
+        'Root and staff tests: 7 requests, 2 failed, left out of the figures above.'
+      )
+    ).toBeInTheDocument()
+    unmount()
+    render(
+      <QualityTab data={quiet} models={{ selected: [], onChange: vi.fn() }} />
+    )
+    expect(screen.queryByText(/Root and staff tests/)).not.toBeInTheDocument()
+  })
+
+  it('points per-user refusals at the capacity tab', () => {
+    render(
+      <QualityTab data={quiet} models={{ selected: [], onChange: vi.fn() }} />
+    )
+    expect(
+      screen.getByText(
+        'Per-user limit refusals are counted on the capacity tab:'
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Capacity →' })).toBeInTheDocument()
+  })
+
+  it('says how many client errors the service failure rate leaves out', () => {
+    render(
+      <QualityTab
+        data={{
+          ...quiet,
+          error_categories: [
+            { name: 'client_error', count: 10 },
+            { name: 'upstream_error', count: 2 },
+          ],
+        }}
+        models={{ selected: [], onChange: vi.fn() }}
+      />
+    )
+    expect(
+      screen.getByText('Leaves out 10 client errors (4xx).')
+    ).toBeInTheDocument()
+  })
+
+  it('lists each vendor’s own failure reasons, and leaves the panel out without them', () => {
+    const { unmount } = render(
+      <QualityTab
+        data={{
+          ...quiet,
+          vendor_failures: [
+            {
+              vendor: 'media',
+              failed_tries: 20,
+              reasons: [
+                {
+                  name: 'Model "gpt-image-2.5-flare" has no image size',
+                  count: 15,
+                },
+              ],
+              other_reasons: 5,
+              status_codes: null,
+              other_status_codes: 0,
+            },
+          ],
+        }}
+        models={{ selected: [], onChange: vi.fn() }}
+      />
+    )
+    expect(screen.getByText('Failure reasons by vendor')).toBeInTheDocument()
+    expect(
+      screen.getByText('Image and video: 20 failed tries')
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Model "gpt-image-2.5-flare" has no image size')
+    ).toBeInTheDocument()
+    expect(screen.getByText('Other reasons')).toBeInTheDocument()
+    unmount()
+    render(
+      <QualityTab data={quiet} models={{ selected: [], onChange: vi.fn() }} />
+    )
+    expect(
+      screen.queryByText('Failure reasons by vendor')
+    ).not.toBeInTheDocument()
+  })
+
+  it('says how many media requests failed before a task was created', () => {
+    render(
+      <QualityTab
+        data={{
+          ...quiet,
+          vendors: [...(data.vendors ?? []), figuresOf('media', 520, 223)],
+          tasks: {
+            total: task,
+            models: null,
+            channels: null,
+            truncated: false,
+          },
+        }}
+        models={{ selected: [], onChange: vi.fn() }}
+      />
+    )
+    expect(
+      screen.getByText(
+        'Failed before a task was created: 223. Media requests failed 223 of 520; tasks failed 1 of 248 submitted.'
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('names the models that failed nearly every request, with or without a task row', () => {
+    render(
+      <QualityTab
+        data={{
+          ...quiet,
+          models: [
+            media('wan-3.0-480p', 20, 20),
+            media('wan-3.0-prime-720p', 20, 20),
+            media('seedance-2.5-720p', 22, 20),
+            media('seedance-2.0-mini-720p-fixed', 22, 22),
+            media('seedance-2.5-480p', 25, 20),
+          ],
+        }}
+        models={{ selected: [], onChange: vi.fn() }}
+      />
+    )
+    expect(
+      screen.getByText(
+        '4 models failed 90% or more of their requests: seedance-2.0-mini-720p-fixed, seedance-2.5-720p, wan-3.0-480p, wan-3.0-prime-720p.'
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('names one model failing every request once, not twice', () => {
+    render(
+      <QualityTab
+        data={{ ...quiet, models: [media('wan-3.0-480p', 20, 20)] }}
+        models={{ selected: [], onChange: vi.fn() }}
+      />
+    )
+    expect(
+      screen.getAllByText('wan-3.0-480p fails 100% of its 20 requests.')
+    ).toHaveLength(1)
+  })
+
+  it('keeps a long failure reason on one line, with its full text in reach', () => {
+    const reason =
+      'Claude upstream request failed with status 400: messages.3.content.0.text is not a valid field path for this request body, see the logs'
+    render(
+      <QualityTab
+        data={{ ...quiet, error_reasons: [{ name: reason, count: 3 }] }}
+        models={{ selected: [], onChange: vi.fn() }}
+      />
+    )
+    expect(screen.getByText(reason)).toHaveClass('truncate')
+  })
+})
+
+function figuresOf(vendor: string, requests: number, errors: number) {
+  return figures({
+    vendor,
+    requests,
+    errors,
+    error_rate: errors / requests,
+  })
+}

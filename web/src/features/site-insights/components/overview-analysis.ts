@@ -35,6 +35,8 @@ import {
   CONCENTRATION_SHARE,
   DROP_SHARE,
   MIN_ORDERS,
+  previousBeforeLogs,
+  rangeSpan,
   SMALL_SAMPLE,
   SPIKE_FACTOR,
   SPIKE_FLOOR,
@@ -383,11 +385,16 @@ export function overviewExtraSignals(
       engine: 'capacity',
       rate_limits: 'capacity',
     }
+    // A previous period wholly before the logs has no hours to compare
+    // with, so the last hour is judged against the range's own median.
+    const previous = previousBeforeLogs(range, props.capacity.logs_since)
+      ? undefined
+      : props.previousCapacity?.hourly
     for (const signal of lastHourSignals(
       props.capacity.hourly,
-      props.previousCapacity?.hourly,
+      previous,
       range.end,
-      range.end - range.start
+      rangeSpan(range)
     )) {
       signals.push({
         key: `hour-${signal.kind}`,

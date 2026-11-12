@@ -193,6 +193,9 @@ type ChannelInsights struct {
 	// StaleHours counts the range's hours still stored under an older rollup
 	// version, until they are rebuilt; omitted when none.
 	StaleHours int `json:"stale_hours"`
+	// Truncated says an hour of the range was cut by its row cap, so the
+	// consumption of that hour is short.
+	Truncated bool `json:"truncated"`
 }
 
 // walletCredit is one credit to a wallet: paid quota with the money paid for
@@ -328,7 +331,7 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 		DeletedAt    gorm.DeletedAt
 	}
 	if err := DB.Model(&User{}).Unscoped().Select("id, inviter_id, request_count, created_at, quota, status, deleted_at").
-		Where("role < ?", common.RoleRootUser).Find(&users).Error; err != nil {
+		Where("role < ?", customerRoleBound).Find(&users).Error; err != nil {
 		return nil, err
 	}
 	// rowOf is the source that brought an account; giftRowOf is where its
@@ -355,16 +358,13 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 		return nil, err
 	}
 	paidOrders := make(map[int]int)
-	firstPaid := make(map[int]int64)
+	firstPaid := firstPaidTimes(orders)
 	payers := make(map[int]bool)
 	for _, order := range orders {
 		if order.Money <= 0 {
 			continue
 		}
 		paidOrders[order.UserId]++
-		if first, ok := firstPaid[order.UserId]; !ok || order.CreateTime < first {
-			firstPaid[order.UserId] = order.CreateTime
-		}
 		if !inRange(order.CreateTime) {
 			continue
 		}
@@ -442,7 +442,9 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 	if err != nil {
 		return nil, err
 	}
+	truncated := false
 	for _, hour := range hours {
+		truncated = truncated || hour.summary.Truncated
 		for _, user := range hour.users {
 			row := rowOf[user.UserId]
 			if row == nil {
@@ -546,7 +548,7 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := &ChannelInsights{Costs: stored, StaleHours: stale}
+	result := &ChannelInsights{Costs: stored, StaleHours: stale, Truncated: truncated}
 	for id, row := range rows {
 		row.Channel.Username = names[id]
 		result.Channels = append(result.Channels, *row)

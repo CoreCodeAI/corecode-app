@@ -283,7 +283,7 @@ export function ShareCharts(props: {
       </Panel>
       <Panel
         title={t('Consumption by provider')}
-        help={t('At list price, root included.')}
+        help={t('At list price, root and staff included.')}
         error={financeFailed}
       >
         {financeFailed === undefined ? (

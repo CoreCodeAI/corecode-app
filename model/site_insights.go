@@ -11,7 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/types"
 )
 
-// The root dashboard reads bounded ranges and aggregates in Go, like the
+// The site-insights dashboard reads bounded ranges and aggregates in Go, like the
 // top-up report: day and hour arithmetic differs across SQLite, MySQL and
 // PostgreSQL, and the ranges are small enough to read.
 const (
@@ -40,7 +40,13 @@ type InsightsRange struct {
 }
 
 // ResolveInsightsRange defaults end to now and start to seven days before
-// end, and rejects a span over maxDays.
+// end, and rejects a span over maxDays. Every view takes its range from here,
+// so the start is floored to the UTC hour the rollups and the raw-table reads
+// count by: the hour a range starts in is counted whole, and a "24 hours"
+// span is the same on every tab. The end is left as sent, and the hour still
+// filling counts what it has. A range may run up to an hour past maxDays: the
+// console sends a start already on the hour, so its longest range is maxDays
+// and the part of the hour its start was floored by.
 func ResolveInsightsRange(start, end, offset int64, maxDays int64) (InsightsRange, bool) {
 	if end <= 0 {
 		end = time.Now().Unix()
@@ -48,9 +54,10 @@ func ResolveInsightsRange(start, end, offset int64, maxDays int64) (InsightsRang
 	if start <= 0 {
 		start = end - 7*86400
 	}
-	if start >= end || end-start > maxDays*86400 || offset < -14*3600 || offset > 14*3600 {
+	if start >= end || end-start > maxDays*86400+3600 || offset < -14*3600 || offset > 14*3600 {
 		return InsightsRange{}, false
 	}
+	start = insightHourKey(start)
 	return InsightsRange{Start: start, End: end, Offset: offset}, true
 }
 
@@ -259,8 +266,9 @@ const (
 	ErrorUpstream     = "upstream_error"
 	ErrorClient       = "client_error"
 	ErrorOther        = "other"
-	// ErrorNoChannel is a request no channel could take, recorded on
-	// channel 0 before any attempt (NoChannelErrorContent).
+	// ErrorNoChannel is a request no channel could take: recorded on channel 0
+	// before any attempt (NoChannelErrorContent), or failed on the retry path
+	// with a no-channel message (noChannelTemplates).
 	ErrorNoChannel = "no_channel"
 )
 
@@ -292,6 +300,50 @@ func containsAny(content string, messages []string) bool {
 	return false
 }
 
+// noChannelTemplates are the texts of the messages a request no channel could
+// take carries when it is turned away after the retry path or by the
+// distributor, one per locale of each message (i18n/locales, keys
+// relay.retry_no_available_channel, distributor.no_available_channel and
+// distributor.no_available_channel_task_plugin). Each text is split at its
+// two placeholders, the group and the model, so a message matches whatever
+// group and model it names. The locale files' test keeps these in step.
+var noChannelTemplates = [][]string{
+	{"No available channel for model ", " under group ", " (retry)"},
+	{"No available channel for model ", " under group ", " (distributor)"},
+	{"No available channel for model ", " under group ", ": the model is claimed by a task plugin, which has no enabled channel serving it (distributor)"},
+	{"分组 ", " 下模型 ", " 的可用渠道不存在（retry）"},
+	{"分组 ", " 下模型 ", " 无可用渠道（distributor）"},
+	{"分组 ", " 下模型 ", " 无可用渠道：该模型由任务插件认领，但当前没有启用的渠道可服务此模型（distributor）"},
+	{"分組 ", " 下模型 ", " 的可用管道不存在（retry）"},
+	{"分組 ", " 下模型 ", " 無可用管道（distributor）"},
+	{"分組 ", " 下模型 ", " 無可用管道：該模型由任務插件認領，但目前沒有啟用的管道可服務此模型（distributor）"},
+}
+
+// isNoChannelMessage reports whether an error message is one of the
+// no-channel texts (noChannelTemplates): its literal parts appear in order,
+// the first at the start and the last at the end.
+func isNoChannelMessage(message string) bool {
+	for _, parts := range noChannelTemplates {
+		rest, ok := strings.CutPrefix(message, parts[0])
+		if !ok {
+			continue
+		}
+		matched := true
+		for _, part := range parts[1 : len(parts)-1] {
+			at := strings.Index(rest, part)
+			if at < 0 {
+				matched = false
+				break
+			}
+			rest = rest[at+len(part):]
+		}
+		if matched && strings.HasSuffix(rest, parts[len(parts)-1]) {
+			return true
+		}
+	}
+	return false
+}
+
 // classifyErrorLog sorts an error log by its content alone, as if the
 // upstream had returned it.
 func classifyErrorLog(content string) string {
@@ -306,7 +358,7 @@ func classifyError(content string, other logOtherFields) string {
 	code := logStatusCode(content)
 	_, rest, _ := strings.Cut(content, ", ")
 	switch {
-	case strings.HasPrefix(rest, ErrorNoChannel+": "):
+	case strings.HasPrefix(rest, ErrorNoChannel+": "), isNoChannelMessage(rest):
 		return ErrorNoChannel
 	case containsAny(content, engineConcurrencyMessages):
 		return ErrorEngineConcurrency
