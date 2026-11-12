@@ -2,6 +2,9 @@
 
 Status: implemented
 
+Partly superseded by [`2026-11-12-daily-quota-without-a-total.md`](2026-11-12-daily-quota-without-a-total.md):
+an unlimited key may now have a daily cap, so the API no longer stores 0 for it.
+
 ## Problem
 
 An API key had either unlimited quota or a total that never refills. A company account

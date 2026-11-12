@@ -36,7 +36,8 @@ export function getApiKeyFormSchema(t: TFunction, maxAutoGroups = 5) {
     .object({
       name: z.string().min(1, t('Please enter a name')),
       remain_quota_dollars: z.number().optional(),
-      // 0, a negative value or none leaves the key without a daily cap.
+      // On a key without the Unlimited switch, 0, a negative value or none
+      // leaves that limit off; at least one of the two must be set.
       daily_quota_dollars: z.number().optional(),
       expired_time: z.date().nullable(),
       unlimited_quota: z.boolean(),
@@ -96,6 +97,22 @@ export function getApiKeyFormSchema(t: TFunction, maxAutoGroups = 5) {
           path: ['remain_quota_dollars'],
           message: t('Quota must be zero or greater'),
         })
+        return
+      }
+
+      // No total and no daily limit is the Unlimited switch; keep one way to
+      // get there so a key is never unlimited by leaving two fields at 0.
+      if (
+        data.remain_quota_dollars === 0 &&
+        (data.daily_quota_dollars ?? 0) <= 0
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['remain_quota_dollars'],
+          message: t(
+            'Set a total quota or a daily quota, or turn on Unlimited Quota.'
+          ),
+        })
       }
     })
 }
@@ -139,23 +156,29 @@ export function getApiKeyFormDefaultValues(
 // ============================================================================
 
 /**
- * Transform form data to API payload
+ * Transform form data to API payload.
+ *
+ * A key with a daily cap and no total is stored as `unlimited_quota` with a
+ * `daily_quota`: the server's "unlimited" means no total, and the daily cap
+ * applies on its own. The Unlimited switch is the one way to have neither.
  */
 export function transformFormDataToPayload(
   data: ApiKeyFormValues
 ): ApiKeyFormData {
+  const total = data.unlimited_quota
+    ? 0
+    : parseQuotaFromDollars(Math.max(data.remain_quota_dollars || 0, 0))
+  const daily = data.unlimited_quota
+    ? 0
+    : parseQuotaFromDollars(Math.max(data.daily_quota_dollars || 0, 0))
   return {
     name: data.name,
-    remain_quota: data.unlimited_quota
-      ? 0
-      : parseQuotaFromDollars(data.remain_quota_dollars || 0),
-    daily_quota: data.unlimited_quota
-      ? 0
-      : parseQuotaFromDollars(Math.max(data.daily_quota_dollars || 0, 0)),
+    remain_quota: total,
+    daily_quota: daily,
     expired_time: data.expired_time
       ? Math.floor(data.expired_time.getTime() / 1000)
       : -1,
-    unlimited_quota: data.unlimited_quota,
+    unlimited_quota: data.unlimited_quota || (total === 0 && daily > 0),
     model_limits_enabled: data.model_limits.length > 0,
     model_limits: data.model_limits.join(','),
     allow_ips: data.allow_ips || '',
@@ -183,19 +206,19 @@ export function transformApiKeyToFormDefaults(
     .filter((group) => availableSet.has(group))
     .slice(0, Math.max(0, maxAutoGroups))
   const autoGroupsMode = storedAutoGroups.length > 0 ? 'custom' : 'inherit'
+  // The server's unlimited with a daily cap is a key limited only per day; the
+  // form shows it as a zero total, not as the Unlimited switch.
+  const dailyQuota = Math.max(apiKey.daily_quota ?? 0, 0)
 
   return {
     name: apiKey.name,
     remain_quota_dollars: apiKey.unlimited_quota
       ? 0
       : quotaUnitsToDollars(apiKey.remain_quota),
-    daily_quota_dollars:
-      apiKey.unlimited_quota || !apiKey.daily_quota
-        ? 0
-        : quotaUnitsToDollars(apiKey.daily_quota),
+    daily_quota_dollars: dailyQuota > 0 ? quotaUnitsToDollars(dailyQuota) : 0,
     expired_time:
       apiKey.expired_time > 0 ? new Date(apiKey.expired_time * 1000) : null,
-    unlimited_quota: apiKey.unlimited_quota,
+    unlimited_quota: apiKey.unlimited_quota && dailyQuota === 0,
     model_limits: apiKey.model_limits
       ? apiKey.model_limits.split(',').filter(Boolean)
       : [],

@@ -227,11 +227,36 @@ describe('API key daily quota form mapping', () => {
     ['zero', { unlimited_quota: false, daily_quota_dollars: 0 }],
     ['negative', { unlimited_quota: false, daily_quota_dollars: -3 }],
     ['empty', { unlimited_quota: false, daily_quota_dollars: undefined }],
-    ['unlimited', { unlimited_quota: true, daily_quota_dollars: 2 }],
+    ['the Unlimited switch', { unlimited_quota: true, daily_quota_dollars: 2 }],
   ])('sends no daily cap for a %s value', (_label, change) => {
     expect(
       transformFormDataToPayload({ ...values, ...change }).daily_quota
     ).toBe(0)
+  })
+
+  test('sends a daily cap with no total as unlimited plus the cap', () => {
+    const payload = transformFormDataToPayload({
+      ...values,
+      unlimited_quota: false,
+      remain_quota_dollars: 0,
+      daily_quota_dollars: 2,
+    })
+    expect(payload).toMatchObject({
+      unlimited_quota: true,
+      remain_quota: 0,
+      daily_quota: 1_000_000,
+    })
+  })
+
+  test('keeps a total and a daily cap together as a limited key', () => {
+    const payload = transformFormDataToPayload({
+      ...values,
+      unlimited_quota: false,
+      remain_quota_dollars: 100,
+      daily_quota_dollars: 2,
+    })
+    expect(payload.unlimited_quota).toBe(false)
+    expect(payload.remain_quota).toBeGreaterThan(0)
   })
 
   test('shows a stored cap, and none for keys without one', () => {
@@ -241,5 +266,85 @@ describe('API key daily quota form mapping', () => {
         .daily_quota_dollars
     ).toBe(2)
     expect(transformApiKeyToFormDefaults(limited).daily_quota_dollars).toBe(0)
+  })
+
+  test('shows an unlimited key with a cap as a zero total, not the switch', () => {
+    const form = transformApiKeyToFormDefaults({
+      ...baseApiKey,
+      unlimited_quota: true,
+      daily_quota: 1_000_000,
+    })
+    expect(form.unlimited_quota).toBe(false)
+    expect(form.remain_quota_dollars).toBe(0)
+    expect(form.daily_quota_dollars).toBe(2)
+    expect(
+      transformApiKeyToFormDefaults({ ...baseApiKey, unlimited_quota: true })
+        .unlimited_quota
+    ).toBe(true)
+  })
+
+  test('saves an unlimited key with a cap back unchanged', () => {
+    const stored = {
+      ...baseApiKey,
+      unlimited_quota: true,
+      daily_quota: 1_000_000,
+    }
+    const payload = transformFormDataToPayload(
+      transformApiKeyToFormDefaults(stored)
+    )
+    expect(payload).toMatchObject({
+      unlimited_quota: true,
+      remain_quota: 0,
+      daily_quota: 1_000_000,
+    })
+  })
+
+  describe('validation', () => {
+    const schema = getApiKeyFormSchema(t)
+    const issues = (change: Record<string, unknown>) => {
+      const result = schema.safeParse({
+        ...values,
+        name: 'k',
+        unlimited_quota: false,
+        ...change,
+      })
+      return result.success ? [] : result.error.issues.map((i) => i.message)
+    }
+
+    test('rejects a key with neither a total nor a daily limit', () => {
+      const message =
+        'Set a total quota or a daily quota, or turn on Unlimited Quota.'
+      expect(
+        issues({ remain_quota_dollars: 0, daily_quota_dollars: 0 })
+      ).toContain(message)
+      expect(
+        issues({ remain_quota_dollars: 0, daily_quota_dollars: undefined })
+      ).toContain(message)
+      expect(
+        issues({ remain_quota_dollars: 0, daily_quota_dollars: -1 })
+      ).toContain(message)
+    })
+
+    test('accepts a total only, a daily cap only, or both', () => {
+      expect(
+        issues({ remain_quota_dollars: 10, daily_quota_dollars: 0 })
+      ).toEqual([])
+      expect(
+        issues({ remain_quota_dollars: 0, daily_quota_dollars: 5 })
+      ).toEqual([])
+      expect(
+        issues({ remain_quota_dollars: 10, daily_quota_dollars: 5 })
+      ).toEqual([])
+    })
+
+    test('accepts the Unlimited switch with both fields empty', () => {
+      expect(
+        issues({
+          unlimited_quota: true,
+          remain_quota_dollars: 0,
+          daily_quota_dollars: 0,
+        })
+      ).toEqual([])
+    })
   })
 })

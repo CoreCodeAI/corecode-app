@@ -48,11 +48,12 @@ type tokenResponse struct {
 	AutoGroups []string `json:"auto_groups"`
 }
 
-// validTokenDailyQuota normalizes a token's daily cap: an unlimited token and
-// a value of 0 or below have none. It writes the error response and returns
-// false for a cap above the largest token quota.
+// validTokenDailyQuota normalizes a token's daily cap: a value of 0 or below
+// has none. The cap applies whether or not the token has a total quota, so an
+// unlimited token with a daily cap is a key limited only per day. It writes the
+// error response and returns false for a cap above the largest token quota.
 func validTokenDailyQuota(c *gin.Context, token *model.Token) bool {
-	if token.UnlimitedQuota || token.DailyQuota < 0 {
+	if token.DailyQuota < 0 {
 		token.DailyQuota = 0
 	}
 	maxQuotaValue := maxTokenQuota()

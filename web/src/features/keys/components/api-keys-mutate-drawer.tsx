@@ -713,7 +713,8 @@ export function ApiKeysMutateDrawer({
                           ? t('Enter the quota amount in tokens')
                           : t('Enter the quota amount in {{currency}}', {
                               currency: currencyLabel,
-                            })}
+                            })}{' '}
+                        {t('0 means no total limit.')}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

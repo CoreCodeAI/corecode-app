@@ -735,8 +735,9 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 	c.Set("token_unlimited_quota", token.UnlimitedQuota)
 	if !token.UnlimitedQuota {
 		c.Set("token_quota", token.RemainQuota)
-		c.Set("token_daily_quota", token.DailyQuota)
 	}
+	// The daily cap is independent of the total: an unlimited token may have one.
+	c.Set("token_daily_quota", token.DailyQuota)
 	if token.ModelLimitsEnabled {
 		c.Set("token_model_limit_enabled", true)
 		c.Set("token_model_limit", token.GetModelLimitsMap())
