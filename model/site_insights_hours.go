@@ -47,7 +47,8 @@ import (
 // reading zero, and counted in each view's stale_hours when it has a request
 // or an attempt: an empty one is current. The task rebuilds it
 // while every log of its hour is still there; once logs before it are
-// cleaned it keeps its old row for good.
+// cleaned it keeps its old row for good. The hour the earliest log falls in
+// is rebuilt only while none of its logs was removed (insightFirstHourWhole).
 //
 // The versions, oldest first: 5 counts the rollup's figures with staff
 // included in the model rows and the failed tries, and has no vendor failures
@@ -950,6 +951,35 @@ func firstLogAt() (int64, error) {
 	return *first, nil
 }
 
+// insightLogInsertSlack is longer than a log can wait between taking its time
+// and being inserted, so a log written this long after another has the higher
+// id.
+const insightLogInsertSlack = 600
+
+// insightFirstHourWhole reports whether the hour the earliest log falls in
+// still has every log it is computed from. The earliest log alone does not
+// say: cleaning deletes by time, in batches of no fixed order, and may have
+// stopped inside the hour. The hour reads logs up to insightHourLookahead
+// after it ends. Take the first log written insightLogInsertSlack after that:
+// every log the hour reads has a lower id. If each id from 1 up to it is
+// still there, none was removed. A gap left by an insert that failed reads as
+// cleaned, and so does a table with no log that late yet: the safe side.
+func insightFirstHourWhole(hour int64) (bool, error) {
+	var next []int64
+	if err := LOG_DB.Model(&Log{}).Where("created_at >= ?", hour+3600+insightHourLookahead+insightLogInsertSlack).
+		Order("created_at, id").Limit(1).Pluck("id", &next).Error; err != nil {
+		return false, err
+	}
+	if len(next) == 0 || next[0] <= 1 {
+		return false, nil
+	}
+	var below int64
+	if err := LOG_DB.Model(&Log{}).Where("id < ?", next[0]).Count(&below).Error; err != nil {
+		return false, err
+	}
+	return below == next[0]-1, nil
+}
+
 // insightLogsSinceTTL is how long the earliest log's time is reused. Logs are
 // only cleaned from the front, so a reused value is early by at most this
 // long, and the hours between the two read as empty, which they are.
@@ -1199,9 +1229,11 @@ func storeInsightHour(hour *insightHour) error {
 // stored under an older version, newest first, but only those whose logs are
 // all still there: a request belongs to the hour it started in and its logs
 // are written after that, so an hour that starts at or after the earliest
-// log is whole. An older hour keeps its old row for good, and the views count
-// it in stale_hours. The rebuild waits while insightRebuildHeld says a server
-// of the last release may still be running.
+// log is whole. So is the hour the earliest log falls in while every log it
+// reads is still there (insightFirstHourWhole): nothing started in it before
+// that log. An older hour keeps its old row for good, and the views count it
+// in stale_hours. The rebuild waits while insightRebuildHeld says a server of
+// the last release may still be running.
 func FillInsightHours(days int64, limit int) (int, error) {
 	now := time.Now().Unix()
 	newest := now - now%3600
@@ -1253,7 +1285,19 @@ func FillInsightHours(days int64, limit int) (int, error) {
 	if insightRebuildHeld(have, now) {
 		return filled, nil
 	}
-	for start := newest; start >= max(oldest, earliest) && filled < limit; start -= 3600 {
+	whole := earliest
+	if first := insightHourKey(earliest); first < earliest && filled < limit {
+		if version, ok := stored[first]; ok && version < insightHourVersion {
+			intact, err := insightFirstHourWhole(first)
+			if err != nil {
+				return filled, err
+			}
+			if intact {
+				whole = first
+			}
+		}
+	}
+	for start := newest; start >= max(oldest, whole) && filled < limit; start -= 3600 {
 		if version, ok := stored[start]; !ok || version >= insightHourVersion {
 			continue
 		}
