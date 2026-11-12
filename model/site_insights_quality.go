@@ -111,9 +111,10 @@ type QualityInsights struct {
 	// FailedTries is the customers' failed tries over every model, and
 	// VendorFailures splits them by vendor. Each vendor's reasons and status
 	// codes are its top ones with the rest counted apart, so each list and its
-	// rest add up to the vendor's FailedTries. Neither includes hours stored
-	// under an older version, which StaleHours counts.
-	FailedTries    int64                    `json:"failed_tries"`
+	// rest add up to the vendor's FailedTries. Older hours carry no vendor
+	// split, and their status codes and reasons count other tries, so while
+	// StaleHours is above zero both are withheld, as Attempts are.
+	FailedTries    *int64                   `json:"failed_tries,omitempty"`
 	VendorFailures []VendorFailureBreakdown `json:"vendor_failures"`
 	Truncated      bool                     `json:"truncated"`
 	// Tasks is how the async tasks submitted in the range ended; their
@@ -231,6 +232,9 @@ var (
 	// A number of four or more digits standing alone. A dated model name
 	// (claude-sonnet-4-5-20250929) is not one: its digits follow a hyphen.
 	reasonNumberPattern = regexp.MustCompile(`(^|[\s(=:,])\d{4,}([\s),.:]|$)`)
+	// A date, optionally with a time, and a bare clock time: they vary per
+	// request, so they must not make a reason of their own.
+	reasonTimePattern = regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}([T ]\d{1,2}:\d{2}(:\d{2}(\.\d+)?)?Z?)?|\b\d{1,2}:\d{2}(:\d{2})?\b`)
 	// An index in a field path: messages.3.content and tools[0].
 	reasonDotIndexPattern     = regexp.MustCompile(`([A-Za-z_])\.\d+\.`)
 	reasonBracketIndexPattern = regexp.MustCompile(`\[\d+\]`)
@@ -244,11 +248,15 @@ var (
 // make a reason of their own, and the text is capped at insightReasonRunes
 // runes with an ellipsis.
 func errorReason(content string) string {
-	reason := content
-	if _, rest, ok := strings.Cut(content, ", "); ok && strings.HasPrefix(content, "status_code=") {
+	reason := strings.TrimSpace(content)
+	if _, rest, ok := strings.Cut(reason, ", "); ok && strings.HasPrefix(reason, "status_code=") {
 		reason = rest
 	}
-	return capReason(normalizeReason(cutSentence(reason)))
+	reason = strings.TrimSpace(capReason(normalizeReason(cutSentence(strings.TrimSpace(reason)))))
+	if reason == "" {
+		return "unknown"
+	}
+	return reason
 }
 
 // cutSentence keeps the text up to its first sentence end.
@@ -272,6 +280,7 @@ func normalizeReason(reason string) string {
 		}
 		return id
 	})
+	reason = reasonTimePattern.ReplaceAllString(reason, "<time>")
 	// Two passes, so that two numbers separated by one space both go.
 	for range 2 {
 		reason = reasonNumberPattern.ReplaceAllString(reason, "${1}<n>${2}")
@@ -354,7 +363,7 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	categories := make(map[string]int64)
 	allTTFT := histogram{}
 	failures := make(map[string]*vendorFailureBucket)
-	var cacheRead, inputTotal, attempts, attemptErrors, reasonsOther int64
+	var cacheRead, inputTotal, attempts, attemptErrors, reasonsOther, failedTries int64
 	for _, hour := range hours {
 		result.Truncated = result.Truncated || hour.summary.Truncated
 		attempts += hour.summary.Attempts
@@ -380,7 +389,7 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 			bucket.reasonsOther += found.ReasonsOther
 			mergeCounts(bucket.statuses, found.StatusCodes)
 			bucket.statusOther += found.StatusOther
-			result.FailedTries += found.Tries
+			failedTries += found.Tries
 		}
 		refusals.NoChannel += hour.summary.Categories[ErrorNoChannel]
 		// An hour without customers' requests holds no vendor split and no
@@ -490,9 +499,10 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	}
 	slices.SortFunc(result.Daily, func(a, b CacheDay) int { return cmp.Compare(a.Day, b.Day) })
 	result.StreamEnds = sortedCounts(streamEnds)
-	result.VendorFailures = vendorFailureBreakdowns(failures)
 	if stale == 0 {
 		result.Attempts, result.AttemptErrors = &attempts, &attemptErrors
+		result.FailedTries = &failedTries
+		result.VendorFailures = vendorFailureBreakdowns(failures)
 	}
 	result.StatusCodes = sortedCounts(statusCodes)
 	result.ErrorReasons = sortedCounts(reasons)

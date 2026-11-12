@@ -347,10 +347,10 @@ describe('quality round 3 helpers', () => {
       failed: 223,
       submitted: 248,
       taskFailed: 1,
-      before: 222,
+      before: 223,
     })
-    // Tasks that failed after submission can outnumber the requests that
-    // failed before one; the difference is never negative.
+    // A task that failed after submission writes no error log, so it is not
+    // subtracted from the failed requests.
     expect(
       preTaskFailures({ requests: 5, errors: 0 }, { submitted: 3, failed: 1 })
         ?.before

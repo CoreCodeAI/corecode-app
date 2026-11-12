@@ -92,8 +92,8 @@ export type UpstreamTaskCounts = {
 
 /**
  * Requests turned away before any channel was tried. no_channel: customers'
- * (not root's) requests no channel of their group serves; they are also in
- * requests, errors and error_categories. risk_gate: requests the risk gate
+ * (not root's or staff's) requests no channel of their group serves; they are
+ * also in requests, errors and error_categories. risk_gate: requests the risk gate
  * blocked (observe-mode hits excluded), every user; they are not in
  * requests. risk_gate_stages: risk_gate by stage, largest first.
  */
@@ -559,7 +559,7 @@ export type LogsSince = { logs_since?: number | null }
 export type CapacityInsights = StaleHours & {
   /** Where the logs begin, unix seconds; see LogsSince. */
   logs_since?: number | null
-  /** Customers' requests (root left out). */
+  /** Customers' requests (root and staff left out). */
   requests: number
   errors: number
   /** The site's peak: requests in flight at once on every channel. */
@@ -606,7 +606,7 @@ export type BalanceUser = UserRef & { balance_usd: number }
 
 /**
  * What running plans owe now: plans with status active and start <= now <
- * end, root's left out. A point in time: never compare it with the previous
+ * end, root's and staff's left out. A point in time: never compare it with the previous
  * period. at: unix seconds (now). deferred_value, in the payment currency
  * (yuan): each paid (order or balance) plan's matched price times the share
  * of its time not yet run; a balance plan is valued at the wallet price as
@@ -700,7 +700,7 @@ export type VendorUpstreamCost = {
 }
 
 /**
- * Customers' use in one billing group (root left out), by consumption
+ * Customers' use in one billing group (root and staff left out), by consumption
  * desc. group "" means not recorded. tokens: used plus cache read and write.
  * consumption_usd: quota dollars after the group's ratio; list_usd the same
  * over today's ratio (0 with no ratio); ratio: today's group ratio (0 with
@@ -722,6 +722,8 @@ export type GroupConsumption = {
 export type FinanceInsights = StaleHours & {
   /** Where the logs begin, unix seconds; see LogsSince. */
   logs_since?: number | null
+  /** An hour of the range was cut by its row cap, so its revenue and consumption may be short; absent before the server's release. */
+  truncated?: boolean
   /** Money paid in the range, yuan. revenue, the top-up and plan parts, methods, daily and hourly count an order when it was paid (its create time on servers that did not record that). */
   revenue: number
   topup_revenue: number
@@ -795,7 +797,7 @@ export type FinanceInsights = StaleHours & {
   plan_accounts?: EnginePlanCount[]
   /** new-api's charge by model, root included, largest first. */
   vendor_models?: VendorModel[]
-  /** Revenue earned by vendor, root left out; absent before the server's release. */
+  /** Revenue earned by vendor, root and staff left out; absent before the server's release. */
   vendor_revenue?: {
     vendor: string
     customer_usd: number
@@ -843,6 +845,8 @@ export type UnpaidSpender = UserRef & {
   granted_usd?: number
   redeemed_usd?: number
   signup_gift_usd?: number
+  /** Check-in rewards used: wallet credit that is no gift of an inviter's. Absent before the server's release, where it is inside signup_gift_usd. */
+  checkin_usd?: number
   signup_method: string
   /** user_id 0 without an inviter. */
   inviter: UserRef
@@ -875,7 +879,7 @@ export type SharedIP = {
 export type RiskInsights = StaleHours & {
   /** Where the logs begin, unix seconds; see LogsSince. */
   logs_since?: number | null
-  /** Sign-ups in the range, root left out, soft-deleted accounts included (older servers: deleted left out, root counted). */
+  /** Sign-ups in the range, root and staff left out, soft-deleted accounts included (older servers: deleted left out, root counted). */
   signups: number
   signup_series: CountPoint[]
   series_unit: 'hour' | 'day'
@@ -922,6 +926,8 @@ export type RiskInsights = StaleHours & {
   unpaid_redeemed_usd?: number
   unpaid_gift_plan_usd?: number
   unpaid_signup_gift_usd?: number
+  /** The check-in rewards in unpaid_spend_usd; with the four parts above it sums to unpaid_spend_usd. */
+  unpaid_checkin_usd?: number
   /** Unpaid spenders whose hand-granted part is over half their consumption. */
   unpaid_hand_funded?: number
   /** The largest 10 by consumption. */
@@ -932,6 +938,8 @@ export type RiskInsights = StaleHours & {
   unpaid_inviters?:
     | (UserRef & {
         accounts: number
+        /** Invitees with gift credit (a gift plan or sign-up gift), of accounts; absent on servers before gift_accounts, where accounts stands in. */
+        gift_accounts?: number | null
         consumption_usd: number
         gift_usd?: number
       })[]
@@ -1195,8 +1203,8 @@ export type QualityInsights = StaleHours & {
   error_reasons: NamedCount[]
   /** Failed tries whose reason is not in error_reasons, which keeps the most frequent; absent before the server's release. */
   error_reasons_other?: number
-  /** Customers' failed tries over every model: the sums of status_codes and error_reasons. Current-version hours only; absent before the server's release. */
-  failed_tries?: number
+  /** Customers' failed tries over every model: the sums of status_codes and error_reasons. Absent before the server's release, and withheld, with vendor_failures, while stale_hours is above zero. */
+  failed_tries?: number | null
   /** Each vendor's failed tries by reason and by status code, largest vendor first; absent before the server's release. */
   vendor_failures?: VendorFailure[] | null
   truncated: boolean
@@ -1318,7 +1326,7 @@ export type UpstreamChannel = {
   priority: number
   host: string
   requests: number
-  /** Served requests without root's. */
+  /** Served requests without root's and staff's. */
   customer_requests?: number
   errors: number
   /** Failed attempts the client caused: 4xx but 401, 402, 403, 404 and 408 (429 never). */

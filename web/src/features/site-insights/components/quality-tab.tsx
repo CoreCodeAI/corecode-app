@@ -36,6 +36,8 @@ import {
   countsRequestsOnce,
   failureTone,
   joinSentences,
+  previousBeforeLogs,
+  rangeHours,
   SMALL_SAMPLE,
   tableState,
   TONES,
@@ -347,14 +349,19 @@ export function QualityTab(props: {
   const definitions = useInsightsDefinitions()
   const partialDay = usePartialDays('quality')
   const modelMapLabels = useVendorLabels()
-  const verdict = useQualityVerdict(props.data, props.previous, {
+  // A previous period before the logs begin has no data: no change is shown.
+  const previousMissing = props.range
+    ? previousBeforeLogs(props.range, props.data?.logs_since)
+    : false
+  const previous = previousMissing ? undefined : props.previous
+  const verdict = useQualityVerdict(props.data, previous, {
     selected: props.models.selected,
     end: props.range?.end,
   })
   const data = props.data as (QualityInsights & QualityAttempts) | undefined
-  const previous = props.previous
   const viewState = props.sources?.view
-  const previousFailed = !previous && props.sources?.previous.status === 'error'
+  const previousFailed =
+    !props.previous && props.sources?.previous.status === 'error'
   // Without sources (an older caller), no data means loading, as before.
   const loading = !data && viewState?.status !== 'error'
   const missing = !data
@@ -446,7 +453,7 @@ export function QualityTab(props: {
       {data && range && (
         <StaleNote
           staleHours={data.stale_hours}
-          rangeHours={(range.end - range.start) / 3600}
+          rangeHours={rangeHours(range)}
         />
       )}
       <VendorCards
@@ -476,6 +483,7 @@ export function QualityTab(props: {
               current: data?.requests ?? 0,
               previous: previous?.requests,
               better: 'neutral',
+              missing: previousMissing,
             },
             trend: requestTrend,
             trendBars: !!hourly,
@@ -510,6 +518,7 @@ export function QualityTab(props: {
                 shift.kind === 'small' ? undefined : previous?.error_rate,
               better: 'down',
               points: true,
+              missing: previousMissing,
             },
             hint:
               shift.kind === 'small'
@@ -544,6 +553,7 @@ export function QualityTab(props: {
                     previous: previousServiceRate ?? undefined,
                     better: 'down' as const,
                     points: true,
+                    missing: previousMissing,
                   },
                   tone: judged ? failureTone(serviceRate) : 'default',
                 },
@@ -556,6 +566,7 @@ export function QualityTab(props: {
               current: data?.ttft_p50_ms ?? 0,
               previous: previous?.ttft_p50_ms || undefined,
               better: 'down',
+              missing: previousMissing,
             },
           },
           {
@@ -567,6 +578,7 @@ export function QualityTab(props: {
               current: data?.ttft_p95_ms ?? 0,
               previous: previous?.ttft_p95_ms || undefined,
               better: 'down',
+              missing: previousMissing,
             },
             tone: (data?.ttft_p95_ms ?? 0) > 10000 ? 'warning' : 'default',
           },
@@ -587,6 +599,7 @@ export function QualityTab(props: {
               previous: previous?.cache_share,
               better: 'up',
               points: true,
+              missing: previousMissing,
             },
           },
           ...(streams == null
@@ -611,6 +624,7 @@ export function QualityTab(props: {
                     previous: previousStreams?.share,
                     better: 'down' as const,
                     points: true,
+                    missing: previousMissing,
                   },
                   tone:
                     streams.total >= SMALL_SAMPLE
@@ -869,9 +883,15 @@ export function QualityTab(props: {
         <Panel
           title={t('Failures by status code')}
           description={triesLine}
-          help={t(
-            'Each failed try by its HTTP status, customers only. A request retried on another channel counts once for each failed try, so the total is the failed tries, not the failed requests.'
-          )}
+          help={
+            customersOnly
+              ? t(
+                  'Each failed try by its HTTP status, customers only. A request retried on another channel counts once for each failed try, so the total is the failed tries, not the failed requests.'
+                )
+              : t(
+                  'Each failed try by its HTTP status, every account’s, root included. A request retried on another channel counts once for each failed try, so the total is the failed tries, not the failed requests.'
+                )
+          }
         >
           <Breakdown
             items={data?.status_codes}
@@ -882,9 +902,15 @@ export function QualityTab(props: {
         <Panel
           title={t('Failure reasons')}
           description={triesLine}
-          help={t(
-            'The most common failed-try messages over every model, customers only. Only the top ones are kept; the rest are summed as other reasons. Each share is of the failed tries, not of the failed requests.'
-          )}
+          help={
+            customersOnly
+              ? t(
+                  'The most common failed-try messages over every model, customers only. Only the top ones are kept; the rest are summed as other reasons. Each share is of the failed tries, not of the failed requests.'
+                )
+              : t(
+                  'The most common failed-try messages over every model, every account’s, root included. Only the top ones are kept; the rest are summed as other reasons. Each share is of the failed tries, not of the failed requests.'
+                )
+          }
         >
           <Breakdown
             items={data ? reasons.items : undefined}

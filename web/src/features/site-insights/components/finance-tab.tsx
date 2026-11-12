@@ -186,6 +186,13 @@ export function FinanceTab(props: {
         staleHours={data?.stale_hours}
         rangeHours={rangeHours(range)}
       />
+      {data?.truncated && (
+        <p className='text-xs text-amber-600 dark:text-amber-400'>
+          {t(
+            'An hour of this range was cut by the log row cap, so its funds figures may be short.'
+          )}
+        </p>
+      )}
       <FinanceSummary
         data={data}
         previous={previous}

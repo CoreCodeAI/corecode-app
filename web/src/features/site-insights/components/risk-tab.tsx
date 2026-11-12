@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next'
 
 import {
   joinSentences,
+  rangeSpan,
   tableState,
   useHourAxis,
   useInsightsFormat,
@@ -126,7 +127,7 @@ export function RiskTab(props: {
   const surges = data ? riskSurges(data, previous, props.range) : []
   const surgeAt = new Map(surges.map((surge) => [surge.at, surge]))
   const surge = largestSurge(surges)
-  const span = props.range ? props.range.end - props.range.start : undefined
+  const span = props.range ? rangeSpan(props.range) : undefined
   const previousAt = new Map(
     (previous?.signup_series ?? []).map((point) => [point.at, point.count])
   )

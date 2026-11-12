@@ -33,6 +33,7 @@ import {
   neverUsed,
   neverUsedComparable,
   rankClusters,
+  riskSurges,
   sharedCounts,
   sharedExitSource,
   signalDelta,
@@ -135,6 +136,37 @@ describe('risk analysis', () => {
     expect(
       rankClusters([office, farm], 1000).map((cluster) => cluster.ip)
     ).toEqual(['10.0.0.1', '10.0.0.2'])
+  })
+
+  it('finds the same-hour baseline when the range starts partway through an hour', () => {
+    // The range starts on the hour a day back from now, 10:00, and now is 10:10:
+    // the span is whole days, so each hour finds the same hour of the day before.
+    const day = 86400
+    const start = day + 10 * HOUR
+    const end = 2 * day + 10 * HOUR + 600
+    const range = { start, end, days: 1, hourly: true }
+    const series = Array.from({ length: 24 }, (_, index) => ({
+      at: start + index * HOUR,
+      count: index === 5 ? 20 : 1,
+    }))
+    const previous = Array.from({ length: 24 }, (_, index) => ({
+      at: start - day + index * HOUR,
+      count: 1,
+    }))
+    const data = { series_unit: 'hour', signup_series: series } as RiskInsights
+    const prior = {
+      series_unit: 'hour',
+      signup_series: previous,
+    } as RiskInsights
+    expect(riskSurges(data, prior, range)).toEqual([
+      {
+        index: 5,
+        at: start + 5 * HOUR,
+        count: 20,
+        baseline: 1,
+        basis: 'same-hour',
+      },
+    ])
   })
 
   it('flags an hour against the same hour of the previous period, leaving the open hour out', () => {
@@ -302,6 +334,7 @@ describe('risk analysis', () => {
       redeemed: 1,
       gift: 2,
       signupGift: 1,
+      checkin: 0,
     })
     expect(grantedShare(unpaidSpend(split))).toBe(0.6)
     // An older server sends no split: the spend reads as before.
@@ -340,6 +373,26 @@ describe('risk analysis', () => {
     // Hand-granted credit alone is not farming; an older row has no gift part to read.
     expect(suspectInviters(data)).toEqual({ unpaid: 2, blocked: 0 })
     expect(usesGiftPart(data)).toBe(false)
+    // Only invitees on gift credit count once the server sends how many they are.
+    const counted = {
+      unpaid_inviters: [
+        {
+          user_id: 1,
+          username: 'a',
+          ...inviter,
+          gift_accounts: 1,
+          gift_usd: 0.5,
+        },
+        {
+          user_id: 2,
+          username: 'b',
+          ...inviter,
+          gift_accounts: 3,
+          gift_usd: 4,
+        },
+      ],
+    } as RiskInsights
+    expect(suspectInviters(counted)).toEqual({ unpaid: 1, blocked: 0 })
     expect(usesGiftPart({ unpaid_signup_gift_usd: 0 } as RiskInsights)).toBe(
       true
     )

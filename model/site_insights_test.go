@@ -373,7 +373,7 @@ func TestRiskSignalsDatabaseMatrix(t *testing.T) {
 				UserRef: UserRef{farm1.Id, "farm1"}, ConsumptionUSD: 2, GiftPlanUSD: 2, SignupMethod: "password",
 				Inviter: UserRef{inviter.Id, "inviter"}, CreatedAt: day1 + 100,
 			}}, risk.UnpaidSpenderTop)
-			assert.Equal(t, []InviterSpenders{{UserRef: UserRef{inviter.Id, "inviter"}, Accounts: 1, ConsumptionUSD: 2, GiftUSD: 2}}, risk.UnpaidInviters)
+			assert.Equal(t, []InviterSpenders{{UserRef: UserRef{inviter.Id, "inviter"}, Accounts: 1, GiftAccounts: 1, ConsumptionUSD: 2, GiftUSD: 2}}, risk.UnpaidInviters)
 
 			assert.Equal(t, []NamedCount{{AffiliateSignupGiftIpUsed, 2}, {AffiliateSignupGiftEmailSignup, 1}, {AffiliateSignupGiftGiven, 1}}, risk.SignupGifts)
 			assert.Equal(t, []GiftBlockInviter{{UserRef: UserRef{inviter.Id, "inviter"}, Blocked: 2, Gifted: 1}}, risk.GiftBlockInviters,
@@ -610,6 +610,12 @@ func TestResolveInsightsRange(t *testing.T) {
 	assert.Equal(t, int64(1_000_000), mid.End, "the end is left as sent")
 	_, ok = ResolveInsightsRange(1, 1+32*86400, 0, 31)
 	assert.False(t, ok, "a span past the bound is rejected")
+	// The console sends a start already on the hour, so its longest range is
+	// the bound and up to an hour more.
+	_, ok = ResolveInsightsRange(7200, 7200+31*86400+3599, 0, 31)
+	assert.True(t, ok, "the bound and the part of an hour the start was floored by")
+	_, ok = ResolveInsightsRange(7200, 7200+31*86400+3601, 0, 31)
+	assert.False(t, ok)
 	_, ok = ResolveInsightsRange(10, 5, 0, 31)
 	assert.False(t, ok)
 	_, ok = ResolveInsightsRange(1, 2, 15*3600, 31)

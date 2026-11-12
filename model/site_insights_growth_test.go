@@ -40,7 +40,8 @@ func TestGrowthFirstPaymentAndStaff(t *testing.T) {
 		t.Run(dialect, func(t *testing.T) {
 			useInsightsTestDB(t, dialect)
 			const day1 = int64(1759248000)
-			r := InsightsRange{Start: day1, End: day1 + 2*86400}
+			// The range ends after the last payment, so every payer is in it.
+			r := InsightsRange{Start: day1, End: day1 + 10*86400}
 			plan := SubscriptionPlan{Title: "trial", PriceAmount: 9.9, MaxPurchasePerUser: 1, Enabled: true}
 			require.NoError(t, DB.Create(&plan).Error)
 			signup := func(name string, createdAt int64) *User {
@@ -164,4 +165,21 @@ func TestRetentionReachesThirtyDays(t *testing.T) {
 			assert.Equal(t, 0.0, cohort.Days[19])
 		})
 	}
+}
+
+// A sign-up's first payment after the range's end is not part of the range's
+// payment timing, as the payer activity view leaves it out.
+func TestFirstPaymentTimingStopsAtTheRangeEnd(t *testing.T) {
+	useInsightsTestDB(t, "sqlite")
+	const day1 = int64(1759248000)
+	r := InsightsRange{Start: day1, End: day1 + 30*86400}
+	late := registerAffiliateTestUser(t, "late", "")
+	require.NoError(t, DB.Model(&User{}).Where("id = ?", late.Id).Update("created_at", day1+100).Error)
+	require.NoError(t, DB.Create(&TopUp{UserId: late.Id, Money: 10, Amount: 10, TradeNo: "T-late", PaymentMethod: "stripe",
+		Status: common.TopUpStatusSuccess, CreateTime: r.End + 3600}).Error)
+
+	growth, err := GetGrowthInsights(r)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, growth.FirstPayment.Payers, "a payment after the range's end is not counted")
+	assert.Zero(t, growth.FirstPayment.MedianHours)
 }

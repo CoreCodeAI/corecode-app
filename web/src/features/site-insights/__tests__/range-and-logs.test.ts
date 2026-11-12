@@ -80,10 +80,16 @@ describe('logs that begin partway through the range', () => {
     expect(rangeReachesBeforeLogs({ start }, 0)).toBe(false)
   })
 
-  it('says the previous period is wholly before the logs when it ends by them', () => {
-    expect(previousBeforeLogs({ start }, start)).toBe(true)
-    expect(previousBeforeLogs({ start }, start - 1)).toBe(false)
-    expect(previousBeforeLogs({ start }, undefined)).toBe(false)
+  it('says the previous period has no data when the logs begin inside it or after its start', () => {
+    const current = range(start, end, 1)
+    // The previous period is [start - DAY, start): logs from its start on are whole.
+    expect(previousBeforeLogs(current, start - DAY - 1)).toBe(false)
+    expect(previousBeforeLogs(current, start - DAY)).toBe(false)
+    // Logs beginning partway through the previous period leave it partly empty.
+    expect(previousBeforeLogs(current, start - 5 * HOUR)).toBe(true)
+    expect(previousBeforeLogs(current, start)).toBe(true)
+    expect(previousBeforeLogs(current, undefined)).toBe(false)
+    expect(previousBeforeLogs(current, 0)).toBe(false)
   })
 
   it('counts the days that have logs, a day the logs begin in included', () => {

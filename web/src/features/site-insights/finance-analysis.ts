@@ -98,7 +98,7 @@ export function financeRange(
   if (range) return range
   const end = data?.end_time ?? 0
   const start = data?.start_time ?? end
-  const days = Math.max(0, (end - start) / DAY)
+  const days = Math.max(0, Math.round((end - start) / DAY))
   return { start, end, days, hourly: days > 0 && days <= HOURLY_MAX_DAYS }
 }
 

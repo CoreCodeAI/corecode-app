@@ -94,6 +94,22 @@ describe('tab verdicts', () => {
     })
   })
 
+  it('says no request went through an idle pool, not a peak of 0 slots', () => {
+    const data = {
+      requests: 1200,
+      peak_concurrency: 10,
+      pool_peak: 0,
+      error_categories: [],
+      limit_rejection_total: 0,
+      pool: { configured: true, effective_slots: 60 },
+    } as unknown as CapacityInsights
+    const { result } = renderHook(() => useCapacityVerdict(data, undefined))
+    expect(result.current?.text).toContain(
+      "No request was served through the pool in this range; the site's, every channel, was 10."
+    )
+    expect(result.current?.text).not.toContain('Pool peak 0')
+  })
+
   it('names the capacity tab’s worst hour, the cause of its 429s, and the action', () => {
     const hour = (
       at: number,
@@ -406,7 +422,10 @@ describe('tab verdicts', () => {
       models: [],
     } as unknown as QualityInsights
     const { result } = renderHook(() => useQualityVerdict(data, undefined))
-    expect(result.current).toEqual({ tone: 'good', text: 'Failure rate 1.6%.' })
+    expect(result.current).toEqual({
+      tone: 'good',
+      text: 'Failure rate 1.6%.',
+    })
   })
 
   it('names media tasks failing after submission and requests with no channel', () => {
@@ -573,8 +592,9 @@ describe('tab verdicts', () => {
     } as unknown as RiskInsights
     const previous = {
       ...data,
+      // The same hours a day earlier: the range is one day long.
       signup_series: [1, 1, 1, 1, 1].map((count, index) => ({
-        at: (index - 5) * 3600,
+        at: index * 3600 - 86400,
         count,
       })),
     } as RiskInsights

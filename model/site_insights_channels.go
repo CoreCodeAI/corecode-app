@@ -193,6 +193,9 @@ type ChannelInsights struct {
 	// StaleHours counts the range's hours still stored under an older rollup
 	// version, until they are rebuilt; omitted when none.
 	StaleHours int `json:"stale_hours"`
+	// Truncated says an hour of the range was cut by its row cap, so the
+	// consumption of that hour is short.
+	Truncated bool `json:"truncated"`
 }
 
 // walletCredit is one credit to a wallet: paid quota with the money paid for
@@ -439,7 +442,9 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 	if err != nil {
 		return nil, err
 	}
+	truncated := false
 	for _, hour := range hours {
+		truncated = truncated || hour.summary.Truncated
 		for _, user := range hour.users {
 			row := rowOf[user.UserId]
 			if row == nil {
@@ -543,7 +548,7 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := &ChannelInsights{Costs: stored, StaleHours: stale}
+	result := &ChannelInsights{Costs: stored, StaleHours: stale, Truncated: truncated}
 	for id, row := range rows {
 		row.Channel.Username = names[id]
 		result.Channels = append(result.Channels, *row)

@@ -393,8 +393,13 @@ export function ModelMixPanel(props: {
             })
           : undefined
       }
-      help={t(
-        'Revenue is allocated to models by their share of list-price consumption; it is an estimate. Models with under 100 requests are faded.'
+      help={joinSentences(
+        t(
+          'Revenue is allocated to models by their share of list-price consumption; it is an estimate. Models with under 100 requests are faded.'
+        ),
+        t(
+          'Revenue (est.) is consumption’s pro-rata share of the range’s revenue earned: an estimate, not a margin, since the data has no cost by model.'
+        )
       )}
     >
       <SimpleTable

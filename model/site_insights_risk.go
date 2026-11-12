@@ -66,6 +66,7 @@ type AliasCluster struct {
 // consumption in the range at list price, split by where the credit came
 // from: GrantedUSD the credit an administrator granted by hand, RedeemedUSD
 // the redemption codes it used, GiftPlanUSD the part given plans covered, and
+// CheckinUSD the daily check-in rewards, which credit the wallet too, and
 // SignupGiftUSD the rest, which sign-up and invite gifts account for.
 type UnpaidSpender struct {
 	UserRef
@@ -73,6 +74,7 @@ type UnpaidSpender struct {
 	GrantedUSD     float64 `json:"granted_usd"`
 	RedeemedUSD    float64 `json:"redeemed_usd"`
 	GiftPlanUSD    float64 `json:"gift_plan_usd"`
+	CheckinUSD     float64 `json:"checkin_usd"`
 	SignupGiftUSD  float64 `json:"signup_gift_usd"`
 	SignupMethod   string  `json:"signup_method"`
 	Inviter        UserRef `json:"inviter"`
@@ -81,10 +83,13 @@ type UnpaidSpender struct {
 
 // InviterSpenders is an inviter of unpaid spenders. ConsumptionUSD is all of
 // their invitees' unpaid consumption; GiftUSD the gifted part of it (gift
-// plans and sign-up gifts), the only part the list is ranked by.
+// plans and sign-up gifts), the only part the list is ranked by. GiftAccounts
+// counts the invitees who spent any of that gifted part: an invitee an
+// administrator credited by hand is in Accounts and not in GiftAccounts.
 type InviterSpenders struct {
 	UserRef
 	Accounts       int64   `json:"accounts"`
+	GiftAccounts   int64   `json:"gift_accounts"`
 	ConsumptionUSD float64 `json:"consumption_usd"`
 	GiftUSD        float64 `json:"gift_usd"`
 }
@@ -167,6 +172,7 @@ type RiskInsights struct {
 	UnpaidGrantedUSD    float64            `json:"unpaid_granted_usd"`
 	UnpaidRedeemedUSD   float64            `json:"unpaid_redeemed_usd"`
 	UnpaidGiftPlanUSD   float64            `json:"unpaid_gift_plan_usd"`
+	UnpaidCheckinUSD    float64            `json:"unpaid_checkin_usd"`
 	UnpaidSignupGiftUSD float64            `json:"unpaid_signup_gift_usd"`
 	UnpaidHandFunded    int64              `json:"unpaid_hand_funded"`
 	UnpaidSpenderTop    []UnpaidSpender    `json:"unpaid_spender_top"`
@@ -177,6 +183,9 @@ type RiskInsights struct {
 	// that are still stored under an older rollup version; omitted when none,
 	// and when the range has no sign-ups, since the rollup is not read then.
 	StaleHours int `json:"stale_hours"`
+	// Truncated says an hour the unpaid spenders were read from was cut by its
+	// row cap, so their consumption is short.
+	Truncated bool `json:"truncated"`
 }
 
 type riskUserRow struct {
@@ -486,6 +495,7 @@ func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, staff map[int]bo
 	type spend struct{ quota, gift int64 }
 	spent := make(map[int]*spend)
 	for _, hour := range hours {
+		result.Truncated = result.Truncated || hour.summary.Truncated
 		for _, user := range hour.users {
 			if _, ok := byID[user.UserId]; !ok {
 				continue
@@ -516,7 +526,9 @@ func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, staff map[int]bo
 	}
 	// A plan order also writes a top-up row with no credit; a plan bought with
 	// money is a payment whatever the top-up rows say.
-	boughtPlan, err := pluckUserIDs(DB, &SubscriptionOrder{}, ids, "status = ? AND money > 0", common.TopUpStatusSuccess)
+	// A plan bought from the wallet is paid with credit, not money.
+	boughtPlan, err := pluckUserIDs(DB, &SubscriptionOrder{}, ids, "status = ? AND money > 0 AND (payment_provider IS NULL OR payment_provider <> ?)",
+		common.TopUpStatusSuccess, PaymentProviderBalance)
 	if err != nil {
 		return err
 	}
@@ -534,6 +546,10 @@ func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, staff map[int]bo
 	if err != nil {
 		return err
 	}
+	checkins, err := readCheckinCredit(r.End, unpaidIDs)
+	if err != nil {
+		return err
+	}
 	var unpaid []UnpaidSpender
 	inviters := make(map[int]*InviterSpenders)
 	inviterQuota := make(map[int]int64)
@@ -544,6 +560,10 @@ func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, staff map[int]bo
 		user := byID[id]
 		entry := spent[id]
 		sources := splitUnpaidSpend(entry.quota, entry.gift, granted[id], redeemed[id])
+		// Check-in rewards credit the wallet too, but they are not a gift to
+		// the inviter: they are taken out of the rest before it is counted.
+		sources.checkin = min(sources.signupGift, max(checkins[id], 0))
+		sources.signupGift -= sources.checkin
 		total.add(sources)
 		totalQuota += entry.quota
 		if 2*sources.granted > entry.quota {
@@ -555,6 +575,7 @@ func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, staff map[int]bo
 			GrantedUSD:     quotaUSD(sources.granted),
 			RedeemedUSD:    quotaUSD(sources.redeemed),
 			GiftPlanUSD:    quotaUSD(sources.giftPlan),
+			CheckinUSD:     quotaUSD(sources.checkin),
 			SignupGiftUSD:  quotaUSD(sources.signupGift),
 			SignupMethod:   signupMethod(user),
 			Inviter:        UserRef{UserID: user.InviterId},
@@ -567,6 +588,9 @@ func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, staff map[int]bo
 				inviters[user.InviterId] = inviter
 			}
 			inviter.Accounts++
+			if sources.giftPlan+sources.signupGift > 0 {
+				inviter.GiftAccounts++
+			}
 			inviterQuota[user.InviterId] += entry.quota
 			inviterGift[user.InviterId] += sources.giftPlan + sources.signupGift
 		}
@@ -576,6 +600,7 @@ func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, staff map[int]bo
 	result.UnpaidGrantedUSD = quotaUSD(total.granted)
 	result.UnpaidRedeemedUSD = quotaUSD(total.redeemed)
 	result.UnpaidGiftPlanUSD = quotaUSD(total.giftPlan)
+	result.UnpaidCheckinUSD = quotaUSD(total.checkin)
 	result.UnpaidSignupGiftUSD = quotaUSD(total.signupGift)
 	slices.SortFunc(unpaid, func(a, b UnpaidSpender) int {
 		return cmp.Or(cmp.Compare(b.ConsumptionUSD, a.ConsumptionUSD), cmp.Compare(a.UserID, b.UserID))
@@ -618,13 +643,14 @@ func fillUnpaidSpenders(r InsightsRange, signups []riskUserRow, staff map[int]bo
 // spendSources is consumption in quota units, split by where the credit came
 // from. The parts sum to the consumption they split.
 type spendSources struct {
-	granted, redeemed, giftPlan, signupGift int64
+	granted, redeemed, giftPlan, checkin, signupGift int64
 }
 
 func (s *spendSources) add(other spendSources) {
 	s.granted += other.granted
 	s.redeemed += other.redeemed
 	s.giftPlan += other.giftPlan
+	s.checkin += other.checkin
 	s.signupGift += other.signupGift
 }
 
@@ -688,6 +714,27 @@ func readHandGrants(end int64, ids []int) (map[int]int64, error) {
 			return granted, nil
 		}
 	}
+}
+
+// readCheckinCredit returns, for each of ids, the quota its daily check-in
+// rewards credited before end.
+func readCheckinCredit(end int64, ids []int) (map[int]int64, error) {
+	credited := make(map[int]int64)
+	for chunk := range slices.Chunk(ids, sharedAddressChunk) {
+		var rows []struct {
+			UserId int
+			Total  int64
+		}
+		if err := DB.Model(&Checkin{}).Select("user_id, SUM(quota_awarded) AS total").
+			Where("user_id IN ? AND created_at < ?", chunk, end).Group("user_id").
+			Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			credited[row.UserId] += row.Total
+		}
+	}
+	return credited, nil
 }
 
 // readRedeemedCodes returns, for each of ids, the quota of the redemption codes

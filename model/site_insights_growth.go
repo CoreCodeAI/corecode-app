@@ -48,7 +48,8 @@ type GrowthInsights struct {
 	SubscriptionBuyers  int64 `json:"subscription_buyers"`
 	SubscriptionToTopup int64 `json:"subscription_to_topup"`
 	// FirstPayment is how long the cohort's payers took to pay for the first
-	// time, counted from sign-up.
+	// time, counted from sign-up. A payment made after the range's end is not
+	// counted, so the timing is over the same window as PayerActivity.
 	FirstPayment PaymentTiming `json:"first_payment"`
 	// PayerActivity follows every account that paid before the range's end
 	// through the last two weeks of the range.
@@ -195,7 +196,8 @@ func GetGrowthInsights(r InsightsRange) (*GrowthInsights, error) {
 				result.SubscriptionToTopup++
 			}
 		}
-		if first, ok := firstPaid[user.Id]; ok {
+		// A payment after the range's end is not part of the range's timing.
+		if first, ok := firstPaid[user.Id]; ok && first < r.End {
 			payDelays = append(payDelays, max(first-user.CreatedAt, 0))
 		}
 	}
@@ -381,9 +383,10 @@ type UserSpend struct {
 
 // ActivityInsights reads the hourly quota_data aggregates, customers only:
 // staff's rows are left out of every figure, as on the capacity and funds
-// views, and their consumption is RootQuotaUSD. A user is active in a span when
-// a request of theirs came back with usage (tokens or a charge); Requests
-// counts every logged request, those without usage included.
+// views, and their consumption is RootQuotaUSD, a name kept from when only root
+// was staff. A user is active in a span when a request of theirs came back
+// with usage (tokens or a charge); Requests counts every logged request, those
+// without usage included.
 // ClaudeQuotaUSD is the part of QuotaUSD charged for Claude models. Hourly is
 // every UTC hour of a range up to insightsHourlySpan.
 type ActivityInsights struct {

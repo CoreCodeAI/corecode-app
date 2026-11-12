@@ -43,7 +43,7 @@ func TestQualityCountsCustomersAndStaffApart(t *testing.T) {
 			assert.InDelta(t, float64(quality.Errors), sumOf(quality.ErrorCategories, func(c NamedCount) float64 { return float64(c.Count) }), 0,
 				"the error categories add up to the customers' failures")
 			assert.Equal(t, []NamedCount{{"upstream_error", 1}}, quality.ErrorCategories)
-			assert.EqualValues(t, 1, quality.FailedTries)
+			assert.EqualValues(t, 1, *quality.FailedTries)
 			assert.Equal(t, []NamedCount{{"502", 1}}, quality.StatusCodes)
 			assert.Equal(t, []NamedCount{{"bad gateway", 1}}, quality.ErrorReasons)
 			require.Len(t, quality.Hourly, 1)
@@ -150,8 +150,8 @@ func TestInsightHourVendorFailuresAddUp(t *testing.T) {
 	r := InsightsRange{Start: hour, End: hour + 3600}
 	quality, err := GetQualityInsights(r, nil)
 	require.NoError(t, err)
-	assert.EqualValues(t, insightHourTopN+8, quality.FailedTries)
-	assert.InDelta(t, float64(quality.FailedTries), sumOf(quality.StatusCodes, func(c NamedCount) float64 { return float64(c.Count) }), 0)
+	assert.EqualValues(t, insightHourTopN+8, *quality.FailedTries)
+	assert.InDelta(t, float64(*quality.FailedTries), sumOf(quality.StatusCodes, func(c NamedCount) float64 { return float64(c.Count) }), 0)
 	require.Len(t, quality.VendorFailures, 2)
 	byVendor := map[string]VendorFailureBreakdown{}
 	for _, breakdown := range quality.VendorFailures {
@@ -238,9 +238,8 @@ func TestQualityToleratesAnOlderRollupRow(t *testing.T) {
 	quality, err := GetQualityInsights(r, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, quality.StaleHours)
-	assert.EqualValues(t, 1, quality.FailedTries, "the current hour's try only")
-	require.Len(t, quality.VendorFailures, 1)
-	assert.Equal(t, VendorClaude, quality.VendorFailures[0].Vendor)
+	assert.Nil(t, quality.FailedTries, "withheld while an hour is stale, as Attempts are")
+	assert.Nil(t, quality.VendorFailures, "the vendor split is withheld too")
 	assert.Equal(t, []NamedCount{{"429", 1}, {"500", 1}}, quality.StatusCodes, "site-wide counts read both hours")
 	assert.EqualValues(t, 6, quality.Requests, "the older row's model figures and the current hour's")
 	assert.EqualValues(t, 2, quality.Errors)
@@ -300,7 +299,35 @@ func TestErrorReasonsAddUpToFailedTries(t *testing.T) {
 	quality, err := GetQualityInsights(InsightsRange{Start: hour, End: hour + 3600}, nil)
 	require.NoError(t, err)
 	assert.Len(t, quality.ErrorReasons, 15)
-	assert.EqualValues(t, insightHourTopN+5, quality.FailedTries)
+	assert.EqualValues(t, insightHourTopN+5, *quality.FailedTries)
 	listed := sumOf(quality.ErrorReasons, func(c NamedCount) float64 { return float64(c.Count) })
-	assert.InDelta(t, float64(quality.FailedTries), listed+float64(quality.ErrorReasonsOther), 0)
+	assert.InDelta(t, float64(*quality.FailedTries), listed+float64(quality.ErrorReasonsOther), 0)
+}
+
+// An older row whose only traffic was staff has no customer request or
+// attempt, but a rebuild would drop its staff model rows, so it is stale and
+// stale_hours counts it.
+func TestOlderHourWithOnlyStaffRowsIsStale(t *testing.T) {
+	useInsightsTestDB(t, "sqlite")
+	const hour = int64(1759248000)
+	require.NoError(t, DB.Create(&InsightHour{HourStart: hour, Version: insightHourVersion - 1, Data: `{}`, CreatedAt: 1}).Error)
+	require.NoError(t, DB.Create(&InsightModelHour{HourStart: hour, ModelName: "claude-opus-5", Requests: 3, Errors: 1}).Error)
+
+	quality, err := GetQualityInsights(InsightsRange{Start: hour, End: hour + 3600}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, quality.StaleHours)
+	assert.Nil(t, quality.Attempts)
+}
+
+// Two messages that differ only in a date or a time are one reason, and a
+// blank or leading-newline message is named, not left as a blank key.
+func TestErrorReasonIgnoresTimesAndBlanks(t *testing.T) {
+	assert.Equal(t, errorReason("status_code=502, 2026-11-12T10:00:00Z upstream timeout at 12:03:44"),
+		errorReason("status_code=502, 2026-11-12T10:00:01Z upstream timeout at 12:03:45"))
+	assert.Equal(t, "<time> upstream timeout at <time>", errorReason("status_code=502, 2026-11-12T10:00:00Z upstream timeout at 12:03:44"))
+	assert.Equal(t, "时间 <time> 失败", errorReason("status_code=500, 时间 2026-11-12 10:00:01 失败"))
+	assert.Equal(t, "时间 <time> 失败", errorReason("status_code=500, 时间 2026-11-12 10:00:02 失败"))
+	assert.Equal(t, "unknown", errorReason(""))
+	assert.Equal(t, "unknown", errorReason(" \n\t"))
+	assert.Equal(t, "multiline first", errorReason("status_code=500, \nmultiline first"))
 }

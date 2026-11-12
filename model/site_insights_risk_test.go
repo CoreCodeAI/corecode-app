@@ -96,7 +96,7 @@ func TestUnpaidSpendSplitsBySource(t *testing.T) {
 
 			// The inviter list is ranked by the gifted part of what its
 			// invitees spent: granted's 5 is hand credit and does not count.
-			assert.Equal(t, []InviterSpenders{{UserRef: UserRef{host.Id, "host"}, Accounts: 2, ConsumptionUSD: 8, GiftUSD: 3}}, risk.UnpaidInviters)
+			assert.Equal(t, []InviterSpenders{{UserRef: UserRef{host.Id, "host"}, Accounts: 2, GiftAccounts: 1, ConsumptionUSD: 8, GiftUSD: 3}}, risk.UnpaidInviters)
 		})
 	}
 }
@@ -245,4 +245,63 @@ func TestSplitUnpaidSpend(t *testing.T) {
 			assert.Equal(t, tc.quota, got.granted+got.redeemed+got.giftPlan+got.signupGift, "the parts sum to the consumption")
 		})
 	}
+}
+
+// A plan bought from the wallet is paid with credit, so a hand-funded account
+// that bought one is still an unpaid spender.
+func TestWalletBoughtPlanIsNotMoneyPaid(t *testing.T) {
+	useInsightsTestDB(t, "sqlite")
+	const day1 = int64(1759248000)
+	dollar := int64(common.QuotaPerUnit)
+	r := InsightsRange{Start: day1, End: day1 + 2*86400}
+	funded := riskTestUser(t, "funded", "", day1+100, nil)
+	riskTestGrant(t, "user.quota_add", funded.Id, day1-5000, 0, 10*dollar, true)
+	require.NoError(t, DB.Create(&SubscriptionOrder{UserId: funded.Id, PlanId: 1, Money: 29.9, TradeNo: "risk-wallet",
+		Status: common.TopUpStatusSuccess, PaymentProvider: PaymentProviderBalance, CreateTime: day1 + 200}).Error)
+	require.NoError(t, LOG_DB.Create(&Log{UserId: funded.Id, Username: "funded", Type: LogTypeConsume, CreatedAt: day1 + 4000,
+		ModelName: "opus", Quota: int(6 * dollar), Other: `{}`}).Error)
+
+	risk, err := GetRiskInsights(r)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, risk.UnpaidSpenders)
+	assert.Equal(t, 6.0, risk.UnpaidGrantedUSD)
+}
+
+// Check-in rewards credit the wallet, but they are not a sign-up gift, so an
+// invitee who only spent check-in credit adds nothing to the inviter's gift.
+func TestCheckinCreditIsNotAnInviterGift(t *testing.T) {
+	useInsightsTestDB(t, "sqlite")
+	const day1 = int64(1759248000)
+	dollar := int64(common.QuotaPerUnit)
+	r := InsightsRange{Start: day1, End: day1 + 2*86400}
+	host := riskTestUser(t, "host", "", day1-86400, nil)
+	checker := riskTestUser(t, "checker", host.AffCode, day1+100, nil)
+	require.NoError(t, DB.Create(&Checkin{UserId: checker.Id, CheckinDate: "2025-10-01", QuotaAwarded: int(dollar), CreatedAt: day1 + 200}).Error)
+	require.NoError(t, LOG_DB.Create(&Log{UserId: checker.Id, Username: "checker", Type: LogTypeConsume, CreatedAt: day1 + 4000,
+		ModelName: "opus", Quota: int(dollar), Other: `{}`}).Error)
+
+	risk, err := GetRiskInsights(r)
+	require.NoError(t, err)
+	assert.Equal(t, 1.0, risk.UnpaidCheckinUSD)
+	assert.Equal(t, 0.0, risk.UnpaidSignupGiftUSD)
+	assert.Equal(t, []InviterSpenders{{UserRef: UserRef{host.Id, "host"}, Accounts: 1, ConsumptionUSD: 1, GiftUSD: 0}}, risk.UnpaidInviters)
+}
+
+// An hour cut by its row cap says so in the risk and channel views, as the
+// finance view does.
+func TestRiskAndChannelsSayWhenAnHourWasCut(t *testing.T) {
+	useInsightsTestDB(t, "sqlite")
+	const day1 = int64(1759248000)
+	dollar := int64(common.QuotaPerUnit)
+	r := InsightsRange{Start: day1, End: day1 + 3600}
+	spender := riskTestUser(t, "cut", "", day1+100, nil)
+	require.NoError(t, DB.Create(&InsightHour{HourStart: day1, Version: insightHourVersion, Data: `{"truncated":true}`, CreatedAt: 1}).Error)
+	require.NoError(t, DB.Create(&InsightUserHour{HourStart: day1, UserId: spender.Id, Requests: 1, Quota: dollar}).Error)
+
+	risk, err := GetRiskInsights(r)
+	require.NoError(t, err)
+	assert.True(t, risk.Truncated)
+	channels, err := GetChannelInsights(r)
+	require.NoError(t, err)
+	assert.True(t, channels.Truncated)
 }

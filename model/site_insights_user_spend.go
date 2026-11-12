@@ -20,8 +20,8 @@ type UserModelSpend struct {
 }
 
 // ReadUserModelSpend sums the consume logs in [start, end) by user, model,
-// group and channel. Root is included: its requests cost gpt-load as much as
-// anyone's.
+// group and channel. Staff (administrators and root) are included: their
+// requests cost gpt-load as much as anyone's, and the caller counts them apart.
 func ReadUserModelSpend(start, end int64) ([]UserModelSpend, error) {
 	var rows []UserModelSpend
 	err := LOG_DB.Model(&Log{}).

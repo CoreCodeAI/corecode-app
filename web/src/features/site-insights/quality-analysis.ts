@@ -589,10 +589,11 @@ export function mediaModels(data: QualityInsights): Set<string> {
 }
 
 /**
- * Media requests that failed before any task was created: the media
- * vendor's failed requests less the tasks that failed after submission.
- * Null without media requests. The two counts have different denominators
- * (requests in the range, tasks submitted in it), so the caller states both.
+ * Media requests that failed before any task was created: every failed media
+ * request. A task that fails after the supplier accepted it writes no error
+ * log, so it is not among them. Null without media requests. The two counts
+ * have different denominators (requests in the range, tasks submitted in it),
+ * so the caller states both.
  */
 export function preTaskFailures(
   media: { requests: number; errors: number } | null | undefined,
@@ -610,7 +611,7 @@ export function preTaskFailures(
     failed: media.errors,
     submitted: tasks.submitted,
     taskFailed: tasks.failed,
-    before: Math.max(0, media.errors - tasks.failed),
+    before: media.errors,
   }
 }
 

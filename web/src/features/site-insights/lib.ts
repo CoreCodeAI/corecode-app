@@ -132,14 +132,20 @@ export function rangeReachesBeforeLogs(
 }
 
 /**
- * Whether the previous period of a range lies wholly before the logs begin:
- * it has no data to compare with, so a change is not shown.
+ * Whether the previous period of a range has no data to compare with: the
+ * logs begin inside it or after its start, so part or all of it is before
+ * them. A partly logged period would read as a false change, so it is
+ * "no data to compare" too.
  */
 export function previousBeforeLogs(
-  range: Pick<InsightsRangeInfo, 'start'>,
+  range: Pick<InsightsRangeInfo, 'start' | 'days'>,
   logsSince: number | null | undefined
 ): boolean {
-  return logsSince != null && logsSince > 0 && range.start <= logsSince
+  return (
+    logsSince != null &&
+    logsSince > 0 &&
+    logsSince > range.start - rangeSpan(range)
+  )
 }
 
 /**
@@ -804,8 +810,10 @@ export function vendorMargins(
   data: FinanceInsights,
   rate: number
 ): VendorMarginRow[] {
+  // The range's whole days: its start is floored to the hour, so the raw span
+  // runs past them by the part of an hour.
   const days = Math.max(
-    ((data.end_time ?? 0) - (data.start_time ?? 0)) / 86400,
+    Math.round(((data.end_time ?? 0) - (data.start_time ?? 0)) / 86400),
     0
   )
   const rows = new Map<string, VendorMarginRow>()

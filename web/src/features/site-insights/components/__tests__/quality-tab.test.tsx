@@ -476,6 +476,27 @@ describe('QualityTab round 3', () => {
     ).toHaveLength(2)
   })
 
+  it('says a previous period before the logs has no data to compare with', () => {
+    const end = 1_800_000_000
+    render(
+      <QualityTab
+        data={{
+          ...quiet,
+          requests: 500,
+          cache_share: 0.95,
+          logs_since: end - 3 * 86400,
+        }}
+        previous={{ ...quiet, requests: 0, cache_share: 0 }}
+        range={{ start: end - 7 * 86400, end, days: 7, hourly: false }}
+        models={{ selected: [], onChange: vi.fn() }}
+      />
+    )
+    // Zero requests before the logs are not a new figure, nor a rise in cache share.
+    expect(screen.queryByText('New this period')).toBeNull()
+    expect(screen.queryByText('95.0 pt')).toBeNull()
+    expect(screen.getAllByText('No data to compare').length).toBeGreaterThan(0)
+  })
+
   it('shows root and staff tests apart, and only when the server sends them', () => {
     const { unmount } = render(
       <QualityTab
@@ -584,7 +605,7 @@ describe('QualityTab round 3', () => {
     )
     expect(
       screen.getByText(
-        'Failed before a task was created: 222. Media requests failed 223 of 520; tasks failed 1 of 248 submitted.'
+        'Failed before a task was created: 223. Media requests failed 223 of 520; tasks failed 1 of 248 submitted.'
       )
     ).toBeInTheDocument()
   })

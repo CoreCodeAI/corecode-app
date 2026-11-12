@@ -11,7 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/types"
 )
 
-// The root dashboard reads bounded ranges and aggregates in Go, like the
+// The site-insights dashboard reads bounded ranges and aggregates in Go, like the
 // top-up report: day and hour arithmetic differs across SQLite, MySQL and
 // PostgreSQL, and the ranges are small enough to read.
 const (
@@ -44,8 +44,9 @@ type InsightsRange struct {
 // so the start is floored to the UTC hour the rollups and the raw-table reads
 // count by: the hour a range starts in is counted whole, and a "24 hours"
 // span is the same on every tab. The end is left as sent, and the hour still
-// filling counts what it has. The span is checked before the start is
-// floored, so a range may run up to an hour past maxDays.
+// filling counts what it has. A range may run up to an hour past maxDays: the
+// console sends a start already on the hour, so its longest range is maxDays
+// and the part of the hour its start was floored by.
 func ResolveInsightsRange(start, end, offset int64, maxDays int64) (InsightsRange, bool) {
 	if end <= 0 {
 		end = time.Now().Unix()
@@ -53,7 +54,7 @@ func ResolveInsightsRange(start, end, offset int64, maxDays int64) (InsightsRang
 	if start <= 0 {
 		start = end - 7*86400
 	}
-	if start >= end || end-start > maxDays*86400 || offset < -14*3600 || offset > 14*3600 {
+	if start >= end || end-start > maxDays*86400+3600 || offset < -14*3600 || offset > 14*3600 {
 		return InsightsRange{}, false
 	}
 	start = insightHourKey(start)

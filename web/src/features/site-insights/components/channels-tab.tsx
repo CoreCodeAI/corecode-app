@@ -35,6 +35,7 @@ import {
   channelEconomics,
   joinSentences,
   rangeHours,
+  rangeReachesBeforeLogs,
   tableState,
   useInsightsDefinitions,
   useInsightsFormat,
@@ -245,7 +246,12 @@ export function ChannelsTab(props: {
         },
       }),
   }
-  const projects = days != null && days >= SHORT_ROI_DAYS
+  // The given credit spent is read from the logged hours only, so a range that
+  // reaches before the logs would divide a shorter spend by the whole month.
+  const projects =
+    days != null &&
+    days >= SHORT_ROI_DAYS &&
+    !(range && rangeReachesBeforeLogs(range, data?.logs_since))
 
   return (
     <div className='grid gap-4'>

@@ -23,6 +23,7 @@ import { findSpikes, median } from '../analysis'
 import {
   DEBT_ALERT_USD,
   MIN_COHORT,
+  rangeSpan,
   SIGNUP_SPIKE_FLOOR,
   SPIKE_FACTOR,
   type InsightsRangeInfo,
@@ -307,7 +308,7 @@ export function riskSurges(
   return signupSurges(data.signup_series, previous?.signup_series, {
     unit: signupUnit(data),
     end: range?.end ?? Number.POSITIVE_INFINITY,
-    span: range ? range.end - range.start : undefined,
+    span: range ? rangeSpan(range) : undefined,
   })
 }
 
@@ -349,6 +350,8 @@ export type UnpaidSplit = {
   redeemed: number
   gift: number
   signupGift: number
+  /** Check-in rewards; 0 from a server that leaves them inside signupGift. */
+  checkin: number
 }
 
 /** Sign-ups that consumed in the range and never paid, in quota dollars. */
@@ -388,6 +391,7 @@ export function unpaidSpend(
       redeemed: data.unpaid_redeemed_usd,
       gift: data.unpaid_gift_plan_usd,
       signupGift: data.unpaid_signup_gift_usd,
+      checkin: data.unpaid_checkin_usd ?? 0,
     }
   }
   return spend
@@ -461,9 +465,13 @@ export function suspectInviters(data: RiskInsights | undefined): {
   blocked: number
 } {
   return {
+    // Only invitees on gift credit count: credit an administrator granted by
+    // hand is not farming. Before gift_accounts, accounts stands in for them.
     unpaid: (data?.unpaid_inviters ?? []).filter(
       (row) =>
-        row.user_id > 0 && row.accounts >= MIN_SIGNAL_COUNT && hasGiftPart(row)
+        row.user_id > 0 &&
+        (row.gift_accounts ?? row.accounts) >= MIN_SIGNAL_COUNT &&
+        hasGiftPart(row)
     ).length,
     blocked: (data?.gift_block_inviters ?? []).filter(
       (row) => row.user_id > 0 && row.blocked >= MIN_SIGNAL_COUNT

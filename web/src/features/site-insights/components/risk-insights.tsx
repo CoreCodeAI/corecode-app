@@ -380,16 +380,29 @@ export function UnpaidSpendersPanel(props: {
           amount: fmt.cny(spend.spend),
         }
       ),
-      spend.split &&
-        t(
-          'Of that, {{granted}} was granted by hand, {{redeemed}} came from redemption codes, {{gift}} from gift plans and {{signup}} from sign-up and invite gifts.',
-          {
-            granted: fmt.cny(spend.split.granted),
-            redeemed: fmt.cny(spend.split.redeemed),
-            gift: fmt.cny(spend.split.gift),
-            signup: fmt.cny(spend.split.signupGift),
-          }
-        )
+      spend.split && spend.split.checkin <= 0
+        ? t(
+            'Of that, {{granted}} was granted by hand, {{redeemed}} came from redemption codes, {{gift}} from gift plans and {{signup}} from sign-up and invite gifts.',
+            {
+              granted: fmt.cny(spend.split.granted),
+              redeemed: fmt.cny(spend.split.redeemed),
+              gift: fmt.cny(spend.split.gift),
+              signup: fmt.cny(spend.split.signupGift),
+            }
+          )
+        : undefined,
+      spend.split && spend.split.checkin > 0
+        ? t(
+            'Of that, {{granted}} was granted by hand, {{redeemed}} came from redemption codes, {{gift}} from gift plans, {{checkin}} from check-in rewards and {{signup}} from sign-up and invite gifts.',
+            {
+              granted: fmt.cny(spend.split.granted),
+              redeemed: fmt.cny(spend.split.redeemed),
+              gift: fmt.cny(spend.split.gift),
+              checkin: fmt.cny(spend.split.checkin),
+              signup: fmt.cny(spend.split.signupGift),
+            }
+          )
+        : undefined
     )
   } else if (spend) {
     description = t('No account created in the range used credit.')
@@ -476,6 +489,16 @@ export function UnpaidSpendersPanel(props: {
                     label: t('Sign-up and invite gifts'),
                     align: 'right' as const,
                     render: (row: UnpaidSpender) => part(row.signup_gift_usd),
+                  },
+                ]
+              : []),
+            ...(spend?.split && spend.split.checkin > 0
+              ? [
+                  {
+                    key: 'checkin',
+                    label: t('Check-in rewards'),
+                    align: 'right' as const,
+                    render: (row: UnpaidSpender) => part(row.checkin_usd),
                   },
                 ]
               : []),

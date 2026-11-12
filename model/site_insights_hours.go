@@ -1074,10 +1074,10 @@ func loadInsightHours(r InsightsRange) ([]*insightHour, error) {
 
 // loadInsightHoursStale returns every hour that starts in [r.Start, r.End),
 // whole hours in UTC, oldest first, and how many of them are stored under an
-// older version and have a request or an attempt. A stored hour is served as
-// it is, whatever its version: the figures an older version did not have read
-// zero until FillInsightHours rebuilds it. An older row with neither a request
-// nor an attempt is current, since nothing a rebuild would add can change it.
+// older version and would change on a rebuild: a request, an attempt, a model
+// row or a status code. A stored hour is served as it is, whatever its version:
+// the figures an older version did not have read zero until FillInsightHours
+// rebuilds it. An older row that a rebuild would not change is current.
 // Only a final hour with no stored row is computed and stored here; an open
 // hour comes from recentOpenInsightHour.
 func loadInsightHoursStale(r InsightsRange) ([]*insightHour, int, error) {
@@ -1093,7 +1093,7 @@ func loadInsightHoursStale(r InsightsRange) ([]*insightHour, int, error) {
 		if err := common.UnmarshalJsonStr(row.Data, &hour.summary); err != nil {
 			continue
 		}
-		hour.stale = row.Version < insightHourVersion && (hour.summary.Requests > 0 || hour.summary.Attempts > 0)
+		hour.stale = row.Version < insightHourVersion
 		hours[row.HourStart] = hour
 	}
 	var users []InsightUserHour
@@ -1113,6 +1113,12 @@ func loadInsightHoursStale(r InsightsRange) ([]*insightHour, int, error) {
 		if hour := hours[row.HourStart]; hour != nil {
 			hour.models[row.ModelName] = &insightModel{row: row, ttft: decodeHistogram(row.TTFT), latency: decodeHistogram(row.Latency)}
 		}
+	}
+	// An older hour is current only when a rebuild would change nothing
+	// (decision 2): a rebuild drops the staff model rows and status codes an
+	// older version counted, so those make it stale as well as requests.
+	for _, hour := range hours {
+		hour.stale = hour.stale && (hour.summary.Requests > 0 || hour.summary.Attempts > 0 || len(hour.models) > 0 || len(hour.summary.StatusCodes) > 0)
 	}
 	var channelRows []InsightChannelHour
 	if err := DB.Where("hour_start >= ? AND hour_start < ?", first, r.End).Find(&channelRows).Error; err != nil {

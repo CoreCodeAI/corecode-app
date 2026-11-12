@@ -434,7 +434,10 @@ export function CapacityTab(props: {
             hint: peakHint,
             delta: {
               current: peak,
-              previous: previousPeak,
+              // An idle pool last period had no peak: "New this period" would
+              // read as the pool being new, so no change is shown.
+              previous:
+                ownPeak && previousPeak === 0 ? undefined : previousPeak,
               better: 'neutral',
               missing: previousMissing,
             },

@@ -95,6 +95,12 @@ export function useCapacityVerdict(
     })
   }
   const peakSentence = (): string => {
+    if (ownPeak && peak === 0) {
+      return t(
+        "No request was served through the pool in this range; the site's, every channel, was {{site}}.",
+        { site: fmt.num(data.peak_concurrency) }
+      )
+    }
     const values = {
       peak: fmt.num(peak),
       slots: fmt.num(slots),

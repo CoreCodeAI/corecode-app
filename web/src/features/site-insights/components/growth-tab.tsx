@@ -267,7 +267,14 @@ export function GrowthTab(props: {
             label: t('Activated'),
             missing: failed,
             value: fmt.num(funnel?.activated ?? 0),
-            hint: sofar(rate(cohort.activated, cohort.registered)),
+            // The count covers every sign-up; the rate and tone judge the aged
+            // cohort, so the hint names that cohort.
+            hint: young
+              ? sofar(rate(cohort.activated, cohort.registered))
+              : t('{{rate}} of {{registered}} aged sign-ups', {
+                  rate: rate(cohort.activated, cohort.registered),
+                  registered: fmt.num(cohort.registered),
+                }),
             help: young
               ? t(
                   'Accounts created in the range that had a request come back with usage (tokens or a charge). They signed up hours ago, so the rate is not judged until a longer range.'
