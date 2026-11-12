@@ -104,6 +104,15 @@ describe('partial days', () => {
     expect(rate?.projected).toBeUndefined()
   })
 
+  it('counts the first day from the hour the range starts in, not the second', () => {
+    // Read at 18:00:01 over two days: the range starts at 18:00 on the first
+    // day, the top of its hour, so 6 of its 24 hours are in it, not 6 hours
+    // less 1,234 seconds.
+    const now = DAY + 2 * 86400 + 18 * 3600 + 1234
+    const [first] = readMarks({ now, days: 2 }, (mark) => [mark(DAY, [100])])
+    expect(first?.projected?.[0]).toBeCloseTo(400, 6)
+  })
+
   it('does not project from too small a part of a typical day', () => {
     const now = DAY + 86400 + 2 * 3600
     const [last] = readMarks({ now, days: 1 }, (mark) => [

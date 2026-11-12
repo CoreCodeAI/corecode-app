@@ -19,7 +19,22 @@ func useInsightsTestDB(t *testing.T, dialect string) {
 	useAffiliateTestDB(t, dialect)
 	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &UpstreamCost{}, &UserConcurrencyRejection{}, &Task{}, &Checkin{}, &RiskGateEvent{}, &Option{}, &Channel{}}
 	require.NoError(t, DB.AutoMigrate(extra...))
-	t.Cleanup(func() { require.NoError(t, DB.Migrator().DropTable(extra...)) })
+	resetInsightReadCaches()
+	t.Cleanup(func() {
+		resetInsightReadCaches()
+		require.NoError(t, DB.Migrator().DropTable(extra...))
+	})
+}
+
+// resetInsightReadCaches forgets what a previous test's database read left in
+// the process-wide caches: the earliest log and the day profile.
+func resetInsightReadCaches() {
+	insightLogsSince.mu.Lock()
+	insightLogsSince.value = 0
+	insightLogsSince.mu.Unlock()
+	dayProfileCache.mu.Lock()
+	dayProfileCache.profile = nil
+	dayProfileCache.mu.Unlock()
 }
 
 func TestSiteInsightsDatabaseMatrix(t *testing.T) {
@@ -191,8 +206,10 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 
 			quality, err := GetQualityInsights(r, nil)
 			require.NoError(t, err)
-			assert.EqualValues(t, 6, quality.Requests, "root counts toward quality")
-			assert.Equal(t, 0.3333, quality.ErrorRate)
+			assert.EqualValues(t, 5, quality.Requests, "staff are left out of the customers' figures")
+			assert.EqualValues(t, 1, quality.StaffRequests, "root's own request is counted apart")
+			assert.EqualValues(t, 0, quality.StaffErrors)
+			assert.Equal(t, 0.4, quality.ErrorRate)
 			assert.EqualValues(t, 1200, quality.TTFTP50)
 			assert.Equal(t, []NamedCount{{"eof", 2}}, quality.StreamEnds)
 			assert.Equal(t, []NamedCount{{"429", 2}}, quality.StatusCodes)
@@ -216,7 +233,7 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 			assert.Equal(t, QualityHour{Hour: day1, Requests: 2, Errors: 1, ErrorRate: 0.5}, sonnetOnly.Hourly[0], "the hourly series follows the filter")
 			assert.EqualValues(t, 2, sumOf(sonnetOnly.Hourly, func(h QualityHour) float64 { return float64(h.Requests) }))
 			assert.Equal(t, capacity.ErrorCategories, quality.ErrorCategories, "customers' failures, as on the capacity view")
-			assert.Equal(t, VendorQuality{Requests: 6, Errors: 2, ErrorRate: 0.3333, TTFTP50: quality.TTFTP50, TTFTP95: quality.TTFTP95},
+			assert.Equal(t, VendorQuality{Requests: 5, Errors: 2, ErrorRate: 0.4, TTFTP50: quality.TTFTP50, TTFTP95: quality.TTFTP95},
 				sonnetOnly.AllModels, "the all-models card ignores the filter")
 			assert.Equal(t, []VendorQuality{{
 				Vendor: VendorOther, Models: []string{"opus", "sonnet"}, Requests: quality.Requests, Errors: quality.Errors,
@@ -338,14 +355,16 @@ func TestRiskSignalsDatabaseMatrix(t *testing.T) {
 
 			assert.Equal(t, 3, risk.SharedIPTotal)
 			assert.Equal(t, 1, risk.SharedExits)
-			require.Len(t, risk.SharedIPs, 3)
-			assert.Equal(t, []string{"10.0.0.1", "10.0.0.2", "10.9.9.9"},
-				[]string{risk.SharedIPs[0].IP, risk.SharedIPs[1].IP, risk.SharedIPs[2].IP}, "the farm first, the proxy exit last")
+			require.Len(t, risk.SharedIPs, 2, "the review addresses; the exit is listed apart")
+			assert.Equal(t, []string{"10.0.0.1", "10.0.0.2"},
+				[]string{risk.SharedIPs[0].IP, risk.SharedIPs[1].IP}, "the farm first")
+			require.Len(t, risk.SharedExitTop, 1)
+			assert.Equal(t, "10.9.9.9", risk.SharedExitTop[0].IP)
+			assert.True(t, risk.SharedExitTop[0].SharedExit)
+			assert.Len(t, risk.SharedExitTop[0].Users, 5)
 			assert.Equal(t, 2, risk.SharedIPs[0].SubscriptionBuyers)
 			assert.Equal(t, 2, risk.SharedIPs[0].NewMembers)
 			assert.True(t, risk.SharedIPs[0].Users[0].LimitedPlan)
-			assert.True(t, risk.SharedIPs[2].SharedExit)
-			assert.Len(t, risk.SharedIPs[2].Users, 5)
 
 			assert.EqualValues(t, 2, risk.SignupSpenders)
 			assert.EqualValues(t, 1, risk.UnpaidSpenders)
@@ -354,7 +373,7 @@ func TestRiskSignalsDatabaseMatrix(t *testing.T) {
 				UserRef: UserRef{farm1.Id, "farm1"}, ConsumptionUSD: 2, GiftPlanUSD: 2, SignupMethod: "password",
 				Inviter: UserRef{inviter.Id, "inviter"}, CreatedAt: day1 + 100,
 			}}, risk.UnpaidSpenderTop)
-			assert.Equal(t, []InviterSpenders{{UserRef: UserRef{inviter.Id, "inviter"}, Accounts: 1, ConsumptionUSD: 2}}, risk.UnpaidInviters)
+			assert.Equal(t, []InviterSpenders{{UserRef: UserRef{inviter.Id, "inviter"}, Accounts: 1, ConsumptionUSD: 2, GiftUSD: 2}}, risk.UnpaidInviters)
 
 			assert.Equal(t, []NamedCount{{AffiliateSignupGiftIpUsed, 2}, {AffiliateSignupGiftEmailSignup, 1}, {AffiliateSignupGiftGiven, 1}}, risk.SignupGifts)
 			assert.Equal(t, []GiftBlockInviter{{UserRef: UserRef{inviter.Id, "inviter"}, Blocked: 2, Gifted: 1}}, risk.GiftBlockInviters,
@@ -548,7 +567,7 @@ func TestInsightsHourlySeries(t *testing.T) {
 			activity, err := GetActivityInsights(r)
 			require.NoError(t, err)
 			require.Len(t, activity.Hourly, 25)
-			assert.Equal(t, ActivityHour{Hour: hour1}, activity.Hourly[0], "the quota row before the range's start is left out, as in the totals")
+			assert.Equal(t, ActivityHour{Hour: hour1, ActiveUsers: 1, Requests: 5, QuotaUSD: 5}, activity.Hourly[0], "the hour the range starts in counts whole, as the rollups' hours do")
 			assert.Equal(t, ActivityHour{Hour: hour1 + 3600, ActiveUsers: 1, Requests: 1, QuotaUSD: 1}, activity.Hourly[1])
 			assert.EqualValues(t, activity.Requests, sumOf(activity.Hourly, func(h ActivityHour) float64 { return float64(h.Requests) }))
 			assert.InDelta(t, activity.QuotaUSD, sumOf(activity.Hourly, func(h ActivityHour) float64 { return h.QuotaUSD }), 1e-9)
@@ -584,7 +603,11 @@ func TestInsightsHourlySeries(t *testing.T) {
 func TestResolveInsightsRange(t *testing.T) {
 	r, ok := ResolveInsightsRange(0, 1_000_000, 0, 31)
 	assert.True(t, ok)
-	assert.Equal(t, int64(1_000_000-7*86400), r.Start, "start defaults to seven days before end")
+	assert.Equal(t, int64(392400), r.Start, "start defaults to seven days before end, floored to its hour")
+	mid, ok := ResolveInsightsRange(392400+1200, 1_000_000, 0, 31)
+	assert.True(t, ok)
+	assert.Equal(t, int64(392400), mid.Start, "a start mid-hour is floored to the hour it starts in")
+	assert.Equal(t, int64(1_000_000), mid.End, "the end is left as sent")
 	_, ok = ResolveInsightsRange(1, 1+32*86400, 0, 31)
 	assert.False(t, ok, "a span past the bound is rejected")
 	_, ok = ResolveInsightsRange(10, 5, 0, 31)
@@ -1106,12 +1129,14 @@ func TestUserConcurrencyRejections(t *testing.T) {
 			alice := registerAffiliateTestUser(t, "alice", "")
 			root := &User{Username: "root", DisplayName: "root", Role: common.RoleRootUser, Status: common.UserStatusEnabled}
 			require.NoError(t, root.Insert(0))
+			ops := &User{Username: "ops", DisplayName: "ops", Role: common.RoleAdminUser, Status: common.UserStatusEnabled}
+			require.NoError(t, ops.Insert(0))
 			key := ConcurrencyRejectionKey{HourStart: hour, UserId: alice.Id}
-			assert.Empty(t, AddUserConcurrencyRejections(map[ConcurrencyRejectionKey]int64{key: 2, {HourStart: hour, UserId: root.Id}: 9}))
+			assert.Empty(t, AddUserConcurrencyRejections(map[ConcurrencyRejectionKey]int64{key: 2, {HourStart: hour, UserId: root.Id}: 9, {HourStart: hour, UserId: ops.Id}: 4}))
 			assert.Empty(t, AddUserConcurrencyRejections(map[ConcurrencyRejectionKey]int64{key: 3, {HourStart: hour + 3600, UserId: alice.Id}: 1}))
 			points, users, err := ReadUserConcurrencyRejections(hour, hour+7200)
 			require.NoError(t, err)
-			assert.Equal(t, []CountPoint{{hour, 5}, {hour + 3600, 1}}, points, "counts add up and root is left out")
+			assert.Equal(t, []CountPoint{{hour, 5}, {hour + 3600, 1}}, points, "counts add up and staff is left out")
 			assert.Equal(t, []UserCount{{UserRef{alice.Id, "alice"}, 6}}, users)
 		})
 	}

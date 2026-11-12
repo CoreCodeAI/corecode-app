@@ -176,7 +176,7 @@ describe('tab verdicts', () => {
     const { result } = renderHook(() => useQualityVerdict(data, previous))
     expect(result.current?.tone).toBe('warning')
     expect(result.current?.text).toBe(
-      'Failure rate 3% (+2 points). GPT fails 15% of requests. Claude first token 1.4s at p50, 6.8s at p95. Failing most: gpt-6.1-terra at 15%.'
+      'Failure rate 3% (+2 points). GPT fails 15% of requests. Claude first token 1.4s at p50, 6.8s at p95. GPT first token 5.7s at p50, 17.0s at p95. Failing most: gpt-6.1-terra at 15%.'
     )
   })
 
@@ -502,7 +502,7 @@ describe('tab verdicts', () => {
     } as unknown as QualityInsights
     const { result } = renderHook(() => useQualityVerdict(data, previous))
     expect(result.current?.text).toBe(
-      'Failure rate 0%. Claude first token 1.0s at p50, 6.2s at p95. First-token p95 went from 9.0s to 15.0s with the mix: GPT from 20% to 50% of requests, while each vendor’s own p95 held.'
+      'Failure rate 0%. Claude first token 1.0s at p50, 6.2s at p95. GPT first token 1.0s at p50, 18.5s at p95. First-token p95 went from 9.0s to 15.0s with the mix: GPT from 20% to 50% of requests, while each vendor’s own p95 held.'
     )
   })
 

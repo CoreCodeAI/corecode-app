@@ -246,7 +246,10 @@ describe('capacity analysis', () => {
       fitted: 18,
       daysToFull: 6,
     })
-    expect(peakTrend([10, 12, 14, 16, 18], 0)).toEqual({ slope: 2, fitted: 18 })
+    expect(peakTrend([10, 12, 14, 16, 18], 0)).toEqual({
+      slope: 2,
+      fitted: 18,
+    })
     expect(peakTrend([18, 16, 14, 12, 10], 30)?.daysToFull).toBeUndefined()
     expect(peakTrend([40, 40, 40, 41, 42], 30)?.daysToFull).toBe(0)
     expect(peakTrend([10, 12, 14, 16], 30)).toBeUndefined()
@@ -257,6 +260,11 @@ describe('capacity analysis', () => {
     expect(periodSpan(range, [], [])).toBe(86400)
     expect(periodSpan(undefined, [hour(7200)], [hour(3600)])).toBe(3600)
     expect(periodSpan(undefined, [hour(7200)], null)).toBeUndefined()
+    // A range that starts mid-hour still spans whole days, so the previous
+    // period lands on the same hours.
+    expect(
+      periodSpan({ start: 3700, end: 90000, days: 1, hourly: true }, [], [])
+    ).toBe(86400)
   })
 })
 
@@ -389,6 +397,65 @@ describe('capacity on the pool’s own terms', () => {
     render(<CapacityTab data={data} vendor='all' />, { wrapper })
     expect(screen.queryByText('Pool peak concurrency')).toBeNull()
     expect(screen.getAllByText('Peak concurrency').length).toBeGreaterThan(0)
+  })
+
+  it('says the pool served nothing instead of printing a time for a zero peak', () => {
+    const data = insights()
+    data.pool_peak = 0
+    data.pool_peak_at = 0
+    data.peak_concurrency = 10
+    render(<CapacityTab data={data} vendor='all' />, { wrapper })
+    expect(
+      screen.getByText(
+        "No request was served through the pool in this range; the site's, every channel, was 10."
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText(/^Pool peak 0 at/)).toBeNull()
+    expect(
+      screen.getByText('No request was served through the pool')
+    ).toBeTruthy()
+  })
+
+  it('counts the stale-note hours of a whole-day range, not its partial hour', () => {
+    const data = insights()
+    data.stale_hours = 3
+    const now = 30 * 86400 + 2400
+    render(
+      <CapacityTab
+        data={data}
+        vendor='all'
+        range={{
+          start: now - 30 * 86400 + 2400,
+          end: now,
+          days: 30,
+          hourly: false,
+        }}
+      />,
+      { wrapper }
+    )
+    expect(
+      screen.getByText(/^3 of the range’s 721 hours are still counted/)
+    ).toBeTruthy()
+  })
+
+  it('reads no data to compare when the previous period lies before the logs', () => {
+    const now = 30 * 86400
+    const range = { start: now - 86400, end: now, days: 1, hourly: true }
+    const data = insights()
+    data.logs_since = range.start + HOUR
+    const previous = insights()
+    previous.requests = 0
+    render(
+      <CapacityTab
+        data={data}
+        previous={previous}
+        range={range}
+        vendor='all'
+      />,
+      { wrapper }
+    )
+    expect(screen.getAllByText('No data to compare').length).toBeGreaterThan(0)
+    expect(screen.queryByText('New this period')).toBeNull()
   })
 
   it('hides the in-flight meter when the pool cannot be read', () => {

@@ -32,8 +32,9 @@ import (
 // none. A request and all of its logs belong to the hour of its earliest
 // start; whole-second use times put its logs' starts up to a second apart,
 // and each hour reads insightHourMargin past its edges so that both hours
-// fold such a request alike. The per-channel rows, status codes and failure
-// reasons still count attempts. An hour is final once no request started in
+// fold such a request alike. The per-channel rows count every attempt; the
+// status codes, failure reasons and vendor failures count the customers'
+// failed tries, every try included. An hour is final once no request started in
 // it can still be unlogged: a log is read up to insightHourLookahead after
 // the hour ends, so a request that runs longer than that is left out.
 //
@@ -43,11 +44,19 @@ import (
 // the hour they were written in, and are no request (moneyOnly).
 //
 // A row stored under an older version is served as it is, its newer figures
-// reading zero, and counted in each view's stale_hours. The task rebuilds it
+// reading zero, and counted in each view's stale_hours when it has a request
+// or an attempt: an empty one is current. The task rebuilds it
 // while every log of its hour is still there; once logs before it are
 // cleaned it keeps its old row for good.
+//
+// The versions, oldest first: 5 counts the rollup's figures with staff
+// included in the model rows and the failed tries, and has no vendor failures
+// or staff figures. 6 leaves staff out of every customer figure (the model rows,
+// status codes, error reasons and failed tries), counts staff apart in the
+// summary's staff_models, and splits failed tries by vendor with their
+// reasons and status codes kept to the top ones.
 const (
-	insightHourVersion   = 5
+	insightHourVersion   = 6
 	insightHourLookahead = 2 * 3600
 	insightHourMargin    = 5
 	insightHourSettle    = 10 * 60
@@ -70,7 +79,7 @@ type InsightHour struct {
 }
 
 // InsightUserHour is one user's requests, peak concurrency and consumption in
-// an hour. Root is left out: the capacity and finance views count customers.
+// an hour. Staff are left out: the capacity and finance views count customers.
 // Quota is what the user's requests cost at list price; WalletQuota is the
 // part the wallet paid, and GiftQuota the part covered by plans an
 // administrator or an inviter gave. The rest came from bought plans.
@@ -85,7 +94,7 @@ type InsightUserHour struct {
 	GiftQuota   int64 `gorm:"not null;default:0"`
 }
 
-// InsightModelHour is one model's quality figures in an hour, root included.
+// InsightModelHour is one model's quality figures in an hour, customers only.
 // TTFT and Latency are histograms in JSON: a value rounded to two significant
 // digits, mapped to its count.
 type InsightModelHour struct {
@@ -100,12 +109,15 @@ type InsightModelHour struct {
 	Latency    string `gorm:"type:text"`
 }
 
-// insightSummary is an hour's site-wide figures. The capacity figures leave
-// root out; the quality breakdowns and clients count everyone. Requests and
-// Errors count requests, a request failed when no attempt was served;
-// Attempts and AttemptErrors count the attempts, retries included. Peak is
-// the most requests in flight on every channel; PoolPeak the most served
-// through the engine.
+// insightSummary is an hour's site-wide figures. Staff (customerRoleBound and
+// up) are left out of every customer figure: the capacity and quality figures,
+// the failed tries, the users and the groups and plans. Their requests are
+// counted apart in StaffModels and their cost in RootQuota, a name kept from
+// when only root was staff. The clients count everyone. Requests and Errors
+// count requests, a request failed when no attempt was served; Attempts and
+// AttemptErrors count the attempts, retries included. Peak is the most
+// requests in flight on every channel; PoolPeak the most served through the
+// engine.
 type insightSummary struct {
 	Requests          int64            `json:"requests"`
 	Errors            int64            `json:"errors"`
@@ -123,8 +135,11 @@ type insightSummary struct {
 	StreamEnds        map[string]int64 `json:"stream_ends,omitempty"`
 	StatusCodes       map[string]int64 `json:"status_codes,omitempty"`
 	ErrorReasons      map[string]int64 `json:"error_reasons,omitempty"`
+	// ErrorReasonsOther counts the failed tries whose reason is not in
+	// ErrorReasons, so the two add up to the failed tries of the hour.
+	ErrorReasonsOther int64            `json:"error_reasons_other,omitempty"`
 	Clients           map[string]int64 `json:"clients,omitempty"`
-	// RootQuota is what root's own requests cost at list price.
+	// RootQuota is what staff's own requests cost at list price.
 	RootQuota int64 `json:"root_quota,omitempty"`
 	// Groups is the customers' requests and consumption by the group each
 	// request was billed in; Plans the customers' consumption each
@@ -133,8 +148,33 @@ type insightSummary struct {
 	Plans  map[int]int64               `json:"plans,omitempty"`
 	// Vendors splits the capacity figures by the vendor a model is sold
 	// under (ModelVendor), customers only, as the site-wide ones are.
-	Vendors   map[string]*vendorCapacity `json:"vendors,omitempty"`
-	Truncated bool                       `json:"truncated,omitempty"`
+	Vendors map[string]*vendorCapacity `json:"vendors,omitempty"`
+	// VendorFailures splits the customers' failed tries by the vendor of
+	// their model: the reasons and status codes the quality view names media
+	// failures by. Absent from a row of an older version.
+	VendorFailures map[string]*vendorFailures `json:"vendor_failures,omitempty"`
+	// StaffModels is each model's staff requests and failed staff requests,
+	// which no customer figure includes.
+	StaffModels map[string]*insightStaffUse `json:"staff_models,omitempty"`
+	Truncated   bool                        `json:"truncated,omitempty"`
+}
+
+// insightStaffUse is one model's staff requests and the ones that failed.
+type insightStaffUse struct {
+	Requests int64 `json:"requests"`
+	Errors   int64 `json:"errors"`
+}
+
+// vendorFailures is one vendor's failed tries in an hour, by reason and by
+// status code. Each keeps its insightHourTopN largest entries; ReasonsOther
+// and StatusOther count the rest, so the kept entries and the rest sum to
+// Tries.
+type vendorFailures struct {
+	Tries        int64            `json:"tries"`
+	Reasons      map[string]int64 `json:"reasons,omitempty"`
+	ReasonsOther int64            `json:"reasons_other,omitempty"`
+	StatusCodes  map[string]int64 `json:"status_codes,omitempty"`
+	StatusOther  int64            `json:"status_other,omitempty"`
 }
 
 // insightGroupUse is one billing group's requests and consumption in an hour.
@@ -286,24 +326,71 @@ func keepTop(counts map[string]int64, n int) map[string]int64 {
 	return kept
 }
 
+// trimTop keeps the n largest entries of a breakdown and returns the sum of
+// the rest, so that the kept entries and the rest still add up to the total.
+func trimTop(counts map[string]int64, n int) (map[string]int64, int64) {
+	if len(counts) <= n {
+		return counts, 0
+	}
+	kept := make(map[string]int64, n)
+	var rest int64
+	for i, item := range sortedCounts(counts) {
+		if i < n {
+			kept[item.Name] = item.Count
+		} else {
+			rest += item.Count
+		}
+	}
+	return kept, rest
+}
+
 func mergeCounts(into map[string]int64, from map[string]int64) {
 	for name, count := range from {
 		into[name] += count
 	}
 }
 
+// countFailedTry counts a customer's failed try, an error log, by its status
+// code, its reason and its model's vendor. Every try is counted, retries
+// included, so the status codes and the reasons add up to the failed tries.
+func (s *insightSummary) countFailedTry(log insightLog) {
+	code := statusCodeName(logStatusCode(log.Content))
+	reason := errorReason(log.Content)
+	s.StatusCodes[code]++
+	s.ErrorReasons[reason]++
+	vendor := ModelVendor(log.ModelName)
+	failures := s.VendorFailures[vendor]
+	if failures == nil {
+		failures = &vendorFailures{Reasons: make(map[string]int64), StatusCodes: make(map[string]int64)}
+		s.VendorFailures[vendor] = failures
+	}
+	failures.Tries++
+	failures.Reasons[reason]++
+	failures.StatusCodes[code]++
+}
+
+// staffOf is one model's staff figures in the hour, created on first use.
+func (s *insightSummary) staffOf(model string) *insightStaffUse {
+	use := s.StaffModels[model]
+	if use == nil {
+		use = &insightStaffUse{}
+		s.StaffModels[model] = use
+	}
+	return use
+}
+
 // insightHourScope is what an hour's aggregation needs besides the logs: who
-// root is, which plans were given away rather than bought, and which channels
-// the engine serves (EngineChannelIDs).
+// is staff (StaffUserIDs), which plans were given away rather than bought, and
+// which channels the engine serves (EngineChannelIDs).
 type insightHourScope struct {
-	roots   map[int]bool
+	staff   map[int]bool
 	gifts   map[int]bool
 	engines map[int]bool
 }
 
 func loadInsightHourScope() (insightHourScope, error) {
-	var roots, gifts []int
-	if err := DB.Model(&User{}).Unscoped().Where("role >= ?", common.RoleRootUser).Pluck("id", &roots).Error; err != nil {
+	var staff, gifts []int
+	if err := DB.Model(&User{}).Unscoped().Where("role >= ?", customerRoleBound).Pluck("id", &staff).Error; err != nil {
 		return insightHourScope{}, err
 	}
 	if err := DB.Model(&UserSubscription{}).Where("source IN ?", []string{"admin", SubscriptionSourceAffiliateGift}).Pluck("id", &gifts).Error; err != nil {
@@ -313,9 +400,9 @@ func loadInsightHourScope() (insightHourScope, error) {
 	if err != nil {
 		return insightHourScope{}, err
 	}
-	scope := insightHourScope{roots: make(map[int]bool, len(roots)), gifts: make(map[int]bool, len(gifts)), engines: engines}
-	for _, id := range roots {
-		scope.roots[id] = true
+	scope := insightHourScope{staff: make(map[int]bool, len(staff)), gifts: make(map[int]bool, len(gifts)), engines: engines}
+	for _, id := range staff {
+		scope.staff[id] = true
 	}
 	for _, id := range gifts {
 		scope.gifts[id] = true
@@ -393,6 +480,8 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 	summary.Clients = make(map[string]int64)
 	summary.Groups = make(map[string]*insightGroupUse)
 	summary.Plans = make(map[int]int64)
+	summary.VendorFailures = make(map[string]*vendorFailures)
+	summary.StaffModels = make(map[string]*insightStaffUse)
 	requests := make([]*insightRequest, 0, len(logs))
 	byID := make(map[string]*insightRequest, len(logs))
 	others := make([]logOtherFields, len(logs))
@@ -450,15 +539,15 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 			// In flight during this hour, perhaps, but another hour's.
 			continue
 		}
-		customer := !scope.roots[log.UserId]
+		customer := !scope.staff[log.UserId]
 		channel := hour.channelOf(log.ChannelId, log.ModelName)
 		if log.Type == LogTypeError {
 			channel.addError(log.Content)
-			summary.StatusCodes[statusCodeName(logStatusCode(log.Content))]++
-			summary.ErrorReasons[errorReason(log.Content)]++
+			if customer {
+				summary.countFailedTry(log)
+			}
 			continue
 		}
-		model := hour.modelOf(log.ModelName)
 		channel.addConsumption(log, other, customer)
 		hour.addQuota(log, other, int64(log.Quota), scope)
 		client := other.AdminInfo.Client
@@ -466,6 +555,10 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 			client = "unknown"
 		}
 		summary.Clients[client]++
+		if !customer {
+			continue
+		}
+		model := hour.modelOf(log.ModelName)
 		if !other.IsTask {
 			model.latency.add(int64(log.UseTime))
 		}
@@ -483,8 +576,12 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 		model.row.CacheWrite += other.CacheCreationTokens
 		model.row.Uncached += uncachedPrompt(log, other)
 	}
-	summary.ErrorReasons = keepTop(summary.ErrorReasons, insightHourTopN)
+	summary.ErrorReasons, summary.ErrorReasonsOther = trimTop(summary.ErrorReasons, insightHourTopN)
 	summary.Clients = keepTop(summary.Clients, insightHourTopN)
+	for _, failures := range summary.VendorFailures {
+		failures.Reasons, failures.ReasonsOther = trimTop(failures.Reasons, insightHourTopN)
+		failures.StatusCodes, failures.StatusOther = trimTop(failures.StatusCodes, insightHourTopN)
+	}
 
 	perMinute := make(map[int64]int64)
 	events := make([]concurrencyEvent, 0, len(requests)*2)
@@ -503,7 +600,7 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 		return vendor
 	}
 	for _, request := range requests {
-		customer := !scope.roots[request.userID]
+		customer := !scope.staff[request.userID]
 		vendorName := ModelVendor(request.modelName)
 		if customer && request.held {
 			in, out := concurrencyEvent{request.heldFrom, 1, request.userID}, concurrencyEvent{request.heldTo, -1, request.userID}
@@ -518,13 +615,18 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 		if request.began < start || request.began >= end {
 			continue
 		}
+		if !customer {
+			staff := summary.staffOf(request.modelName)
+			staff.Requests++
+			if !request.served {
+				staff.Errors++
+			}
+			continue
+		}
 		model := hour.modelOf(request.modelName)
 		model.row.Requests++
 		if !request.served {
 			model.row.Errors++
-		}
-		if !customer {
-			continue
 		}
 		summary.Requests++
 		summary.Attempts += request.attempts
@@ -731,13 +833,13 @@ func (h *insightHour) groupOf(name string) *insightGroupUse {
 }
 
 // addQuota adds what a log charged, negative for a refund, to its user,
-// group, plan and channel, or to root's own figure. A refund is counted in
+// group, plan and channel, or to staff's own figure. A refund is counted in
 // its own hour, which may hold less of the user's, channel's, group's or
 // plan's consumption than it returns, so an hour's figure may be negative:
 // it is stored as it is, and the views stop a figure at zero only once it is
 // summed over what they show.
 func (h *insightHour) addQuota(log insightLog, other logOtherFields, quota int64, scope insightHourScope) {
-	if scope.roots[log.UserId] {
+	if scope.staff[log.UserId] {
 		h.summary.RootQuota += quota
 		return
 	}
@@ -848,6 +950,49 @@ func firstLogAt() (int64, error) {
 	return *first, nil
 }
 
+// insightLogsSinceTTL is how long the earliest log's time is reused. Logs are
+// only cleaned from the front, so a reused value is early by at most this
+// long, and the hours between the two read as empty, which they are.
+const insightLogsSinceTTL = 5 * time.Minute
+
+var insightLogsSince struct {
+	mu     sync.Mutex
+	readAt time.Time
+	value  int64
+	flight singleflight.Group
+}
+
+// InsightLogsSince is the time of the earliest request log the hourly rollups
+// read: the views return it as logs_since, and an hour before it is no data
+// rather than zero. It is read once per insightLogsSinceTTL, shared by
+// concurrent callers. Without logs it is 0, and that is not kept, so the first
+// log is seen at once.
+func InsightLogsSince() (int64, error) {
+	insightLogsSince.mu.Lock()
+	if insightLogsSince.value > 0 && time.Since(insightLogsSince.readAt) < insightLogsSinceTTL {
+		value := insightLogsSince.value
+		insightLogsSince.mu.Unlock()
+		return value, nil
+	}
+	insightLogsSince.mu.Unlock()
+	value, err, _ := insightLogsSince.flight.Do("logs_since", func() (any, error) {
+		first, err := firstLogAt()
+		if err != nil {
+			return nil, err
+		}
+		if first > 0 {
+			insightLogsSince.mu.Lock()
+			insightLogsSince.value, insightLogsSince.readAt = first, time.Now()
+			insightLogsSince.mu.Unlock()
+		}
+		return first, nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return value.(int64), nil
+}
+
 // insightOpenHourTTL is how long a computed open hour is served as is. An
 // older one, up to insightOpenHourStaleLimit, is still served at once while a
 // new computation runs in the background, so the capacity view's 30 s refresh
@@ -929,10 +1074,12 @@ func loadInsightHours(r InsightsRange) ([]*insightHour, error) {
 
 // loadInsightHoursStale returns every hour that starts in [r.Start, r.End),
 // whole hours in UTC, oldest first, and how many of them are stored under an
-// older version. A stored hour is served as it is, whatever its version:
-// the figures an older version did not have read zero until FillInsightHours
-// rebuilds it. Only a final hour with no stored row is computed and stored
-// here; an open hour comes from recentOpenInsightHour.
+// older version and have a request or an attempt. A stored hour is served as
+// it is, whatever its version: the figures an older version did not have read
+// zero until FillInsightHours rebuilds it. An older row with neither a request
+// nor an attempt is current, since nothing a rebuild would add can change it.
+// Only a final hour with no stored row is computed and stored here; an open
+// hour comes from recentOpenInsightHour.
 func loadInsightHoursStale(r InsightsRange) ([]*insightHour, int, error) {
 	first := r.Start - ((r.Start%3600)+3600)%3600
 	now := time.Now().Unix()
@@ -946,7 +1093,7 @@ func loadInsightHoursStale(r InsightsRange) ([]*insightHour, int, error) {
 		if err := common.UnmarshalJsonStr(row.Data, &hour.summary); err != nil {
 			continue
 		}
-		hour.stale = row.Version < insightHourVersion
+		hour.stale = row.Version < insightHourVersion && (hour.summary.Requests > 0 || hour.summary.Attempts > 0)
 		hours[row.HourStart] = hour
 	}
 	var users []InsightUserHour
@@ -977,7 +1124,7 @@ func loadInsightHoursStale(r InsightsRange) ([]*insightHour, int, error) {
 		}
 	}
 
-	earliest, err := firstLogAt()
+	earliest, err := InsightLogsSince()
 	if err != nil {
 		return nil, 0, err
 	}

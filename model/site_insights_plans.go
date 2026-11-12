@@ -136,11 +136,11 @@ func unrunValue(value float64, subscription UserSubscription, now int64) float64
 }
 
 // readPlanBook returns what running plans owe as of now and each plan's
-// movement over the range. Root's plans are left out, as from balances.
+// movement over the range. Staff plans are left out, as from balances.
 func readPlanBook(r InsightsRange, now int64, prices map[int]walletPrice) (PlanLiability, []PlanBookRow, error) {
 	liability := PlanLiability{At: now}
-	var roots []int
-	if err := DB.Model(&User{}).Unscoped().Where("role >= ?", common.RoleRootUser).Pluck("id", &roots).Error; err != nil {
+	var staff []int
+	if err := DB.Model(&User{}).Unscoped().Where("role >= ?", customerRoleBound).Pluck("id", &staff).Error; err != nil {
 		return liability, nil, err
 	}
 	// Every plan the book reads ends after this: running now, ended in the
@@ -151,7 +151,7 @@ func readPlanBook(r InsightsRange, now int64, prices map[int]walletPrice) (PlanL
 		Where("end_time >= ?", since).Find(&all).Error; err != nil {
 		return liability, nil, err
 	}
-	all = slices.DeleteFunc(all, func(s UserSubscription) bool { return slices.Contains(roots, s.UserId) })
+	all = slices.DeleteFunc(all, func(s UserSubscription) bool { return slices.Contains(staff, s.UserId) })
 	var payers []int
 	for _, subscription := range all {
 		if slices.Contains(paidPlanSources, subscription.Source) {

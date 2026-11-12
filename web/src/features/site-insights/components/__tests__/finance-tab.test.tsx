@@ -30,7 +30,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import {
-  balanceRunway,
   bestWholeDay,
   claudeEarned,
   financeDrivers,
@@ -43,6 +42,7 @@ import {
   peakHour,
   planBookTotals,
   poolUse,
+  runwayOf,
   spendFlags,
 } from '../../finance-analysis'
 import type { InsightsSources } from '../../lib'
@@ -151,7 +151,11 @@ describe('cash and credit at the head of the funds view', () => {
       within(consumed)
         .getAllByRole('listitem')
         .map((item) => item.textContent)
-    ).toEqual(['Paid part ¥17', 'Gifted part ¥8', 'Root (internal) ¥30'])
+    ).toEqual([
+      'Paid part ¥17',
+      'Gifted part ¥8',
+      'Root and staff (internal) ¥30',
+    ])
   })
 
   it('divides revenue earned by customers’ consumption, root left out', () => {
@@ -644,30 +648,48 @@ describe('revenue over few orders', () => {
 })
 
 describe('balances owed against customers’ paid use', () => {
-  // ¥17 paid use over two days is ¥8.5 a day.
-  const twoDays = (liability: number): FinanceInsights => ({
+  // Paid use ¥25 consumed less ¥8 gifted: ¥17 over ten days is ¥1.7 a day.
+  // The paid balance is ¥40 and the paid plans hold ¥10 of quota.
+  const tenDays = (paidBalance: number): FinanceInsights => ({
     ...earned(),
     start_time: day(0),
-    end_time: day(2),
-    liability_usd: liability,
+    end_time: day(10),
+    liability_usd: paidBalance,
+    liability_paid_value: paidBalance,
+    paid_plan_quota_left_usd: 10,
   })
 
-  it('states the runway and leaves a short one uncolored', () => {
-    render(<FinanceTab data={twoDays(50)} />)
+  it('states the runway on paid balances and paid plans’ quota', () => {
+    render(<FinanceTab data={tenDays(40)} />)
     const owed = screen.getByText('Balances owed').closest('dl') as HTMLElement
+    // (¥40 + ¥10) over ¥1.7 a day is 29.4 days.
     expect(
       within(owed).getByText(
-        'Covers 6 days of customers’ paid use at this range’s pace.'
+        'Paid balances and paid plans’ quota cover 29 days of customers’ paid use at this range’s pace.'
       )
     ).toBeInTheDocument()
-    expect(within(owed).getByText('¥50')).not.toHaveClass('text-amber-600')
+    expect(within(owed).getByText('¥40')).not.toHaveClass('text-amber-600')
   })
 
   it('colors a balance that covers over 60 days of paid use', () => {
-    render(<FinanceTab data={twoDays(1000)} />)
+    render(<FinanceTab data={tenDays(1000)} />)
     const owed = screen.getByText('Balances owed').closest('dl') as HTMLElement
     expect(within(owed).getByText('¥1,000')).toHaveClass('text-amber-600')
-    expect(within(owed).getByText(/^Covers 118 days/)).toBeInTheDocument()
+    // (¥1,000 + ¥10) over ¥1.7 a day is 594 days.
+    expect(
+      within(owed).getByText(/^Paid balances and paid plans/)
+    ).toHaveTextContent('cover 594 days')
+  })
+
+  it('shows a dash, not a number, on a range under three days', () => {
+    render(
+      <FinanceTab
+        data={{ ...tenDays(40), start_time: day(0), end_time: day(2) }}
+      />
+    )
+    const owed = screen.getByText('Balances owed').closest('dl') as HTMLElement
+    expect(within(owed).getByText('Runway: -')).toBeInTheDocument()
+    expect(within(owed).queryByText(/^Paid balances/)).toBeNull()
   })
 })
 
@@ -780,12 +802,55 @@ describe('funds analysis', () => {
     })
   })
 
-  it('sets the balance against paid use per day', () => {
-    const data = { ...earned(), liability_usd: 85 }
-    // ¥25 consumed less ¥8 gifted over 2 days: ¥8.5 a day.
-    expect(balanceRunway(data, 2)).toBe(10)
-    expect(balanceRunway({ ...data, gift_consumption_usd: 25 }, 2)).toBeNull()
-    expect(balanceRunway(data, 0)).toBeNull()
+  it('sets the paid balances against paid use per day', () => {
+    const data = {
+      ...earned(),
+      liability_paid_value: 60,
+      paid_plan_quota_left_usd: 25,
+    }
+    const range = { start: day(0), end: day(10), days: 10, hourly: false }
+    // ¥17 paid use over 10 days is ¥1.7 a day; ¥85 of paid balance and plan
+    // quota covers 50 days.
+    const measured = runwayOf(data, range)
+    expect(measured.gap).toBeNull()
+    expect(measured.days).toBeCloseTo(50)
+    // The same use over the 5 days the logs cover: ¥3.4 a day, 25 days.
+    const logged = runwayOf({ ...data, logs_since: day(5) }, range)
+    expect(logged.days).toBeCloseTo(25)
+    expect(runwayOf(data, { ...range, days: 2 }).gap).toBe('short')
+    const oldServer = { ...data, paid_plan_quota_left_usd: undefined }
+    expect(runwayOf(oldServer, range)).toEqual({ days: null, gap: 'missing' })
+    expect(runwayOf({ ...data, gift_consumption_usd: 25 }, range)).toEqual({
+      days: null,
+      gap: 'no_use',
+    })
+  })
+
+  it('measures the d30 payload on the same basis as about 14 days, not 21', () => {
+    const data = {
+      ...earned(),
+      consumption_usd: 74113.9688,
+      gift_consumption_usd: 23566.6275,
+      liability_usd: 34751.8373,
+      liability_paid_value: 20846.84,
+      plan_liability: {
+        at: 0,
+        deferred_value: 0,
+        paid_plans: 0,
+        paid_users: 0,
+        gift_plans: 0,
+        unlimited: 0,
+        unmatched: 0,
+        paid_quota_left_usd: 2648.5539,
+        gift_quota_left_usd: 0,
+        paid_period_left_usd: 0,
+        gift_period_left_usd: 0,
+      },
+    } as FinanceInsights
+    const range = { start: 0, end: 0, days: 30, hourly: false }
+    // ¥50,547 paid use over 30 days is ¥1,684.9 a day; (¥20,846.8 + ¥2,648.6)
+    // over that is 13.9 days, where the old total balance gave 20.6.
+    expect(runwayOf(data, range).days).toBeCloseTo(13.94, 1)
   })
 
   it('picks the peak closed hour and the best whole day', () => {

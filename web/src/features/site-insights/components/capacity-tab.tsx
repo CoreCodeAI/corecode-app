@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 
-import { closedHours } from '../analysis'
+import { beforeLogs, closedHours } from '../analysis'
 import {
   accountLimits,
   diagnoseRejections,
@@ -40,6 +40,8 @@ import {
   HEADROOM_SHARE,
   joinSentences,
   PROVIDER_LABELS,
+  previousBeforeLogs,
+  rangeHours,
   SMALL_SAMPLE,
   tableState,
   useErrorCategoryLabel,
@@ -153,6 +155,12 @@ export function CapacityTab(props: {
   const end = rangeEnd(props.range)
   const span = periodSpan(props.range, hourly, previous?.hourly)
   const closed = closedHours(hourly, end)
+  // Before the logs begin an hour has no data, so it is drawn missing; a
+  // previous period wholly before them has nothing to compare with.
+  const logsSince = data?.logs_since
+  const previousMissing = props.range
+    ? previousBeforeLogs(props.range, logsSince)
+    : false
   const room = headroom(hourly, slots, end)
   const diagnosis = diagnoseRejections(hourly, slots)
   const once = countsRequestsOnce(data)
@@ -162,25 +170,36 @@ export function CapacityTab(props: {
   // A week of hours fills the weekday grid; a shorter range leaves it
   // one or two rows that say nothing.
   const weekly = (props.range?.days ?? hourly.length / 24) >= 7
-  const rangeHours = props.range
-    ? (props.range.end - props.range.start) / 3600
-    : hourly.length
+  const hoursInRange = props.range ? rangeHours(props.range) : hourly.length
 
   // The pool's own peak where the server sends it at the top level; the
   // site's otherwise. A stale range sends none, so it reads as the site's
   // everywhere (chart, trend and headline alike).
   const ownPeak = data?.pool_peak != null
   const peak = data ? poolPeakOf(data) : 0
+  // A zero pool_peak_at is no time, so the card does not print one.
   const peakAt =
-    (ownPeak ? data?.pool_peak_at : undefined) ?? data?.peak_at ?? 0
+    (ownPeak && data?.pool_peak_at ? data.pool_peak_at : undefined) ??
+    data?.peak_at ??
+    0
   const previousPeak =
     previous && (previous.pool_peak != null) === (data?.pool_peak != null)
       ? poolPeakOf(previous)
       : undefined
   const peakLabel = ownPeak ? t('Pool peak') : t('Peak concurrency')
+  // While some hours are rebuilt the server withholds the pool's peak, so
+  // the figure shown is the site's; the help says so.
   const peakHelp = ownPeak
     ? joinSentences(definitions.poolPeak, definitions.sitePeak)
-    : definitions.sitePeak
+    : joinSentences(
+        definitions.sitePeak,
+        (data?.stale_hours ?? 0) > 0 &&
+          t(
+            'While some hours of the range are rebuilt, the pool’s own peak is withheld, so this is the site’s, every channel.'
+          )
+      )
+  // A pool that served nothing has no time to read: it says so instead.
+  const poolIdle = ownPeak && peak === 0
 
   // Only Claude's upstream says which limit it hit, and only one provider's
   // view is that upstream alone.
@@ -232,7 +251,12 @@ export function CapacityTab(props: {
       slots,
       site: fmt.num(data.peak_concurrency),
     }
-    if (ownPeak && slots) {
+    if (poolIdle) {
+      peakSummary = t(
+        "No request was served through the pool in this range; the site's, every channel, was {{site}}.",
+        values
+      )
+    } else if (ownPeak && slots) {
       peakSummary = t(
         "Pool peak {{peak}} at {{time}}, {{share}} of the {{slots}} pool slots; the site's, every channel, was {{site}}.",
         values
@@ -254,6 +278,7 @@ export function CapacityTab(props: {
 
   // Slots are the pool's value now, so past hours read against today's.
   let peakHint: string | undefined = data ? fmt.time(peakAt) : undefined
+  if (poolIdle) peakHint = t('No request was served through the pool')
   const tightest = room?.tightest
   if (room && tightest) {
     const time = fmt.time(tightest.hour)
@@ -389,11 +414,13 @@ export function CapacityTab(props: {
               current: data?.requests ?? 0,
               previous: previous?.requests,
               better: 'neutral',
+              missing: previousMissing,
             },
             // The open hour is still filling and would read as a drop.
             trend: closed.map((hour) => ({
               title: axis.title(hour.hour),
               value: hour.requests,
+              missing: beforeLogs(hour.hour, 3600, logsSince),
             })),
             trendBars: true,
             hint: requestsHint,
@@ -409,11 +436,13 @@ export function CapacityTab(props: {
               current: peak,
               previous: previousPeak,
               better: 'neutral',
+              missing: previousMissing,
             },
             tone: peakTone,
             trend: closed.map((hour) => ({
               title: axis.title(hour.hour),
               value: poolPeakOf(hour),
+              missing: beforeLogs(hour.hour, 3600, logsSince),
             })),
           },
           {
@@ -446,6 +475,7 @@ export function CapacityTab(props: {
               current: engine.full,
               previous: previousEngine?.full,
               better: 'down',
+              missing: previousMissing,
             },
             tone: poolFullTone,
           },
@@ -475,7 +505,7 @@ export function CapacityTab(props: {
         ]}
       />
       <TruncatedNotice show={!!data?.truncated} />
-      <StaleNote staleHours={data?.stale_hours} rangeHours={rangeHours} />
+      <StaleNote staleHours={data?.stale_hours} rangeHours={hoursInRange} />
       {props.sources?.previous.status === 'error' && data && !previous && (
         <SampleNote>
           {t('The previous period could not be read, so no change is shown.')}
@@ -549,6 +579,7 @@ export function CapacityTab(props: {
           span={span}
           end={end}
           slots={slots}
+          logsSince={logsSince}
         />
       </Panel>
 
@@ -559,6 +590,7 @@ export function CapacityTab(props: {
             hourly={hourly}
             end={end}
             slots={slots}
+            logsSince={logsSince}
           />
           <Panel
             title={t('Peak concurrency by weekday and hour')}
@@ -574,10 +606,12 @@ export function CapacityTab(props: {
           >
             <WeekHeatmap
               cells={foldIntoWeek(
-                hourly.map((hour) => ({
-                  hour: hour.hour,
-                  value: poolPeakOf(hour),
-                }))
+                hourly
+                  .filter((hour) => !beforeLogs(hour.hour, 3600, logsSince))
+                  .map((hour) => ({
+                    hour: hour.hour,
+                    value: poolPeakOf(hour),
+                  }))
               )}
               format={fmt.num}
               limit={slots || undefined}
@@ -594,6 +628,7 @@ export function CapacityTab(props: {
           span={span}
           end={end}
           definition={requestDefinition}
+          logsSince={logsSince}
         />
       )}
 
@@ -633,24 +668,29 @@ export function CapacityTab(props: {
               { label: upstreamLabel },
               ...(all ? [{ label: t('Per-user limit (attempts)') }] : []),
             ]}
-            points={axis.bars(hourly, end, (hour) => ({
-              values: [
-                hour.engine_rejections,
-                hour.upstream_rate_limits,
-                ...(all ? [limitRejections.get(hour.hour) ?? 0] : []),
-              ],
-              extra: [
-                {
-                  label: peakLabel,
-                  value: slots
-                    ? t('{{peak}} of {{slots}}', {
-                        peak: fmt.num(poolPeakOf(hour)),
-                        slots: fmt.num(slots),
-                      })
-                    : fmt.num(poolPeakOf(hour)),
-                },
-              ],
-            }))}
+            points={axis.bars(
+              hourly,
+              end,
+              (hour) => ({
+                values: [
+                  hour.engine_rejections,
+                  hour.upstream_rate_limits,
+                  ...(all ? [limitRejections.get(hour.hour) ?? 0] : []),
+                ],
+                extra: [
+                  {
+                    label: peakLabel,
+                    value: slots
+                      ? t('{{peak}} of {{slots}}', {
+                          peak: fmt.num(poolPeakOf(hour)),
+                          slots: fmt.num(slots),
+                        })
+                      : fmt.num(poolPeakOf(hour)),
+                  },
+                ],
+              }),
+              logsSince
+            )}
           />
         </Panel>
         {all && (
@@ -684,9 +724,8 @@ export function CapacityTab(props: {
         <Panel
           title={t('Failures by cause')}
           help={joinSentences(
-            t(
-              "Customers' failed requests by cause; root's tests are left out, so the total can be lower than the quality tab's status codes."
-            ),
+            t("Customers' failed requests by cause."),
+            definitions.customers,
             requestDefinition
           )}
         >

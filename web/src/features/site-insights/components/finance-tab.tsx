@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next'
 
 import {
   bestWholeDay,
+  bucketBeforeLogs,
   financeHours,
   financeRange,
   peakHour,
@@ -27,6 +28,8 @@ import {
 import {
   joinSentences,
   paymentSlices,
+  previousBeforeLogs,
+  rangeHours,
   tableState,
   useHourAxis,
   useInsightsDefinitions,
@@ -77,15 +80,20 @@ export function FinanceTab(props: {
   const defs = useInsightsDefinitions()
   const hourAxis = useHourAxis()
   const partialDay = usePartialDays('finance')
-  const verdict = useFinanceVerdict(props.data, props.previous)
   const data = props.data
   const previous = props.previous
+  const range = financeRange(data, props.range)
+  const logsSince = data?.logs_since
+  // A previous period wholly before the logs has no data: nothing is
+  // compared with it, so the verdict and the drivers see none.
+  const comparable =
+    previous && !previousBeforeLogs(range, logsSince) ? previous : undefined
+  const verdict = useFinanceVerdict(props.data, comparable)
   const view = props.sources?.view
   const failed = !data && view?.status === 'error'
   const failedText = failed
     ? (view?.error ?? t('Could not be read'))
     : undefined
-  const range = financeRange(data, props.range)
   const hours = financeHours(data, range)
   const daily = data?.daily ?? []
   // Partial days at either end of the range are never the best day.
@@ -120,7 +128,7 @@ export function FinanceTab(props: {
       t('Top-up bonus'),
       data?.bonus_usd ?? 0,
       t(
-        'Credit added free on top of a top-up. It lowers what the owner paid per dollar, so revenue earned stays right, but spending it counts in the paid part of consumption, not the gifted part.'
+        'Credit added free on top of a top-up. Spending it counts in the gifted part of consumption, and it lowers the average price paid per quota dollar, so revenue earned stays right.'
       ),
     ],
     [
@@ -139,7 +147,7 @@ export function FinanceTab(props: {
       t('Manual adjustments (net)'),
       data?.adjustment_net_usd ?? 0,
       t(
-        'Balance an administrator added, less what one took away, from the audit log. Root’s own wallet included.'
+        'Balance an administrator added, less what one took away, over the whole range from the audit log. Root and staff wallets included.'
       ),
     ],
   ]
@@ -167,7 +175,6 @@ export function FinanceTab(props: {
     )
   }
   const issued = issuedRows.reduce((sum, row) => sum + row[1], 0)
-  const rangeHours = Math.round(range.days * 24)
   return (
     <div className='grid gap-4'>
       <Verdict
@@ -175,7 +182,10 @@ export function FinanceTab(props: {
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text ?? failedText}
       />
-      <StaleNote staleHours={data?.stale_hours} rangeHours={rangeHours} />
+      <StaleNote
+        staleHours={data?.stale_hours}
+        rangeHours={rangeHours(range)}
+      />
       <FinanceSummary
         data={data}
         previous={previous}
@@ -185,7 +195,7 @@ export function FinanceTab(props: {
 
       <FinanceDriversPanel
         data={data}
-        previous={previous}
+        previous={comparable}
         previousSource={props.sources?.previous}
       />
 
@@ -197,7 +207,7 @@ export function FinanceTab(props: {
 
       <GroupConsumptionPanel
         data={data}
-        previous={previous}
+        previous={comparable}
         sources={props.sources}
       />
 
@@ -209,7 +219,7 @@ export function FinanceTab(props: {
         error={failedText}
         help={joinSentences(
           t(
-            'The bars are revenue paid, top-ups and plans, in yuan. Consumption at list price, root’s internal use included, reads out on each bar, and by the day revenue earned too.'
+            'The bars are revenue paid, top-ups and plans, in yuan. Consumption at list price, root and staff’s internal use included, reads out on each bar, and by the day revenue earned too.'
           ),
           defs.paidRevenue
         )}
@@ -218,17 +228,22 @@ export function FinanceTab(props: {
           <BarSeries
             ariaLabel={t('Hourly revenue')}
             series={revenueSeries}
-            points={hourAxis.bars(hours, range.end, (hour) => ({
-              values: [hour.topup, hour.subscription],
-              extra: [
-                {
-                  label: t('Consumed at list price'),
-                  value: fmt.cny(
-                    hour.consumption_usd + hour.root_consumption_usd
-                  ),
-                },
-              ],
-            }))}
+            points={hourAxis.bars(
+              hours,
+              range.end,
+              (hour) => ({
+                values: [hour.topup, hour.subscription],
+                extra: [
+                  {
+                    label: t('Consumed at list price'),
+                    value: fmt.cny(
+                      hour.consumption_usd + hour.root_consumption_usd
+                    ),
+                  },
+                ],
+              }),
+              logsSince
+            )}
           />
         )}
         {!failed && !hours && (
@@ -240,6 +255,7 @@ export function FinanceTab(props: {
               title: fmt.day(day.day),
               values: [day.topup, day.subscription],
               partial: partialDay(day.day, [day.topup, day.subscription]),
+              missing: bucketBeforeLogs(day.day, 'day', logsSince),
               extra: [
                 {
                   label: t('Revenue earned'),
@@ -260,11 +276,12 @@ export function FinanceTab(props: {
       <GiftWatchPanel
         data={data}
         previous={previous}
+        range={range}
         onOpen={props.onOpen}
         source={view}
       />
 
-      <OrdersPanel data={data} previous={previous} sources={props.sources} />
+      <OrdersPanel data={data} previous={comparable} sources={props.sources} />
 
       <div className='grid gap-4 lg:grid-cols-3'>
         <Panel
@@ -368,6 +385,14 @@ export function FinanceTab(props: {
           help={t(
             'From the audit log: who changed whose balance, and by how much.'
           )}
+          description={
+            data?.adjustments_truncated && data.adjustments_total != null
+              ? t('Showing the newest {{shown}} of {{total}}.', {
+                  shown: fmt.num(data.adjustments.length),
+                  total: fmt.num(data.adjustments_total),
+                })
+              : undefined
+          }
         >
           <SimpleTable
             rows={data?.adjustments}

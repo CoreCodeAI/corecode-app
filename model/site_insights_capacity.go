@@ -27,7 +27,7 @@ type UserPeak struct {
 
 // CapacityInsights reconstructs concurrency from the request logs: a log is
 // written when a request ends, so it was in flight from created_at - use_time
-// to created_at. Root's requests are left out. Requests rejected before
+// to created_at. Staff's requests are left out. Requests rejected before
 // reaching the relay, such as the per-user concurrency limit, are not in the
 // logs; the controller adds those from model.UserConcurrencyRejection.
 //
@@ -35,9 +35,11 @@ type UserPeak struct {
 // requests the engine served at once, the largest hourly pool peak. Requests
 // and Errors count each request once; Attempts and AttemptErrors count every
 // try on a channel. StaleHours counts the range's hours still stored under an
-// older rollup version, which counted attempts as requests and had no pool
-// peak: while any is left, PoolPeak and Attempts are absent rather than
-// summed over part of the range.
+// older rollup version that have a request or an attempt, which counted
+// attempts as requests and had no pool peak. While any is left, PoolPeak and
+// Attempts are absent: the part of the range that is current would read as the
+// range's figure, a lower bound for the pool peak and a partial sum for the
+// attempts. An empty older hour is current and counts nothing.
 type CapacityInsights struct {
 	Requests        int64          `json:"requests"`
 	Errors          int64          `json:"errors"`

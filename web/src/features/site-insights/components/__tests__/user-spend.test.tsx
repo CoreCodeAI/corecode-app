@@ -123,7 +123,7 @@ describe('consumption by user', () => {
 
     expect(
       screen.getByText(
-        '2 customers used ¥60 of new-api value and $20.00 at gpt-load’s official prices. Root’s own use, ¥10 and $5.00, is not listed.'
+        '2 customers used ¥60 of new-api value and $20.00 at gpt-load’s official prices. Root’s and staff’s own use, ¥10 and $5.00, is not listed.'
       )
     ).toBeInTheDocument()
   })
@@ -157,7 +157,7 @@ describe('consumption by user', () => {
     expect(within(alice).queryByText('$16.50')).toBeNull()
     expect(
       screen.getByText(
-        '2 customers used ¥60 of new-api value. Root’s own use, ¥10, is not listed.'
+        '2 customers used ¥60 of new-api value. Root’s and staff’s own use, ¥10, is not listed.'
       )
     ).toBeInTheDocument()
   })

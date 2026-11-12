@@ -22,6 +22,7 @@ import { dominant, type Contribution } from '../analysis'
 import type { Tone } from '../components/shared'
 import {
   customerMoves,
+  judgedCohort,
   matureCohort,
   segmentChanges,
   signupBurst,
@@ -83,7 +84,7 @@ export function useGrowthVerdict(
   // Activation and payment are read over the sign-ups old enough to have
   // shown them; a range's newest hours of sign-ups have not had the time.
   const aged = matureCohort(data.daily, range)
-  const cohort = aged ?? data.funnel
+  const { cohort } = judgedCohort(data.funnel, data.daily, range)
   const activation = cohort.registered
     ? cohort.activated / cohort.registered
     : 0
@@ -95,6 +96,31 @@ export function useGrowthVerdict(
     value > 0 ? `+${fmt.num(value)}` : fmt.num(value)
   const drivers = signupDrivers(data, previous)
   const burst = range?.hourly ? signupBurst(data.hourly) : null
+  // Payment timing and churn are judged only on a fair sample of payers.
+  const timing = data.first_payment
+  const paceSentence =
+    timing && timing.payers >= MIN_COHORT
+      ? t(
+          '{{day}} of payers paid within a day of signing up, {{week}} within a week.',
+          {
+            day: fmt.pct(timing.within_day),
+            week: fmt.pct(timing.within_week),
+          }
+        )
+      : false
+  const quiet = data.payer_activity
+  const recentPayers = (quiet?.active ?? 0) + (quiet?.lapsed ?? 0)
+  const quietSentence =
+    quiet && quiet.lapsed > 0 && recentPayers >= MIN_COHORT
+      ? t(
+          '{{count}} payers have gone quiet: {{share}} of the {{recent}} who used quota in the last 28 days.',
+          {
+            count: fmt.num(quiet.lapsed),
+            share: fmt.pct(quiet.lapsed / recentPayers),
+            recent: fmt.num(recentPayers),
+          }
+        )
+      : false
   const rates = {
     activation: fmt.pct(activation),
     conversion: fmt.pct(conversion),
@@ -158,7 +184,9 @@ export function useGrowthVerdict(
           '{{share}} of them signed up in the hour from {{time}}: check the sign-up source.',
           { share: fmt.pct(burst.share), time: fmt.time(burst.hour) }
         ),
-      ratesSentence
+      ratesSentence,
+      paceSentence,
+      quietSentence
     ),
   }
 }

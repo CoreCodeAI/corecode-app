@@ -25,7 +25,13 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { sortFindings, type Finding } from '../analysis'
-import { TONES, useTabLabel, type InsightsTab } from '../lib'
+import {
+  rangeReachesBeforeLogs,
+  TONES,
+  useInsightsFormat,
+  useTabLabel,
+  type InsightsTab,
+} from '../lib'
 import type { PoolProvider } from '../types'
 import type { Tone } from './shared'
 
@@ -219,6 +225,30 @@ export function StaleNote(props: {
             '{{stale}} of the range’s {{total}} hours are still counted by the earlier definition and are being rebuilt; their figures may change.',
             { stale, total: Math.round(total) }
           )}
+    </p>
+  )
+}
+
+/**
+ * Says where the logs begin, when the range reaches before them: an hour or
+ * day before that has no data, not zero. Nothing when the range starts after
+ * the logs, or the server has not said where they begin.
+ */
+export function LogsNote(props: {
+  /** The earliest start of the ranges the page shows. */
+  start: number
+  logsSince: number | null | undefined
+}) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  if (!rangeReachesBeforeLogs({ start: props.start }, props.logsSince)) {
+    return null
+  }
+  return (
+    <p className='text-muted-foreground text-xs'>
+      {t('Logs start {{date}}; earlier hours have no data.', {
+        date: fmt.day(props.logsSince ?? 0),
+      })}
     </p>
   )
 }

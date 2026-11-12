@@ -29,15 +29,18 @@ import {
   useSignupMethodLabel,
   useTabLabel,
 } from '../lib'
-import type { BalanceUser, RiskInsights } from '../types'
+import type { BalanceUser, RiskInsights, UnpaidSpender } from '../types'
 import { useClusterReasons } from '../verdicts/risk'
 import { TabLink } from './insight-kit'
 import {
   giftOutcomes,
+  isHandFunded,
   rankClusters,
   sharedCounts,
   splitExits,
   unpaidSpend,
+  usesGiftPart,
+  withRisk,
   type RankedCluster,
   type RiskCluster,
 } from './risk-analysis'
@@ -192,22 +195,63 @@ export function ClusterList(props: { clusters: RankedCluster[] }) {
   )
 }
 
+/** The shared exits as a table, in the server's order, each with the reasons its row shows. */
+function ExitTable(props: { exits: RiskCluster[]; start: number | undefined }) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const reasonsOf = useClusterReasons()
+  return (
+    <SimpleTable
+      rows={withRisk(props.exits, props.start)}
+      rowKey={(row) => row.ip}
+      empty=''
+      columns={[
+        {
+          key: 'ip',
+          label: t('Address'),
+          render: (row) => <span className='font-mono'>{row.ip}</span>,
+        },
+        {
+          key: 'accounts',
+          label: t('Accounts'),
+          align: 'right',
+          render: (row) => fmt.num(row.users.length),
+        },
+        {
+          key: 'reasons',
+          label: t('Reasons'),
+          render: (row) =>
+            reasonsOf(row.risk)
+              .map((reason) => reason.text)
+              .join(t(', ')) || '-',
+        },
+        {
+          key: 'req',
+          label: t('Requests'),
+          align: 'right',
+          render: (row) => fmt.num(row.requests),
+        },
+      ]}
+    />
+  )
+}
+
 /**
  * Addresses several accounts used, riskiest first, with the shared exits
  * folded away under their own heading: they are many customers behind one
- * proxy or network, not one person, and count nowhere else.
+ * proxy or network, not one person, and count nowhere else. The exits come
+ * ranked from the server and are listed as sent.
  */
 export function SharedAddressPanel(props: {
   data: RiskInsights | undefined
   clusters: RiskCluster[]
+  exits: RiskCluster[]
   start: number | undefined
   state?: TableState
 }) {
   const { t } = useTranslation()
-  const split = splitExits(props.clusters)
-  const counts = sharedCounts(props.data, props.clusters)
-  const ranked = rankClusters(split.review, props.start)
-  const exits = rankClusters(split.exits, props.start)
+  const ranked = rankClusters(splitExits(props.clusters).review, props.start)
+  const counts = sharedCounts(props.data, props.clusters, props.exits)
   const marksExits = props.data?.shared_ip_total != null
   let description: string | undefined
   if (props.data && counts.total > 0) {
@@ -272,9 +316,9 @@ export function SharedAddressPanel(props: {
             <summary className='text-muted-foreground cursor-pointer text-xs'>
               {exitTitle}
             </summary>
-            {exits.length > 0 && (
+            {props.exits.length > 0 && (
               <div className='mt-3'>
-                <ClusterList clusters={exits} />
+                <ExitTable exits={props.exits} start={props.start} />
               </div>
             )}
           </details>
@@ -308,7 +352,9 @@ function useGiftStatusLabel(): (name: string) => string {
 /**
  * Sign-ups of the range that consumed and never paid, the largest first,
  * and the inviters who brought most of them: gift farming that needs no
- * shared address.
+ * shared address. Where the server splits the spend by source, each account
+ * shows its parts, and one funded mostly by an administrator is marked, so it
+ * does not read as farming.
  */
 export function UnpaidSpendersPanel(props: {
   data: RiskInsights | undefined
@@ -319,25 +365,48 @@ export function UnpaidSpendersPanel(props: {
   const methodLabel = useSignupMethodLabel()
   const tabLabel = useTabLabel()
   const spend = unpaidSpend(props.data)
+  const split = spend?.split != null
+  const giftPart = usesGiftPart(props.data)
+  const part = (value: number | undefined) =>
+    value == null ? '-' : fmt.cny(value)
+  let description: string | undefined
+  if (spend && spend.spenders > 0) {
+    description = joinSentences(
+      t(
+        '{{unpaid}} of the {{spenders}} new accounts that used credit have never paid; they used {{amount}} in the range.',
+        {
+          unpaid: fmt.num(spend.unpaid),
+          spenders: fmt.num(spend.spenders),
+          amount: fmt.cny(spend.spend),
+        }
+      ),
+      spend.split &&
+        t(
+          'Of that, {{granted}} was granted by hand, {{redeemed}} came from redemption codes, {{gift}} from gift plans and {{signup}} from sign-up and invite gifts.',
+          {
+            granted: fmt.cny(spend.split.granted),
+            redeemed: fmt.cny(spend.split.redeemed),
+            gift: fmt.cny(spend.split.gift),
+            signup: fmt.cny(spend.split.signupGift),
+          }
+        )
+    )
+  } else if (spend) {
+    description = t('No account created in the range used credit.')
+  }
   return (
     <Panel
       title={t('Spent without paying')}
-      description={
-        spend &&
-        (spend.spenders > 0
+      description={description}
+      help={
+        split
           ? t(
-              '{{unpaid}} of the {{spenders}} new accounts that used credit have never paid; they used {{amount}} in the range.',
-              {
-                unpaid: fmt.num(spend.unpaid),
-                spenders: fmt.num(spend.spenders),
-                amount: fmt.cny(spend.spend),
-              }
+              'Accounts created in the range that consumed in it and have never paid: no successful top-up with money and no plan bought with money, at any time. Consumption is in the range, from the hourly rollup. It splits into credit an administrator granted by hand (audit log, up to the range’s end), redemption codes, gift plans, and sign-up and invite gifts. An account whose hand grant covers over half its consumption is marked as credited by an administrator. Only the gift part judges an inviter. Trial users and buyers of resold redemption codes look the same, so read an inviter with several such accounts as the signal, not one account.'
             )
-          : t('No account created in the range used credit.'))
+          : t(
+              'Accounts created in the range that consumed in it and have never paid: no successful top-up with money, at any time. Consumption is in the range, from the hourly rollup; the gift plan part is what given plans covered, the rest came from sign-up or invite credit. Trial users and buyers of resold redemption codes look the same, so read an inviter with several such accounts as the signal, not one account.'
+            )
       }
-      help={t(
-        'Accounts created in the range that consumed in it and have never paid: no successful top-up with money, at any time. Consumption is in the range, from the hourly rollup; the gift plan part is what given plans covered, the rest came from sign-up or invite credit. Trial users and buyers of resold redemption codes look the same, so read an inviter with several such accounts as the signal, not one account.'
-      )}
     >
       <div className='grid gap-4'>
         <SimpleTable
@@ -349,7 +418,16 @@ export function UnpaidSpendersPanel(props: {
             {
               key: 'user',
               label: t('User'),
-              render: (row) => <UserLabel {...row} />,
+              render: (row) => (
+                <span className='flex flex-wrap items-center gap-2'>
+                  <UserLabel {...row} />
+                  {isHandFunded(row) && (
+                    <Badge variant='secondary'>
+                      {t('Credited by an administrator')}
+                    </Badge>
+                  )}
+                </span>
+              ),
             },
             {
               key: 'signup',
@@ -369,12 +447,38 @@ export function UnpaidSpendersPanel(props: {
               align: 'right',
               render: (row) => fmt.cny(row.consumption_usd),
             },
+            ...(split
+              ? [
+                  {
+                    key: 'granted',
+                    label: t('Granted by hand'),
+                    align: 'right' as const,
+                    render: (row: UnpaidSpender) => part(row.granted_usd),
+                  },
+                  {
+                    key: 'redeemed',
+                    label: t('Redeemed codes'),
+                    align: 'right' as const,
+                    render: (row: UnpaidSpender) => part(row.redeemed_usd),
+                  },
+                ]
+              : []),
             {
               key: 'gift',
               label: t('Gift plans'),
               align: 'right',
               render: (row) => fmt.cny(row.gift_plan_usd),
             },
+            ...(split
+              ? [
+                  {
+                    key: 'signup-gift',
+                    label: t('Sign-up and invite gifts'),
+                    align: 'right' as const,
+                    render: (row: UnpaidSpender) => part(row.signup_gift_usd),
+                  },
+                ]
+              : []),
             {
               key: 'act',
               label: t('Actions'),
@@ -406,6 +510,17 @@ export function UnpaidSpendersPanel(props: {
                 align: 'right',
                 render: (row) => fmt.cny(row.consumption_usd),
               },
+              ...(giftPart
+                ? [
+                    {
+                      key: 'gift-part',
+                      label: t('Gift part'),
+                      align: 'right' as const,
+                      render: (row: { gift_usd?: number }) =>
+                        part(row.gift_usd),
+                    },
+                  ]
+                : []),
               {
                 key: 'act',
                 label: t('Actions'),

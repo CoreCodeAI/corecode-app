@@ -328,7 +328,7 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 		DeletedAt    gorm.DeletedAt
 	}
 	if err := DB.Model(&User{}).Unscoped().Select("id, inviter_id, request_count, created_at, quota, status, deleted_at").
-		Where("role < ?", common.RoleRootUser).Find(&users).Error; err != nil {
+		Where("role < ?", customerRoleBound).Find(&users).Error; err != nil {
 		return nil, err
 	}
 	// rowOf is the source that brought an account; giftRowOf is where its
@@ -355,16 +355,13 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 		return nil, err
 	}
 	paidOrders := make(map[int]int)
-	firstPaid := make(map[int]int64)
+	firstPaid := firstPaidTimes(orders)
 	payers := make(map[int]bool)
 	for _, order := range orders {
 		if order.Money <= 0 {
 			continue
 		}
 		paidOrders[order.UserId]++
-		if first, ok := firstPaid[order.UserId]; !ok || order.CreateTime < first {
-			firstPaid[order.UserId] = order.CreateTime
-		}
 		if !inRange(order.CreateTime) {
 			continue
 		}

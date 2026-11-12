@@ -31,6 +31,7 @@ import type { Tone } from './components/shared'
 import {
   HEADROOM_SHARE,
   HOUR_SAMPLE,
+  rangeSpan,
   SPIKE_FACTOR,
   SPIKE_FLOOR,
   type InsightsRangeInfo,
@@ -53,15 +54,16 @@ export function rangeEnd(range: InsightsRangeInfo | undefined): number {
 
 /**
  * The seconds between an hour and the same point of the previous period:
- * the range's length, or, without a range, the distance between the two
- * series' first hours. Undefined when neither is known.
+ * the range's whole days, which the previous period is cut to, or, without
+ * a range, the distance between the two series' first hours. Undefined when
+ * neither is known.
  */
 export function periodSpan(
   range: InsightsRangeInfo | undefined,
   current: { hour: number }[],
   previous: { hour: number }[] | null | undefined
 ): number | undefined {
-  if (range) return range.end - range.start
+  if (range) return rangeSpan(range)
   const first = current[0]
   const before = previous?.[0]
   if (!first || !before || first.hour <= before.hour) return undefined

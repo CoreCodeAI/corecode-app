@@ -71,9 +71,13 @@ func TestUserSpendDatabaseMatrix(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, map[int]bool{2: true, 3: true}, engineChannels)
 
-			roots, err := RootUserIDs()
+			// An administrator is staff too: the customer views leave both out.
+			admin := &User{Username: "admin", DisplayName: "admin", Role: common.RoleAdminUser, Status: common.UserStatusEnabled}
+			require.NoError(t, admin.Insert(0))
+			staff, err := StaffUserIDs()
 			require.NoError(t, err)
-			assert.Equal(t, []int{root.Id}, roots)
+			assert.ElementsMatch(t, []int{root.Id, admin.Id}, staff)
+			assert.NotContains(t, staff, alice.Id)
 
 			// Alice topped up twice and bought a plan; a wallet-paid order and
 			// a pending one do not count.

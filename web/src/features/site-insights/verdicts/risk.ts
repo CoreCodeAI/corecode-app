@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useTranslation } from 'react-i18next'
 
 import {
+  grantedShare,
   hasRepeatBuyers,
   materialDebtors,
   MIN_SIGNAL_COUNT,
@@ -28,6 +29,8 @@ import {
   sharedCounts,
   splitExits,
   suspectInviters,
+  unpaidSpend,
+  usesGiftPart,
   type ClusterRisk,
   type SignupSurge,
 } from '../components/risk-analysis'
@@ -168,6 +171,8 @@ export function useRiskVerdict(
   const buyers = hasRepeatBuyers(clusters)
   const shared = sharedCounts(data, clusters)
   const inviters = suspectInviters(data)
+  const giftBased = usesGiftPart(data)
+  const granted = grantedShare(unpaidSpend(data))
   const surge = largestSurge(riskSurges(data, previous, range))
   const [top] = rankClusters(
     splitExits(clusters).review,
@@ -185,10 +190,15 @@ export function useRiskVerdict(
         count: data.off_whitelist,
       }),
     inviters.unpaid > 0 &&
-      t('{{count}} inviters with {{min}} or more unpaid spenders', {
-        count: inviters.unpaid,
-        min: MIN_SIGNAL_COUNT,
-      }),
+      (giftBased
+        ? t(
+            '{{count}} inviters with {{min}} or more unpaid spenders on gift credit',
+            { count: inviters.unpaid, min: MIN_SIGNAL_COUNT }
+          )
+        : t('{{count}} inviters with {{min}} or more unpaid spenders', {
+            count: inviters.unpaid,
+            min: MIN_SIGNAL_COUNT,
+          })),
     inviters.blocked > 0 &&
       t('{{count}} inviters with {{min}} or more blocked gifts', {
         count: inviters.blocked,
@@ -210,12 +220,22 @@ export function useRiskVerdict(
   } else if (!surge) {
     summary = t('Nothing to check.')
   }
+  // An information line, not a finding: the administrator's own grants.
+  const handGranted =
+    granted > 0.5 &&
+    t(
+      '{{share}} of unpaid spend was credit an administrator granted by hand.',
+      {
+        share: fmt.pct(granted),
+      }
+    )
   return {
     tone,
     text: join(
       t('{{count}} sign-ups.', { count: fmt.num(data.signups) }),
       surge && surgeText(surge, data.series_unit === 'day' ? 'day' : 'hour'),
       summary,
+      handGranted,
       reasons.length > 0 &&
         top &&
         t('Review {{ip}} first: {{reasons}}.', {

@@ -32,6 +32,7 @@ import {
   TONES,
   failureTone,
   joinSentences,
+  rangeHours,
   tableState,
   useInsightsDefinitions,
   useInsightsFormat,
@@ -466,7 +467,7 @@ function ChannelTable(props: {
           label: t('Revenue'),
           hint: joinSentences(
             t(
-              'What customers were charged for the requests the channel served; root is left out.'
+              'What customers were charged for the requests the channel served; root and staff are left out.'
             ),
             help.units
           ),
@@ -698,10 +699,10 @@ function ModelComparison(props: {
             label: t('Revenue per request'),
             hint: customers
               ? t(
-                  'What customers were charged per request they sent; root’s requests and charges are both left out.'
+                  'What customers were charged per request they sent; root and staff requests and charges are both left out.'
                 )
               : t(
-                  'What customers were charged over every request served, root’s included, though root’s charges are not, so it reads low where root used the channel.'
+                  'What customers were charged over every request served, root and staff included, though their charges are not, so it reads low where they used the channel.'
                 ),
             align: 'right',
             render: (row) => {
@@ -717,7 +718,7 @@ function ModelComparison(props: {
             key: 'cost',
             label: t('Cost per request'),
             hint: t(
-              'The upstream bill over every request served, root’s included: root’s use costs money too.'
+              'The upstream bill over every request served, root and staff included: their use costs money too.'
             ),
             align: 'right',
             render: (row) => (
@@ -957,9 +958,7 @@ export function UpstreamTab(props: {
   const missing = viewError !== undefined
   const previousFailed = props.sources?.previous.status === 'error'
   const rows = (value: unknown) => tableState(props.sources?.view, value)
-  const rangeHours = props.range
-    ? (props.range.end - props.range.start) / 3600
-    : 0
+  const hoursInRange = props.range ? rangeHours(props.range) : 0
   const staleRevenue = stale.every((item) => item.revenue !== null)
     ? stale.reduce((sum, item) => sum + (item.revenue ?? 0), 0)
     : null
@@ -1018,7 +1017,10 @@ export function UpstreamTab(props: {
         />
       )}
       <TruncatedNotice show={props.data?.truncated ?? false} />
-      <StaleNote staleHours={props.data?.stale_hours} rangeHours={rangeHours} />
+      <StaleNote
+        staleHours={props.data?.stale_hours}
+        rangeHours={hoursInRange}
+      />
       {previousFailed && props.data && (
         <SampleNote>
           {t(
@@ -1097,7 +1099,7 @@ export function UpstreamTab(props: {
             missing,
             help: joinSentences(
               t(
-                'What customers were charged for the requests the channels served; root is left out.'
+                'What customers were charged for the requests the channels served; root and staff are left out.'
               ),
               help.units
             ),

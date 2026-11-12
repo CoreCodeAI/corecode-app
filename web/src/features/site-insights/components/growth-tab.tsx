@@ -25,13 +25,14 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
-import { alignPrevious } from '../analysis'
+import { alignPrevious, beforeLogs } from '../analysis'
 import {
   claudeCoverage,
   dayInProgress,
-  hourSpan,
+  judgedCohort,
   lastFullDay,
   perActiveUser,
+  previousWindow,
   signupBurst,
   stickiness,
   viewState,
@@ -40,6 +41,8 @@ import {
 import {
   joinSentences,
   MIN_COHORT,
+  previousBeforeLogs,
+  rangeSpan,
   tableState,
   useChargeFormat,
   useHourAxis,
@@ -67,7 +70,11 @@ import {
 } from './activity-insights'
 import { FunnelChart } from './advanced-charts'
 import { GroupsPanel, ReferralPanel } from './business-panels'
-import { SignupDriversPanel } from './growth-insights'
+import {
+  PayerActivityPanel,
+  PaymentTimingPanel,
+  SignupDriversPanel,
+} from './growth-insights'
 import {
   BarSeries,
   type BarPoint,
@@ -94,9 +101,11 @@ export function GrowthTab(props: {
   const verdict = useGrowthVerdict(props.data, props.previous, props.range)
   const label = useSignupMethodLabel()
   const hours = useHourAxis()
+  const defs = useInsightsDefinitions()
   const data = props.data
   const previous = props.previous
   const range = props.range
+  const logsSince = data?.logs_since
   const state = viewState(data, props.sources?.view)
   const failed = state === 'error'
   const viewError = failed ? t('Could not be read') : undefined
@@ -104,13 +113,26 @@ export function GrowthTab(props: {
     !previous && props.sources?.previous.status === 'error'
       ? t('The previous period could not be read, so no change is shown.')
       : undefined
-  const cohortHelp = t(
-    'Accounts created in the range, followed up to now. Activated: a request of theirs came back with usage (tokens or a charge) at any time up to now. Paid: completed a gateway order. Accounts deleted since are left out; the risk tab counts them.'
+  const cohortHelp = joinSentences(
+    t(
+      'Accounts created in the range, followed up to now. Activated: a request of theirs came back with usage (tokens or a charge) at any time up to now. Paid: completed a gateway order. Accounts deleted since are left out; the risk tab counts them.'
+    ),
+    defs.customers
   )
   const funnel = data?.funnel
   const registered = funnel?.registered ?? 0
-  const judgeable = cohortJudgeable(registered, range)
+  // Activation and payment rates, on the same cohort as the verdict.
+  const judged = funnel ? judgedCohort(funnel, data?.daily, range) : undefined
+  const cohort = judged?.cohort ?? { registered: 0, activated: 0, paid: 0 }
+  const judgeable = cohortJudgeable(cohort.registered, range)
   const young = !!range?.hourly && registered > 0
+  const youngSentence =
+    judged && judged.young > 0
+      ? t(
+          '{{count}} sign-ups from the newest day are left out of these rates: too young to show activation or payment.',
+          { count: fmt.num(judged.young) }
+        )
+      : undefined
   const hourly =
     range?.hourly && data?.hourly && data.hourly.length > 0 ? data.hourly : null
   const burst = hourly ? signupBurst(hourly) : null
@@ -192,7 +214,7 @@ export function GrowthTab(props: {
   ]
   const previousHours =
     hourly && range
-      ? alignPrevious(hourly, previous?.hourly, hourSpan(range))
+      ? alignPrevious(hourly, previous?.hourly, rangeSpan(range))
       : []
   let funnelSentence: string | undefined
   if (funnel && young) {
@@ -222,6 +244,8 @@ export function GrowthTab(props: {
             featured: true,
             value: fmt.num(funnel?.registered ?? 0),
             help: cohortHelp,
+            // Sign-ups come from the accounts table, not the logs, so their
+            // counts stand before the logs begin.
             delta: {
               current: funnel?.registered ?? 0,
               previous: previous?.funnel.registered,
@@ -243,16 +267,15 @@ export function GrowthTab(props: {
             label: t('Activated'),
             missing: failed,
             value: fmt.num(funnel?.activated ?? 0),
-            hint: sofar(rate(funnel?.activated ?? 0, registered)),
+            hint: sofar(rate(cohort.activated, cohort.registered)),
             help: young
               ? t(
                   'Accounts created in the range that had a request come back with usage (tokens or a charge). They signed up hours ago, so the rate is not judged until a longer range.'
                 )
-              : cohortHelp,
+              : joinSentences(cohortHelp, youngSentence),
             tone:
-              funnel &&
               judgeable &&
-              funnel.activated / registered < ACTIVATION_WARN
+              cohort.activated / cohort.registered < ACTIVATION_WARN
                 ? 'warning'
                 : 'default',
           },
@@ -260,8 +283,8 @@ export function GrowthTab(props: {
             label: t('Has paid'),
             missing: failed,
             value: fmt.num(funnel?.paid ?? 0),
-            hint: sofar(rate(funnel?.paid ?? 0, registered)),
-            help: cohortHelp,
+            hint: sofar(rate(cohort.paid, cohort.registered)),
+            help: joinSentences(cohortHelp, youngSentence),
           },
           {
             label: t('Paid again'),
@@ -295,25 +318,30 @@ export function GrowthTab(props: {
           <BarSeries
             ariaLabel={t('Sign-ups by hour')}
             series={signupSeries}
-            points={hours.bars(hourly, range.end, (hour, index) => {
-              const before = previousHours[index]
-              return {
-                values: [
-                  hour.paid,
-                  Math.max(hour.activated - hour.paid, 0),
-                  Math.max(hour.registered - hour.activated, 0),
-                ],
-                extra: before
-                  ? [
-                      {
-                        label: t('Same hour, previous period'),
-                        value: fmt.num(before.registered),
-                      },
-                    ]
-                  : undefined,
-                tone: burst?.hour === hour.hour ? 'warning' : undefined,
-              }
-            })}
+            points={hours.bars(
+              hourly,
+              range.end,
+              (hour, index) => {
+                const before = previousHours[index]
+                return {
+                  values: [
+                    hour.paid,
+                    Math.max(hour.activated - hour.paid, 0),
+                    Math.max(hour.registered - hour.activated, 0),
+                  ],
+                  extra: before
+                    ? [
+                        {
+                          label: t('Same hour, previous period'),
+                          value: fmt.num(before.registered),
+                        },
+                      ]
+                    : undefined,
+                  tone: burst?.hour === hour.hour ? 'warning' : undefined,
+                }
+              },
+              logsSince
+            )}
           />
         </Panel>
       ) : (
@@ -337,6 +365,7 @@ export function GrowthTab(props: {
                   title: fmt.day(day.day),
                   values,
                   partial: partialDay(day.day, values),
+                  missing: beforeLogs(day.day, 86400, logsSince),
                 }
               })}
             />
@@ -368,6 +397,12 @@ export function GrowthTab(props: {
           />
         )}
       </Panel>
+      {(data?.first_payment || data?.payer_activity) && (
+        <div className='grid gap-4 lg:grid-cols-2'>
+          <PaymentTimingPanel timing={data?.first_payment} />
+          <PayerActivityPanel activity={data?.payer_activity} />
+        </div>
+      )}
       <div className='grid gap-4 lg:grid-cols-2'>
         <Panel title={t('Funnel by sign-up method')}>
           <SimpleTable
@@ -428,9 +463,12 @@ export function ActivityTab(props: {
     !previous && props.sources?.previous.status === 'error'
       ? t('The previous period could not be read, so no change is shown.')
       : undefined
-  // An older server counts root in every figure and sends no root_quota_usd.
+  // An older server counts root and staff in every figure and sends no
+  // root_quota_usd.
   const customersOnly = data?.root_quota_usd != null
   const rootQuota = data?.root_quota_usd ?? 0
+  const logsSince = data?.logs_since
+  const previousMissing = range ? previousBeforeLogs(range, logsSince) : false
   const activeHelp = t(
     'A user is active when a request of theirs came back with usage (tokens or a charge); a request that came back with none does not count.'
   )
@@ -439,11 +477,10 @@ export function ActivityTab(props: {
   const last = daily.at(-1)
   const hourly =
     range?.hourly && data?.hourly && data.hourly.length > 0 ? data.hourly : null
-  const span = range ? range.end - range.start : 0
   const fullDay = lastFullDay(daily, range)
   const previousFullDay = lastFullDay(
     previous?.daily,
-    range ? { start: range.start - span, end: range.start } : undefined
+    range ? previousWindow(range) : undefined
   )
   const sticky = fullDay ? stickiness(fullDay.dau, fullDay.wau) : null
   const stickyBefore = previousFullDay
@@ -510,6 +547,7 @@ export function ActivityTab(props: {
     title: fmt.day(day.day),
     values: [shown.value(day)],
     partial: partialDay(day.day, [shown.value(day)]),
+    missing: beforeLogs(day.day, 86400, logsSince),
     extra: [
       ...(['usd', 'cny', 'engine'] as const)
         .filter((key) => key !== measure && (key !== 'engine' || totalReady))
@@ -575,11 +613,13 @@ export function ActivityTab(props: {
               current: data?.active_users ?? 0,
               previous: previous?.active_users,
               better: 'up',
+              missing: previousMissing,
             },
             trend: hourly
               ? hourly.map((hour) => ({
                   title: fmt.time(hour.hour),
                   value: hour.active_users,
+                  missing: beforeLogs(hour.hour, 3600, logsSince),
                 }))
               : daily.map((day) => ({
                   title: fmt.day(day.day),
@@ -587,6 +627,7 @@ export function ActivityTab(props: {
                   // Distinct users do not add up hour by hour, so part of a day
                   // is marked, not projected.
                   partial: partialDay(day.day),
+                  missing: beforeLogs(day.day, 86400, logsSince),
                 })),
             trendBars: !!hourly,
             hint: t('DAU {{dau}} · WAU {{wau}} on the last day', {
@@ -599,7 +640,7 @@ export function ActivityTab(props: {
             missing: failed,
             help: customersOnly
               ? t(
-                  'What new-api charged customers, in dollars at the site’s exchange rate: quota dollars that customers pay ¥1 each for, so yuan. Root’s own use is left out and shown below on its own. Below, the yuan, and what gpt-load’s requests for every model were worth at official prices.'
+                  'What new-api charged customers, in dollars at the site’s exchange rate: quota dollars that customers pay ¥1 each for, so yuan. Root’s and staff’s own use is left out and shown below on its own. Below, the yuan, and what gpt-load’s requests for every model were worth at official prices.'
                 )
               : t(
                   'What new-api charged, in dollars at the site’s exchange rate: quota dollars that customers pay ¥1 each for, so yuan. Below, the yuan, and what gpt-load’s requests for every model were worth at official prices.'
@@ -613,7 +654,7 @@ export function ActivityTab(props: {
                   })
                 : fmt.cny(quota),
               rootQuota > 0 &&
-                t('root {{amount}} apart', {
+                t('root and staff {{amount}} apart', {
                   amount: fmt.usd(charge.toUSD(rootQuota)),
                 }),
             ]
@@ -623,6 +664,7 @@ export function ActivityTab(props: {
               current: data?.quota_usd ?? 0,
               previous: previous?.quota_usd,
               better: 'up',
+              missing: previousMissing,
             },
           },
           {
@@ -641,6 +683,7 @@ export function ActivityTab(props: {
               current: data?.requests ?? 0,
               previous: previous?.requests,
               better: 'up',
+              missing: previousMissing,
             },
           },
           {
@@ -671,7 +714,12 @@ export function ActivityTab(props: {
             delta:
               perUser == null
                 ? undefined
-                : { current: perUser, previous: perUserBefore, better: 'up' },
+                : {
+                    current: perUser,
+                    previous: perUserBefore,
+                    better: 'up',
+                    missing: previousMissing,
+                  },
           },
           {
             label: t('Stickiness'),
@@ -691,6 +739,7 @@ export function ActivityTab(props: {
                     previous: stickyBefore ?? undefined,
                     better: 'up',
                     points: true,
+                    missing: previousMissing,
                   },
           },
           {
@@ -713,19 +762,26 @@ export function ActivityTab(props: {
               previous: previous?.top3_share,
               better: 'down',
               points: true,
+              missing: previousMissing,
             },
           },
         ]}
       />
       {hourly && range && data ? (
         <div className='grid gap-4 lg:grid-cols-2'>
-          <HourlyActivePanel rows={hourly} previous={previous} range={range} />
+          <HourlyActivePanel
+            rows={hourly}
+            previous={previous}
+            range={range}
+            logsSince={logsSince}
+          />
           <HourlyConsumptionPanel
             data={data}
             rows={hourly}
             previous={previous}
             range={range}
             totals={spendTotals}
+            logsSince={logsSince}
           />
         </div>
       ) : (
@@ -744,6 +800,7 @@ export function ActivityTab(props: {
                   title: fmt.day(day.day),
                   values: [day.dau],
                   partial: partialDay(day.day),
+                  missing: beforeLogs(day.day, 86400, logsSince),
                   extra: [{ label: t('WAU'), value: fmt.num(day.wau) }],
                 }))}
               />
@@ -858,17 +915,21 @@ export function ActivityTab(props: {
                 title: fmt.day(day.day),
                 values: [official?.cost_usd ?? 0],
                 partial: partialDay(day.day, [official?.cost_usd ?? 0]),
+                // The official cost is the engine's and stands before the
+                // logs; what new-api charged comes from the logs.
                 extra: [
                   claudeCharged
                     ? {
                         label: t('Claude charged'),
-                        value: charge.usd(
-                          charge.toUSD(day.claude_quota_usd ?? 0)
-                        ),
+                        value: beforeLogs(day.day, 86400, logsSince)
+                          ? t('No data')
+                          : charge.usd(charge.toUSD(day.claude_quota_usd ?? 0)),
                       }
                     : {
                         label: t('Charged'),
-                        value: charge.usd(charge.toUSD(day.quota_usd)),
+                        value: beforeLogs(day.day, 86400, logsSince)
+                          ? t('No data')
+                          : charge.usd(charge.toUSD(day.quota_usd)),
                       },
                   {
                     label: t('Claude requests'),
@@ -889,7 +950,12 @@ export function ActivityTab(props: {
       >
         {range?.hourly && <RetentionNeedsRange />}
         {!range?.hourly && !failed && (
-          <RetentionGrid data={data} state={state} end={range?.end} />
+          <RetentionGrid
+            data={data}
+            state={state}
+            end={range?.end}
+            logsSince={logsSince}
+          />
         )}
       </Panel>
       <TopCustomersPanel
@@ -907,11 +973,14 @@ function RetentionGrid(props: {
   state: ViewState
   /** The range's end, unix seconds: a day that had not ended by it is in progress. */
   end?: number
+  /** Where the logs begin: a day before them has no activity to read. */
+  logsSince?: number | null
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const cohorts = props.data?.retention ?? []
   const end = props.end
+  const logsSince = props.logsSince
   if (props.state === 'loading') {
     return (
       <div role='status' aria-label={t('Loading...')} className='grid gap-2'>
@@ -954,6 +1023,16 @@ function RetentionGrid(props: {
                   const value = cohort.days?.[day]
                   const partial =
                     end != null && dayInProgress(cohort.day + day * 86400, end)
+                  if (beforeLogs(cohort.day + day * 86400, 86400, logsSince)) {
+                    return (
+                      <td
+                        key={day}
+                        className='text-muted-foreground p-0.5 text-center'
+                      >
+                        -
+                      </td>
+                    )
+                  }
                   const reading = {
                     share: fmt.pct(value ?? 0),
                     size: fmt.num(cohort.size),

@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
+import { beforeLogs } from '../analysis'
 import { useChargeFormat, useInsightsFormat } from '../lib'
 import { usePartialDays } from '../partial-days'
 import type { FinanceInsights } from '../types'
@@ -135,7 +136,7 @@ function VendorCharge(props: {
     <Panel
       title={t('{{vendor}}: new-api usage', { vendor: props.label })}
       help={t(
-        'What new-api deducted for this vendor’s models at its own ratios, root included, gifted and paid balance alike. Customers pay ¥1 for each new-api dollar, so it is shown in dollars at the site’s USD exchange rate, with the yuan beside it. A model belongs to a vendor by its name: claude-, gpt- and codex-, grok-, gemini-. No account cost is counted for this vendor yet.'
+        'What new-api deducted for this vendor’s models at its own ratios, root and staff included, gifted and paid balance alike. Customers pay ¥1 for each new-api dollar, so it is shown in dollars at the site’s USD exchange rate, with the yuan beside it. A model belongs to a vendor by its name: claude-, gpt- and codex-, grok-, gemini-. No account cost is counted for this vendor yet.'
       )}
     >
       <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
@@ -144,7 +145,7 @@ function VendorCharge(props: {
           dot='bg-primary'
           label={t('new-api charge')}
           help={t(
-            'What new-api deducted for this vendor’s models, root included. In dollars at the site’s exchange rate; the yuan new-api counted is in brackets.'
+            'What new-api deducted for this vendor’s models, root and staff included. In dollars at the site’s exchange rate; the yuan new-api counted is in brackets.'
           )}
           value={
             <ChargeValue usd={fmt.usd(charge.toUSD(usd))} yuan={fmt.cny(usd)} />
@@ -196,6 +197,7 @@ function VendorCharge(props: {
             partial: partialDay(day.day, [
               charge.toUSD(day.vendor_usd?.[props.vendor] ?? 0),
             ]),
+            missing: beforeLogs(day.day, 86400, props.data?.logs_since),
           }))}
         />
       </div>

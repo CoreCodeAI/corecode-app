@@ -2,6 +2,7 @@ package model
 
 import (
 	"cmp"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -51,7 +52,7 @@ type CacheDay struct {
 }
 
 // QualityHour is one hour of the figures CacheDay holds for a day: requests
-// and failures of the selected models, root included, and their streamed
+// and failures of the selected models, customers' only, and their streamed
 // first-response times.
 type QualityHour struct {
 	Hour      int64   `json:"hour"`
@@ -66,14 +67,21 @@ type QualityHour struct {
 // logs. Unlike the performance panel it counts every logged failure,
 // including requests the pool turned away.
 //
-// Hourly is every hour of a range up to insightsHourlySpan, keyed by UTC
-// hour start, and follows the model filter as Daily does. ErrorCategories
-// counts customers' failures only, as the capacity view does; when the
-// filter selects models of one vendor it counts that vendor's, otherwise
-// every model's.
+// Every headline figure, series and model row counts customers only, as the
+// capacity view does, so the two agree on the same range. Staff (administrators
+// and root) are counted apart in StaffRequests and StaffErrors on the same
+// model filter. Hourly is every hour of a range up to insightsHourlySpan,
+// keyed by UTC hour start, and follows the model filter as Daily does.
+// ErrorCategories counts customers' failures only; when the filter selects
+// models of one vendor it counts that vendor's, otherwise every model's, so
+// its sum is Errors for an unfiltered range.
 type QualityInsights struct {
 	Requests int64 `json:"requests"`
 	Errors   int64 `json:"errors"`
+	// StaffRequests and StaffErrors are the staff's requests and failed
+	// requests on the selected models, which no figure above includes.
+	StaffRequests int64 `json:"staff_requests"`
+	StaffErrors   int64 `json:"staff_errors"`
 	// Attempts and AttemptErrors are customers' tries on a channel, retries
 	// included, and the ones that failed, over every model: the rollup keeps
 	// them for the whole site only, so the model filter cannot narrow them.
@@ -88,14 +96,26 @@ type QualityInsights struct {
 	Vendors       []VendorQuality `json:"vendors"`
 	// AllModels is every model's figures whatever the filter selects, for
 	// the quick-select card that clears it. Its Vendor and Models are empty.
-	AllModels       VendorQuality `json:"all_models"`
-	Daily           []CacheDay    `json:"daily"`
-	Hourly          []QualityHour `json:"hourly,omitempty"`
-	StreamEnds      []NamedCount  `json:"stream_ends"`
-	StatusCodes     []NamedCount  `json:"status_codes"`
-	ErrorReasons    []NamedCount  `json:"error_reasons"`
-	ErrorCategories []NamedCount  `json:"error_categories"`
-	Truncated       bool          `json:"truncated"`
+	AllModels  VendorQuality `json:"all_models"`
+	Daily      []CacheDay    `json:"daily"`
+	Hourly     []QualityHour `json:"hourly,omitempty"`
+	StreamEnds []NamedCount  `json:"stream_ends"`
+	// StatusCodes and ErrorReasons count the customers' failed tries, every
+	// try of a request included, so their sums are FailedTries.
+	StatusCodes  []NamedCount `json:"status_codes"`
+	ErrorReasons []NamedCount `json:"error_reasons"`
+	// ErrorReasonsOther counts the failed tries whose reason is not in
+	// ErrorReasons, which keeps the most frequent ones.
+	ErrorReasonsOther int64        `json:"error_reasons_other"`
+	ErrorCategories   []NamedCount `json:"error_categories"`
+	// FailedTries is the customers' failed tries over every model, and
+	// VendorFailures splits them by vendor. Each vendor's reasons and status
+	// codes are its top ones with the rest counted apart, so each list and its
+	// rest add up to the vendor's FailedTries. Neither includes hours stored
+	// under an older version, which StaleHours counts.
+	FailedTries    int64                    `json:"failed_tries"`
+	VendorFailures []VendorFailureBreakdown `json:"vendor_failures"`
+	Truncated      bool                     `json:"truncated"`
 	// Tasks is how the async tasks submitted in the range ended; their
 	// submissions are also requests above, counted as served.
 	Tasks *TaskOutcomes `json:"tasks,omitempty"`
@@ -104,6 +124,18 @@ type QualityInsights struct {
 	// StaleHours counts the range's hours stored under an older rollup
 	// version, which count attempts rather than requests.
 	StaleHours int `json:"stale_hours"`
+}
+
+// VendorFailureBreakdown is one vendor's failed tries by reason and by status
+// code. Reasons and StatusCodes hold the vendor's most frequent entries; the
+// Other fields count the rest.
+type VendorFailureBreakdown struct {
+	Vendor           string       `json:"vendor"`
+	FailedTries      int64        `json:"failed_tries"`
+	Reasons          []NamedCount `json:"reasons"`
+	OtherReasons     int64        `json:"other_reasons"`
+	StatusCodes      []NamedCount `json:"status_codes"`
+	OtherStatusCodes int64        `json:"other_status_codes"`
 }
 
 // QualityRefusals counts requests turned away before any channel was tried,
@@ -189,19 +221,72 @@ func parseLogOther(other string) logOtherFields {
 	return fields
 }
 
-// errorReason shortens an error log to its first clause, for grouping.
+// insightReasonRunes caps a failure reason, ellipsis included.
+const insightReasonRunes = 120
+
+var (
+	// Ids that vary per request: a UUID or a run of letters, digits and
+	// underscores, which is an id only when it holds a digit (normalizeReason).
+	reasonIDPattern = regexp.MustCompile(`\b[0-9A-Za-z]{8}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{12}\b|\b[A-Za-z0-9_]{20,}\b`)
+	// A number of four or more digits standing alone. A dated model name
+	// (claude-sonnet-4-5-20250929) is not one: its digits follow a hyphen.
+	reasonNumberPattern = regexp.MustCompile(`(^|[\s(=:,])\d{4,}([\s),.:]|$)`)
+	// An index in a field path: messages.3.content and tools[0].
+	reasonDotIndexPattern     = regexp.MustCompile(`([A-Za-z_])\.\d+\.`)
+	reasonBracketIndexPattern = regexp.MustCompile(`\[\d+\]`)
+)
+
+// errorReason shortens an error log to the sentence that names the failure,
+// for grouping. The status prefix goes. The cut is at a sentence end, a period
+// followed by a space or the end, or a newline, so a model name with dots
+// (gpt-image-2.5) and a field path (messages.3.content) survive. Ids and
+// numbers that vary per request are replaced by placeholders, so they do not
+// make a reason of their own, and the text is capped at insightReasonRunes
+// runes with an ellipsis.
 func errorReason(content string) string {
 	reason := content
 	if _, rest, ok := strings.Cut(content, ", "); ok && strings.HasPrefix(content, "status_code=") {
 		reason = rest
 	}
-	if cut := strings.IndexAny(reason, ".\n"); cut > 0 {
-		reason = reason[:cut]
+	return capReason(normalizeReason(cutSentence(reason)))
+}
+
+// cutSentence keeps the text up to its first sentence end.
+func cutSentence(text string) string {
+	for i := 0; i < len(text); i++ {
+		switch {
+		case text[i] == '\n' && i > 0:
+			return text[:i]
+		case text[i] == '.' && i > 0 && (i+1 == len(text) || text[i+1] == ' '):
+			return text[:i]
+		}
 	}
-	if len(reason) > 80 {
-		reason = reason[:80]
+	return text
+}
+
+// normalizeReason replaces the parts of a reason that vary per request.
+func normalizeReason(reason string) string {
+	reason = reasonIDPattern.ReplaceAllStringFunc(reason, func(id string) string {
+		if strings.ContainsAny(id, "0123456789") {
+			return "<id>"
+		}
+		return id
+	})
+	// Two passes, so that two numbers separated by one space both go.
+	for range 2 {
+		reason = reasonNumberPattern.ReplaceAllString(reason, "${1}<n>${2}")
 	}
-	return reason
+	reason = reasonDotIndexPattern.ReplaceAllString(reason, "${1}.<n>.")
+	return reasonBracketIndexPattern.ReplaceAllString(reason, "[<n>]")
+}
+
+// capReason cuts a reason to insightReasonRunes runes, the last one an ellipsis.
+func capReason(reason string) string {
+	runes := []rune(reason)
+	if len(runes) <= insightReasonRunes {
+		return reason
+	}
+	return string(runes[:insightReasonRunes-1]) + "…"
 }
 
 // QualityModelFilter limits the headline figures and the daily series to the
@@ -268,7 +353,8 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	reasons := make(map[string]int64)
 	categories := make(map[string]int64)
 	allTTFT := histogram{}
-	var cacheRead, inputTotal, attempts, attemptErrors int64
+	failures := make(map[string]*vendorFailureBucket)
+	var cacheRead, inputTotal, attempts, attemptErrors, reasonsOther int64
 	for _, hour := range hours {
 		result.Truncated = result.Truncated || hour.summary.Truncated
 		attempts += hour.summary.Attempts
@@ -276,6 +362,26 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 		mergeCounts(streamEnds, hour.summary.StreamEnds)
 		mergeCounts(statusCodes, hour.summary.StatusCodes)
 		mergeCounts(reasons, hour.summary.ErrorReasons)
+		reasonsOther += hour.summary.ErrorReasonsOther
+		for name, staff := range hour.summary.StaffModels {
+			if selected(name) {
+				result.StaffRequests += staff.Requests
+				result.StaffErrors += staff.Errors
+			}
+		}
+		for name, found := range hour.summary.VendorFailures {
+			bucket := failures[name]
+			if bucket == nil {
+				bucket = &vendorFailureBucket{reasons: make(map[string]int64), statuses: make(map[string]int64)}
+				failures[name] = bucket
+			}
+			bucket.tries += found.Tries
+			mergeCounts(bucket.reasons, found.Reasons)
+			bucket.reasonsOther += found.ReasonsOther
+			mergeCounts(bucket.statuses, found.StatusCodes)
+			bucket.statusOther += found.StatusOther
+			result.FailedTries += found.Tries
+		}
 		refusals.NoChannel += hour.summary.Categories[ErrorNoChannel]
 		// An hour without customers' requests holds no vendor split and no
 		// categories either.
@@ -384,14 +490,19 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	}
 	slices.SortFunc(result.Daily, func(a, b CacheDay) int { return cmp.Compare(a.Day, b.Day) })
 	result.StreamEnds = sortedCounts(streamEnds)
+	result.VendorFailures = vendorFailureBreakdowns(failures)
 	if stale == 0 {
 		result.Attempts, result.AttemptErrors = &attempts, &attemptErrors
 	}
 	result.StatusCodes = sortedCounts(statusCodes)
 	result.ErrorReasons = sortedCounts(reasons)
 	if len(result.ErrorReasons) > 15 {
+		for _, rest := range result.ErrorReasons[15:] {
+			reasonsOther += rest.Count
+		}
 		result.ErrorReasons = result.ErrorReasons[:15]
 	}
+	result.ErrorReasonsOther = reasonsOther
 	if refusals.RiskGateStages, refusals.RiskGate, err = readRiskGateBlocks(r); err != nil {
 		return nil, err
 	}
@@ -400,6 +511,41 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 		return nil, err
 	}
 	return result, nil
+}
+
+// qualityVendorTopN is how many reasons and status codes the quality view
+// names for each vendor; the rest are counted apart.
+const qualityVendorTopN = 10
+
+// vendorFailureBucket is one vendor's failed tries merged across the hours.
+type vendorFailureBucket struct {
+	tries        int64
+	reasons      map[string]int64
+	reasonsOther int64
+	statuses     map[string]int64
+	statusOther  int64
+}
+
+// vendorFailureBreakdowns lists each vendor's failed tries, the most failing
+// vendor first. Entries past the top qualityVendorTopN join the Other counts.
+func vendorFailureBreakdowns(buckets map[string]*vendorFailureBucket) []VendorFailureBreakdown {
+	list := make([]VendorFailureBreakdown, 0, len(buckets))
+	for name, bucket := range buckets {
+		reasons, reasonsRest := trimTop(bucket.reasons, qualityVendorTopN)
+		statuses, statusesRest := trimTop(bucket.statuses, qualityVendorTopN)
+		list = append(list, VendorFailureBreakdown{
+			Vendor:           name,
+			FailedTries:      bucket.tries,
+			Reasons:          sortedCounts(reasons),
+			OtherReasons:     bucket.reasonsOther + reasonsRest,
+			StatusCodes:      sortedCounts(statuses),
+			OtherStatusCodes: bucket.statusOther + statusesRest,
+		})
+	}
+	slices.SortFunc(list, func(a, b VendorFailureBreakdown) int {
+		return cmp.Or(cmp.Compare(b.FailedTries, a.FailedTries), cmp.Compare(a.Vendor, b.Vendor))
+	})
+	return list
 }
 
 func statusCodeName(code int) string {

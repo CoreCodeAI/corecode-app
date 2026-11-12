@@ -25,17 +25,19 @@ import { cn } from '@/lib/utils'
 
 import { isOpenHour } from '../analysis'
 import {
-  balanceRunway,
+  bucketBeforeLogs,
   financeHours,
   financeRange,
   ordersComparable,
   owedNow,
   RUNWAY_WARN_DAYS,
+  runwayOf,
   signed,
 } from '../finance-analysis'
 import {
   DEBT_ALERT_USD,
   joinSentences,
+  previousBeforeLogs,
   TONES,
   useChargeFormat,
   useInsightsDefinitions,
@@ -57,8 +59,9 @@ import {
 
 /**
  * new-api's credit, in yuan: customers pay ¥1 for each quota dollar, so
- * the quota dollars the server reports are yuan. Root's own requests are
- * internal use, counted with everyone's and as given: nobody pays for them.
+ * the quota dollars the server reports are yuan. Root's and staff's own
+ * requests are internal use, counted with everyone's and as given: nobody
+ * pays for them.
  */
 function creditTotals(data: FinanceInsights | undefined) {
   const root = data?.root_consumption_usd ?? 0
@@ -72,8 +75,8 @@ function creditTotals(data: FinanceInsights | undefined) {
     paid,
     gifted,
     root,
-    // Customers on both sides: earned revenue leaves root out, so root's
-    // internal use stays out of the yuan it is divided by.
+    // Customers on both sides: earned revenue leaves root and staff out, so
+    // their internal use stays out of the yuan it is divided by.
     earnedPerYuan: customers > 0 ? earned / customers : 0,
     paidPerYuan: paid > 0 ? earned / paid : 0,
     cashPerYuan: customers > 0 ? (data?.revenue ?? 0) / customers : 0,
@@ -108,6 +111,10 @@ export function FinanceSummary(props: {
   const dollars = (yuan: number) => `≈ ${fmt.usd(charge.toUSD(yuan))}`
   const range = financeRange(data, props.range)
   const hours = financeHours(data, range)
+  const logsSince = data?.logs_since
+  // Before the logs begin a bucket has no data: drawn as a gap, never zero.
+  // A previous period wholly before them has nothing to compare with.
+  const noPrevious = !!data && previousBeforeLogs(range, logsSince)
 
   // A day split at the viewer's midnight is two partial days on a short
   // range: there the cash trend reads by the hour, the open one marked.
@@ -117,11 +124,13 @@ export function FinanceSummary(props: {
           ? t('{{time}} (in progress)', { time: fmt.time(hour.hour) })
           : fmt.time(hour.hour),
         value: hour.topup + hour.subscription,
+        missing: bucketBeforeLogs(hour.hour, 'hour', logsSince),
       }))
     : (data?.daily ?? []).map((day) => ({
         title: fmt.day(day.day),
         value: day.topup + day.subscription,
         partial: partialDay(day.day, [day.topup + day.subscription]),
+        missing: bucketBeforeLogs(day.day, 'day', logsSince),
       }))
 
   // Over a handful of orders a percentage is noise: the change reads as an
@@ -137,21 +146,25 @@ export function FinanceSummary(props: {
     })
   }
 
-  const runway = balanceRunway(data, range.days)
+  const runway = runwayOf(data, range)
   let runwayNote: string | undefined
-  if (runway != null) {
+  if (data && runway.days != null) {
     runwayNote = t(
-      'Covers {{days}} days of customers’ paid use at this range’s pace.',
-      { days: fmt.num(Math.round(runway)) }
+      'Paid balances and paid plans’ quota cover {{days}} days of customers’ paid use at this range’s pace.',
+      { days: fmt.num(Math.round(runway.days)) }
     )
-  } else if (data && data.liability_usd > 0) {
-    runwayNote = t('No paid use in this range to measure a runway against.')
+  } else if (data && runway.gap === 'no_use') {
+    if (data.liability_usd > 0) {
+      runwayNote = t('No paid use in this range to measure a runway against.')
+    }
+  } else if (data) {
+    runwayNote = t('Runway: -')
   }
 
   let balanceTone: Tone = 'default'
   if ((data?.debt_usd ?? 0) < DEBT_ALERT_USD) {
     balanceTone = 'danger'
-  } else if (runway != null && runway > RUNWAY_WARN_DAYS) {
+  } else if (runway.days != null && runway.days > RUNWAY_WARN_DAYS) {
     balanceTone = 'warning'
   }
 
@@ -187,6 +200,7 @@ export function FinanceSummary(props: {
                       current: data?.revenue ?? 0,
                       previous: previous?.revenue,
                       better: 'up',
+                      missing: noPrevious,
                     }
               }
               sub={revenueNote}
@@ -213,6 +227,7 @@ export function FinanceSummary(props: {
                 current: data?.recognized_revenue ?? 0,
                 previous: previous?.recognized_revenue,
                 better: 'up',
+                missing: noPrevious,
               }}
               trend={
                 hours
@@ -223,6 +238,7 @@ export function FinanceSummary(props: {
                       // A plan earns by the hour and a wallet by use, so part
                       // of a day is marked, not projected from requests.
                       partial: partialDay(day.day),
+                      missing: bucketBeforeLogs(day.day, 'day', logsSince),
                     }))
               }
               trendFormat={fmt.cny}
@@ -256,7 +272,7 @@ export function FinanceSummary(props: {
               help={joinSentences(
                 defs.listCharge,
                 t(
-                  'Every request new-api charged in the range at list price, root’s internal use included. Paid is what customers’ payments cover; gifted is given plans and the unpaid share of each wallet; root’s is internal use, which nobody pays for.'
+                  'Every request new-api charged in the range at list price, root and staff’s internal use included. Paid is what customers’ payments cover; gifted is given plans and the unpaid share of each wallet; the root and staff part is internal use, which nobody pays for.'
                 )
               )}
               value={fmt.cny(credit.consumed)}
@@ -265,11 +281,12 @@ export function FinanceSummary(props: {
                 current: credit.consumed,
                 previous: before?.consumed,
                 better: 'neutral',
+                missing: noPrevious,
               }}
               parts={[
                 { label: t('Paid part'), value: credit.paid },
                 { label: t('Gifted part'), value: credit.gifted },
-                { label: t('Root (internal)'), value: credit.root },
+                { label: t('Root and staff (internal)'), value: credit.root },
               ]}
             />
             <Stat
@@ -277,13 +294,14 @@ export function FinanceSummary(props: {
               missing={missing}
               label={t('Earned per ¥1 consumed')}
               help={t(
-                'Revenue earned divided by customers’ consumption, root’s internal use left out on both sides: what each yuan customers used earned. Paid use divides by the paid part only: the price customers actually paid. Cash basis divides the revenue paid in the range instead, which swings with when customers pay.'
+                'Revenue earned divided by customers’ consumption, root and staff’s internal use left out on both sides: what each yuan customers used earned. Paid use divides by the paid part only: the price customers actually paid. Cash basis divides the revenue paid in the range instead, which swings with when customers pay.'
               )}
               value={fmt.cny(credit.earnedPerYuan)}
               delta={{
                 current: credit.earnedPerYuan,
                 previous: before?.earnedPerYuan,
                 better: 'up',
+                missing: noPrevious,
               }}
               hint={t('Paid use {{paid}} · cash basis {{cash}}', {
                 paid: fmt.cny(credit.paidPerYuan),
@@ -296,7 +314,7 @@ export function FinanceSummary(props: {
               label={t('Balances owed')}
               help={joinSentences(
                 t(
-                  'Credit customers hold now and can still spend, in yuan. Deferred revenue is what they paid for it at each wallet’s price, money taken but not yet earned; the rest was given. Root’s balance is internal and not counted. The runway is the balance over customers’ paid use per day in this range. Red when debt passes the alert line; amber when the balance covers more than 60 days of paid use, money owed back in use or refunds that the current pace takes over two months to earn.'
+                  'Credit customers hold now and can still spend, in yuan. Deferred revenue is what they paid for it at each wallet’s price, money taken but not yet earned; the rest was given. Balances of root and staff are internal and not counted. The runway is paid balances and paid plans’ quota left, over customers’ paid use per day in this range, so both sides count the same money. Under three days of range, or a server that does not send what it needs, it shows a dash. Red when debt passes the alert line; amber when the balance covers more than 60 days of paid use, money owed back in use or refunds that the current pace takes over two months to earn.'
                 ),
                 owed &&
                   t(

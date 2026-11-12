@@ -14,10 +14,11 @@ import (
 // times out, writes a refund log and no error log, so the request logs count
 // it as served. Only the tasks table knows how it ended and when.
 
+// insightTaskMaxRows bounds the tasks one view reads; the newest submitted
+// are kept and the outcome says it was cut. Tests lower it.
+var insightTaskMaxRows = 50_000
+
 const (
-	// insightTaskMaxRows bounds the tasks one view reads; the earliest
-	// submitted are kept and the outcome says it was cut.
-	insightTaskMaxRows = 50_000
 	// insightTaskStallSeconds is how long after submission a task still
 	// running counts as stalled. The timeout sweep can be off.
 	insightTaskStallSeconds = 30 * 60
@@ -89,13 +90,19 @@ func (t insightTask) modelName() string {
 }
 
 // readInsightTasks reads the tasks submitted in [r.Start, r.End), earliest
-// first, and whether more were left out.
-func readInsightTasks(r InsightsRange) ([]insightTask, bool, error) {
+// first, and whether more were left out. At the cap the newest are kept,
+// since a running or stalled task is the one a reader needs. withModel adds
+// the columns modelName reads; private_data holds the upstream key, so a view
+// that does not name models leaves it unread.
+func readInsightTasks(r InsightsRange, withModel bool) ([]insightTask, bool, error) {
+	columns := "channel_id, status, fail_reason, submit_time, finish_time"
+	if withModel {
+		columns += ", platform, action, properties, private_data"
+	}
 	var tasks []insightTask
-	err := DB.Model(&Task{}).
-		Select("channel_id, platform, action, status, fail_reason, submit_time, finish_time, properties, private_data").
+	err := DB.Model(&Task{}).Select(columns).
 		Where("submit_time >= ? AND submit_time < ?", r.Start, r.End).
-		Order("submit_time").Limit(insightTaskMaxRows + 1).Find(&tasks).Error
+		Order("submit_time DESC, id DESC").Limit(insightTaskMaxRows + 1).Find(&tasks).Error
 	if err != nil {
 		return nil, false, err
 	}
@@ -103,6 +110,7 @@ func readInsightTasks(r InsightsRange) ([]insightTask, bool, error) {
 	if truncated {
 		tasks = tasks[:insightTaskMaxRows]
 	}
+	slices.Reverse(tasks)
 	return tasks, truncated, nil
 }
 
@@ -167,7 +175,7 @@ func sortTaskOutcomes(list []TaskOutcome) {
 // GetTaskOutcomes counts the tasks submitted in the range by model and by
 // channel.
 func GetTaskOutcomes(r InsightsRange) (*TaskOutcomes, error) {
-	tasks, truncated, err := readInsightTasks(r)
+	tasks, truncated, err := readInsightTasks(r, true)
 	if err != nil {
 		return nil, err
 	}

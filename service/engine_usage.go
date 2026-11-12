@@ -7,10 +7,13 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // EngineClaudeModelPrefix limits the engine's official-price cost to Claude
@@ -82,9 +85,19 @@ func fetchEngineDailyCost(start, end, offset int64, prefix string) EngineDailyCo
 	if prefix != "" {
 		query.Set("model_prefix", prefix)
 	}
+	path := "/usage/daily?" + query.Encode()
+	return cachedEngineDailyCost(base+path, func() EngineDailyCost {
+		return readEngineDailyCost(base, key, path)
+	})
+}
+
+// readEngineDailyCost is one uncached read of the engine's daily usage at path,
+// priced as the engine priced it.
+func readEngineDailyCost(base, key, path string) EngineDailyCost {
+	result := EngineDailyCost{Configured: true, Daily: []EngineCostDay{}}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	usage, err := engineGet[engineUsageDaily](ctx, base, key, "/usage/daily?"+query.Encode())
+	usage, err := engineGet[engineUsageDaily](ctx, base, key, path)
 	if err != nil {
 		result.Error = err.Error()
 		return result
@@ -105,6 +118,52 @@ func fetchEngineDailyCost(start, end, offset int64, prefix string) EngineDailyCo
 	}
 	result.CostUSD = nanoToUSD(&total)
 	return result
+}
+
+// engineUsageTTL is how long a read of the engine's daily usage is shared. An
+// overview load asks for the same range from finance and activity, and both
+// for the earlier period too, so the same read repeats within one load.
+var engineUsageTTL = 2 * time.Minute
+
+var engineUsageCache struct {
+	mu      sync.Mutex
+	entries map[string]cachedEngineCost
+	flight  singleflight.Group
+}
+
+type cachedEngineCost struct {
+	cost   EngineDailyCost
+	readAt time.Time
+}
+
+// cachedEngineDailyCost returns the read for key, shared for engineUsageTTL.
+// A read that failed is not kept, so the next request asks the engine again.
+// The Daily slices of a shared read must not be modified.
+func cachedEngineDailyCost(key string, read func() EngineDailyCost) EngineDailyCost {
+	engineUsageCache.mu.Lock()
+	if entry, ok := engineUsageCache.entries[key]; ok && time.Since(entry.readAt) < engineUsageTTL {
+		engineUsageCache.mu.Unlock()
+		return entry.cost
+	}
+	engineUsageCache.mu.Unlock()
+	value, _, _ := engineUsageCache.flight.Do(key, func() (any, error) {
+		cost := read()
+		if cost.Error == "" {
+			engineUsageCache.mu.Lock()
+			if engineUsageCache.entries == nil {
+				engineUsageCache.entries = make(map[string]cachedEngineCost)
+			}
+			for stored, entry := range engineUsageCache.entries {
+				if time.Since(entry.readAt) >= engineUsageTTL {
+					delete(engineUsageCache.entries, stored)
+				}
+			}
+			engineUsageCache.entries[key] = cachedEngineCost{cost: cost, readAt: time.Now()}
+			engineUsageCache.mu.Unlock()
+		}
+		return cost, nil
+	})
+	return value.(EngineDailyCost)
 }
 
 func nanoToUSD(nano *big.Int) float64 {

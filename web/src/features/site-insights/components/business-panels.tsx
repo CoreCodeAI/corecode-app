@@ -38,6 +38,7 @@ import {
   TONES,
   useChargeFormat,
   useInsightsDefinitions,
+  rangeHours,
   useInsightsFormat,
   useVendorName,
   type InsightsRangeInfo,
@@ -215,13 +216,13 @@ export function VendorMarginPanel(props: {
         upstream
           ? joinSentences(
               t(
-                'Revenue is the revenue earned in the range (what customers’ use and running plans earned), shared out by each vendor’s part of customers’ list-price consumption; root’s own use is left out. Revenue per list-price dollar is not known by model, so each vendor earns the site’s average: an estimate. Cost is the pool’s accounts at their monthly price, today’s pool over the range’s days at the site’s exchange rate, plus what the billed upstreams charged for the vendor’s models. Image and video models have no pool accounts: their cost is the supplier’s bill. Accounts with no recorded price or no vendor count as free and are flagged. Payment fees are not counted.'
+                'Revenue is the revenue earned in the range (what customers’ use and running plans earned), shared out by each vendor’s part of customers’ list-price consumption; root’s and staff’s own use is left out. Revenue per list-price dollar is not known by model, so each vendor earns the site’s average: an estimate. Cost is the pool’s accounts at their monthly price, today’s pool over the range’s days at the site’s exchange rate, plus what the billed upstreams charged for the vendor’s models. Image and video models have no pool accounts: their cost is the supplier’s bill. Accounts with no recorded price or no vendor count as free and are flagged. Payment fees are not counted.'
               ),
               defs.upstreamBill,
               defs.fee
             )
           : t(
-              'Revenue is the revenue earned in the range (what customers’ use and running plans earned), shared out by each vendor’s part of customers’ list-price consumption; root’s own use is left out. Revenue per list-price dollar is not known by model, so each vendor earns the site’s average: an estimate. Cost is the monthly price of every account in the pool now, over the range’s days, at the site’s exchange rate; accounts without a recorded price count as free. Payment fees are not counted.'
+              'Revenue is the revenue earned in the range (what customers’ use and running plans earned), shared out by each vendor’s part of customers’ list-price consumption; root’s and staff’s own use is left out. Revenue per list-price dollar is not known by model, so each vendor earns the site’s average: an estimate. Cost is the monthly price of every account in the pool now, over the range’s days, at the site’s exchange rate; accounts without a recorded price count as free. Payment fees are not counted.'
             )
       }
     >
@@ -504,7 +505,7 @@ export function ReferralPanel(props: {
         {range && (
           <StaleNote
             staleHours={data?.stale_hours}
-            rangeHours={(range.end - range.start) / 3600}
+            rangeHours={rangeHours(range)}
           />
         )}
         <MetricGrid

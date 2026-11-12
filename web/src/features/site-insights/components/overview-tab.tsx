@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQueries } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
+import { beforeLogs } from '../analysis'
 import type { InsightsView } from '../api'
 import {
   ATTENTION,
@@ -27,6 +28,8 @@ import {
   failureTone,
   joinSentences,
   OVERVIEW_VIEWS,
+  previousBeforeLogs,
+  rangeHours,
   SMALL_SAMPLE,
   sourceState,
   useChargeFormat,
@@ -149,6 +152,10 @@ export function OverviewTab(props: {
   const charge = useChargeFormat(finance)
   const margin = marginCard(t, fmt, finance, charge.rate)
   const range = props.range
+  // The logs of the request views begin here; the capacity view is the one
+  // the overview already reads for its figures.
+  const logsSince = capacity?.logs_since
+  const previousMissing = range ? previousBeforeLogs(range, logsSince) : false
 
   const state = (view: (typeof OVERVIEW_VIEWS)[number]) =>
     sourceState(current[OVERVIEW_VIEWS.indexOf(view)])
@@ -289,9 +296,11 @@ export function OverviewTab(props: {
       signals.push({
         key: 'capacity-limit',
         tone: 'warning',
-        title: t('Per-user limits turned away {{count}} requests', {
-          count: capacity.limit_rejection_total,
-        }),
+        // The same unit as the capacity tab: refused attempts, not requests.
+        title: t(
+          '{{count}} attempts refused by per-user limits, retries included.',
+          { count: fmt.num(capacity.limit_rejection_total) }
+        ),
         detail: top
           ? t('Most: {{user}} #{{id}}, {{count}} times', {
               user: top.username,
@@ -429,6 +438,7 @@ export function OverviewTab(props: {
       title: fmt.day(day.day),
       value: day.requests,
       partial: qualityDay(day.day, [day.requests]),
+      missing: beforeLogs(day.day, 86400, logsSince),
     })
   )
   let signupTrend: TrendPoint[] | undefined
@@ -444,8 +454,13 @@ export function OverviewTab(props: {
       : undefined
     const requestHours: { hour: number; requests: number }[] | undefined =
       quality?.hourly ?? capacity?.hourly
+    // An hour before the logs has no data: drawn missing, not as zero.
     requestsTrend = requestHours
-      ? hourPoints(closedTrend(requestHours, end, (row) => row.requests))
+      ? closedTrend(requestHours, end, (row) => row.requests).map((point) => ({
+          title: hours.title(point.hour),
+          value: point.value,
+          missing: beforeLogs(point.hour, 3600, logsSince),
+        }))
       : undefined
   }
   if (risk?.signup_series) {
@@ -464,7 +479,7 @@ export function OverviewTab(props: {
   const qualitySampled = (quality?.requests ?? 0) >= SMALL_SAMPLE
   const once = countsRequestsOnce(quality)
   const five = pool?.five_hour_estimate
-  const rangeHours = range ? (range.end - range.start) / 3600 : 0
+  const hoursInRange = range ? rangeHours(range) : 0
   const staleHours = Math.max(
     capacity?.stale_hours ?? 0,
     quality?.stale_hours ?? 0,
@@ -505,6 +520,7 @@ export function OverviewTab(props: {
                 : undefined,
             better: 'down',
             points: true,
+            missing: previousMissing,
           }
         : undefined,
     tone: qualitySampled ? failureTone(quality?.error_rate ?? 0) : 'default',
@@ -522,6 +538,7 @@ export function OverviewTab(props: {
           current: poolPeak.peak,
           previous: previousCapacity?.pool_peak,
           better: 'neutral',
+          missing: previousMissing,
         },
         hint: t('{{slots}} slots now · site {{peak}}', {
           slots: fmt.num(poolPeak.slots),
@@ -538,6 +555,7 @@ export function OverviewTab(props: {
               current: capacity.peak_concurrency,
               previous: previousCapacity?.peak_concurrency,
               better: 'neutral',
+              missing: previousMissing,
             }
           : undefined,
         hint: capacity ? fmt.time(capacity.peak_at) : undefined,
@@ -588,6 +606,7 @@ export function OverviewTab(props: {
                       ? previousQuality?.requests
                       : undefined,
                   better: 'neutral',
+                  missing: previousMissing,
                 }
               : undefined,
             trend: requestsTrend,
@@ -618,7 +637,7 @@ export function OverviewTab(props: {
           },
         ]}
       />
-      <StaleNote staleHours={staleHours} rangeHours={rangeHours} />
+      <StaleNote staleHours={staleHours} rangeHours={hoursInRange} />
 
       <Panel
         title={t('Needs attention')}
@@ -669,6 +688,7 @@ export function OverviewTab(props: {
                   current: activity.active_users,
                   previous: previousActivity?.active_users,
                   better: 'up',
+                  missing: previousMissing,
                 }
               : undefined,
           },

@@ -41,6 +41,7 @@ import {
   TONES,
   useInsightsDefinitions,
   useInsightsFormat,
+  useTabLabel,
   useVendorName,
   type InsightsRangeInfo,
   type InsightsSources,
@@ -50,6 +51,8 @@ import { usePartialDays } from '../partial-days'
 import {
   abnormalStreams,
   attemptsOf,
+  clientErrorsOf,
+  errorsOf,
   excessFailures,
   failingTaskModels,
   failingWindow,
@@ -59,6 +62,8 @@ import {
   hourFlags,
   mediaModels,
   modelChange,
+  NEARLY_FAILED,
+  nearlyFailingModels,
   rankByExcess,
   serviceFailureRate,
   siteFailureRate,
@@ -70,13 +75,20 @@ import type { BusinessInsights, QualityInsights, VendorQuality } from '../types'
 import { useQualityVerdict } from '../verdicts'
 import { ModelMap } from './advanced-charts'
 import { ClientsPanel } from './business-panels'
-import { Findings, StaleNote, type Finding } from './insight-kit'
+import {
+  Findings,
+  SampleNote,
+  StaleNote,
+  TabLink,
+  type Finding,
+} from './insight-kit'
 import {
   DailyFailurePanel,
   FailureDriversPanel,
   FailureOwnersPanel,
   QualityHourlyPanels,
   UnplacedModels,
+  VendorFailuresPanel,
 } from './quality-insights'
 import { RefusalsPanel, TaskOutcomesPanel } from './quality-tasks'
 import {
@@ -368,6 +380,24 @@ export function QualityTab(props: {
     t('Other reasons')
   )
   const findings = useQualityFindings(data, previous, siteRate, range?.end)
+  const tabLabel = useTabLabel()
+  // Requests, failures and the breakdowns count customers only from the
+  // server's release that sends the staff figures apart.
+  const customersOnly = data?.staff_requests != null
+  const mediaVendor = data?.vendors?.find((vendor) => vendor.vendor === 'media')
+  const clientErrors = data ? clientErrorsOf(data) : 0
+  // The breakdowns count failed tries, not failed requests: the status codes
+  // and reasons sum to the tries, which the server sends as failed_tries.
+  const tries = data
+    ? (data.failed_tries ??
+      (data.status_codes ?? []).reduce((sum, item) => sum + item.count, 0))
+    : 0
+  const triesLine = data
+    ? t('{{tries}} failed tries for {{errors}} failed requests.', {
+        tries: fmt.num(tries),
+        errors: fmt.num(data.errors),
+      })
+    : undefined
   const requestTrend = hourly
     ? hourly.map((row) => ({
         title:
@@ -438,12 +468,10 @@ export function QualityTab(props: {
             featured: true,
             missing,
             value: fmt.num(data?.requests ?? 0),
-            help: corrected
-              ? joinSentences(definitions.requests, definitions.everyone)
-              : joinSentences(
-                  definitions.requestsAsAttempts,
-                  definitions.everyone
-                ),
+            help: joinSentences(
+              corrected ? definitions.requests : definitions.requestsAsAttempts,
+              customersOnly ? definitions.customers : definitions.everyone
+            ),
             delta: {
               current: data?.requests ?? 0,
               previous: previous?.requests,
@@ -470,7 +498,10 @@ export function QualityTab(props: {
                 'A stream cut short after it started, and an image or video task that failed after it was accepted, count as successes here; see Streams cut short and the tasks panel.'
               ),
               t(
-                'Colored above 2%; red above 5%, from 100 requests. Root’s requests count.'
+                'Colored above 2%; red above 5%, from 100 requests. Root and staff tests are left out.'
+              ),
+              t(
+                'Per-user limit refusals never reach the request logs, so this rate leaves them out.'
               )
             ),
             delta: {
@@ -493,13 +524,21 @@ export function QualityTab(props: {
                 {
                   label: t('Service failure rate'),
                   value: fmt.pct(serviceRate),
-                  help: corrected
-                    ? t(
-                        'The failure rate without customers’ invalid requests (4xx): what the service itself failed. The engine’s limits and budgets, a request no channel served, and a key or wallet the upstream refused all count as the service’s.'
-                      )
-                    : t(
-                        'The failure rate without customers’ invalid requests (4xx). This server still files a key or wallet the upstream refused (401, 402, 403) as the customer’s, so this reads low until it counts the corrected way.'
-                      ),
+                  help: joinSentences(
+                    corrected
+                      ? t(
+                          'The failure rate without customers’ invalid requests (4xx): what the service itself failed. The engine’s limits and budgets, a request no channel served, and a key or wallet the upstream refused all count as the service’s.'
+                        )
+                      : t(
+                          'The failure rate without customers’ invalid requests (4xx). This server still files a key or wallet the upstream refused (401, 402, 403) as the customer’s, so this reads low until it counts the corrected way.'
+                        ),
+                    t(
+                      'An upstream’s 400 is a client error here, not a service failure.'
+                    )
+                  ),
+                  hint: t('Leaves out {{count}} client errors (4xx).', {
+                    count: fmt.num(clientErrors),
+                  }),
                   delta: {
                     current: serviceRate,
                     previous: previousServiceRate ?? undefined,
@@ -557,7 +596,7 @@ export function QualityTab(props: {
                   label: t('Streams cut short'),
                   value: fmt.pct(streams.share),
                   help: t(
-                    'Streams that started and then broke off on the service’s side (a timeout, a read error, a crash), over every stream of every model, root included. The client leaving is counted apart and is not a failure. These count as successes in the failure rate.'
+                    'Streams that started and then broke off on the service’s side (a timeout, a read error, a crash), over every customer’s stream of every model; root and staff are left out. The client leaving is counted apart and is not a failure. These count as successes in the failure rate.'
                   ),
                   hint: t(
                     '{{count}} of {{total}}; {{gone}} more left by the client',
@@ -581,6 +620,25 @@ export function QualityTab(props: {
               ]),
         ]}
       />
+      {data && (
+        <div className='grid gap-1'>
+          {data.staff_requests != null && (
+            <SampleNote>
+              {t(
+                'Root and staff tests: {{requests}} requests, {{failed}} failed, left out of the figures above.',
+                {
+                  requests: fmt.num(data.staff_requests),
+                  failed: fmt.num(data.staff_errors ?? 0),
+                }
+              )}
+            </SampleNote>
+          )}
+          <SampleNote>
+            {t('Per-user limit refusals are counted on the capacity tab:')}{' '}
+            <TabLink tab='capacity'>{tabLabel('capacity')} →</TabLink>
+          </SampleNote>
+        </div>
+      )}
       <TruncatedNotice show={!!data?.truncated} />
       {findings.length > 0 && (
         <Panel title={t('Where to look')}>
@@ -601,7 +659,11 @@ export function QualityTab(props: {
       {(data?.tasks || data?.refusals) && (
         <div className='grid gap-4'>
           {data.tasks && (
-            <TaskOutcomesPanel tasks={data.tasks} onOpen={props.onOpen} />
+            <TaskOutcomesPanel
+              tasks={data.tasks}
+              media={mediaVendor}
+              onOpen={props.onOpen}
+            />
           )}
           {data.refusals && (
             <RefusalsPanel refusals={data.refusals} onOpen={props.onOpen} />
@@ -804,7 +866,13 @@ export function QualityTab(props: {
         {!hourly && data && <DailyFailurePanel data={data} />}
       </div>
       <div className='grid gap-4 lg:grid-cols-3'>
-        <Panel title={t('Failures by status code')}>
+        <Panel
+          title={t('Failures by status code')}
+          description={triesLine}
+          help={t(
+            'Each failed try by its HTTP status, customers only. A request retried on another channel counts once for each failed try, so the total is the failed tries, not the failed requests.'
+          )}
+        >
           <Breakdown
             items={data?.status_codes}
             state={stateOf(data?.status_codes)}
@@ -813,8 +881,9 @@ export function QualityTab(props: {
         </Panel>
         <Panel
           title={t('Failure reasons')}
+          description={triesLine}
           help={t(
-            'The most common failure messages over every model. Only the top ones are kept; the rest are summed as other reasons, so each share is of every failure.'
+            'The most common failed-try messages over every model, customers only. Only the top ones are kept; the rest are summed as other reasons. Each share is of the failed tries, not of the failed requests.'
           )}
         >
           <Breakdown
@@ -826,7 +895,7 @@ export function QualityTab(props: {
         <Panel
           title={t('How streams ended')}
           help={t(
-            'Every stream’s ending, root included, over every model. eof, done and handler_stop are normal; client_gone, ping_fail and cancelled are the client leaving.'
+            'Every customer stream’s ending over every model; root and staff are left out. eof, done and handler_stop are normal; client_gone, ping_fail and cancelled are the client leaving.'
           )}
         >
           <Breakdown
@@ -836,6 +905,9 @@ export function QualityTab(props: {
           />
         </Panel>
       </div>
+      {data?.vendor_failures && (
+        <VendorFailuresPanel vendors={data.vendor_failures} />
+      )}
       {props.business || !props.sources?.business ? (
         <ClientsPanel data={props.business} />
       ) : (
@@ -946,7 +1018,44 @@ function useQualityFindings(
       impact: noChannel,
     })
   }
-  for (const row of rankByExcess(data.models, siteRate).slice(0, 3)) {
+  // Models failing nearly every request over a fair sample are named once,
+  // here, whether or not the task table lists them.
+  const nearly = nearlyFailingModels(data.models)
+  if (nearly.length === 1) {
+    const [row] = nearly
+    findings.push({
+      key: `model-${row.model}`,
+      tone: 'danger',
+      title: t('{{model}} fails {{rate}} of its {{count}} requests.', {
+        model: row.model,
+        rate: fmt.pct(row.error_rate),
+        count: fmt.num(row.requests),
+      }),
+      detail: t('Check the channels that serve it.'),
+      tab: 'upstream',
+      impact: errorsOf(row),
+    })
+  } else if (nearly.length > 1) {
+    findings.push({
+      key: 'models-nearly-failed',
+      tone: 'danger',
+      title: t(
+        '{{count}} models failed {{share}} or more of their requests: {{models}}.',
+        {
+          count: fmt.num(nearly.length),
+          share: fmt.pct(NEARLY_FAILED),
+          models: nearly.map((row) => row.model).join(', '),
+        }
+      ),
+      detail: t('Check the channels that serve them.'),
+      tab: 'upstream',
+      impact: nearly.reduce((sum, row) => sum + errorsOf(row), 0),
+    })
+  }
+  const nearlyNames = new Set(nearly.map((row) => row.model))
+  for (const row of rankByExcess(data.models, siteRate)
+    .filter((item) => !nearlyNames.has(item.model))
+    .slice(0, 3)) {
     if (!failsAboveSite(row, siteRate)) continue
     if (failureTone(row.error_rate) === 'default') continue
     findings.push({

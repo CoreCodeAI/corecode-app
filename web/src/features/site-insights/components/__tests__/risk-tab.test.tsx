@@ -23,19 +23,25 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RiskInsights } from '../../types'
 import {
   clusterRisk,
+  exitsOf,
   giftOutcomes,
+  grantedShare,
   hasRepeatBuyers,
+  isHandFunded,
   largestBurst,
   materialDebtors,
   neverUsed,
   neverUsedComparable,
   rankClusters,
   sharedCounts,
+  sharedExitSource,
   signalDelta,
   signupSurges,
   splitExits,
   suspectInviters,
   unpaidSpend,
+  usesGiftPart,
+  withRisk,
   type RiskCluster,
 } from '../risk-analysis'
 import { RiskTab } from '../risk-tab'
@@ -278,6 +284,91 @@ describe('risk analysis', () => {
     expect(giftOutcomes(data)).toEqual({ total: 10, blocked: 5, gifted: 3 })
     expect(suspectInviters(data)).toEqual({ unpaid: 1, blocked: 1 })
   })
+
+  it('splits unpaid spend by source and marks an account funded mostly by hand', () => {
+    const base = { signups: 10, zero_use_accounts: 4 } as RiskInsights
+    const split = {
+      ...base,
+      signup_spenders: 8,
+      unpaid_spenders: 2,
+      unpaid_spend_usd: 10,
+      unpaid_granted_usd: 6,
+      unpaid_redeemed_usd: 1,
+      unpaid_gift_plan_usd: 2,
+      unpaid_signup_gift_usd: 1,
+    } as RiskInsights
+    expect(unpaidSpend(split)?.split).toEqual({
+      granted: 6,
+      redeemed: 1,
+      gift: 2,
+      signupGift: 1,
+    })
+    expect(grantedShare(unpaidSpend(split))).toBe(0.6)
+    // An older server sends no split: the spend reads as before.
+    const older = unpaidSpend({
+      ...base,
+      signup_spenders: 8,
+      unpaid_spenders: 2,
+      unpaid_spend_usd: 10,
+    } as RiskInsights)
+    expect(older?.split).toBeUndefined()
+    expect(grantedShare(older)).toBe(0)
+    const account = {
+      user_id: 5,
+      username: 'a',
+      consumption_usd: 10,
+      gift_plan_usd: 0,
+      granted_usd: 6,
+      signup_method: 'email',
+      inviter: { user_id: 0, username: '' },
+      created_at: 1,
+    }
+    expect(isHandFunded(account)).toBe(true)
+    expect(isHandFunded({ ...account, granted_usd: 5 })).toBe(false)
+    expect(isHandFunded({ ...account, granted_usd: undefined })).toBe(false)
+  })
+
+  it('judges inviters on gift credit once the server sends it', () => {
+    const inviter = { accounts: 3, consumption_usd: 9 }
+    const data = {
+      unpaid_inviters: [
+        { user_id: 1, username: 'a', ...inviter, gift_usd: 0 },
+        { user_id: 2, username: 'b', ...inviter, gift_usd: 4 },
+        { user_id: 3, username: 'c', ...inviter },
+      ],
+    } as RiskInsights
+    // Hand-granted credit alone is not farming; an older row has no gift part to read.
+    expect(suspectInviters(data)).toEqual({ unpaid: 2, blocked: 0 })
+    expect(usesGiftPart(data)).toBe(false)
+    expect(usesGiftPart({ unpaid_signup_gift_usd: 0 } as RiskInsights)).toBe(
+      true
+    )
+  })
+
+  it('lists the server’s shared exits as sent and counts addresses to review as the total less the exits', () => {
+    const exitB = { ...office, ip: '10.0.0.4', shared_exit: true }
+    const exitC = { ...office, ip: '10.0.0.5', shared_exit: true }
+    const data = {
+      shared_ip_total: 80,
+      shared_exits: 30,
+      shared_exit_top: [exitB, exitC],
+    } as RiskInsights
+    expect(sharedExitSource(data)?.shared_ips).toEqual([exitB, exitC])
+    expect(sharedExitSource({} as RiskInsights)).toBeUndefined()
+    expect(exitsOf(data, [farm], [exitB, exitC])).toEqual([exitB, exitC])
+    // An older server keeps exits among shared_ips.
+    expect(exitsOf({} as RiskInsights, [farm, exitB], [])).toEqual([exitB])
+    expect(sharedCounts(data, [farm, office], [exitB, exitC])).toEqual({
+      total: 50,
+      listed: 2,
+      exits: 30,
+      exitsListed: 2,
+    })
+    expect(withRisk([office, farm], 1000).map((c) => c.ip)).toEqual([
+      '10.0.0.2',
+      '10.0.0.1',
+    ])
+  })
 })
 
 describe('risk tab', () => {
@@ -442,5 +533,160 @@ describe('risk tab', () => {
     expect(screen.queryByText('No customer owes money')).toBeNull()
     expect(screen.getAllByText('Could not be read').length).toBeGreaterThan(0)
     expect(screen.queryByText('0')).toBeNull()
+  })
+
+  it('reads unpaid spend by source, says how much an administrator granted, and marks the account funded by hand', () => {
+    const data = {
+      signups: 3,
+      signup_series: [],
+      series_unit: 'hour',
+      peak_signups: { at: 0, count: 0 },
+      signup_methods: [],
+      email_domains: [],
+      alias_emails: 0,
+      off_whitelist: 0,
+      zero_use_accounts: 3,
+      shared_ips: [],
+      debtors: [],
+      signup_spenders: 4,
+      unpaid_spenders: 2,
+      unpaid_spend_usd: 10,
+      unpaid_granted_usd: 8,
+      unpaid_redeemed_usd: 0,
+      unpaid_gift_plan_usd: 1,
+      unpaid_signup_gift_usd: 1,
+      unpaid_spender_top: [
+        {
+          user_id: 31,
+          username: 'granted31',
+          consumption_usd: 6,
+          gift_plan_usd: 0,
+          granted_usd: 6,
+          redeemed_usd: 0,
+          signup_gift_usd: 0,
+          signup_method: 'password',
+          inviter: { user_id: 0, username: '' },
+          created_at: 1200,
+        },
+        {
+          user_id: 32,
+          username: 'gift32',
+          consumption_usd: 4,
+          gift_plan_usd: 1,
+          granted_usd: 2,
+          redeemed_usd: 0,
+          signup_gift_usd: 1,
+          signup_method: 'email',
+          inviter: { user_id: 0, username: '' },
+          created_at: 1300,
+        },
+      ],
+    } as unknown as RiskInsights
+    render(
+      <RiskTab
+        data={data}
+        range={{ start: 1000, end: 1000 + 86400, days: 1, hourly: true }}
+      />
+    )
+    expect(
+      screen.getByText(
+        /Of that, .* was granted by hand, .* came from redemption codes/
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByText('Granted by hand')).toBeInTheDocument()
+    expect(screen.getByText('Redeemed codes')).toBeInTheDocument()
+    expect(screen.getByText('Sign-up and invite gifts')).toBeInTheDocument()
+    // Only the account funded mostly by hand is marked.
+    expect(screen.getAllByText('Credited by an administrator')).toHaveLength(1)
+    expect(screen.getByText('granted31').closest('tr')).toHaveTextContent(
+      'Credited by an administrator'
+    )
+    // Eight of the ten are by hand: information, not a finding.
+    expect(
+      screen.getByText(
+        /of unpaid spend was credit an administrator granted by hand\./
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/unpaid spenders on gift credit/)).toBeNull()
+  })
+
+  it('judges farming on gift credit only, so an inviter whose spenders were hand-funded is not named', () => {
+    const inviter = {
+      user_id: 9,
+      username: 'boss',
+      accounts: 3,
+      consumption_usd: 9,
+    }
+    const data = {
+      signups: 3,
+      signup_series: [],
+      series_unit: 'hour',
+      peak_signups: { at: 0, count: 0 },
+      signup_methods: [],
+      email_domains: [],
+      alias_emails: 0,
+      off_whitelist: 0,
+      zero_use_accounts: 3,
+      shared_ips: [],
+      debtors: [],
+      signup_spenders: 4,
+      unpaid_spenders: 3,
+      unpaid_spend_usd: 9,
+      unpaid_granted_usd: 9,
+      unpaid_redeemed_usd: 0,
+      unpaid_gift_plan_usd: 0,
+      unpaid_signup_gift_usd: 0,
+      unpaid_inviters: [{ ...inviter, gift_usd: 0 }],
+    } as unknown as RiskInsights
+    render(
+      <RiskTab
+        data={data}
+        range={{ start: 1000, end: 1000 + 86400, days: 1, hourly: true }}
+      />
+    )
+    expect(
+      screen.queryByText(/inviters with 3 or more unpaid spenders/)
+    ).toBeNull()
+    expect(
+      screen.getByText(
+        /100% of unpaid spend was credit an administrator granted by hand\./
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('lists shared exits as a table in the server’s order, under the count', () => {
+    const exitB = { ...office, ip: '10.0.0.4', shared_exit: true }
+    const exitC = { ...office, ip: '10.0.0.5', shared_exit: true }
+    const data = {
+      signups: 3,
+      signup_series: [],
+      series_unit: 'hour',
+      peak_signups: { at: 0, count: 0 },
+      signup_methods: [],
+      email_domains: [],
+      alias_emails: 0,
+      off_whitelist: 0,
+      zero_use_accounts: 3,
+      shared_ips: [{ ...farm, shared_exit: false }],
+      shared_ip_total: 3,
+      shared_exits: 2,
+      shared_exit_top: [exitB, exitC],
+      debtors: [],
+    } as unknown as RiskInsights
+    render(
+      <RiskTab
+        data={data}
+        range={{ start: 1000, end: 1000 + 86400, days: 1, hourly: true }}
+      />
+    )
+    expect(
+      screen.getByText('2 shared exits: not counted above')
+    ).toBeInTheDocument()
+    const rows = screen
+      .getAllByText(/^10\.0\.0\.[45]$/)
+      .map((node) => node.textContent)
+    expect(rows).toEqual(['10.0.0.4', '10.0.0.5'])
+    expect(screen.getByText('Address')).toBeInTheDocument()
+    expect(screen.getByText('Reasons')).toBeInTheDocument()
   })
 })

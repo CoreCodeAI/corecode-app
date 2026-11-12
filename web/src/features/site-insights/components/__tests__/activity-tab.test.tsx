@@ -218,7 +218,7 @@ describe('customers only, Claude against Claude, and the open day', () => {
     expect(bars[1].getAttribute('aria-label')).toMatch(
       /Claude charged \$1\.00 \(¥8/
     )
-    expect(screen.getByText(/root \$2\.00 apart/)).toBeInTheDocument()
+    expect(screen.getByText(/root and staff \$2\.00 apart/)).toBeInTheDocument()
   })
 
   it('fades and labels a retention cell whose day is still in progress', () => {
@@ -276,7 +276,8 @@ describe('a short range', () => {
     ],
   })
   const previous = activity(claude, {
-    hourly: [{ hour: T0 - 3 * H, active_users: 1, requests: 2, quota_usd: 4 }],
+    // The previous period starts a whole range (one day) earlier.
+    hourly: [{ hour: T0 - 86400, active_users: 1, requests: 2, quota_usd: 4 }],
     top_users: [
       { user_id: 1, username: 'alice', quota_usd: 4, requests: 1, share: 0.4 },
       { user_id: 3, username: 'carol', quota_usd: 6, requests: 2, share: 0.6 },
@@ -325,5 +326,80 @@ describe('a short range', () => {
         '1 new to the list and 1 that left it or halved, against the previous period.'
       )
     ).toBeInTheDocument()
+  })
+})
+
+describe('the first hour and the logs', () => {
+  const H = 3600
+  const T0 = day(0)
+  const claude: EngineDailyCost = {
+    configured: true,
+    cost_usd: 0,
+    requests: 0,
+    daily: [],
+  }
+
+  it('lets the first closed hour of a day be the busiest one', () => {
+    const range = { start: T0, end: T0 + 2 * H + 600, days: 1, hourly: true }
+    render(
+      <ActivityTab
+        data={activity(claude, {
+          hourly: [
+            { hour: T0, active_users: 9, requests: 90, quota_usd: 50 },
+            { hour: T0 + H, active_users: 4, requests: 40, quota_usd: 20 },
+            { hour: T0 + 2 * H, active_users: 1, requests: 5, quota_usd: 2 },
+          ],
+        })}
+        range={range}
+      />
+    )
+    expect(
+      screen.getByText(/^Busiest hour .*: 9 active users\.$/)
+    ).toBeInTheDocument()
+  })
+
+  it('reads a day before the logs as no data and its change as not comparable', () => {
+    const range = {
+      start: day(0),
+      end: day(1) + 86400,
+      days: 2,
+      hourly: false,
+    }
+    render(
+      <ActivityTab
+        data={activity(claude, { logs_since: day(1) })}
+        previous={activity(claude)}
+        range={range}
+      />
+    )
+    const bars = screen
+      .getByRole('list', { name: 'Daily active users' })
+      .querySelectorAll('[tabindex="0"]')
+    expect(bars[0].getAttribute('aria-label')).toContain('No data')
+    expect(bars[1].getAttribute('aria-label')).not.toContain('No data')
+    expect(screen.getAllByText('No data to compare').length).toBeGreaterThan(0)
+  })
+
+  it('draws every retention day a cohort reports, so a 30-day cohort is not cut at D13', () => {
+    render(
+      <ActivityTab
+        data={activity(claude, {
+          retention: [
+            {
+              day: day(0),
+              size: 3,
+              days: Array.from({ length: 30 }, () => 0.5),
+            },
+          ],
+        })}
+        range={{
+          start: day(0),
+          end: day(0) + 31 * 86400,
+          days: 30,
+          hourly: false,
+        }}
+      />
+    )
+    expect(screen.getByText('D29')).toBeInTheDocument()
   })
 })

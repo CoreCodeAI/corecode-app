@@ -18,12 +18,12 @@ import (
 // requests went to: how many each served and failed, how fast, what
 // customers paid on it, and what the upstream charged for it.
 
-// InsightChannelHour is one channel's figures for one model in an hour, root
+// InsightChannelHour is one channel's figures for one model in an hour, staff
 // included. Requests counts the requests the channel served and Errors the
 // attempts that failed on it, so a request that failed on one channel and
 // was served by another counts once on each. Rescued counts the served
 // requests that had failed elsewhere first; RescuedFrom maps each channel
-// they failed on to a count. Quota is what customers were charged, root left
+// they failed on to a count. Quota is what customers were charged, staff left
 // out. TTFT, Latency, Reasons and RescuedFrom are JSON.
 type InsightChannelHour struct {
 	HourStart        int64  `gorm:"primaryKey;autoIncrement:false"`
@@ -55,7 +55,7 @@ type insightChannel struct {
 	reasons     map[string]int64
 	rescuedFrom map[string]int64
 	// clientErrors counts the failed attempts the customer's request caused
-	// (customerFault); rootRequests the served requests of root. Both are
+	// (customerFault); rootRequests the served requests of staff. Both are
 	// stored in Reasons under keys no reason can take, so they need no
 	// column; an hour stored before them reads zero.
 	clientErrors int64
@@ -320,7 +320,7 @@ const (
 // UpstreamChannel is one channel over the range. Attempts are Requests plus
 // Errors; ClientErrors is the part of Errors the customers' requests caused
 // (customerFault), and FailureRate is the rest of Errors over the attempts.
-// CustomerRequests is Requests without root's. RevenueUSD is what customers
+// CustomerRequests is Requests without staff's. RevenueUSD is what customers
 // were charged for the requests it served. CostUSD is the upstream's bill for
 // the range when the upstream's log is read (CostSource "upstream"), else the
 // monthly fee spread over the range ("fee"). UnmatchedCostUSD is the part of
@@ -579,7 +579,7 @@ func upstreamInsightsFromHours(r InsightsRange, hours []*insightHour, stale int)
 		}
 	}
 
-	tasks, tasksTruncated, err := readInsightTasks(r)
+	tasks, tasksTruncated, err := readInsightTasks(r, false)
 	if err != nil {
 		return nil, err
 	}

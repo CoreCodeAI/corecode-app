@@ -1,5 +1,12 @@
 package model
 
+import (
+	"strconv"
+	"sync"
+
+	"golang.org/x/sync/singleflight"
+)
+
 // HourlyVendorQuota sums quota_data's quota per hour for the models sold
 // under vendor (ModelVendor), over hours starting in [from, to), unix
 // seconds. Each of the vendor's prefixes is read with LIKE; a model an
@@ -75,4 +82,41 @@ func GetDayProfile(now int64) (*DayProfile, error) {
 		profile.Hours = append(profile.Hours, roundTo(float64(requests)/float64(total), 6))
 	}
 	return profile, nil
+}
+
+// dayProfileCache holds the profile read for one hour. The days it averages
+// end at a day's start, so the profile moves only when the hour does, and one
+// read serves every request in that hour.
+var dayProfileCache struct {
+	mu      sync.Mutex
+	hour    int64
+	profile *DayProfile
+	flight  singleflight.Group
+}
+
+// CachedDayProfile is GetDayProfile as of the start of now's UTC hour, shared
+// by every caller in that hour. A failed read is not kept.
+func CachedDayProfile(now int64) (*DayProfile, error) {
+	hour := insightHourKey(now)
+	dayProfileCache.mu.Lock()
+	if dayProfileCache.profile != nil && dayProfileCache.hour == hour {
+		profile := dayProfileCache.profile
+		dayProfileCache.mu.Unlock()
+		return profile, nil
+	}
+	dayProfileCache.mu.Unlock()
+	value, err, _ := dayProfileCache.flight.Do(strconv.FormatInt(hour, 10), func() (any, error) {
+		profile, err := GetDayProfile(hour)
+		if err != nil {
+			return nil, err
+		}
+		dayProfileCache.mu.Lock()
+		dayProfileCache.hour, dayProfileCache.profile = hour, profile
+		dayProfileCache.mu.Unlock()
+		return profile, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return value.(*DayProfile), nil
 }

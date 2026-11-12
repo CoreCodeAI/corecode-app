@@ -48,6 +48,7 @@ import { CapacityTab, type CapacityVendor } from './components/capacity-tab'
 import { ChannelsTab } from './components/channels-tab'
 import { FinanceTab } from './components/finance-tab'
 import { ActivityTab, GrowthTab } from './components/growth-tab'
+import { LogsNote } from './components/insight-kit'
 import { OverviewTab } from './components/overview-tab'
 import { PoolTab } from './components/pool-tab'
 import { QualityTab } from './components/quality-tab'
@@ -59,6 +60,8 @@ import {
   INSIGHTS_TAB_GROUPS,
   OVERVIEW_VIEWS,
   POOL_REFRESH_CHOICES,
+  previousRange,
+  rangeStart,
   readPoolRefresh,
   sourceState,
   STALE_VIEW_SECONDS,
@@ -69,7 +72,7 @@ import {
   type InsightsTab,
 } from './lib'
 import { InsightsSpanContext } from './partial-days'
-import type { EngineOutlook, PoolProvider, PoolUsage } from './types'
+import type { EngineOutlook, LogsSince, PoolProvider, PoolUsage } from './types'
 
 const route = getRouteApi('/_authenticated/site-insights/')
 
@@ -122,8 +125,10 @@ export function SiteInsights() {
   }, [])
   const behind = clock - now > STALE_VIEW_SECONDS
   const [poolRefresh, setPoolRefresh] = useState(readPoolRefresh)
+  // Every range starts on the hour it starts in, so a span is the same on
+  // every tab and the previous period ends exactly where this one starts.
   const range: InsightsRangeInfo = {
-    start: now - days * 86400,
+    start: rangeStart(now, days),
     end: now,
     days,
     hourly: days <= HOURLY_MAX_DAYS,
@@ -143,7 +148,10 @@ export function SiteInsights() {
   const vendorOf = (view: InsightsView, filtered: boolean) =>
     view === 'capacity' && filtered ? search.vendor : undefined
   const insightsQuery = (view: InsightsView, filtered = true) => {
-    const range = { start_time: now - viewDays(view) * 86400, end_time: now }
+    const range = {
+      start_time: rangeStart(now, viewDays(view)),
+      end_time: now,
+    }
     const only = filterOf(view, filtered)
     const vendor = vendorOf(view, filtered)
     return {
@@ -160,8 +168,10 @@ export function SiteInsights() {
     }
   }
   const previousQuery = (view: InsightsView, filtered = true) => {
-    const span = viewDays(view) * 86400
-    const range = { start_time: now - 2 * span, end_time: now - span }
+    const range = previousRange({
+      start: rangeStart(now, viewDays(view)),
+      days: viewDays(view),
+    })
     const only = filterOf(view, filtered)
     const vendor = vendorOf(view, filtered)
     return {
@@ -237,6 +247,25 @@ export function SiteInsights() {
   })
   // The overview's own queries, so Refresh shows them loading there too.
   const overviewFetching = useIsFetching({ queryKey: ['site-insights'] })
+  // The overview has no query of its own to say where the logs begin: the
+  // capacity view's is the same query it already reads, so this shares it.
+  const overviewLogs = useQuery({
+    ...insightsQuery('capacity', false),
+    enabled: tab === 'overview',
+  })
+  // Where the logs begin, from whichever view the page shows. The overview's
+  // views reach back furthest, so its note starts from the earliest of them.
+  const logsSince = (view === undefined ? overviewLogs.data : query.data) as
+    | LogsSince
+    | undefined
+  const pageStart =
+    view === undefined
+      ? Math.min(
+          ...OVERVIEW_VIEWS.filter((item) => item !== 'pool').map((item) =>
+            rangeStart(now, viewDays(item))
+          )
+        )
+      : range.start
   // The pool is live and has no earlier period.
   const previous = useQuery({
     ...previousQuery(view ?? 'capacity'),
@@ -413,11 +442,6 @@ export function SiteInsights() {
                   {t('As of {{time}}', { time: fmt.clock(asOf) })}
                 </span>
               )}
-              {behind && tab !== 'pool' && (
-                <span className='text-muted-foreground text-xs'>
-                  {t('Figures are from then; Refresh reads to now.')}
-                </span>
-              )}
               <Button
                 variant='outline'
                 size='icon-sm'
@@ -429,6 +453,12 @@ export function SiteInsights() {
               </Button>
             </div>
           </div>
+          {behind && tab !== 'pool' && (
+            <p className='text-muted-foreground text-xs'>
+              {t('Figures are from then; Refresh reads to now.')}
+            </p>
+          )}
+          <LogsNote start={pageStart} logsSince={logsSince?.logs_since} />
           {view && query.isError && (
             <p className='text-destructive text-sm'>
               {query.error instanceof Error

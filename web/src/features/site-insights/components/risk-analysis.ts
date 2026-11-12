@@ -27,7 +27,12 @@ import {
   SPIKE_FACTOR,
   type InsightsRangeInfo,
 } from '../lib'
-import type { BalanceUser, CountPoint, RiskInsights } from '../types'
+import type {
+  BalanceUser,
+  CountPoint,
+  RiskInsights,
+  UnpaidSpender,
+} from '../types'
 
 /** Registrations this close together look scripted. */
 export const BURST_SECONDS = 600
@@ -123,6 +128,31 @@ export function splitExits(clusters: RiskCluster[]): {
   }
 }
 
+/**
+ * The clusters a response's shared_exit_top is shown through: the same
+ * viewer and size rules as shared_ips (useSharedAddresses). Undefined before
+ * the server sends the list.
+ */
+export function sharedExitSource(
+  data: RiskInsights | undefined
+): RiskInsights | undefined {
+  if (data?.shared_exit_top == null) return undefined
+  return { ...data, shared_ips: data.shared_exit_top }
+}
+
+/**
+ * The shared exits to list, in the order the server ranks them. Once the
+ * server sends shared_exit_top it is the list; an older server keeps exits
+ * among shared_ips, so they are split out there.
+ */
+export function exitsOf(
+  data: RiskInsights | undefined,
+  clusters: RiskCluster[],
+  topExits: RiskCluster[]
+): RiskCluster[] {
+  return data?.shared_exit_top != null ? topExits : splitExits(clusters).exits
+}
+
 /** How many shared addresses there are in all against how many are listed. */
 export type SharedCounts = {
   /** Addresses to review in all, before the server's cut to 50. */
@@ -136,16 +166,19 @@ export type SharedCounts = {
 
 /**
  * The shared-address counts of a response, its listed clusters already
- * filtered (useSharedAddresses). Before the server sends its totals the
- * list is all there is; a total never reads under what is listed.
+ * filtered (useSharedAddresses), and its listed exits when the server sends
+ * them apart. The server's total counts exits too, so the addresses to review
+ * are the total less the exits. Before the server sends its totals the list
+ * is all there is; a total never reads under what is listed.
  */
 export function sharedCounts(
   data: Pick<RiskInsights, 'shared_ip_total' | 'shared_exits'> | undefined,
-  clusters: RiskCluster[]
+  clusters: RiskCluster[],
+  exitList?: RiskCluster[]
 ): SharedCounts {
   const split = splitExits(clusters)
   const listed = split.review.length
-  const exitsListed = split.exits.length
+  const exitsListed = exitList?.length ?? split.exits.length
   if (data?.shared_ip_total == null) {
     return { total: listed, listed, exits: exitsListed, exitsListed }
   }
@@ -165,20 +198,29 @@ export function hasRepeatBuyers(clusters: RiskCluster[]): boolean {
   )
 }
 
+/** Clusters with their risk, in the order given. */
+export function withRisk(
+  clusters: RiskCluster[],
+  start: number | undefined
+): RankedCluster[] {
+  return clusters.map((cluster) => ({
+    ...cluster,
+    risk: clusterRisk(cluster, start),
+  }))
+}
+
 /** Clusters by risk, highest first; ties by size, then requests, then address. */
 export function rankClusters(
   clusters: RiskCluster[],
   start: number | undefined
 ): RankedCluster[] {
-  return clusters
-    .map((cluster) => ({ ...cluster, risk: clusterRisk(cluster, start) }))
-    .sort(
-      (a, b) =>
-        b.risk.score - a.risk.score ||
-        b.users.length - a.users.length ||
-        b.requests - a.requests ||
-        a.ip.localeCompare(b.ip)
-    )
+  return withRisk(clusters, start).sort(
+    (a, b) =>
+      b.risk.score - a.risk.score ||
+      b.users.length - a.users.length ||
+      b.requests - a.requests ||
+      a.ip.localeCompare(b.ip)
+  )
 }
 
 /** Where the range begins: the range's own start, else the first bucket's. */
@@ -301,6 +343,14 @@ export function neverUsed(data: RiskInsights): NeverUsed {
   return cohort
 }
 
+/** Unpaid consumption by source, in quota dollars; they sum to the spend. */
+export type UnpaidSplit = {
+  granted: number
+  redeemed: number
+  gift: number
+  signupGift: number
+}
+
 /** Sign-ups that consumed in the range and never paid, in quota dollars. */
 export type UnpaidSpend = {
   spenders: number
@@ -308,6 +358,8 @@ export type UnpaidSpend = {
   spend: number
   /** unpaid over spenders; 0 without spenders. */
   share: number
+  /** Absent before the server splits the spend by source. */
+  split?: UnpaidSplit
 }
 
 /** The unpaid spenders of a response; undefined before the server's release. */
@@ -319,12 +371,45 @@ export function unpaidSpend(
   }
   const spenders = data.signup_spenders
   const unpaid = data.unpaid_spenders
-  return {
+  const spend: UnpaidSpend = {
     spenders,
     unpaid,
     spend: data.unpaid_spend_usd ?? 0,
     share: spenders > 0 ? unpaid / spenders : 0,
   }
+  if (
+    data.unpaid_granted_usd != null &&
+    data.unpaid_redeemed_usd != null &&
+    data.unpaid_gift_plan_usd != null &&
+    data.unpaid_signup_gift_usd != null
+  ) {
+    spend.split = {
+      granted: data.unpaid_granted_usd,
+      redeemed: data.unpaid_redeemed_usd,
+      gift: data.unpaid_gift_plan_usd,
+      signupGift: data.unpaid_signup_gift_usd,
+    }
+  }
+  return spend
+}
+
+/** The share of unpaid spend that an administrator granted by hand; 0 without a split. */
+export function grantedShare(spend: UnpaidSpend | undefined): number {
+  if (!spend?.split || spend.spend <= 0) return 0
+  return spend.split.granted / spend.spend
+}
+
+/**
+ * Whether an account's hand grant covers more than half its consumption: it
+ * was funded by an administrator, so it does not read as farming. Absent
+ * before the server sends the split.
+ */
+export function isHandFunded(row: UnpaidSpender): boolean {
+  return (
+    row.granted_usd != null &&
+    row.consumption_usd > 0 &&
+    row.granted_usd * 2 > row.consumption_usd
+  )
 }
 
 /** Invite gift statuses the guard refused; email_signup is policy, not a block. */
@@ -350,9 +435,26 @@ export function giftOutcomes(
   return { total, blocked, gifted }
 }
 
+/** One inviter of unpaid spenders, as the risk view sends it. */
+export type UnpaidInviter = NonNullable<RiskInsights['unpaid_inviters']>[number]
+
 /**
- * Inviters worth a look: MIN_SIGNAL_COUNT or more unpaid spenders, or as
- * many gifts blocked, in the range.
+ * Whether an inviter's unpaid spenders got any gift credit. Credit an
+ * administrator granted by hand is not farming, so an inviter whose gift part
+ * is 0 is not judged; before the server sends gift_usd every inviter is.
+ */
+export function hasGiftPart(row: UnpaidInviter): boolean {
+  return row.gift_usd == null || row.gift_usd > 0
+}
+
+/** Whether the unpaid spend is split by source, so farming is judged on gifts. */
+export function usesGiftPart(data: RiskInsights | undefined): boolean {
+  return data?.unpaid_signup_gift_usd != null
+}
+
+/**
+ * Inviters worth a look: MIN_SIGNAL_COUNT or more unpaid spenders on gift
+ * credit, or as many gifts blocked, in the range.
  */
 export function suspectInviters(data: RiskInsights | undefined): {
   unpaid: number
@@ -360,7 +462,8 @@ export function suspectInviters(data: RiskInsights | undefined): {
 } {
   return {
     unpaid: (data?.unpaid_inviters ?? []).filter(
-      (row) => row.user_id > 0 && row.accounts >= MIN_SIGNAL_COUNT
+      (row) =>
+        row.user_id > 0 && row.accounts >= MIN_SIGNAL_COUNT && hasGiftPart(row)
     ).length,
     blocked: (data?.gift_block_inviters ?? []).filter(
       (row) => row.user_id > 0 && row.blocked >= MIN_SIGNAL_COUNT

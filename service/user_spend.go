@@ -27,8 +27,10 @@ var UserSpendWindowHours = []int64{1, 5, 12, 24, 168}
 const (
 	// userSpendTopN is how many customers the table lists, largest first.
 	userSpendTopN = 100
-	// userSpendTTL is how long one read of a window is shared.
-	userSpendTTL = time.Minute
+	// userSpendTTL is how long one read of a window is shared. The console
+	// polls every minute, so a one-minute TTL never held a poll's read: a
+	// three-minute one serves two polls in three.
+	userSpendTTL = 3 * time.Minute
 )
 
 // UserSpend is what each customer used over the Hours before EndTime: new-api's
@@ -43,8 +45,8 @@ const (
 // way over the provider's other models.
 //
 // QuotaUSD figures are new-api quota dollars, which customers pay ¥1 each
-// for; EngineUSD figures are US dollars at official prices. Root's own use is
-// counted apart and is not in Users.
+// for; EngineUSD figures are US dollars at official prices. Staff's own use
+// (administrators and root) is counted apart and is not in Users.
 type UserSpend struct {
 	Hours            int64   `json:"hours"`
 	StartTime        int64   `json:"start_time"`
@@ -54,10 +56,12 @@ type UserSpend struct {
 	// EngineError is set when gpt-load could not be read; every EngineUSD is
 	// then zero.
 	EngineError string `json:"engine_error,omitempty"`
-	// Customers counts the non-root users with consumption in the window;
+	// Customers counts the non-staff users with consumption in the window;
 	// Users lists the largest userSpendTopN of them.
-	Customers         int     `json:"customers"`
-	QuotaUSD          float64 `json:"quota_usd"`
+	Customers int     `json:"customers"`
+	QuotaUSD  float64 `json:"quota_usd"`
+	// RootQuotaUSD and RootEngineUSD are the staff's (administrators and root)
+	// use; the names predate admins being left out with root.
 	RootQuotaUSD      float64 `json:"root_quota_usd"`
 	EngineUSD         float64 `json:"engine_usd"`
 	CustomerEngineUSD float64 `json:"customer_engine_usd"`
@@ -125,7 +129,10 @@ func FetchUserSpend(hours int64) (UserSpend, error) {
 
 func readUserSpend(hours int64, now time.Time) (UserSpend, error) {
 	end := now.Unix()
+	// The window starts on the hour, as every site-insights view's does: the
+	// hour it starts in counts whole, so "24 h" is the same span on each tab.
 	start := end - hours*3600
+	start -= start % 3600
 	spend := UserSpend{
 		Hours: hours, StartTime: start, EndTime: end,
 		USDExchangeRate: operation_setting.USDExchangeRate, Users: []UserSpendRow{},
@@ -144,7 +151,7 @@ func readUserSpend(hours int64, now time.Time) (UserSpend, error) {
 	if err != nil {
 		return spend, err
 	}
-	rootIDs, err := model.RootUserIDs()
+	staffIDs, err := model.StaffUserIDs()
 	if err != nil {
 		return spend, err
 	}
@@ -184,7 +191,7 @@ func readUserSpend(hours int64, now time.Time) (UserSpend, error) {
 	var customerQuota, rootQuota int64
 	var customers []int
 	for id, total := range totals {
-		if slices.Contains(rootIDs, id) {
+		if slices.Contains(staffIDs, id) {
 			rootQuota += total.quota
 			spend.RootEngineUSD += total.engine
 			continue
