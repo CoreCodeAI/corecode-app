@@ -50,26 +50,92 @@ type CacheDay struct {
 	ErrorCount int64   `json:"errors"`
 }
 
+// QualityHour is one hour of the figures CacheDay holds for a day: requests
+// and failures of the selected models, root included, and their streamed
+// first-response times.
+type QualityHour struct {
+	Hour      int64   `json:"hour"`
+	Requests  int64   `json:"requests"`
+	Errors    int64   `json:"errors"`
+	ErrorRate float64 `json:"error_rate"`
+	TTFTP50   int64   `json:"ttft_p50_ms"`
+	TTFTP95   int64   `json:"ttft_p95_ms"`
+}
+
 // QualityInsights reads latency, cache use and failures from the request
 // logs. Unlike the performance panel it counts every logged failure,
 // including requests the pool turned away.
+//
+// Hourly is every hour of a range up to insightsHourlySpan, keyed by UTC
+// hour start, and follows the model filter as Daily does. ErrorCategories
+// counts customers' failures only, as the capacity view does; when the
+// filter selects models of one vendor it counts that vendor's, otherwise
+// every model's.
 type QualityInsights struct {
-	Requests   int64           `json:"requests"`
-	Errors     int64           `json:"errors"`
-	ErrorRate  float64         `json:"error_rate"`
-	TTFTP50    int64           `json:"ttft_p50_ms"`
-	TTFTP95    int64           `json:"ttft_p95_ms"`
-	CacheShare float64         `json:"cache_share"`
-	Models     []ModelQuality  `json:"models"`
-	Vendors    []VendorQuality `json:"vendors"`
+	Requests int64 `json:"requests"`
+	Errors   int64 `json:"errors"`
+	// Attempts and AttemptErrors are customers' tries on a channel, retries
+	// included, and the ones that failed, over every model: the rollup keeps
+	// them for the whole site only, so the model filter cannot narrow them.
+	// Absent while the range has hours stored under an older version.
+	Attempts      *int64          `json:"attempts,omitempty"`
+	AttemptErrors *int64          `json:"attempt_errors,omitempty"`
+	ErrorRate     float64         `json:"error_rate"`
+	TTFTP50       int64           `json:"ttft_p50_ms"`
+	TTFTP95       int64           `json:"ttft_p95_ms"`
+	CacheShare    float64         `json:"cache_share"`
+	Models        []ModelQuality  `json:"models"`
+	Vendors       []VendorQuality `json:"vendors"`
 	// AllModels is every model's figures whatever the filter selects, for
 	// the quick-select card that clears it. Its Vendor and Models are empty.
-	AllModels    VendorQuality `json:"all_models"`
-	Daily        []CacheDay    `json:"daily"`
-	StreamEnds   []NamedCount  `json:"stream_ends"`
-	StatusCodes  []NamedCount  `json:"status_codes"`
-	ErrorReasons []NamedCount  `json:"error_reasons"`
-	Truncated    bool          `json:"truncated"`
+	AllModels       VendorQuality `json:"all_models"`
+	Daily           []CacheDay    `json:"daily"`
+	Hourly          []QualityHour `json:"hourly,omitempty"`
+	StreamEnds      []NamedCount  `json:"stream_ends"`
+	StatusCodes     []NamedCount  `json:"status_codes"`
+	ErrorReasons    []NamedCount  `json:"error_reasons"`
+	ErrorCategories []NamedCount  `json:"error_categories"`
+	Truncated       bool          `json:"truncated"`
+	// Tasks is how the async tasks submitted in the range ended; their
+	// submissions are also requests above, counted as served.
+	Tasks *TaskOutcomes `json:"tasks,omitempty"`
+	// Refusals is what was turned away before any channel was tried.
+	Refusals *QualityRefusals `json:"refusals,omitempty"`
+	// StaleHours counts the range's hours stored under an older rollup
+	// version, which count attempts rather than requests.
+	StaleHours int `json:"stale_hours"`
+}
+
+// QualityRefusals counts requests turned away before any channel was tried,
+// whatever the model filter. NoChannel is customers' requests no channel of
+// their group could take; they are also in Requests, Errors and the
+// no_channel error category. RiskGate is the requests the risk gate blocked,
+// read from its own events (observe-mode hits left out), by stage in
+// RiskGateStages; they are not in Requests.
+type QualityRefusals struct {
+	NoChannel      int64        `json:"no_channel"`
+	RiskGate       int64        `json:"risk_gate"`
+	RiskGateStages []NamedCount `json:"risk_gate_stages"`
+}
+
+// readRiskGateBlocks counts the requests the risk gate blocked in the range,
+// by stage.
+func readRiskGateBlocks(r InsightsRange) ([]NamedCount, int64, error) {
+	stages := []NamedCount{}
+	err := DB.Model(&RiskGateEvent{}).Select("stage AS name, COUNT(*) AS count").
+		Where("created_at >= ? AND created_at < ? AND action = ?", r.Start, r.End, RiskGateActionBlocked).
+		Group("stage").Scan(&stages).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	slices.SortFunc(stages, func(a, b NamedCount) int {
+		return cmp.Or(cmp.Compare(b.Count, a.Count), cmp.Compare(a.Name, b.Name))
+	})
+	var total int64
+	for _, stage := range stages {
+		total += stage.Count
+	}
+	return stages, total, nil
 }
 
 // logOtherFields is the part of a log's other column the quality, business
@@ -80,9 +146,31 @@ type logOtherFields struct {
 	BillingOverflowSource string  `json:"billing_overflow_source"`
 	BillingOverflowQuota  int64   `json:"billing_overflow_quota"`
 	SubscriptionId        int     `json:"subscription_id"`
-	CacheTokens           int64   `json:"cache_tokens"`
-	CacheCreationTokens   int64   `json:"cache_creation_tokens"`
-	StreamStatus          struct {
+	SubscriptionPlanId    int     `json:"subscription_plan_id"`
+	// SubscriptionGift is whether the paying plan was given, recorded at
+	// billing time; nil on a log from before it was.
+	SubscriptionGift      *bool `json:"subscription_gift"`
+	CacheTokens           int64 `json:"cache_tokens"`
+	CacheCreationTokens   int64 `json:"cache_creation_tokens"`
+	CacheCreationTokens5m int64 `json:"cache_creation_tokens_5m"`
+	CacheCreationTokens1h int64 `json:"cache_creation_tokens_1h"`
+	// PromptIncludesCache is billing's rule for the log's usage, recorded at
+	// billing time; nil on a log from before it was (uncachedPrompt).
+	PromptIncludesCache *bool  `json:"prompt_includes_cache"`
+	UsageSemantic       string `json:"usage_semantic"`
+	Claude              bool   `json:"claude"`
+	// IsTask marks an async task's billing logs; PreConsumedQuota is set on
+	// a task's settlement logs only.
+	IsTask           bool   `json:"is_task"`
+	TaskId           string `json:"task_id"`
+	PreConsumedQuota *int64 `json:"pre_consumed_quota"`
+	// ViolationFee marks the consume log of a fee charged for a refused
+	// request (ChargeViolationFeeIfNeeded).
+	ViolationFee bool `json:"violation_fee"`
+	// ErrorType is an error log's error type: new_api_error when new-api
+	// raised it, another when an upstream returned it.
+	ErrorType    string `json:"error_type"`
+	StreamStatus struct {
 		EndReason string `json:"end_reason"`
 	} `json:"stream_status"`
 	AdminInfo struct {
@@ -128,13 +216,28 @@ func QualityModelFilter(models []string) func(string) bool {
 	return func(name string) bool { return slices.Contains(models, name) }
 }
 
+// filterVendor is the vendor every named model is sold under, or "" when
+// the filter is empty or spans vendors.
+func filterVendor(models []string) string {
+	if len(models) == 0 {
+		return ""
+	}
+	vendor := ModelVendor(models[0])
+	for _, name := range models[1:] {
+		if ModelVendor(name) != vendor {
+			return ""
+		}
+	}
+	return vendor
+}
+
 func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error) {
 	selected := QualityModelFilter(only)
-	hours, err := loadInsightHours(r)
+	hours, stale, err := loadInsightHoursStale(r)
 	if err != nil {
 		return nil, err
 	}
-	result := &QualityInsights{}
+	result := &QualityInsights{StaleHours: stale}
 	type modelBucket struct {
 		quality       ModelQuality
 		ttft, latency histogram
@@ -149,17 +252,40 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	for _, day := range r.days() {
 		days[day] = &dayBucket{day: CacheDay{Day: day}, ttft: histogram{}}
 	}
+	type hourBucket struct {
+		hour QualityHour
+		ttft histogram
+	}
+	hourStarts := r.hourStarts()
+	hourly := make(map[int64]*hourBucket, len(hourStarts))
+	for _, start := range hourStarts {
+		hourly[start] = &hourBucket{hour: QualityHour{Hour: start}, ttft: histogram{}}
+	}
+	vendor := filterVendor(only)
+	refusals := &QualityRefusals{}
 	streamEnds := make(map[string]int64)
 	statusCodes := make(map[string]int64)
 	reasons := make(map[string]int64)
+	categories := make(map[string]int64)
 	allTTFT := histogram{}
-	var cacheRead, inputTotal int64
+	var cacheRead, inputTotal, attempts, attemptErrors int64
 	for _, hour := range hours {
 		result.Truncated = result.Truncated || hour.summary.Truncated
+		attempts += hour.summary.Attempts
+		attemptErrors += hour.summary.AttemptErrors
 		mergeCounts(streamEnds, hour.summary.StreamEnds)
 		mergeCounts(statusCodes, hour.summary.StatusCodes)
 		mergeCounts(reasons, hour.summary.ErrorReasons)
+		refusals.NoChannel += hour.summary.Categories[ErrorNoChannel]
+		// An hour without customers' requests holds no vendor split and no
+		// categories either.
+		if vendor != "" && hour.summary.Vendors != nil {
+			mergeCounts(categories, vendorSummary(hour.summary, vendor).Categories)
+		} else {
+			mergeCounts(categories, hour.summary.Categories)
+		}
 		day := days[r.DayStart(hour.start)]
+		slot := hourly[hour.start]
 		for name, model := range hour.models {
 			row := model.row
 			bucket := models[name]
@@ -190,8 +316,20 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 				day.day.Uncached += row.Uncached
 				day.ttft.merge(model.ttft)
 			}
+			if slot != nil {
+				slot.hour.Requests += row.Requests
+				slot.hour.Errors += row.Errors
+				slot.ttft.merge(model.ttft)
+			}
 		}
 	}
+	for _, start := range hourStarts {
+		slot := hourly[start]
+		slot.hour.ErrorRate = ratio(float64(slot.hour.Errors), float64(slot.hour.Requests))
+		slot.hour.TTFTP50, slot.hour.TTFTP95 = slot.ttft.percentile(0.5), slot.ttft.percentile(0.95)
+		result.Hourly = append(result.Hourly, slot.hour)
+	}
+	result.ErrorCategories = sortedCounts(categories)
 	result.TTFTP50, result.TTFTP95 = allTTFT.percentile(0.5), allTTFT.percentile(0.95)
 	type vendorBucket struct {
 		quality VendorQuality
@@ -246,10 +384,20 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	}
 	slices.SortFunc(result.Daily, func(a, b CacheDay) int { return cmp.Compare(a.Day, b.Day) })
 	result.StreamEnds = sortedCounts(streamEnds)
+	if stale == 0 {
+		result.Attempts, result.AttemptErrors = &attempts, &attemptErrors
+	}
 	result.StatusCodes = sortedCounts(statusCodes)
 	result.ErrorReasons = sortedCounts(reasons)
 	if len(result.ErrorReasons) > 15 {
 		result.ErrorReasons = result.ErrorReasons[:15]
+	}
+	if refusals.RiskGateStages, refusals.RiskGate, err = readRiskGateBlocks(r); err != nil {
+		return nil, err
+	}
+	result.Refusals = refusals
+	if result.Tasks, err = GetTaskOutcomes(r); err != nil {
+		return nil, err
 	}
 	return result, nil
 }

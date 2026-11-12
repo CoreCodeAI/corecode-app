@@ -6,27 +6,55 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// UserModelSpend is what one user's requests to one model in one group cost
-// at new-api's prices over a span, read from the consume logs. Group is the
-// group the request was billed in, so its ratio can be taken back out.
+// UserModelSpend is what one user's requests to one model in one group on
+// one channel cost at new-api's prices over a span, read from the consume
+// logs. Group is the group the request was billed in, so its ratio can be
+// taken back out.
 type UserModelSpend struct {
 	UserId    int
 	ModelName string
 	LogGroup  string
+	ChannelId int
 	Requests  int64
 	Quota     int64
 }
 
-// ReadUserModelSpend sums the consume logs in [start, end) by user, model and
-// group. Root is included: its requests cost gpt-load as much as anyone's.
+// ReadUserModelSpend sums the consume logs in [start, end) by user, model,
+// group and channel. Root is included: its requests cost gpt-load as much as
+// anyone's.
 func ReadUserModelSpend(start, end int64) ([]UserModelSpend, error) {
 	var rows []UserModelSpend
 	err := LOG_DB.Model(&Log{}).
-		Select("user_id, model_name, "+logGroupCol+" AS log_group, COUNT(*) AS requests, COALESCE(SUM(quota), 0) AS quota").
+		Select("user_id, model_name, "+logGroupCol+" AS log_group, channel_id, COUNT(*) AS requests, COALESCE(SUM(quota), 0) AS quota").
 		Where("created_at >= ? AND created_at < ? AND type = ?", start, end, LogTypeConsume).
-		Group("user_id, model_name, " + logGroupCol).
+		Group("user_id, model_name, " + logGroupCol + ", channel_id").
 		Find(&rows).Error
 	return rows, err
+}
+
+// EngineChannelIDs lists the channels the engine serves: those whose base URL
+// names the engine's host, or a host that is not public, as the engine inside
+// the deployment (http://gpt-load:3001) is. A channel with no base URL goes to
+// its vendor's own API and is not the engine's.
+func EngineChannelIDs(engineURL string) (map[int]bool, error) {
+	var channels []struct {
+		Id      int
+		BaseURL *string
+	}
+	if err := DB.Model(&Channel{}).Select("id, base_url").Find(&channels).Error; err != nil {
+		return nil, err
+	}
+	engineHost := upstreamHost(engineURL)
+	ids := make(map[int]bool)
+	for _, channel := range channels {
+		if channel.BaseURL == nil || *channel.BaseURL == "" {
+			continue
+		}
+		if !PublicUpstreamHost(*channel.BaseURL) || (engineHost != "" && upstreamHost(*channel.BaseURL) == engineHost) {
+			ids[channel.Id] = true
+		}
+	}
+	return ids, nil
 }
 
 // RootUserIDs lists the root accounts, deleted ones included.

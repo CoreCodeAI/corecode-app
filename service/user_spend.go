@@ -167,7 +167,11 @@ func readUserSpend(hours int64, now time.Time) (UserSpend, error) {
 		total.requests += row.Requests
 	}
 	if engine.err == "" {
-		shares, unattributed := shareEngineCost(rows, engine.costs, ratio_setting.GetGroupRatioCopy())
+		engineChannels, err := model.EngineChannelIDs(operation_setting.EngineControlURL)
+		if err != nil {
+			return spend, err
+		}
+		shares, unattributed := shareEngineCost(engineRows(rows, engineChannels), engine.costs, ratio_setting.GetGroupRatioCopy())
 		for id, usd := range shares {
 			totals[id].engine = usd
 		}
@@ -220,6 +224,18 @@ func readUserSpend(hours int64, now time.Time) (UserSpend, error) {
 
 // roundUSD keeps four places, as the other insights views do.
 func roundUSD(value float64) float64 { return math.Round(value*1e4) / 1e4 }
+
+// engineRows keeps the rows served by an engine channel, so the engine's cost
+// goes only to the requests that reached it. With no engine channel known,
+// every row is kept.
+func engineRows(rows []model.UserModelSpend, engineChannels map[int]bool) []model.UserModelSpend {
+	if len(engineChannels) == 0 {
+		return rows
+	}
+	return slices.DeleteFunc(slices.Clone(rows), func(row model.UserModelSpend) bool {
+		return !engineChannels[row.ChannelId]
+	})
+}
 
 // providerCost is gpt-load's official-price cost on one provider's channels:
 // by model where the engine names the model, and in total.

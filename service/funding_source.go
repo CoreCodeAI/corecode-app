@@ -91,6 +91,7 @@ type SubscriptionFunding struct {
 	AmountUsedAfter int64
 	PlanId          int
 	PlanTitle       string
+	PlanSource      string
 }
 
 func (s *SubscriptionFunding) Source() string { return BillingSourceSubscription }
@@ -115,6 +116,7 @@ func (s *SubscriptionFunding) PreConsume(_ int) error {
 	if planInfo, err := model.GetSubscriptionPlanInfoByUserSubscriptionId(res.UserSubscriptionId); err == nil && planInfo != nil {
 		s.PlanId = planInfo.PlanId
 		s.PlanTitle = planInfo.PlanTitle
+		s.PlanSource = planInfo.Source
 	}
 	return nil
 }

@@ -42,9 +42,13 @@ func TestChannelInsightsDatabaseMatrix(t *testing.T) {
 			plan := SubscriptionPlan{Title: "trial", PriceAmount: 29.9, MaxPurchasePerUser: 1, Enabled: true}
 			require.NoError(t, DB.Create(&plan).Error)
 			require.NoError(t, DB.Create(&SubscriptionOrder{UserId: payer.Id, PlanId: plan.Id, Money: 29.9, TradeNo: "SUB1", Status: common.TopUpStatusSuccess, CreateTime: day1 + 300}).Error)
+			// The gifted account, created before the range, buys a plan in it:
+			// the channel's revenue, but not from a new account.
+			require.NoError(t, DB.Create(&SubscriptionOrder{UserId: gifted.Id, PlanId: plan.Id, Money: 5, TradeNo: "SUB2", Status: common.TopUpStatusSuccess, CreateTime: day1 + 900}).Error)
 			require.NoError(t, DB.Create(&[]TopUp{
 				{UserId: payer.Id, Amount: 50, Money: 50, PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, TradeNo: "T1", CreateTime: day1 + 200},
 				{UserId: payer.Id, Money: 29.9, PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, TradeNo: "SUB1", CreateTime: day1 + 300},
+				{UserId: gifted.Id, Money: 5, PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, TradeNo: "SUB2", CreateTime: day1 + 900},
 				{UserId: organic.Id, Amount: 10, Money: 10, PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, TradeNo: "T2", CreateTime: day1 + 400},
 			}).Error)
 
@@ -80,14 +84,126 @@ func TestChannelInsightsDatabaseMatrix(t *testing.T) {
 			assert.Equal(t, ChannelRow{
 				Segment: ChannelSegmentChannel, Channel: UserRef{channel.Id, "magpie"}, Tier: "retail",
 				Accounts: 2, Registered: 1, Activated: 1, Paid: 1, Repeat: 1,
-				Revenue: 79.9, Payers: 1, NewPayers: 1,
-				ConsumptionUSD: 3, GiftConsumptionUSD: 1, GrantedUSD: 9, GiftOutstandingUSD: 8,
-				CommissionUSD: 1, FeeUSD: 2,
-			}, insights.Channels[0])
+				Revenue: 84.9, RevenueNewAccounts: 79.9, RevenueSinceFee: 84.9, FeeStart: day1 - 10*86400, Payers: 2, NewPayers: 2,
+				ConsumptionUSD: 3, GiftConsumptionUSD: 1, InviteGiftUSD: 1, GrantedUSD: 9, GiftOutstandingUSD: 8,
+				CommissionUSD: 1, CommissionEarnedUSD: 1, CommissionAccruingUSD: 1, FeeUSD: 2,
+			}, insights.Channels[0], "the commission was earned while the fee ran")
 			assert.Equal(t, ChannelRow{Segment: ChannelSegmentInvited, Accounts: 1, Registered: 1}, insights.Channels[1],
 				"an invitation that is not a channel's")
 			// The channel's own account is organic: nobody invited it.
-			assert.Equal(t, ChannelRow{Segment: ChannelSegmentOrganic, Accounts: 2, Registered: 1, Paid: 1, Revenue: 10, Payers: 1, NewPayers: 1}, insights.Channels[2])
+			assert.Equal(t, ChannelRow{Segment: ChannelSegmentOrganic, Accounts: 2, Registered: 1, Paid: 1, Revenue: 10, RevenueNewAccounts: 10, Payers: 1, NewPayers: 1}, insights.Channels[2])
 		})
 	}
+}
+
+func TestEffectiveChannelCosts(t *testing.T) {
+	costs, overlaps := effectiveChannelCosts([]ChannelCost{
+		{UserID: 2, MonthlyUSD: 600, Start: 300},
+		{UserID: 1, MonthlyUSD: 1000, Start: 100},
+		{UserID: 1, MonthlyUSD: 600, Start: 200},
+		{UserID: 2, MonthlyUSD: 100, Start: 100, End: 300},
+	})
+	assert.Equal(t, []ChannelCost{
+		{UserID: 1, MonthlyUSD: 1000, Start: 100, End: 200},
+		{UserID: 1, MonthlyUSD: 600, Start: 200},
+		{UserID: 2, MonthlyUSD: 100, Start: 100, End: 300},
+		{UserID: 2, MonthlyUSD: 600, Start: 300},
+	}, costs, "an open entry ends where the next begins")
+	assert.Equal(t, map[int]bool{1: true}, overlaps, "entries that meet end to end do not overlap")
+}
+
+// The second scenario: a fee replaced without closing the old entry, a
+// level-two commission, a refund taken back by an administrator, credit held
+// by deleted and disabled accounts, and a channel's own given plan.
+func TestChannelInsightsAttributionDatabaseMatrix(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			require.NoError(t, DB.AutoMigrate(&Option{}))
+			t.Cleanup(func() { require.NoError(t, DB.Migrator().DropTable(&Option{})) })
+			previousMap := common.OptionMap
+			common.OptionMap = map[string]string{}
+			t.Cleanup(func() { common.OptionMap = previousMap })
+
+			const day1 = int64(1759248000)
+			dollar := int64(common.QuotaPerUnit)
+			r := InsightsRange{Start: day1, End: day1 + 2*86400}
+
+			distributor := registerAffiliateTestUser(t, "distributor", "")
+			require.NoError(t, DB.Create(&Affiliate{UserId: distributor.Id, Rate: 10, Channel: true, Tier: "distributor"}).Error)
+			sub := registerAffiliateTestUser(t, "sub", distributor.AffCode)
+			buyer := registerAffiliateTestUser(t, "buyer", sub.AffCode)
+			gone := registerAffiliateTestUser(t, "gone", distributor.AffCode)
+			banned := registerAffiliateTestUser(t, "banned", distributor.AffCode)
+			for _, user := range []*User{distributor, sub, buyer, gone, banned} {
+				require.NoError(t, DB.Model(&User{}).Where("id = ?", user.Id).Update("created_at", day1-30*86400).Error)
+			}
+			require.NoError(t, DB.Model(&User{}).Where("id = ?", gone.Id).Update("quota", 4*dollar).Error)
+			require.NoError(t, DB.Delete(&User{}, gone.Id).Error)
+			require.NoError(t, DB.Model(&User{}).Where("id = ?", banned.Id).
+				Updates(map[string]any{"quota": 3 * dollar, "status": common.UserStatusDisabled}).Error)
+
+			// The buyer pays twenty and is refunded fifteen by an administrator.
+			require.NoError(t, DB.Create(&TopUp{UserId: buyer.Id, Amount: 20, Money: 20, PaymentMethod: "alipay",
+				Status: common.TopUpStatusSuccess, TradeNo: "T1", CreateTime: day1 + 100}).Error)
+			require.NoError(t, LOG_DB.Create(&AuditLog{
+				EventId: "e1", Username: "root", CreatedAt: day1 + 500, Action: "user.quota_subtract", Success: true, Category: AuditCategoryOperation,
+				Other: AuditOther{Op: &AuditOperation{Action: "user.quota_subtract", Params: AuditFields{
+					"target_user_id": buyer.Id, "from": 20 * dollar, "to": 5 * dollar,
+				}}},
+			}).Error)
+			// The distributor earns level two on the buyer, whose source is the
+			// plain invitation of sub.
+			require.NoError(t, DB.Create(&AffiliateCommission{UserId: distributor.Id, SourceUserId: buyer.Id, Level: 2, Rate: 5, Amount: dollar, CreatedAt: day1 + 600}).Error)
+			require.NoError(t, DB.Create(&AffiliateCommission{UserId: sub.Id, SourceUserId: buyer.Id, Level: 1, Rate: 10, Amount: 2 * dollar, CreatedAt: day1 + 600}).Error)
+
+			// An administrator gives the distributor's own account a plan.
+			plan := SubscriptionPlan{Title: "gift", PriceAmount: 50, Enabled: true}
+			require.NoError(t, DB.Create(&plan).Error)
+			future := time.Now().Unix() + 86400
+			for _, given := range []UserSubscription{
+				{UserId: distributor.Id, PlanId: plan.Id, AmountTotal: 50 * dollar, StartTime: day1, EndTime: future, Status: "active", Source: "admin"},
+				{UserId: gone.Id, PlanId: plan.Id, AmountTotal: 7 * dollar, StartTime: day1 - 86400, EndTime: future, Status: "active", Source: SubscriptionSourceAffiliateGift},
+			} {
+				require.NoError(t, DB.Create(&given).Error)
+				require.NoError(t, DB.Model(&UserSubscription{}).Where("id = ?", given.Id).Update("created_at", given.StartTime).Error)
+			}
+
+			// A thousand a month, replaced by six hundred from the second day
+			// without closing the first entry.
+			require.NoError(t, SaveChannelCosts([]ChannelCost{
+				{UserID: distributor.Id, MonthlyUSD: 1000, Start: day1 - 86400},
+				{UserID: distributor.Id, MonthlyUSD: 600, Start: day1 + 86400},
+			}))
+
+			insights, err := GetChannelInsights(r)
+			require.NoError(t, err)
+			require.Len(t, insights.Channels, 3)
+			assert.Len(t, insights.Costs, 2, "the stored entries are returned as saved")
+			assert.Equal(t, ChannelRow{
+				Segment: ChannelSegmentChannel, Channel: UserRef{distributor.Id, "distributor"}, Tier: "distributor",
+				Accounts: 3, FeeStart: day1 - 86400, FeeOverlap: true, FeeUSD: roundTo((1000+600)/30.0, 2),
+				GrantedUSD: 50, GiftOutstandingUSD: 50, GiftDormantUSD: 3,
+				CommissionEarnedUSD: 1, CommissionAccruingUSD: 1,
+			}, insights.Channels[0], "one day at each fee; the deleted account's credit is gone, the disabled one's dormant")
+			assert.Equal(t, ChannelRow{
+				Segment: ChannelSegmentInvited, Accounts: 1, Revenue: 20, Payers: 1, NewPayers: 1,
+				ClawedBackUSD: 15, CommissionUSD: 3,
+			}, insights.Channels[1], "both levels of commission on the buyer are charged where the buyer came from")
+			assert.Equal(t, ChannelRow{Segment: ChannelSegmentOrganic, Accounts: 1}, insights.Channels[2],
+				"the distributor's own account counts with organic, its given plan does not")
+		})
+	}
+}
+
+func TestWalletHistoryPaidShare(t *testing.T) {
+	history := walletHistory{1: {
+		{at: 100, given: 6},
+		{at: 200, money: 100, paid: 100},
+		{at: 300, given: -50},
+	}}
+	assert.Zero(t, history.paidShare(1, 150), "a gift spent before the first top-up is all gift")
+	assert.InDelta(t, 100.0/106, history.paidShare(1, 250), 1e-9)
+	assert.Equal(t, 1.0, history.paidShare(1, 400), "taking credit away never raises the share above one")
+	assert.Zero(t, history.paidShare(2, 400))
 }

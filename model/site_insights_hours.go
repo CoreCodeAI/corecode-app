@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
@@ -23,22 +24,44 @@ import (
 // outlives the logs it came from.
 //
 // A request belongs to the hour it started in (created_at - use_time), and is
-// in flight until created_at. An hour is final once no request started in it
-// can still be unlogged: a log is read up to insightHourLookahead after the
-// hour ends, so a request that runs longer than that is left out.
+// in flight until created_at. A retried request writes a log per attempt, all
+// with its request id; they are folded into one request, in flight from its
+// earliest start to its latest end, served when any attempt was, otherwise
+// failed under its last error's category. A log without a request id is a
+// request of its own, and one refused before any channel was in flight on
+// none. A request and all of its logs belong to the hour of its earliest
+// start; whole-second use times put its logs' starts up to a second apart,
+// and each hour reads insightHourMargin past its edges so that both hours
+// fold such a request alike. The per-channel rows, status codes and failure
+// reasons still count attempts. An hour is final once no request started in
+// it can still be unlogged: a log is read up to insightHourLookahead after
+// the hour ends, so a request that runs longer than that is left out.
+//
+// The pool peak counts only the requests an engine channel served
+// (EngineChannelIDs); the site peak counts every channel. An async task's
+// refund, its positive settlement delta and a violation fee move money in
+// the hour they were written in, and are no request (moneyOnly).
+//
+// A row stored under an older version is served as it is, its newer figures
+// reading zero, and counted in each view's stale_hours. The task rebuilds it
+// while every log of its hour is still there; once logs before it are
+// cleaned it keeps its old row for good.
 const (
-	insightHourVersion    = 4
-	insightHourLookahead  = 2 * 3600
-	insightHourSettle     = 10 * 60
-	insightHourMaxLogRows = 200_000
+	insightHourVersion   = 5
+	insightHourLookahead = 2 * 3600
+	insightHourMargin    = 5
+	insightHourSettle    = 10 * 60
 	// Breakdowns keep this many entries per hour, enough for the views'
 	// top lists after merging hours.
 	insightHourTopN = 30
 )
 
+// insightHourMaxLogRows bounds the logs one hour reads; tests lower it.
+var insightHourMaxLogRows = 200_000
+
 // InsightHour holds one hour's site-wide figures. Data is an insightSummary
-// in JSON; Version marks the format, and a row of another version is rebuilt
-// from the logs while they last.
+// in JSON; Version marks the format. A row of an older version is served as
+// it is and rebuilt by FillInsightHours while its logs last.
 type InsightHour struct {
 	HourStart int64  `json:"hour_start" gorm:"primaryKey;autoIncrement:false"`
 	Version   int    `json:"version" gorm:"not null"`
@@ -78,12 +101,20 @@ type InsightModelHour struct {
 }
 
 // insightSummary is an hour's site-wide figures. The capacity figures leave
-// root out; the quality breakdowns and clients count everyone.
+// root out; the quality breakdowns and clients count everyone. Requests and
+// Errors count requests, a request failed when no attempt was served;
+// Attempts and AttemptErrors count the attempts, retries included. Peak is
+// the most requests in flight on every channel; PoolPeak the most served
+// through the engine.
 type insightSummary struct {
 	Requests          int64            `json:"requests"`
 	Errors            int64            `json:"errors"`
+	Attempts          int64            `json:"attempts"`
+	AttemptErrors     int64            `json:"attempt_errors"`
 	Peak              int              `json:"peak"`
 	PeakAt            int64            `json:"peak_at"`
+	PoolPeak          int              `json:"pool_peak"`
+	PoolPeakAt        int64            `json:"pool_peak_at"`
 	PeakRPM           int64            `json:"peak_rpm"`
 	PeakRPMAt         int64            `json:"peak_rpm_at"`
 	EngineRejections  int64            `json:"engine_rejections"`
@@ -95,18 +126,33 @@ type insightSummary struct {
 	Clients           map[string]int64 `json:"clients,omitempty"`
 	// RootQuota is what root's own requests cost at list price.
 	RootQuota int64 `json:"root_quota,omitempty"`
+	// Groups is the customers' requests and consumption by the group each
+	// request was billed in; Plans the customers' consumption each
+	// subscription plan (by plan id) covered.
+	Groups map[string]*insightGroupUse `json:"groups,omitempty"`
+	Plans  map[int]int64               `json:"plans,omitempty"`
 	// Vendors splits the capacity figures by the vendor a model is sold
 	// under (ModelVendor), customers only, as the site-wide ones are.
 	Vendors   map[string]*vendorCapacity `json:"vendors,omitempty"`
 	Truncated bool                       `json:"truncated,omitempty"`
 }
 
+// insightGroupUse is one billing group's requests and consumption in an hour.
+type insightGroupUse struct {
+	Requests int64 `json:"requests"`
+	Quota    int64 `json:"quota"`
+}
+
 // vendorCapacity is one vendor's capacity figures in an hour.
 type vendorCapacity struct {
 	Requests          int64            `json:"requests"`
 	Errors            int64            `json:"errors"`
+	Attempts          int64            `json:"attempts"`
+	AttemptErrors     int64            `json:"attempt_errors"`
 	Peak              int              `json:"peak"`
 	PeakAt            int64            `json:"peak_at"`
+	PoolPeak          int              `json:"pool_peak"`
+	PoolPeakAt        int64            `json:"pool_peak_at"`
 	PeakRPM           int64            `json:"peak_rpm"`
 	PeakRPMAt         int64            `json:"peak_rpm_at"`
 	EngineRejections  int64            `json:"engine_rejections"`
@@ -144,9 +190,11 @@ func peakInHour(events []concurrencyEvent, start, end int64) (int, int64) {
 	return peak, at
 }
 
-// insightHour is one hour in memory: its summary, users and models.
+// insightHour is one hour in memory: its summary, users and models. stale is
+// a stored hour of an older version, whose newer figures read zero.
 type insightHour struct {
 	start    int64
+	stale    bool
 	summary  insightSummary
 	users    map[int]*InsightUserHour
 	models   map[string]*insightModel
@@ -245,10 +293,12 @@ func mergeCounts(into map[string]int64, from map[string]int64) {
 }
 
 // insightHourScope is what an hour's aggregation needs besides the logs: who
-// root is, and which plans were given away rather than bought.
+// root is, which plans were given away rather than bought, and which channels
+// the engine serves (EngineChannelIDs).
 type insightHourScope struct {
-	roots map[int]bool
-	gifts map[int]bool
+	roots   map[int]bool
+	gifts   map[int]bool
+	engines map[int]bool
 }
 
 func loadInsightHourScope() (insightHourScope, error) {
@@ -259,7 +309,11 @@ func loadInsightHourScope() (insightHourScope, error) {
 	if err := DB.Model(&UserSubscription{}).Where("source IN ?", []string{"admin", SubscriptionSourceAffiliateGift}).Pluck("id", &gifts).Error; err != nil {
 		return insightHourScope{}, err
 	}
-	scope := insightHourScope{roots: make(map[int]bool, len(roots)), gifts: make(map[int]bool, len(gifts))}
+	engines, err := EngineChannelIDs(operation_setting.EngineControlURL)
+	if err != nil {
+		return insightHourScope{}, err
+	}
+	scope := insightHourScope{roots: make(map[int]bool, len(roots)), gifts: make(map[int]bool, len(gifts)), engines: engines}
 	for _, id := range roots {
 		scope.roots[id] = true
 	}
@@ -269,27 +323,67 @@ func loadInsightHourScope() (insightHourScope, error) {
 	return scope, nil
 }
 
-// computeInsightHour aggregates the logs of the hour starting at start.
+// insightRequest is one request: its logs folded by request id. Each failed
+// attempt writes an error log timed from the request's start, and the attempt
+// that served it a consume log.
+type insightRequest struct {
+	userID        int
+	modelName     string
+	group         string
+	began         int64
+	attempts      int64
+	attemptErrors int64
+	served        bool
+	// pool is a request an engine channel served.
+	pool bool
+	// category is the last error's, the one a failed request is counted
+	// under.
+	category string
+	// held is whether the request was in flight on a channel, from heldFrom
+	// to heldTo; one refused before any channel was not.
+	held             bool
+	heldFrom, heldTo int64
+}
+
+func (h *insightHour) modelOf(name string) *insightModel {
+	model := h.models[name]
+	if model == nil {
+		model = &insightModel{row: InsightModelHour{HourStart: h.start, ModelName: name}, ttft: histogram{}, latency: histogram{}}
+		h.models[name] = model
+	}
+	return model
+}
+
+func (h *insightHour) userOf(userID int) *InsightUserHour {
+	user := h.users[userID]
+	if user == nil {
+		user = &InsightUserHour{HourStart: h.start, UserId: userID}
+		h.users[userID] = user
+	}
+	return user
+}
+
+// computeInsightHour aggregates the logs of the hour starting at start. The
+// per-channel rows, status codes and failure reasons count attempts; the
+// other figures count requests, folding a request's logs by its request id.
+// A log without one is a request of its own.
+//
+// An async task's refund, its positive settlement delta and a violation fee
+// move money in the hour they were written in and are no request
+// (moneyOnly). A task's submit log times its submission only, not the task,
+// so it stays out of the latency and first-token histograms.
 func computeInsightHour(start int64, scope insightHourScope) (*insightHour, error) {
 	end := start + 3600
-	var logs []insightLog
-	err := LOG_DB.Model(&Log{}).
-		Select("user_id, username, created_at, type, content, model_name, quota, prompt_tokens, completion_tokens, use_time, is_stream, ip, other, channel_id").
-		Where("created_at >= ? AND created_at < ? AND created_at - use_time < ? AND type IN ?",
-			start, end+insightHourLookahead, end, []int{LogTypeConsume, LogTypeError}).
-		Order("id desc").Limit(insightHourMaxLogRows + 1).Find(&logs).Error
+	logs, truncated, err := readInsightHourLogs(start, end)
 	if err != nil {
 		return nil, err
 	}
 	hour := &insightHour{
 		start:    start,
-		summary:  insightSummary{Truncated: len(logs) > insightHourMaxLogRows},
+		summary:  insightSummary{Truncated: truncated},
 		users:    make(map[int]*InsightUserHour),
 		models:   make(map[string]*insightModel),
 		channels: make(map[insightChannelKey]*insightChannel),
-	}
-	if hour.summary.Truncated {
-		logs = logs[:insightHourMaxLogRows]
 	}
 	summary := &hour.summary
 	summary.Categories = make(map[string]int64)
@@ -297,90 +391,86 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 	summary.StatusCodes = make(map[string]int64)
 	summary.ErrorReasons = make(map[string]int64)
 	summary.Clients = make(map[string]int64)
-	perMinute := make(map[int64]int64)
-	events := make([]concurrencyEvent, 0, len(logs)*2)
-	summary.Vendors = make(map[string]*vendorCapacity)
-	vendorEvents := make(map[string][]concurrencyEvent)
-	vendorMinutes := make(map[string]map[int64]int64)
-	vendorOf := func(name string) *vendorCapacity {
-		vendor := summary.Vendors[name]
-		if vendor == nil {
-			vendor = &vendorCapacity{Categories: make(map[string]int64)}
-			summary.Vendors[name] = vendor
-			vendorMinutes[name] = make(map[int64]int64)
-		}
-		return vendor
-	}
-	for _, log := range logs {
-		began := log.CreatedAt - int64(max(log.UseTime, 0))
-		finished := max(log.CreatedAt, began+1)
-		customer := !scope.roots[log.UserId]
-		vendorName := ModelVendor(log.ModelName)
-		if customer {
-			events = append(events, concurrencyEvent{began, 1, log.UserId}, concurrencyEvent{finished, -1, log.UserId})
-			vendorEvents[vendorName] = append(vendorEvents[vendorName], concurrencyEvent{began, 1, log.UserId}, concurrencyEvent{finished, -1, log.UserId})
-		}
-		if began < start {
-			// In flight during this hour but counted in the hour it began.
+	summary.Groups = make(map[string]*insightGroupUse)
+	summary.Plans = make(map[int]int64)
+	requests := make([]*insightRequest, 0, len(logs))
+	byID := make(map[string]*insightRequest, len(logs))
+	others := make([]logOtherFields, len(logs))
+	// requestOf is each log's request; nil for a log that only moves money.
+	requestOf := make([]*insightRequest, len(logs))
+	// Every log is folded before any is counted: whether a request is this
+	// hour's depends on the earliest start among all of its logs.
+	for i, log := range logs {
+		other := parseLogOther(log.Other)
+		others[i] = other
+		if _, ok := moneyOnly(log, other); ok || log.Type == LogTypeRefund {
 			continue
 		}
-		if customer {
-			summary.Requests++
-			perMinute[began-began%60]++
-			vendorOf(vendorName).Requests++
-			vendorMinutes[vendorName][began-began%60]++
-			user := hour.users[log.UserId]
-			if user == nil {
-				user = &InsightUserHour{HourStart: start, UserId: log.UserId}
-				hour.users[log.UserId] = user
+		began := log.CreatedAt - int64(max(log.UseTime, 0))
+		finished := max(log.CreatedAt, began+1)
+		request := byID[log.RequestId]
+		if request == nil {
+			request = &insightRequest{userID: log.UserId, began: began}
+			requests = append(requests, request)
+			if log.RequestId != "" {
+				byID[log.RequestId] = request
 			}
-			user.Requests++
 		}
-		model := hour.models[log.ModelName]
-		if model == nil {
-			model = &insightModel{row: InsightModelHour{HourStart: start, ModelName: log.ModelName}, ttft: histogram{}, latency: histogram{}}
-			hour.models[log.ModelName] = model
+		requestOf[i] = request
+		request.began = min(request.began, began)
+		request.modelName = log.ModelName
+		request.group = log.Group
+		request.attempts++
+		category := ""
+		if log.Type == LogTypeError {
+			category = classifyError(log.Content, other)
+			request.attemptErrors++
+			request.category = category
+		} else {
+			request.served = true
+			request.pool = request.pool || scope.engines[log.ChannelId]
 		}
-		model.row.Requests++
+		if category != ErrorNoChannel {
+			if !request.held {
+				request.held, request.heldFrom, request.heldTo = true, began, finished
+			}
+			request.heldFrom, request.heldTo = min(request.heldFrom, began), max(request.heldTo, finished)
+		}
+	}
+	for i, log := range logs {
+		other := others[i]
+		if quota, ok := moneyOnly(log, other); ok {
+			if log.CreatedAt >= start && log.CreatedAt < end {
+				hour.addQuota(log, other, quota, scope)
+			}
+			continue
+		}
+		request := requestOf[i]
+		if request == nil || request.began < start || request.began >= end {
+			// In flight during this hour, perhaps, but another hour's.
+			continue
+		}
+		customer := !scope.roots[log.UserId]
 		channel := hour.channelOf(log.ChannelId, log.ModelName)
 		if log.Type == LogTypeError {
-			model.row.Errors++
 			channel.addError(log.Content)
 			summary.StatusCodes[statusCodeName(logStatusCode(log.Content))]++
 			summary.ErrorReasons[errorReason(log.Content)]++
-			if customer {
-				summary.Errors++
-				category := classifyErrorLog(log.Content)
-				summary.Categories[category]++
-				vendor := vendorOf(vendorName)
-				vendor.Errors++
-				vendor.Categories[category]++
-				switch category {
-				case ErrorEngineConcurrency:
-					summary.EngineRejections++
-					vendor.EngineRejections++
-				case ErrorUpstreamRateLimit:
-					summary.UpstreamRateLimit++
-					vendor.UpstreamRateLimit++
-				}
-			}
 			continue
 		}
-		other := parseLogOther(log.Other)
+		model := hour.modelOf(log.ModelName)
 		channel.addConsumption(log, other, customer)
-		if customer {
-			hour.users[log.UserId].addConsumption(log.Quota, other, scope.gifts)
-		} else {
-			summary.RootQuota += int64(log.Quota)
-		}
+		hour.addQuota(log, other, int64(log.Quota), scope)
 		client := other.AdminInfo.Client
 		if client == "" {
 			client = "unknown"
 		}
 		summary.Clients[client]++
-		model.latency.add(int64(log.UseTime))
+		if !other.IsTask {
+			model.latency.add(int64(log.UseTime))
+		}
 		if log.IsStream {
-			if other.Frt > 0 {
+			if other.Frt > 0 && !other.IsTask {
 				model.ttft.add(int64(other.Frt))
 			}
 			reason := other.StreamStatus.EndReason
@@ -391,20 +481,97 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 		}
 		model.row.CacheRead += other.CacheTokens
 		model.row.CacheWrite += other.CacheCreationTokens
-		model.row.Uncached += int64(log.PromptTokens)
+		model.row.Uncached += uncachedPrompt(log, other)
 	}
 	summary.ErrorReasons = keepTop(summary.ErrorReasons, insightHourTopN)
 	summary.Clients = keepTop(summary.Clients, insightHourTopN)
+
+	perMinute := make(map[int64]int64)
+	events := make([]concurrencyEvent, 0, len(requests)*2)
+	var poolEvents []concurrencyEvent
+	summary.Vendors = make(map[string]*vendorCapacity)
+	vendorEvents := make(map[string][]concurrencyEvent)
+	vendorPoolEvents := make(map[string][]concurrencyEvent)
+	vendorMinutes := make(map[string]map[int64]int64)
+	vendorOf := func(name string) *vendorCapacity {
+		vendor := summary.Vendors[name]
+		if vendor == nil {
+			vendor = &vendorCapacity{Categories: make(map[string]int64)}
+			summary.Vendors[name] = vendor
+			vendorMinutes[name] = make(map[int64]int64)
+		}
+		return vendor
+	}
+	for _, request := range requests {
+		customer := !scope.roots[request.userID]
+		vendorName := ModelVendor(request.modelName)
+		if customer && request.held {
+			in, out := concurrencyEvent{request.heldFrom, 1, request.userID}, concurrencyEvent{request.heldTo, -1, request.userID}
+			events = append(events, in, out)
+			vendorEvents[vendorName] = append(vendorEvents[vendorName], in, out)
+			// Only a request the engine served held a slot of the pool.
+			if request.pool {
+				poolEvents = append(poolEvents, in, out)
+				vendorPoolEvents[vendorName] = append(vendorPoolEvents[vendorName], in, out)
+			}
+		}
+		if request.began < start || request.began >= end {
+			continue
+		}
+		model := hour.modelOf(request.modelName)
+		model.row.Requests++
+		if !request.served {
+			model.row.Errors++
+		}
+		if !customer {
+			continue
+		}
+		summary.Requests++
+		summary.Attempts += request.attempts
+		summary.AttemptErrors += request.attemptErrors
+		minute := request.began - request.began%60
+		perMinute[minute]++
+		vendor := vendorOf(vendorName)
+		vendor.Requests++
+		vendor.Attempts += request.attempts
+		vendor.AttemptErrors += request.attemptErrors
+		vendorMinutes[vendorName][minute]++
+		hour.userOf(request.userID).Requests++
+		if request.group != "" {
+			hour.groupOf(request.group).Requests++
+		}
+		if request.served {
+			continue
+		}
+		summary.Errors++
+		summary.Categories[request.category]++
+		vendor.Errors++
+		vendor.Categories[request.category]++
+		switch request.category {
+		case ErrorEngineConcurrency:
+			summary.EngineRejections++
+			vendor.EngineRejections++
+		case ErrorUpstreamRateLimit:
+			summary.UpstreamRateLimit++
+			vendor.UpstreamRateLimit++
+		}
+	}
 	for minute, count := range perMinute {
 		if count > summary.PeakRPM || count == summary.PeakRPM && minute < summary.PeakRPMAt {
 			summary.PeakRPM, summary.PeakRPMAt = count, minute
 		}
+	}
+	if len(poolEvents) > 0 {
+		summary.PoolPeak, summary.PoolPeakAt = peakInHour(poolEvents, start, end)
 	}
 	// A vendor in flight during the hour but with no request starting in it
 	// still has its peak.
 	for name, list := range vendorEvents {
 		vendor := vendorOf(name)
 		vendor.Peak, vendor.PeakAt = peakInHour(list, start, end)
+		if pool := vendorPoolEvents[name]; len(pool) > 0 {
+			vendor.PoolPeak, vendor.PoolPeakAt = peakInHour(pool, start, end)
+		}
 		for minute, count := range vendorMinutes[name] {
 			if count > vendor.PeakRPM || count == vendor.PeakRPM && minute < vendor.PeakRPMAt {
 				vendor.PeakRPM, vendor.PeakRPMAt = count, minute
@@ -426,11 +593,7 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 	current := 0
 	perUser := make(map[int]int)
 	userPeak := func(userID int, at int64) {
-		user := hour.users[userID]
-		if user == nil {
-			user = &InsightUserHour{HourStart: start, UserId: userID}
-			hour.users[userID] = user
-		}
+		user := hour.userOf(userID)
 		if perUser[userID] > user.Peak {
 			user.Peak, user.PeakAt = perUser[userID], at
 		}
@@ -470,27 +633,154 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 	return hour, nil
 }
 
-// addConsumption adds a consumed request to the user's hour, split by what
-// paid for it. A request is billed to one source, and when that source runs
+// readInsightHourLogs reads the logs the hour starting at start folds: those
+// of the requests that may have started in it, up to insightHourLookahead
+// after it ends, and those within insightHourMargin of either edge, so that
+// this hour and its neighbours see the same logs of a request whose attempts
+// straddle an edge and agree on which hour owns it.
+//
+// Past the row cap the earliest rows are kept, so the start of the hour is
+// whole, and the result says it was truncated. A request with an error log
+// among them may have its later attempts past the cut; those are read by
+// request id, so the request is not judged failed from part of its logs.
+func readInsightHourLogs(start, end int64) ([]insightLog, bool, error) {
+	query := func() *gorm.DB {
+		return LOG_DB.Model(&Log{}).
+			Select("id, user_id, username, created_at, type, content, model_name, quota, prompt_tokens, completion_tokens, use_time, is_stream, ip, other, channel_id, request_id, "+logGroupCol).
+			Where("created_at >= ? AND created_at < ? AND created_at - use_time < ? AND type IN ?",
+				start-insightHourMargin, end+insightHourLookahead, end+insightHourMargin, []int{LogTypeConsume, LogTypeError, LogTypeRefund})
+	}
+	var logs []insightLog
+	if err := query().Order("id asc").Limit(insightHourMaxLogRows + 1).Find(&logs).Error; err != nil {
+		return nil, false, err
+	}
+	if len(logs) <= insightHourMaxLogRows {
+		return logs, false, nil
+	}
+	logs = logs[:insightHourMaxLogRows]
+	cut := logs[len(logs)-1].Id
+	seen := make(map[string]bool)
+	var pending []string
+	for _, log := range logs {
+		if log.Type == LogTypeError && log.RequestId != "" && !seen[log.RequestId] {
+			seen[log.RequestId] = true
+			pending = append(pending, log.RequestId)
+		}
+	}
+	for ids := range slices.Chunk(pending, 500) {
+		var more []insightLog
+		if err := query().Where("request_id IN ? AND id > ?", ids, cut).Order("id asc").Find(&more).Error; err != nil {
+			return nil, false, err
+		}
+		logs = append(logs, more...)
+	}
+	return logs, true, nil
+}
+
+// moneyOnly reports a log that moves money without being a request or an
+// attempt, and the quota it adds. An async task's refund (negative) and its
+// positive settlement delta, a second consume log carrying
+// pre_consumed_quota: a task log is told apart by other.is_task
+// (taskBillingOther and the submit log) or, on a Midjourney refund,
+// other.task_id; RefundTaskQuota, RecalculateTaskQuota and
+// RefundMidjourneyQuota are the only writers of refund logs. And a violation
+// fee (ChargeViolationFeeIfNeeded), a consume log written after the refused
+// request's error log with its request id: the request stays failed.
+func moneyOnly(log insightLog, other logOtherFields) (int64, bool) {
+	switch {
+	case log.Type == LogTypeRefund && (other.IsTask || other.TaskId != ""):
+		return -int64(log.Quota), true
+	case log.Type == LogTypeConsume && other.IsTask && other.PreConsumedQuota != nil:
+		return int64(log.Quota), true
+	case log.Type == LogTypeConsume && other.ViolationFee:
+		return int64(log.Quota), true
+	}
+	return 0, false
+}
+
+// uncachedPrompt is a consume log's input tokens that were neither read from
+// nor written to the cache. Billing (service/text_quota.go) counts the cache
+// inside prompt_tokens unless the usage is Anthropic's
+// (IsClaudeUsageSemantic) or legacy Claude-derived OpenAI usage, which
+// reports 5m or 1h cache writes with no usage source or semantic. The log
+// records that rule as prompt_includes_cache. An older log is judged from
+// what it kept: Anthropic usage wrote usage_semantic "anthropic" or
+// claude, and only Claude usage writes the 5m and 1h write counts, so a log
+// with either is taken as excluding the cache; the usage source is not
+// logged, so Claude-derived usage that carried one reads as excluding too.
+func uncachedPrompt(log insightLog, other logOtherFields) int64 {
+	prompt := int64(log.PromptTokens)
+	includes := other.UsageSemantic != "anthropic" && !other.Claude &&
+		other.CacheCreationTokens5m == 0 && other.CacheCreationTokens1h == 0
+	if other.PromptIncludesCache != nil {
+		includes = *other.PromptIncludesCache
+	}
+	if !includes {
+		return prompt
+	}
+	return max(0, prompt-other.CacheTokens-other.CacheCreationTokens)
+}
+
+func (h *insightHour) groupOf(name string) *insightGroupUse {
+	group := h.summary.Groups[name]
+	if group == nil {
+		group = &insightGroupUse{}
+		h.summary.Groups[name] = group
+	}
+	return group
+}
+
+// addQuota adds what a log charged, negative for a refund, to its user,
+// group, plan and channel, or to root's own figure. A refund is counted in
+// its own hour, which may hold less of the user's, channel's, group's or
+// plan's consumption than it returns, so an hour's figure may be negative:
+// it is stored as it is, and the views stop a figure at zero only once it is
+// summed over what they show.
+func (h *insightHour) addQuota(log insightLog, other logOtherFields, quota int64, scope insightHourScope) {
+	if scope.roots[log.UserId] {
+		h.summary.RootQuota += quota
+		return
+	}
+	h.channelOf(log.ChannelId, log.ModelName).row.Quota += quota
+	plan := h.userOf(log.UserId).addConsumption(quota, other, scope.gifts)
+	if log.Group != "" {
+		h.groupOf(log.Group).Quota += quota
+	}
+	if other.SubscriptionPlanId != 0 && plan != 0 {
+		h.summary.Plans[other.SubscriptionPlanId] += plan
+	}
+}
+
+// addConsumption adds a log's charge, negative for a refund, to the user's
+// hour, split by what paid for it, and returns the part a subscription plan
+// covered. A request is billed to one source, and when that source runs
 // short the other covers the rest (billing_overflow_quota). A log without a
 // source predates the field and was billed to the wallet. A plan that covers
 // a wallet-first request's overflow is not named in the log, so that part
-// counts as bought.
-func (u *InsightUserHour) addConsumption(quota int, other logOtherFields, gifts map[int]bool) {
-	total := int64(quota)
-	overflow := min(max(other.BillingOverflowQuota, 0), max(total, 0))
-	wallet := total - overflow
+// counts as bought and is no named plan's. Whether the plan was given is
+// read from the log's subscription_gift, and from the plans given now on a
+// log from before it, which loses a given plan since deleted.
+func (u *InsightUserHour) addConsumption(quota int64, other logOtherFields, gifts map[int]bool) int64 {
+	overflow := min(max(other.BillingOverflowQuota, 0), max(quota, 0))
+	wallet := quota - overflow
+	var plan int64
 	if other.BillingSource == "subscription" {
 		wallet = 0
 		if other.BillingOverflowSource == "wallet" {
 			wallet = overflow
 		}
-		if gifts[other.SubscriptionId] {
-			u.GiftQuota += total - wallet
+		plan = quota - wallet
+		gift := gifts[other.SubscriptionId]
+		if other.SubscriptionGift != nil {
+			gift = *other.SubscriptionGift
+		}
+		if gift {
+			u.GiftQuota += plan
 		}
 	}
-	u.Quota += total
+	u.Quota += quota
 	u.WalletQuota += wallet
+	return plan
 }
 
 func (h *insightHour) save() error {
@@ -631,30 +921,37 @@ func recentOpenInsightHour(start int64) (*insightHour, error) {
 }
 
 // loadInsightHours returns every hour that starts in [r.Start, r.End),
-// whole hours in UTC, oldest first. Stored hours are read; a final hour that
-// is missing or of an old version is computed and stored; an open hour comes
-// from recentOpenInsightHour.
+// whole hours in UTC, oldest first (loadInsightHoursStale).
 func loadInsightHours(r InsightsRange) ([]*insightHour, error) {
+	hours, _, err := loadInsightHoursStale(r)
+	return hours, err
+}
+
+// loadInsightHoursStale returns every hour that starts in [r.Start, r.End),
+// whole hours in UTC, oldest first, and how many of them are stored under an
+// older version. A stored hour is served as it is, whatever its version:
+// the figures an older version did not have read zero until FillInsightHours
+// rebuilds it. Only a final hour with no stored row is computed and stored
+// here; an open hour comes from recentOpenInsightHour.
+func loadInsightHoursStale(r InsightsRange) ([]*insightHour, int, error) {
 	first := r.Start - ((r.Start%3600)+3600)%3600
 	now := time.Now().Unix()
 	var stored []InsightHour
 	if err := DB.Where("hour_start >= ? AND hour_start < ?", first, r.End).Find(&stored).Error; err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	hours := make(map[int64]*insightHour, len(stored))
 	for _, row := range stored {
-		if row.Version != insightHourVersion {
-			continue
-		}
 		hour := &insightHour{start: row.HourStart, users: map[int]*InsightUserHour{}, models: map[string]*insightModel{}, channels: map[insightChannelKey]*insightChannel{}}
 		if err := common.UnmarshalJsonStr(row.Data, &hour.summary); err != nil {
 			continue
 		}
+		hour.stale = row.Version < insightHourVersion
 		hours[row.HourStart] = hour
 	}
 	var users []InsightUserHour
 	if err := DB.Where("hour_start >= ? AND hour_start < ?", first, r.End).Find(&users).Error; err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for i := range users {
 		if hour := hours[users[i].HourStart]; hour != nil {
@@ -663,7 +960,7 @@ func loadInsightHours(r InsightsRange) ([]*insightHour, error) {
 	}
 	var models []InsightModelHour
 	if err := DB.Where("hour_start >= ? AND hour_start < ?", first, r.End).Find(&models).Error; err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for _, row := range models {
 		if hour := hours[row.HourStart]; hour != nil {
@@ -672,7 +969,7 @@ func loadInsightHours(r InsightsRange) ([]*insightHour, error) {
 	}
 	var channelRows []InsightChannelHour
 	if err := DB.Where("hour_start >= ? AND hour_start < ?", first, r.End).Find(&channelRows).Error; err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for _, row := range channelRows {
 		if hour := hours[row.HourStart]; hour != nil {
@@ -682,9 +979,10 @@ func loadInsightHours(r InsightsRange) ([]*insightHour, error) {
 
 	earliest, err := firstLogAt()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var scope *insightHourScope
+	stale := 0
 	result := make([]*insightHour, 0, (r.End-first)/3600+1)
 	for start := first; start < r.End; start += 3600 {
 		hour := hours[start]
@@ -696,7 +994,7 @@ func loadInsightHours(r InsightsRange) ([]*insightHour, error) {
 			}
 			if !final {
 				if hour, err = recentOpenInsightHour(start); err != nil {
-					return nil, err
+					return nil, 0, err
 				}
 				result = append(result, hour)
 				continue
@@ -704,26 +1002,53 @@ func loadInsightHours(r InsightsRange) ([]*insightHour, error) {
 			if scope == nil {
 				loaded, err := loadInsightHourScope()
 				if err != nil {
-					return nil, err
+					return nil, 0, err
 				}
 				scope = &loaded
 			}
 			if hour, err = computeInsightHour(start, *scope); err != nil {
-				return nil, err
+				return nil, 0, err
 			}
-			if err := hour.save(); err != nil {
-				// The other color stored it first; the figures are the same.
+			if err := storeInsightHour(hour); err != nil {
 				common.SysLog(common.LogText("site insights hour %d not stored: %s", start, err.Error()))
 			}
+		} else if hour.stale {
+			stale++
 		}
 		result = append(result, hour)
 	}
-	return result, nil
+	return result, stale, nil
 }
 
-// FillInsightHours stores the final hours of the last days that are missing,
-// newest first, at most limit of them, and returns how many it stored. The
-// views compute a missing hour on demand; this keeps them from having to.
+// storeInsightHour saves a computed hour. During a release both colors may
+// store the same hour at once: each save deletes and inserts in one
+// transaction, so the hour is never left missing, and the one that loses
+// fails on the primary key or a deadlock and rolls back whole. That failure
+// is no error when the hour is now stored at this version or a newer one,
+// since the other runner wrote the same figures.
+func storeInsightHour(hour *insightHour) error {
+	err := hour.save()
+	if err == nil {
+		return nil
+	}
+	var version []int
+	if DB.Model(&InsightHour{}).Where("hour_start = ?", hour.start).Pluck("version", &version).Error == nil &&
+		len(version) == 1 && version[0] >= insightHourVersion {
+		return nil
+	}
+	return err
+}
+
+// FillInsightHours stores the final hours of the last days, newest first, at
+// most limit of them, and returns how many it stored. It first computes the
+// hours with no stored row; the views compute a missing hour on demand, and
+// this keeps them from having to. With room left, it rebuilds the hours
+// stored under an older version, newest first, but only those whose logs are
+// all still there: a request belongs to the hour it started in and its logs
+// are written after that, so an hour that starts at or after the earliest
+// log is whole. An older hour keeps its old row for good, and the views count
+// it in stale_hours. The rebuild waits while insightRebuildHeld says a server
+// of the last release may still be running.
 func FillInsightHours(days int64, limit int) (int, error) {
 	now := time.Now().Unix()
 	newest := now - now%3600
@@ -735,33 +1060,74 @@ func FillInsightHours(days int64, limit int) (int, error) {
 	if err != nil || earliest == 0 {
 		return 0, err
 	}
-	oldest = max(oldest, earliest-earliest%3600-insightHourLookahead)
-	var have []int64
-	if err := DB.Model(&InsightHour{}).Where("hour_start >= ? AND hour_start <= ? AND version = ?", oldest, newest, insightHourVersion).
-		Pluck("hour_start", &have).Error; err != nil {
+	var have []InsightHour
+	if err := DB.Model(&InsightHour{}).Select("hour_start, version, created_at").
+		Where("hour_start >= ? AND hour_start <= ?", oldest, newest).Find(&have).Error; err != nil {
 		return 0, err
 	}
-	stored := make(map[int64]bool, len(have))
-	for _, start := range have {
-		stored[start] = true
+	stored := make(map[int64]int, len(have))
+	for _, row := range have {
+		stored[row.HourStart] = row.Version
 	}
-	scope, err := loadInsightHourScope()
-	if err != nil {
-		return 0, err
-	}
+	var scope *insightHourScope
 	filled := 0
-	for start := newest; start >= oldest && filled < limit; start -= 3600 {
-		if stored[start] {
-			continue
+	store := func(start int64) error {
+		if scope == nil {
+			loaded, err := loadInsightHourScope()
+			if err != nil {
+				return err
+			}
+			scope = &loaded
 		}
-		hour, err := computeInsightHour(start, scope)
+		hour, err := computeInsightHour(start, *scope)
 		if err != nil {
-			return filled, err
+			return err
 		}
-		if err := hour.save(); err != nil {
-			return filled, err
+		if err := storeInsightHour(hour); err != nil {
+			return err
 		}
 		filled++
+		return nil
+	}
+	for start := newest; start >= max(oldest, earliest-earliest%3600-insightHourLookahead) && filled < limit; start -= 3600 {
+		if _, ok := stored[start]; ok {
+			continue
+		}
+		if err := store(start); err != nil {
+			return filled, err
+		}
+	}
+	if insightRebuildHeld(have, now) {
+		return filled, nil
+	}
+	for start := newest; start >= max(oldest, earliest) && filled < limit; start -= 3600 {
+		if version, ok := stored[start]; !ok || version >= insightHourVersion {
+			continue
+		}
+		if err := store(start); err != nil {
+			return filled, err
+		}
 	}
 	return filled, nil
+}
+
+// A server of the release before this one treats a row of this version as
+// missing and stores the hour again under its own. During a release both run
+// until the old one's last request ends, so rebuilding at once would have the
+// two rewrite the same hours in turn. The rebuild therefore waits for
+// insightRebuildStartDelay after this process started, and for as long as any
+// older-version row was stored within insightRebuildQuiet: only a server that
+// is still running writes those.
+var (
+	insightRebuildStartDelay int64 = 15 * 60
+	insightRebuildQuiet      int64 = 30 * 60
+)
+
+func insightRebuildHeld(rows []InsightHour, now int64) bool {
+	if now-common.StartTime < insightRebuildStartDelay {
+		return true
+	}
+	return slices.ContainsFunc(rows, func(row InsightHour) bool {
+		return row.Version < insightHourVersion && row.CreatedAt > now-insightRebuildQuiet
+	})
 }

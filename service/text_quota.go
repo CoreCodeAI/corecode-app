@@ -541,23 +541,25 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	}
 
 	attachQuotaSaturation(ctx, relayInfo, other)
+	// Mirrors the base-price rule above: only OpenAI usage counts the cache
+	// inside prompt_tokens. The log keeps it, for readers of the stored log.
+	promptIncludesCache := !summary.IsClaudeUsageSemantic && !isLegacyClaudeDerivedOpenAIUsage(relayInfo, billingUsage)
+	other.SetPublic("prompt_includes_cache", promptIncludesCache)
 
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
-		ChannelId:        relayInfo.ChannelId,
-		PromptTokens:     summary.PromptTokens,
-		CompletionTokens: summary.CompletionTokens,
-		ModelName:        logModel,
-		TokenName:        summary.TokenName,
-		Quota:            summary.Quota,
-		Content:          extraContent,
-		TokenId:          relayInfo.TokenId,
-		UseTimeSeconds:   int(summary.UseTimeSeconds),
-		IsStream:         relayInfo.IsStream,
-		Group:            relayInfo.UsingGroup,
-		Other:            other,
-		// Mirrors the base-price rule above: only OpenAI usage counts the
-		// cache inside prompt_tokens.
-		PromptIncludesCache: !summary.IsClaudeUsageSemantic && !isLegacyClaudeDerivedOpenAIUsage(relayInfo, billingUsage),
+		ChannelId:           relayInfo.ChannelId,
+		PromptTokens:        summary.PromptTokens,
+		CompletionTokens:    summary.CompletionTokens,
+		ModelName:           logModel,
+		TokenName:           summary.TokenName,
+		Quota:               summary.Quota,
+		Content:             extraContent,
+		TokenId:             relayInfo.TokenId,
+		UseTimeSeconds:      int(summary.UseTimeSeconds),
+		IsStream:            relayInfo.IsStream,
+		Group:               relayInfo.UsingGroup,
+		Other:               other,
+		PromptIncludesCache: promptIncludesCache,
 	})
 	relayInfo.PerformanceOutputTokens = int64(summary.CompletionTokens)
 }

@@ -22,16 +22,29 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 import {
+  financeMargins,
+  financeRange,
+  marginTone,
+  monthProjection,
+} from '../finance-analysis'
+import {
   clientFamilies,
   joinSentences,
   MARGIN_VENDORS,
+  PRICE_MONTH_DAYS,
+  SHORT_ROI_DAYS,
   SMALL_SAMPLE,
+  tableState,
+  TONES,
   useChargeFormat,
+  useInsightsDefinitions,
   useInsightsFormat,
   useVendorName,
-  vendorMargins,
+  type InsightsRangeInfo,
+  type SourceState,
 } from '../lib'
 import type { BusinessInsights, FinanceInsights } from '../types'
+import { StaleNote } from './insight-kit'
 import {
   Breakdown,
   MetricGrid,
@@ -55,39 +68,72 @@ const MARGIN_TONES: Record<Tone, string> = {
  */
 export function VendorMarginPanel(props: {
   data: FinanceInsights | undefined
+  range?: InsightsRangeInfo
+  /** The funds view's state, so a failed read is not drawn as loading. */
+  source?: SourceState
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const defs = useInsightsDefinitions()
   const charge = useChargeFormat(props.data)
   const name = useVendorName()
   const data = props.data
-  const rows = data ? vendorMargins(data, charge.rate) : []
-  const revenue = rows.reduce((sum, row) => sum + row.revenue, 0)
-  const cost = rows.reduce((sum, row) => sum + row.cost, 0)
+  const margins = data ? financeMargins(data, charge.rate) : undefined
+  const rows = margins?.rows ?? []
+  const upstream = !!margins?.upstreamRead
+  const revenue = margins?.revenue ?? 0
+  const cost = margins?.cost ?? 0
   const margin = revenue - cost
+  const days = financeRange(data, props.range).days
+  // A month's range already reads as a month; any other is projected to one.
+  const month =
+    days > 0 && Math.abs(days - PRICE_MONTH_DAYS) >= 0.5
+      ? monthProjection(revenue, cost, days)
+      : undefined
   const scale = Math.max(
     ...rows.map((row) => Math.max(row.revenue, row.cost)),
     1
   )
   const losing = rows.filter((row) => row.margin < 0 && row.cost > 0)
   const unpriced = rows.filter((row) => row.unpriced > 0)
-  const tone = (value: number, base: number): Tone => {
-    if (value < 0) return 'danger'
-    if (base > 0 && value / base < 0.2) return 'warning'
-    return 'good'
-  }
+  const freeAccounts =
+    (margins?.unpricedAccounts ?? 0) + (margins?.ungroupedAccounts ?? 0)
+  const failed = !data && props.source?.status === 'error'
 
+  const totals = {
+    revenue: fmt.cny(revenue),
+    cost: fmt.cny(cost),
+    margin: fmt.cny(margin),
+    rate: revenue > 0 ? fmt.pct(margin / revenue) : '-',
+  }
+  const monthVars = month && {
+    revenue: fmt.cny(month.revenue),
+    cost: fmt.cny(month.cost),
+    margin: fmt.cny(month.margin),
+    days: fmt.num(Math.round(days * 10) / 10),
+  }
   const sentence = data
     ? joinSentences(
-        t(
-          'Earned {{revenue}} against {{cost}} of accounts: gross margin {{margin}} ({{rate}}).',
-          {
-            revenue: fmt.cny(revenue),
-            cost: fmt.cny(cost),
-            margin: fmt.cny(margin),
-            rate: revenue > 0 ? fmt.pct(margin / revenue) : '-',
-          }
-        ),
+        upstream
+          ? t(
+              'Earned {{revenue}} against {{cost}} of accounts and upstream bills: gross margin {{margin}} ({{rate}}).',
+              totals
+            )
+          : t(
+              'Earned {{revenue}} against {{cost}} of accounts: gross margin {{margin}} ({{rate}}).',
+              totals
+            ),
+        monthVars &&
+          revenue + cost > 0 &&
+          (upstream
+            ? t(
+                'At this pace a 30-day month earns {{revenue}} against {{cost}} of accounts and upstream bills, margin {{margin}} (projected from {{days}} days).',
+                monthVars
+              )
+            : t(
+                'At this pace a 30-day month earns {{revenue}} against {{cost}} of accounts, margin {{margin}} (projected from {{days}} days).',
+                monthVars
+              )),
         ...losing.map((row) =>
           t('{{vendor}} loses {{amount}}.', {
             vendor: name(row.vendor),
@@ -104,20 +150,94 @@ export function VendorMarginPanel(props: {
       )
     : undefined
 
+  // What the margin leaves out or reads high by, worst first.
+  const warnings: string[] = []
+  if (data && freeAccounts > 0) {
+    warnings.push(
+      t(
+        '{{count}} pool accounts have no recorded price or vendor and count as free: the margin reads high by what they cost.',
+        { count: fmt.num(freeAccounts) }
+      )
+    )
+  }
+  if (margins && margins.staleBills.length > 0) {
+    const oldest = Math.min(...margins.staleBills.map((item) => item.at))
+    warnings.push(
+      t(
+        'Upstream bills for {{vendors}} were last read {{time}}; revenue since then has no bill subtracted yet.',
+        {
+          vendors: margins.staleBills
+            .map((item) => name(item.vendor))
+            .join(t(', ')),
+          time: fmt.time(oldest),
+        }
+      )
+    )
+  }
+  const notes: string[] = []
+  if (margins && margins.unattributed > 0) {
+    notes.push(
+      t(
+        '{{amount}} of upstream cost fell on channels no customer used in the range: it is in the total, in no vendor’s row.',
+        { amount: fmt.cny(margins.unattributed) }
+      )
+    )
+  }
+  // Only the pool now is known, so a long range sets past revenue against
+  // today's accounts.
+  if (data && days > SHORT_ROI_DAYS && rows.some((row) => row.accounts > 0)) {
+    const observed = data.plan_accounts_observed_at_ms ?? 0
+    notes.push(
+      observed > 0
+        ? t(
+            'Account cost is the pool as read {{time}}, over all {{days}} days: accounts bought or dropped during the range are not reflected.',
+            {
+              time: fmt.time(Math.floor(observed / 1000)),
+              days: fmt.num(Math.round(days)),
+            }
+          )
+        : t(
+            'Account cost is today’s pool over all {{days}} days: accounts bought or dropped during the range are not reflected.',
+            { days: fmt.num(Math.round(days)) }
+          )
+    )
+  }
+  const costLabel = upstream ? t('Cost') : t('Account cost')
+
   return (
     <Panel
       title={t('Gross margin by vendor')}
       description={sentence}
-      help={t(
-        'Revenue is the revenue earned in the range (what customers’ use and running plans earned), shared out by each vendor’s part of customers’ list-price consumption; root’s own use is left out. Revenue per list-price dollar is not known by model, so each vendor earns the site’s average: an estimate. Cost is the monthly price of every account in the pool now, over the range’s days, at the site’s exchange rate; accounts without a recorded price count as free. Payment fees are not counted.'
-      )}
+      error={
+        failed ? (props.source?.error ?? t('Could not be read')) : undefined
+      }
+      help={
+        upstream
+          ? joinSentences(
+              t(
+                'Revenue is the revenue earned in the range (what customers’ use and running plans earned), shared out by each vendor’s part of customers’ list-price consumption; root’s own use is left out. Revenue per list-price dollar is not known by model, so each vendor earns the site’s average: an estimate. Cost is the pool’s accounts at their monthly price, today’s pool over the range’s days at the site’s exchange rate, plus what the billed upstreams charged for the vendor’s models. Image and video models have no pool accounts: their cost is the supplier’s bill. Accounts with no recorded price or no vendor count as free and are flagged. Payment fees are not counted.'
+              ),
+              defs.upstreamBill,
+              defs.fee
+            )
+          : t(
+              'Revenue is the revenue earned in the range (what customers’ use and running plans earned), shared out by each vendor’s part of customers’ list-price consumption; root’s own use is left out. Revenue per list-price dollar is not known by model, so each vendor earns the site’s average: an estimate. Cost is the monthly price of every account in the pool now, over the range’s days, at the site’s exchange rate; accounts without a recorded price count as free. Payment fees are not counted.'
+            )
+      }
     >
-      {!data && (
+      {!data && !failed && (
         <div className='grid gap-3'>
           {MARGIN_VENDORS.slice(0, 3).map((vendor) => (
             <Skeleton key={vendor} className='h-12 w-full' />
           ))}
         </div>
+      )}
+      {warnings.length > 0 && (
+        <ul className={cn('mb-3 grid gap-1 text-xs', TONES.warning)}>
+          {warnings.map((text) => (
+            <li key={text}>{text}</li>
+          ))}
+        </ul>
       )}
       {data && rows.length === 0 && (
         <p className='text-muted-foreground text-xs'>
@@ -127,7 +247,7 @@ export function VendorMarginPanel(props: {
       {data && rows.length > 0 && (
         <ul className='grid gap-3'>
           {rows.map((row) => {
-            const rowTone = tone(row.margin, row.revenue)
+            const rowTone = marginTone(row.margin, row.revenue)
             return (
               <li
                 key={row.vendor}
@@ -177,10 +297,15 @@ export function VendorMarginPanel(props: {
                     <dd className='text-sm'>{fmt.cny(row.revenue)}</dd>
                   </div>
                   <div>
-                    <dt className='text-muted-foreground'>
-                      {t('Account cost')}
-                    </dt>
+                    <dt className='text-muted-foreground'>{costLabel}</dt>
                     <dd className='text-sm'>{fmt.cny(row.cost)}</dd>
+                    {upstream && row.upstreamCost > 0 && (
+                      <dd className='text-muted-foreground'>
+                        {t('upstream {{amount}}', {
+                          amount: fmt.cny(row.upstreamCost),
+                        })}
+                      </dd>
+                    )}
                   </div>
                   <div>
                     <dt className='text-muted-foreground'>
@@ -214,10 +339,15 @@ export function VendorMarginPanel(props: {
           </span>
           <span className='inline-flex items-center gap-1.5'>
             <span className='size-2 rounded-full bg-amber-500' />
-            {t('Account cost')}
+            {costLabel}
           </span>
         </p>
       )}
+      {notes.map((text) => (
+        <p key={text} className='text-muted-foreground mt-1 text-xs'>
+          {text}
+        </p>
+      ))}
     </Panel>
   )
 }
@@ -238,14 +368,22 @@ function ShareBar(props: { label: string; share: number }) {
 }
 
 /** Each model's consumption, its share and the revenue it is credited with. */
-export function ModelMixPanel(props: { data: BusinessInsights | undefined }) {
+export function ModelMixPanel(props: {
+  data: BusinessInsights | undefined
+  /** The business view's query, so a failure is not read as no consumption. */
+  source?: SourceState
+}) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const data = props.data
   const top = data?.models?.[0]
+  const failed = !data && props.source?.status === 'error'
   return (
     <Panel
       title={t('Revenue by model')}
+      error={
+        failed ? (props.source?.error ?? t('Could not be read')) : undefined
+      }
       description={
         top
           ? t('{{model}} takes {{share}} of consumption.', {
@@ -263,6 +401,7 @@ export function ModelMixPanel(props: { data: BusinessInsights | undefined }) {
         rowKey={(row) => row.model}
         faded={(row) => row.requests < SMALL_SAMPLE}
         empty={t('No consumption in this range')}
+        state={tableState(props.source, data?.models)}
         columns={[
           {
             key: 'model',
@@ -313,11 +452,19 @@ export function ModelMixPanel(props: { data: BusinessInsights | undefined }) {
 export function ReferralPanel(props: {
   data: BusinessInsights | undefined
   previous?: BusinessInsights
+  /** The business view's query, so a failure is not read as no referrals. */
+  source?: SourceState
+  previousSource?: SourceState
+  range?: InsightsRangeInfo
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const data = props.data
   const previous = props.previous
+  const failed = !data && props.source?.status === 'error'
+  const loading = !data && !failed
+  const previousFailed =
+    !!data && !previous && props.previousSource?.status === 'error'
   // Commission is credit, sold at ¥1 a dollar, so it compares with yuan paid.
   const returned =
     data && data.commission_usd > 0
@@ -325,9 +472,11 @@ export function ReferralPanel(props: {
       : null
   const share =
     data && data.revenue > 0 ? data.invitee_payments / data.revenue : 0
+  const range = props.range
   return (
     <Panel
       title={t('Referrals')}
+      error={failed ? t('Could not be read') : undefined}
       description={
         data
           ? joinSentences(
@@ -339,20 +488,31 @@ export function ReferralPanel(props: {
                 t('Commission of {{commission}} returned {{times}}×.', {
                   commission: fmt.usd(data.commission_usd),
                   times: fmt.num(Math.round(returned * 10) / 10),
-                })
+                }),
+              previousFailed &&
+                t(
+                  'The previous period could not be read, so no change is shown.'
+                )
             )
           : undefined
       }
       help={t(
-        'Invitees are users signed up through an inviter’s link. Their payments are money paid in the range; their consumption is credit used at list price. Commission is credit given to inviters, sold at ¥1 a dollar, so the return is payments over commission.'
+        'Invitees are users signed up through an inviter’s link. Their payments are money paid in the range; their consumption is credit used at list price, given credit included. Commission is credit given to inviters, sold at ¥1 a dollar, so the return is payments over commission. The gift plans promotion channels give their invitees are not in that cost; the promotion channels tab subtracts them from each channel’s net.'
       )}
     >
       <div className='grid gap-4'>
+        {range && (
+          <StaleNote
+            staleHours={data?.stale_hours}
+            rangeHours={(range.end - range.start) / 3600}
+          />
+        )}
         <MetricGrid
-          loading={!data}
+          loading={loading}
           items={[
             {
               label: t('Invitee payments'),
+              missing: failed,
               featured: true,
               value: fmt.cny(data?.invitee_payments ?? 0),
               delta: {
@@ -360,13 +520,17 @@ export function ReferralPanel(props: {
                 previous: previous?.invitee_payments,
                 better: 'up',
               },
-              hint: t('{{inviters}} inviters brought {{invitees}} invitees', {
-                inviters: fmt.num(data?.inviters ?? 0),
-                invitees: fmt.num(data?.invitees ?? 0),
-              }),
+              hint: t(
+                'All time: {{inviters}} inviters brought {{invitees}} invitees',
+                {
+                  inviters: fmt.num(data?.inviters ?? 0),
+                  invitees: fmt.num(data?.invitees ?? 0),
+                }
+              ),
             },
             {
               label: t('Invitee consumption'),
+              missing: failed,
               value: fmt.usd(data?.invitee_spend_usd ?? 0),
               delta: {
                 current: data?.invitee_spend_usd ?? 0,
@@ -376,6 +540,7 @@ export function ReferralPanel(props: {
             },
             {
               label: t('Commission credited'),
+              missing: failed,
               value: fmt.usd(data?.commission_usd ?? 0),
               hint: t('{{rate}} of invitee consumption', {
                 rate: fmt.pct(data?.commission_to_spend ?? 0),
@@ -386,21 +551,30 @@ export function ReferralPanel(props: {
             },
             {
               label: t('Payments ÷ commission'),
+              missing: failed,
               value:
                 returned == null
                   ? '-'
                   : `${fmt.num(Math.round(returned * 10) / 10)}×`,
               help: t(
-                'Yuan invitees paid for each dollar of commission; commission is sold at ¥1 a dollar, so under 1× it costs more than it brings.'
+                'Yuan invitees paid for each dollar of commission; commission is sold at ¥1 a dollar, so under 1× it costs more than it brings. Gift plans given to promotion channels’ invitees are not counted as a cost, so for those channels the return reads high.'
               ),
               tone: returned != null && returned < 1 ? 'danger' : 'default',
             },
           ]}
         />
+        {returned != null && (
+          <p className='text-muted-foreground text-xs'>
+            {t(
+              'The gift plans promotion channels give their invitees are not in this return; the promotion channels tab subtracts them from each channel’s net.'
+            )}
+          </p>
+        )}
         <SimpleTable
           rows={data?.top_inviters}
           rowKey={(row) => row.user_id}
           empty={t('No referrals')}
+          state={tableState(props.source, data?.top_inviters)}
           columns={[
             {
               key: 'user',
@@ -410,6 +584,9 @@ export function ReferralPanel(props: {
             {
               key: 'inv',
               label: t('Invitees (active)'),
+              hint: t(
+                'Invitees over all time; active: had a request logged in the range, with usage or not.'
+              ),
               align: 'right',
               render: (row) => `${row.invitees} (${row.active_invitees})`,
             },
@@ -439,11 +616,22 @@ export function ReferralPanel(props: {
 }
 
 /** Users by the group they are in. */
-export function GroupsPanel(props: { data: BusinessInsights | undefined }) {
+export function GroupsPanel(props: {
+  data: BusinessInsights | undefined
+  /** The business view's query, so a failure is not read as no users. */
+  source?: SourceState
+}) {
   const { t } = useTranslation()
   return (
-    <Panel title={t('Users by group')}>
-      <Breakdown items={props.data?.groups} empty={t('No users')} />
+    <Panel
+      title={t('Users by group')}
+      description={t('All time: every user, not only those of this range.')}
+    >
+      <Breakdown
+        items={props.data?.groups}
+        empty={t('No users')}
+        state={tableState(props.source, props.data?.groups)}
+      />
     </Panel>
   )
 }

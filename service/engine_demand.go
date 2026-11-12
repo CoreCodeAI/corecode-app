@@ -345,20 +345,10 @@ func vendorDemandHistory(vendor string, now time.Time) (demandProfile, []float64
 	return profile, series, from
 }
 
-// vendorHourlyQuota sums quota_data per hour over every model prefix the
-// vendor sells under, for hours starting in [from, to).
+// vendorHourlyQuota sums quota_data per hour over the models the vendor
+// sells, for hours starting in [from, to).
 func vendorHourlyQuota(vendor string, from, to int64) (map[int64]int64, error) {
-	hours := make(map[int64]int64)
-	for _, prefix := range model.VendorPrefixes(vendor) {
-		quota, err := model.HourlyQuotaWithPrefix(prefix, from, to)
-		if err != nil {
-			return nil, err
-		}
-		for at, value := range quota {
-			hours[at] += value
-		}
-	}
-	return hours, nil
+	return model.HourlyVendorQuota(vendor, from, to)
 }
 
 // over is the demand over [fromMS, toMS) when it averages level an hour

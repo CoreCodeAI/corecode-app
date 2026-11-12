@@ -98,6 +98,16 @@ describe('vendor margins', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('1 accounts, 1 unpriced')).toBeInTheDocument()
   })
+
+  it('projects a range other than a month to 30 days', () => {
+    // Seven days: ¥4,000 earned against ¥735 of accounts.
+    render(<VendorMarginPanel data={finance({ end_time: 7 * 86400 })} />)
+    expect(
+      screen.getByText(
+        /At this pace a 30-day month earns ¥17,142\.86 against ¥3,150 of accounts, margin ¥13,992\.86 \(projected from 7 days\)\./
+      )
+    ).toBeInTheDocument()
+  })
 })
 
 describe('referrals', () => {

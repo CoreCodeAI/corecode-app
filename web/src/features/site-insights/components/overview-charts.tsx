@@ -23,12 +23,17 @@ import { cn } from '@/lib/utils'
 
 import {
   failureTone,
+  SMALL_SAMPLE,
   groupProvider,
   paymentSlices,
+  tableState,
+  useInsightsDefinitions,
   useInsightsFormat,
   useVendorName,
   vendorColor,
   VENDOR_ORDER,
+  joinSentences,
+  type SourceState,
 } from '../lib'
 import {
   POOL_PROVIDERS,
@@ -43,6 +48,12 @@ const TONE_TEXT = {
   danger: 'text-destructive font-medium',
   warning: 'text-amber-600 dark:text-amber-400',
 } as Record<string, string>
+
+/** A failure rate's color, none over too few requests to judge. */
+function rateClass(row: { requests: number; error_rate: number }) {
+  if (row.requests < SMALL_SAMPLE) return undefined
+  return TONE_TEXT[failureTone(row.error_rate)]
+}
 
 /** What each vendor charged at list price over the range. */
 function vendorCharges(finance: FinanceInsights | undefined) {
@@ -63,29 +74,42 @@ function byVendorOrder(a: string, b: string) {
   return rank(a) - rank(b)
 }
 
+/** Vendors sold apart from the pool, listed after the pool's. */
+const OFF_POOL_VENDORS = ['media', 'other']
+
+/** Where the overview's views stand, so a missing figure reads -, not 0. */
+export type OverviewSources = Partial<
+  Record<'pool' | 'quality' | 'finance', SourceState>
+>
+
 /**
  * One row per provider: its accounts and slots now, and its requests,
- * failures, first token and charge over the range.
+ * failures, first token and charge over the range. Image and video models
+ * and other models follow with no accounts or slots, as they have no pool,
+ * so the charges sum to the donut beside it.
  */
 export function ProvidersPanel(props: {
   pool: EnginePool | undefined
   quality: QualityInsights | undefined
   finance: FinanceInsights | undefined
+  sources?: OverviewSources
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
+  const definitions = useInsightsDefinitions()
   const vendorName = useVendorName()
   const charges = vendorCharges(props.finance)
   const quality = new Map(
     (props.quality?.vendors ?? []).map((row) => [row.vendor, row])
   )
-  const rows = POOL_PROVIDERS.map((key) => {
+  const pooled = POOL_PROVIDERS.map((key) => {
     const groups = (props.pool?.groups ?? []).filter(
       (group) => groupProvider(group) === key
     )
     const enabled = groups.filter((group) => group.enabled)
     return {
       key,
+      pooled: true,
       accounts: groups.reduce((sum, group) => sum + group.accounts, 0),
       eligible: groups.reduce((sum, group) => sum + group.eligible, 0),
       slots: enabled.reduce((sum, group) => sum + group.slots, 0),
@@ -94,14 +118,36 @@ export function ProvidersPanel(props: {
       charge: charges.get(key) ?? 0,
     }
   }).filter((row) => row.accounts > 0 || (row.quality?.requests ?? 0) > 0)
+  const offPool = OFF_POOL_VENDORS.map((key) => ({
+    key,
+    pooled: false,
+    accounts: 0,
+    eligible: 0,
+    slots: 0,
+    inFlight: 0,
+    quality: quality.get(key),
+    charge: charges.get(key) ?? 0,
+  })).filter((row) => (row.quality?.requests ?? 0) > 0 || row.charge > 0)
+  const rows = [...pooled, ...offPool]
+  const ready = props.pool || props.quality
+  const hasPool = !!props.pool
+  const hasQuality = !!props.quality
+  const hasFinance = !!props.finance
 
   return (
     <Panel
       title={t('By provider')}
-      help={t('Accounts and slots are live; the rest covers the range.')}
+      help={joinSentences(
+        t('Accounts and slots are live; the rest covers the range.'),
+        t(
+          'Image and video and other models have no pool, so they have no accounts or slots.'
+        ),
+        definitions.listCharge
+      )}
     >
       <SimpleTable
-        rows={props.pool || props.quality ? rows : undefined}
+        rows={ready ? rows : undefined}
+        state={tableState(props.sources?.quality, ready ? rows : undefined)}
         rowKey={(row) => row.key}
         empty={t('No provider has accounts or requests')}
         columns={[
@@ -123,30 +169,36 @@ export function ProvidersPanel(props: {
             key: 'accounts',
             label: t('Schedulable accounts'),
             align: 'right',
-            render: (row) => (
-              <span
-                className={cn(
-                  row.accounts > 0 &&
-                    row.eligible === 0 &&
-                    'text-destructive font-medium'
-                )}
-              >
-                {row.eligible} / {row.accounts}
-              </span>
-            ),
+            render: (row) =>
+              row.pooled && hasPool ? (
+                <span
+                  className={cn(
+                    row.accounts > 0 &&
+                      row.eligible === 0 &&
+                      'text-destructive font-medium'
+                  )}
+                >
+                  {row.eligible} / {row.accounts}
+                </span>
+              ) : (
+                '-'
+              ),
           },
           {
             key: 'in-flight',
             label: t('In flight now'),
             align: 'right',
-            render: (row) =>
-              row.slots ? `${row.inFlight} / ${row.slots}` : row.inFlight,
+            render: (row) => {
+              if (!row.pooled || !hasPool) return '-'
+              return row.slots ? `${row.inFlight} / ${row.slots}` : row.inFlight
+            },
           },
           {
             key: 'requests',
             label: t('Requests'),
             align: 'right',
-            render: (row) => fmt.num(row.quality?.requests ?? 0),
+            render: (row) =>
+              hasQuality ? fmt.num(row.quality?.requests ?? 0) : '-',
           },
           {
             key: 'failures',
@@ -154,9 +206,7 @@ export function ProvidersPanel(props: {
             align: 'right',
             render: (row) =>
               row.quality ? (
-                <span
-                  className={TONE_TEXT[failureTone(row.quality.error_rate)]}
-                >
+                <span className={rateClass(row.quality)}>
                   {fmt.pct(row.quality.error_rate)}
                 </span>
               ) : (
@@ -176,7 +226,7 @@ export function ProvidersPanel(props: {
             key: 'charge',
             label: t('Consumption'),
             align: 'right',
-            render: (row) => fmt.cny(row.charge),
+            render: (row) => (hasFinance ? fmt.cny(row.charge) : '-'),
           },
         ]}
       />
@@ -188,6 +238,7 @@ export function ProvidersPanel(props: {
 export function ShareCharts(props: {
   quality: QualityInsights | undefined
   finance: FinanceInsights | undefined
+  sources?: OverviewSources
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -209,43 +260,71 @@ export function ShareCharts(props: {
     (method) => getPaymentMethodName(method, t) || method
   )
 
+  const qualityFailed = failedWithout(props.sources?.quality, props.quality)
+  const financeFailed = failedWithout(props.sources?.finance, props.finance)
+  const unread = (
+    <p className='text-muted-foreground text-xs'>{t('Could not be read')}</p>
+  )
+
   return (
     <div className='grid gap-4 lg:grid-cols-3'>
-      <Panel title={t('Requests by provider')}>
-        <ShareDonut
-          loading={!props.quality}
-          slices={requests}
-          format={fmt.num}
-          ariaLabel={t('Requests by provider')}
-          totalLabel={t('Requests')}
-          empty={t('No requests in this range')}
-        />
+      <Panel title={t('Requests by provider')} error={qualityFailed}>
+        {qualityFailed === undefined ? (
+          <ShareDonut
+            loading={!props.quality}
+            slices={requests}
+            format={fmt.num}
+            ariaLabel={t('Requests by provider')}
+            totalLabel={t('Requests')}
+            empty={t('No requests in this range')}
+          />
+        ) : (
+          unread
+        )}
       </Panel>
       <Panel
         title={t('Consumption by provider')}
         help={t('At list price, root included.')}
+        error={financeFailed}
       >
-        <ShareDonut
-          loading={!props.finance}
-          slices={charges}
-          format={fmt.cny}
-          ariaLabel={t('Consumption by provider')}
-          totalLabel={t('Consumption')}
-          empty={t('Nothing was charged in this range')}
-        />
+        {financeFailed === undefined ? (
+          <ShareDonut
+            loading={!props.finance}
+            slices={charges}
+            format={fmt.cny}
+            ariaLabel={t('Consumption by provider')}
+            totalLabel={t('Consumption')}
+            empty={t('Nothing was charged in this range')}
+          />
+        ) : (
+          unread
+        )}
       </Panel>
-      <Panel title={t('Revenue by payment method')}>
-        <ShareDonut
-          loading={!props.finance}
-          slices={revenue}
-          format={fmt.cny}
-          ariaLabel={t('Revenue by payment method')}
-          totalLabel={t('Revenue')}
-          empty={t('No successful orders in this range')}
-        />
+      <Panel title={t('Revenue by payment method')} error={financeFailed}>
+        {financeFailed === undefined ? (
+          <ShareDonut
+            loading={!props.finance}
+            slices={revenue}
+            format={fmt.cny}
+            ariaLabel={t('Revenue by payment method')}
+            totalLabel={t('Revenue')}
+            empty={t('No successful orders in this range')}
+          />
+        ) : (
+          unread
+        )}
       </Panel>
     </div>
   )
+}
+
+/** The source's error when it failed with no data on screen; undefined otherwise. */
+function failedWithout(
+  source: SourceState | undefined,
+  data: unknown
+): string | undefined {
+  if (data || source?.status !== 'error') return undefined
+  return source.error ?? ''
 }
 
 /**
@@ -256,6 +335,7 @@ export function TopModelsPanel(props: {
   quality: QualityInsights | undefined
   limit?: number
   onOpen?: () => void
+  source?: SourceState
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -289,7 +369,12 @@ export function TopModelsPanel(props: {
         )
       }
     >
-      {!props.quality && (
+      {!props.quality && props.source?.status === 'error' && (
+        <p className='text-muted-foreground text-xs'>
+          {t('Could not be read')}
+        </p>
+      )}
+      {!props.quality && props.source?.status !== 'error' && (
         <div className='bg-muted h-40 animate-pulse rounded-md' />
       )}
       {props.quality && models.length === 0 && (
@@ -320,8 +405,7 @@ export function TopModelsPanel(props: {
                 <span
                   className={cn(
                     'w-14 shrink-0 text-right tabular-nums',
-                    TONE_TEXT[failureTone(row.error_rate)] ??
-                      'text-muted-foreground'
+                    rateClass(row) ?? 'text-muted-foreground'
                   )}
                   title={t('Failure rate')}
                 >

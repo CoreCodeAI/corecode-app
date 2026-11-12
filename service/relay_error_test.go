@@ -314,3 +314,40 @@ func TestRelayLogAdminInfoCarriesRequestBodyRead(t *testing.T) {
 	AppendRelayLogAdminInfo(unread, nil, untouched)
 	assert.NotContains(t, untouched.Snapshot()["admin_info"], "request_body", "a request whose body was never read has no measurement")
 }
+
+// A flood of refusals naming made-up models must not grow the logs table
+// without the channel cache: production runs with the cache off.
+func TestRecordNoChannelErrorLogSkipsUnlistedModelsWithoutCache(t *testing.T) {
+	previousDB, previousLogDB := model.DB, model.LOG_DB
+	previousCache, previousErrorLog := common.MemoryCacheEnabled, constant.ErrorLogEnabled
+	previousType := common.MainDatabaseType()
+	t.Cleanup(func() {
+		model.DB, model.LOG_DB = previousDB, previousLogDB
+		common.MemoryCacheEnabled, constant.ErrorLogEnabled = previousCache, previousErrorLog
+		common.SetMainDatabaseType(previousType)
+	})
+	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := database.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
+	require.NoError(t, database.AutoMigrate(&model.Channel{}, &model.Ability{}, &model.User{}, &model.Log{}))
+	model.DB, model.LOG_DB = database, database
+	common.SetMainDatabaseType(common.DatabaseTypeSQLite)
+	common.MemoryCacheEnabled, constant.ErrorLogEnabled = false, true
+	channel := &model.Channel{Name: "no-channel-review", Key: "fixture-key", Type: 1, Status: common.ChannelStatusEnabled, Group: "default", Models: "listed-model"}
+	require.NoError(t, channel.Insert())
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	for i := 0; i < 50; i++ {
+		RecordNoChannelErrorLog(c, fmt.Sprintf("x-%d", i), "default", http.StatusServiceUnavailable)
+	}
+	var count int64
+	require.NoError(t, database.Model(&model.Log{}).Count(&count).Error)
+	assert.Equal(t, int64(0), count, "made-up model names must not be logged")
+
+	RecordNoChannelErrorLog(c, "listed-model", "default", http.StatusServiceUnavailable)
+	require.NoError(t, database.Model(&model.Log{}).Count(&count).Error)
+	assert.Equal(t, int64(1), count, "a model a channel lists is still logged")
+}

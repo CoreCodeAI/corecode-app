@@ -23,11 +23,145 @@ export type NamedCount = { name: string; count: number }
 export type UserRef = { user_id: number; username: string }
 export type CountPoint = { at: number; count: number }
 
+/**
+ * Why a failed request failed, as the rollup files it. engine_concurrency,
+ * engine_limit and engine_budget are the pool engine's own 429s (a
+ * credential's concurrency; a group, global or key cap or the access key's
+ * rate; a credential's request rate, quota budget or a missing quota
+ * observation); upstream_rate_limit is every other 429. upstream_auth is a
+ * 401, 402 or 403 the upstream returned, a channel fault. no_channel is a
+ * customer request no channel of their group serves. A server may send a
+ * name not listed here; it reads as its raw name.
+ */
+export type ErrorCategory =
+  | 'engine_concurrency'
+  | 'engine_limit'
+  | 'engine_budget'
+  | 'upstream_rate_limit'
+  | 'upstream_overloaded'
+  | 'upstream_auth'
+  | 'upstream_error'
+  | 'client_error'
+  | 'no_channel'
+  | 'other'
+
+/**
+ * How the async tasks (images, video) submitted in the range stand now.
+ * Every user's tasks, root included. failed includes timed_out; running is
+ * any task not yet succeeded or failed, stalled those of them submitted 30
+ * minutes or more before now. failure_rate = failed / (succeeded + failed),
+ * 0..1. finish_*_s: seconds from submission to finish, successes only.
+ * reasons: the five most common failure reasons.
+ */
+export type TaskOutcome = {
+  /** Set on a per-model row; absent on the total and channel rows. */
+  model?: string
+  /** Set on a per-channel row; absent on the total and model rows. */
+  channel_id?: number
+  submitted: number
+  succeeded: number
+  failed: number
+  timed_out: number
+  running: number
+  stalled: number
+  failure_rate: number
+  finish_p50_s: number
+  finish_p95_s: number
+  reasons: NamedCount[] | null
+}
+
+/**
+ * The quality view's tasks: tasks-table rows submitted in [start, end), at
+ * most 50,000, earliest first (truncated when cut). The model filter does
+ * not narrow it. Lists are by submitted, largest first.
+ */
+export type TaskOutcomes = {
+  total: TaskOutcome
+  models: TaskOutcome[] | null
+  channels: TaskOutcome[] | null
+  truncated: boolean
+}
+
+/** Tasks submitted on a channel in one day or hour, by how they stand now; absent when 0. */
+export type UpstreamTaskCounts = {
+  task_submitted?: number
+  task_succeeded?: number
+  task_failed?: number
+  task_running?: number
+}
+
+/**
+ * Requests turned away before any channel was tried. no_channel: customers'
+ * (not root's) requests no channel of their group serves; they are also in
+ * requests, errors and error_categories. risk_gate: requests the risk gate
+ * blocked (observe-mode hits excluded), every user; they are not in
+ * requests. risk_gate_stages: risk_gate by stage, largest first.
+ */
+export type QualityRefusals = {
+  no_channel: number
+  risk_gate: number
+  risk_gate_stages: NamedCount[] | null
+}
+
+/**
+ * Hourly series for ranges of 3 days or less. hour is the UTC hour start, as
+ * CapacityHour.hour; each series has every hour of the range, zero-filled,
+ * oldest first, except UpstreamHour (one row per hour and channel with
+ * traffic or cost).
+ */
+export type QualityHour = {
+  hour: number
+  requests: number
+  errors: number
+  error_rate: number
+  ttft_p50_ms: number
+  ttft_p95_ms: number
+}
+
+/** Charges as FinanceInsights.daily's fields of the same names. */
+export type FinanceHour = {
+  hour: number
+  topup: number
+  subscription: number
+  consumption_usd: number
+  root_consumption_usd: number
+}
+
+export type ActivityHour = {
+  hour: number
+  active_users: number
+  requests: number
+  /** Quota dollars, which customers pay ¥1 each for, so yuan. */
+  quota_usd: number
+}
+
+/** By sign-up hour, as GrowthInsights.daily. */
+export type GrowthHour = {
+  hour: number
+  registered: number
+  activated: number
+  paid: number
+}
+
+export type UpstreamHour = UpstreamTaskCounts & {
+  hour: number
+  channel_id: number
+  requests: number
+  errors: number
+  /** Failed attempts the client caused: 4xx but 401, 402, 403, 404 and 408 (429 never). Hours stored before the server's release read 0 until rebuilt; absent before it. */
+  client_errors?: number
+  revenue_usd: number
+  cost_usd: number
+}
+
 export type CapacityHour = {
   hour: number
   requests: number
   errors: number
+  /** The site's peak: requests in flight at once on every channel. */
   peak_concurrency: number
+  /** The pool's peak: successful requests in flight at once through engine channels only. Planned for rollup version 5; not sent yet. */
+  pool_peak?: number
   engine_rejections: number
   upstream_rate_limits: number
 }
@@ -408,13 +542,29 @@ export type PoolUsage = {
   }
 }
 
-export type CapacityInsights = {
+/**
+ * How many of a view's stored hours are still on the rollup's earlier
+ * definition, being rebuilt while their logs last. Planned with rollup
+ * version 5; absent until then, and absent means none.
+ */
+export type StaleHours = { stale_hours?: number }
+
+export type CapacityInsights = StaleHours & {
+  /** Customers' requests (root left out). */
   requests: number
   errors: number
+  /** The site's peak: requests in flight at once on every channel. */
   peak_concurrency: number
   peak_at: number
+  /** The pool's peak: successful requests in flight at once through engine channels only, unix seconds for its time. Planned for rollup version 5; not sent yet. */
+  pool_peak?: number
+  pool_peak_at?: number
+  /** Every try, a retry on another channel included, and the tries that failed. Planned for rollup version 5; not sent yet. */
+  attempts?: number
+  attempt_errors?: number
   peak_rpm: number
   peak_rpm_at: number
+  /** Names are ErrorCategory values. */
   error_categories: NamedCount[]
   hourly: CapacityHour[]
   user_peaks: (UserRef & { peak: number; peak_at: number; requests: number })[]
@@ -441,7 +591,123 @@ export type CapacityInsights = {
 
 export type BalanceUser = UserRef & { balance_usd: number }
 
-export type FinanceInsights = {
+/**
+ * What running plans owe now: plans with status active and start <= now <
+ * end, root's left out. A point in time: never compare it with the previous
+ * period. at: unix seconds (now). deferred_value, in the payment currency
+ * (yuan): each paid (order or balance) plan's matched price times the share
+ * of its time not yet run; a balance plan is valued at the wallet price as
+ * of the range's end. unmatched: running paid plans with no order found
+ * (they add 0). *_quota_left_usd: quota dollars left on never-resetting
+ * plans with a total; *_period_left_usd: this period's remainder on
+ * resetting plans.
+ */
+export type PlanLiability = {
+  at: number
+  deferred_value: number
+  paid_plans: number
+  paid_users: number
+  unmatched: number
+  gift_plans: number
+  unlimited: number
+  paid_quota_left_usd: number
+  gift_quota_left_usd: number
+  paid_period_left_usd: number
+  gift_period_left_usd: number
+}
+
+/**
+ * One plan's movement, running plans first. As of now: running_*,
+ * expiring_7d*, deferred_value. Over the range: sold (paid plans started in
+ * it), renewed (part of sold whose buyer held the same plan ending no more
+ * than 7 days before), gifted (admin or affiliate gift plans started in it),
+ * expired (paid plans that ended in it, cancelled included).
+ * finished_used_share (0..1): quota used over quota granted by the paid,
+ * never-resetting plans with a total that ended in the range (finished_plans
+ * of them; 0 with none). price, sold_value, expiring_7d_value and
+ * deferred_value are in the payment currency (yuan).
+ */
+export type PlanBookRow = {
+  plan_id: number
+  title: string
+  price: number
+  one_per_user: boolean
+  running_paid: number
+  running_gifted: number
+  sold: number
+  sold_value: number
+  renewed: number
+  gifted: number
+  expired: number
+  expiring_7d: number
+  expiring_7d_value: number
+  deferred_value: number
+  finished_plans: number
+  finished_used_share: number
+}
+
+/**
+ * Checkouts opened in the range with one payment method, by created desc:
+ * top-ups and plan orders (a plan order's top-up twin skipped), wallet-paid
+ * ones left out. completion_rate = paid / created, 0..1. pending_stale:
+ * pending and opened more than an hour before now. paid_money is in the
+ * payment currency (yuan).
+ */
+export type OrderMethodFunnel = {
+  payment_method: string
+  created: number
+  paid: number
+  failed: number
+  expired: number
+  pending: number
+  pending_stale: number
+  plan_orders: number
+  paid_money: number
+  completion_rate: number
+}
+
+/**
+ * What the billed upstream channels serving one vendor cost over the range,
+ * sorted by bill plus fee, largest first. bill_usd: the upstreams' bills in
+ * each upstream's quota dollars, compared with revenue one for one. fee_usd:
+ * monthly fees over the range, real US dollars. costed_revenue_usd /
+ * uncosted_revenue_usd: customers' charge (quota dollars) on channels with
+ * a bill or fee / with neither, such as the pool's. oldest_bill_at: unix
+ * seconds of the oldest newest bill among its channels, 0 with none:
+ * revenue after it is not costed yet. channels: the costed channel ids.
+ */
+export type VendorUpstreamCost = {
+  vendor: string
+  bill_usd: number
+  fee_usd: number
+  costed_revenue_usd: number
+  uncosted_revenue_usd: number
+  oldest_bill_at: number
+  channels: number[] | null
+}
+
+/**
+ * Customers' use in one billing group (root left out), by consumption
+ * desc. group "" means not recorded. tokens: used plus cache read and write.
+ * consumption_usd: quota dollars after the group's ratio; list_usd the same
+ * over today's ratio (0 with no ratio); ratio: today's group ratio (0 with
+ * none). share: 0..1 of consumption. revenue_estimate: recognized revenue
+ * times share, in the payment currency (yuan).
+ */
+export type GroupConsumption = {
+  group: string
+  requests: number
+  users: number
+  tokens: number
+  consumption_usd: number
+  share: number
+  ratio: number
+  list_usd: number
+  revenue_estimate: number
+}
+
+export type FinanceInsights = StaleHours & {
+  /** Money paid in the range, yuan. revenue, the top-up and plan parts, methods, daily and hourly count an order when it was paid (its create time on servers that did not record that). */
   revenue: number
   topup_revenue: number
   subscription_revenue: number
@@ -518,9 +784,43 @@ export type FinanceInsights = {
   usd_exchange_rate?: number
   bonus_usd: number
   topup_credit_usd: number
+  /** Ranges of 3 days or less; absent before the server's release. */
+  hourly?: FinanceHour[] | null
+  /** When the plan_accounts pool snapshot was taken, unix ms; 0 without an engine report. No pool history exists. Absent before the server's release. */
+  plan_accounts_observed_at_ms?: number
+  /** Credit check-ins awarded in the range, quota dollars (exact). Absent before the server's release. */
+  checkin_credit_usd?: number
+  /** Sign-up and invitee bonuses logged in the range, counts. Absent before the server's release. */
+  signup_bonuses?: number
+  invitee_bonuses?: number
+  /** Those counts times today's QuotaForNewUser / QuotaForInvitee, quota dollars: estimates. Absent before the server's release. */
+  signup_credit_estimate_usd?: number
+  invitee_credit_estimate_usd?: number
+  /** Absent before the server's release. */
+  plan_liability?: PlanLiability | null
+  plan_book?: PlanBookRow[] | null
+  order_methods?: OrderMethodFunnel[] | null
+  vendor_upstream?: VendorUpstreamCost[] | null
+  /** Cost on billed channels with no customer revenue in the range: bills in upstream quota dollars, fees in real US dollars. Absent before the server's release. */
+  upstream_unattributed_bill_usd?: number
+  upstream_unattributed_fee_usd?: number
+  groups?: GroupConsumption[] | null
+}
+
+/** A sign-up of the range that consumed and never paid (no successful top-up with money > 0 off the wallet, ever). Quota dollars. */
+export type UnpaidSpender = UserRef & {
+  /** Consumption in the range. */
+  consumption_usd: number
+  /** The part given plans covered. */
+  gift_plan_usd: number
+  signup_method: string
+  /** user_id 0 without an inviter. */
+  inviter: UserRef
+  created_at: number
 }
 
 export type RiskInsights = {
+  /** Sign-ups in the range, root left out, soft-deleted accounts included (older servers: deleted left out, root counted). */
   signups: number
   signup_series: CountPoint[]
   series_unit: 'hour' | 'day'
@@ -529,22 +829,69 @@ export type RiskInsights = {
   email_domains:
     | { domain: string; count: number; whitelisted: boolean }[]
     | null
+  /** Sign-ups whose canonical inbox (lower case, no +tag, Gmail dots dropped) another account of any time also has. Older servers counted the address pattern instead (now alias_pattern_emails). */
   alias_emails: number
+  /** Email sign-ups off the allowlist; 0 while the restriction is off or the list empty. */
   off_whitelist: number
+  /** Sign-ups with no successful request. */
   zero_use_accounts: number
+  /** Ranked before the cut to 50: not shared exits first, then subscription_buyers, new_members, members, requests, ip. */
   shared_ips: {
     ip: string
+    /** Requests from consume and error logs only; sign-ins, sessions and orders add 0. */
     requests: number
+    /** Members who bought a one-per-user plan (order or balance) within 30 days of the range's end; older servers counted any plan ever bought. */
     subscription_buyers: number
+    /** Members created in the range; absent before the server's release. */
+    new_members?: number
+    /** A shared exit at min(end, now), by the purchase check's rule: 20+ requesters in 7 days or 5+ members in 30 days who bought no one-per-user plan. Absent before the server's release. */
+    shared_exit?: boolean
     users: (UserRef & {
       requests: number
+      /** A real top-up (money > 0 and amount > 0); a plan order's mirror row no longer counts. */
       paid: boolean
       subscription: boolean
+      /** Counts in subscription_buyers; absent before the server's release. */
+      limited_plan?: boolean
       created_at: number
       balance_usd: number
     })[]
   }[]
+  /** All time and now, not the range. */
   debtors: BalanceUser[]
+  /** Sign-ups created at least 6 hours before the range's end; absent before the server's release. */
+  signups_mature?: number
+  /** Those of signups_mature with no request; absent before the server's release. */
+  zero_use_mature?: number
+  /** Fields below are absent before the server's release. Sign-ups in the range deleted since. */
+  deleted_signups?: number
+  /** Sign-ups whose address has a +tag or a dotted Gmail local part (the old alias_emails). */
+  alias_pattern_emails?: number
+  /** Groups of 2+ accounts sharing a canonical inbox, one at least signed up in the range; by size, then canonical; at most 20. */
+  alias_clusters?: { canonical: string; users: UserRef[] }[] | null
+  /** The EmailDomainRestrictionEnabled setting now. */
+  email_restriction?: boolean
+  /** Shared addresses before the cut to 50, and how many of them are shared exits. */
+  shared_ip_total?: number
+  shared_exits?: number
+  /** zero_use_accounts with one or more error logs in the range; _mature: of signups_mature. */
+  zero_use_failed?: number
+  zero_use_failed_mature?: number
+  /** Sign-ups that consumed in the range, from the user-hour rollup. */
+  signup_spenders?: number
+  /** Of signup_spenders, those that never paid, and their consumption in quota dollars. */
+  unpaid_spenders?: number
+  unpaid_spend_usd?: number
+  /** The largest 10 by consumption. */
+  unpaid_spender_top?: UnpaidSpender[] | null
+  /** Top 10 inviters of unpaid spenders, by accounts then consumption (quota dollars). */
+  unpaid_inviters?:
+    | (UserRef & { accounts: number; consumption_usd: number })[]
+    | null
+  /** Invite sign-up gift rows created in the range by status (gifted, ip_used, cap_reached, email_blocked, email_signup...), count desc. */
+  signup_gifts?: NamedCount[] | null
+  /** Top 10 inviters by blocked (ip_used, cap_reached, email_blocked; email_signup is not a block), then gifted. */
+  gift_block_inviters?: (UserRef & { blocked: number; gifted: number })[] | null
 }
 
 export type FunnelRow = {
@@ -562,6 +909,8 @@ export type GrowthInsights = {
   daily: { day: number; registered: number; activated: number; paid: number }[]
   subscription_buyers: number
   subscription_to_topup: number
+  /** Ranges of 3 days or less; absent before the server's release. */
+  hourly?: GrowthHour[] | null
 }
 
 /** A fee paid to a promotion channel: monthly_usd every 30 days from start until end, or until now when end is 0. Unix seconds. */
@@ -592,14 +941,37 @@ export type ChannelRow = {
   payers: number
   new_payers: number
   consumption_usd: number
+  /** The unpaid wallet share taken per hour, from credits received before that hour's end. */
   gift_consumption_usd: number
+  /** Credits only: given plans created in the range plus administrators' balance increases; never negative. */
   granted_usd: number
+  /** Given credit not yet spent, now, on enabled accounts. */
   gift_outstanding_usd: number
+  /** Commission paid by the row's accounts (source_user_id), whoever earned it, both levels. */
   commission_usd: number
+  /** Fee entries no longer add up where they overlap: an entry ends where the next starts. */
   fee_usd: number
+  /** The part of revenue paid by accounts created in the range; absent before the server's release. */
+  revenue_new_accounts?: number
+  /** Fields below are absent before the server's release. The part of revenue paid in the range by accounts created on or after fee_start, yuan; 0 without a fee. */
+  revenue_since_fee?: number
+  /** The earliest start among the channel's fee entries, unix seconds; 0 without one. */
+  fee_start?: number
+  /** GiftQuota of the row's accounts holding an affiliate gift plan and no admin plan: a lower bound on what invite gift plans covered. */
+  invite_gift_usd?: number
+  /** Administrators' balance decreases in the range, positive. */
+  clawed_back_usd?: number
+  /** Unspent given plans and unpaid wallet share, now, on disabled (not deleted) accounts. */
+  gift_dormant_usd?: number
+  /** Channel rows only: all commission the channel's own account earned in the range, both levels. */
+  commission_earned_usd?: number
+  /** The part of commission_earned_usd earned while a fee entry was active. Above 0, commission is still being credited to a fee channel; net does not subtract it. */
+  commission_accruing?: number
+  /** The channel's stored fee entries overlapped; the later replaced the earlier from its own start. */
+  fee_overlap?: boolean
 }
 
-export type ChannelInsights = {
+export type ChannelInsights = StaleHours & {
   channels: ChannelRow[]
   costs: ChannelCost[]
   usd_exchange_rate: number
@@ -645,10 +1017,19 @@ export type EngineDailyCost = {
   daily: { day: number; cost_usd: number; requests: number }[]
 }
 
+/**
+ * Root's rows are left out of every figure (older servers included them in
+ * all but none). A user is active only on a row with a charge or tokens;
+ * requests counts every row's count.
+ */
 export type ActivityInsights = {
   active_users: number
   /** new-api's charge: quota dollars that customers pay ¥1 each for, so yuan. */
   quota_usd: number
+  /** Fields below are absent before the server's release, in quota dollars (yuan). The part of quota_usd charged for Claude models. */
+  claude_quota_usd?: number
+  /** Root's own charge in the range. */
+  root_quota_usd?: number
   requests: number
   /** Claude's models at official prices. */
   engine_cost: EngineDailyCost
@@ -662,6 +1043,8 @@ export type ActivityInsights = {
     wau: number
     requests: number
     quota_usd: number
+    /** The day's Claude charge, quota dollars; absent before the server's release. */
+    claude_quota_usd?: number
   }[]
   retention: { day: number; size: number; days: number[] | null }[]
   top_users: (UserRef & {
@@ -672,6 +1055,8 @@ export type ActivityInsights = {
   top1_share: number
   top3_share: number
   top10_share: number
+  /** Ranges of 3 days or less; absent before the server's release. */
+  hourly?: ActivityHour[] | null
 }
 
 export type VendorQuality = {
@@ -684,7 +1069,7 @@ export type VendorQuality = {
   ttft_p95_ms: number
 }
 
-export type QualityInsights = {
+export type QualityInsights = StaleHours & {
   requests: number
   errors: number
   error_rate: number
@@ -725,9 +1110,17 @@ export type QualityInsights = {
   status_codes: NamedCount[]
   error_reasons: NamedCount[]
   truncated: boolean
+  /** Ranges of 3 days or less, following the model filter as daily does; absent before the server's release. */
+  hourly?: QualityHour[] | null
+  /** Customers only, as the capacity view's categories (ErrorCategory names, no_channel included); absent before the server's release. */
+  error_categories?: NamedCount[] | null
+  /** On every successful response from the server's release; absent before it. */
+  tasks?: TaskOutcomes | null
+  refusals?: QualityRefusals | null
 }
 
-export type BusinessInsights = {
+/** revenue counts orders by when they were paid, as FinanceInsights.revenue. */
+export type BusinessInsights = StaleHours & {
   inviters: number
   invitees: number
   invitee_spend_usd: number
@@ -799,16 +1192,37 @@ export type UserSpend = {
 /** Where a channel's cost comes from: the upstream's bill, a monthly fee, or nowhere. */
 export type UpstreamCostSource = 'upstream' | 'fee' | 'none'
 
+/**
+ * One channel over the range. requests and errors count attempts, root's
+ * included. failure_rate = (errors - client_errors) / (requests + errors) on
+ * servers that send client_errors, errors / attempts before. An auto-disabled
+ * channel (status 3) is listed without traffic, and a channel with tasks in
+ * the range whatever its status.
+ */
 export type UpstreamChannel = {
   id: number
   name: string
   status: number
+  /** Fields to tasks are absent before the server's release. Why and when the channel was disabled, or on an enabled multi-key channel its latest still-disabled key; unix seconds. Absent when unknown. */
+  status_reason?: string
+  status_time?: number
+  /** Keys the channel holds (1 for a single-key channel) and how many are disabled. */
+  key_count?: number
+  disabled_keys?: number
   priority: number
   host: string
   requests: number
+  /** Served requests without root's. */
+  customer_requests?: number
   errors: number
+  /** Failed attempts the client caused: 4xx but 401, 402, 403, 404 and 408 (429 never). */
+  client_errors?: number
   failure_rate: number
   rescued: number
+  /** The part of cost_usd no model row takes, in the upstream's quota dollars. */
+  unmatched_cost_usd?: number
+  /** Tasks submitted on the channel in the range; absent with none. */
+  tasks?: TaskOutcome | null
   revenue_usd: number
   cost_usd: number
   cost_source: UpstreamCostSource
@@ -825,11 +1239,15 @@ export type UpstreamChannel = {
   reasons: NamedCount[]
 }
 
+/** cost_usd includes bills under the name the channel's model mapping sent upstream, split by served requests when several names map to one. */
 export type UpstreamModel = {
   model: string
   channel_id: number
   requests: number
+  /** Absent before the server's release, as on UpstreamChannel. */
+  customer_requests?: number
   errors: number
+  client_errors?: number
   failure_rate: number
   rescued: number
   ttft_p50_ms: number
@@ -838,21 +1256,26 @@ export type UpstreamModel = {
   cost_usd: number
 }
 
-export type UpstreamDay = {
+/** A row can exist for tasks alone. */
+export type UpstreamDay = UpstreamTaskCounts & {
   day: number
   channel_id: number
   requests: number
   errors: number
+  /** As on UpstreamHour; absent before the server's release. */
+  client_errors?: number
   revenue_usd: number
   cost_usd: number
 }
 
 export type UpstreamRescue = { from: number; to: number; count: number }
 
-export type UpstreamInsights = {
+export type UpstreamInsights = StaleHours & {
   channels: UpstreamChannel[]
   models: UpstreamModel[]
   daily: UpstreamDay[]
   rescues: UpstreamRescue[]
   truncated: boolean
+  /** Ranges of 3 days or less; absent before the server's release. */
+  hourly?: UpstreamHour[] | null
 }

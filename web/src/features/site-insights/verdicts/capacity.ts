@@ -1,0 +1,157 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import { useTranslation } from 'react-i18next'
+
+import {
+  diagnoseRejections,
+  engineRefusals,
+  headroom,
+  POOL_FULL_DANGER,
+  poolPeakOf,
+  rangeEnd,
+} from '../capacity-analysis'
+import type { Tone } from '../components/shared'
+import {
+  HEADROOM_SHARE,
+  useInsightsFormat,
+  type InsightsRangeInfo,
+} from '../lib'
+import type { CapacityInsights } from '../types'
+import { join, useChange, type TabVerdict } from './shared'
+
+/**
+ * The capacity tab's verdict over the slots in view: every pool slot, or one
+ * provider's. The pool's own peak is read against them; a server before it
+ * leaves the site's. The per-user limit is not split by provider, so a
+ * provider's verdict leaves it out. With an hourly series it names the hour
+ * the engine turned most away, why, and what to do. The engine's caps and
+ * budgets are their own causes, with their own actions.
+ */
+export function useCapacityVerdict(
+  data: CapacityInsights | undefined,
+  previous: CapacityInsights | undefined,
+  scope?: { slots: number; userLimits: boolean },
+  range?: InsightsRangeInfo
+): TabVerdict | undefined {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const change = useChange()
+  if (!data) return undefined
+  const slots =
+    scope?.slots ?? (data.pool?.configured ? data.pool.effective_slots : 0)
+  const engine = engineRefusals(data.error_categories)
+  const pool = engine.full
+  const limited = scope?.userLimits === false ? 0 : data.limit_rejection_total
+  const hourly = data.hourly ?? []
+  const diagnosis = diagnoseRejections(hourly, slots)
+  const room = headroom(hourly, slots, rangeEnd(range))
+  const ownPeak = data.pool_peak != null
+  const peak = poolPeakOf(data)
+  // Only successes count in the pool's peak, so it reaches the slots at
+  // most; the site's, with every channel, can pass them.
+  const overSlots = ownPeak ? peak >= slots : peak > slots
+  let tone: Tone = 'good'
+  if (slots && overSlots) tone = 'danger'
+  else if (pool >= POOL_FULL_DANGER) tone = 'danger'
+  else if (pool + engine.limit + engine.budget + limited > 0) tone = 'warning'
+  const poolSentence = (): string => {
+    const count = fmt.num(pool)
+    if (!diagnosis) {
+      return t('{{count}} turned away with the pool full.', { count })
+    }
+    const time = fmt.time(diagnosis.worst.hour)
+    const worstPeak = fmt.num(diagnosis.worst.peak)
+    if (diagnosis.cause === 'saturation') {
+      return t(
+        '{{count}} turned away with the pool full, most at {{time}} with the peak at {{peak}} of {{slots}} slots: the pool is too small, add accounts.',
+        { count, time, peak: worstPeak, slots: fmt.num(slots) }
+      )
+    }
+    if (diagnosis.cause === 'eligibility') {
+      return t(
+        '{{count}} turned away with the pool full, most at {{time}} with the peak only {{peak}} of {{slots}} slots: too few accounts were schedulable (cooldowns or spent quota); check the account pool.',
+        { count, time, peak: worstPeak, slots: fmt.num(slots) }
+      )
+    }
+    return t('{{count}} turned away with the pool full, most at {{time}}.', {
+      count,
+      time,
+    })
+  }
+  const peakSentence = (): string => {
+    const values = {
+      peak: fmt.num(peak),
+      slots: fmt.num(slots),
+      share: fmt.pct(peak / slots),
+    }
+    return ownPeak
+      ? t('Pool peak {{peak}} of {{slots}} slots ({{share}}).', values)
+      : t('Peak concurrency {{peak}} of {{slots}} slots ({{share}}).', values)
+  }
+  // Near-full hours matter most when nothing was turned away yet.
+  const tightest = room?.tightest
+  const headroomSentence =
+    pool === 0 &&
+    room &&
+    room.near > 0 &&
+    tightest &&
+    t(
+      "{{hours}} hours reached {{share}} of today's slots; the tightest, {{time}}, had {{free}} free.",
+      {
+        hours: fmt.num(room.near),
+        share: fmt.pct(HEADROOM_SHARE),
+        time: fmt.time(tightest.hour),
+        free: fmt.num(Math.max(0, tightest.free)),
+      }
+    )
+  const turnedAway = pool + engine.limit + engine.budget + limited
+  return {
+    tone,
+    text: join(
+      (() => {
+        const moved = change(data.requests, previous?.requests)
+        const requests = fmt.num(data.requests)
+        return moved
+          ? t('{{requests}} requests ({{change}}).', {
+              requests,
+              change: moved,
+            })
+          : t('{{requests}} requests.', { requests })
+      })(),
+      slots > 0 && peakSentence(),
+      headroomSentence,
+      pool > 0 && poolSentence(),
+      engine.limit > 0 &&
+        t(
+          "{{count}} refused at the engine's own caps: raise the group's limit or the key's cap.",
+          { count: fmt.num(engine.limit) }
+        ),
+      engine.budget > 0 &&
+        t(
+          "{{count}} refused by accounts' request rate or quota budget: wait for the window or add accounts.",
+          { count: fmt.num(engine.budget) }
+        ),
+      limited > 0 &&
+        t('{{count}} attempts refused by per-user limits, retries included.', {
+          count: fmt.num(limited),
+        }),
+      turnedAway === 0 && t('Nothing turned away.')
+    ),
+  }
+}

@@ -116,18 +116,22 @@ type EngineGroup struct {
 	Channel string `json:"channel"`
 	// Provider is the vendor new-api sells the channel's models under
 	// (ChannelProvider), which the pool tab is split by.
-	Provider       string         `json:"provider"`
-	Enabled        bool           `json:"enabled"`
-	InFlight       int            `json:"in_flight"`
-	EffectiveLimit int            `json:"effective_limit"`
-	OverrideLimit  *int           `json:"override_limit"`
-	Accounts       int            `json:"accounts"`
-	Eligible       int            `json:"eligible"`
-	Slots          int            `json:"slots"`
-	Counts         map[string]int `json:"counts"`
-	QuotaBudget    bool           `json:"quota_budget"`
-	FiveHourBudget float64        `json:"five_hour_budget"`
-	SevenDayBudget float64        `json:"seven_day_budget"`
+	Provider       string `json:"provider"`
+	Enabled        bool   `json:"enabled"`
+	InFlight       int    `json:"in_flight"`
+	EffectiveLimit int    `json:"effective_limit"`
+	OverrideLimit  *int   `json:"override_limit"`
+	// CredentialLimit is the group's own per-account limit, omitted when the
+	// engine does not report it; the pool's CredentialConcurrency is the
+	// default it inherits. An explicit 0 is a real limit, not an unset one.
+	CredentialLimit *int           `json:"credential_limit,omitempty"`
+	Accounts        int            `json:"accounts"`
+	Eligible        int            `json:"eligible"`
+	Slots           int            `json:"slots"`
+	Counts          map[string]int `json:"counts"`
+	QuotaBudget     bool           `json:"quota_budget"`
+	FiveHourBudget  float64        `json:"five_hour_budget"`
+	SevenDayBudget  float64        `json:"seven_day_budget"`
 }
 
 // EngineHorizon is the pool estimate's remaining dollars over one window.
@@ -199,17 +203,20 @@ type engineWindow struct {
 }
 
 type engineGroup struct {
-	ID             int            `json:"id"`
-	Name           string         `json:"name"`
-	Channel        string         `json:"channel_id"`
-	Enabled        bool           `json:"enabled"`
-	Current        int            `json:"current"`
-	OverrideLimit  *int           `json:"override_limit"`
-	EffectiveLimit int            `json:"effective_limit"`
-	QuotaSupported bool           `json:"quota_supported"`
-	QuotaEffective engineBudget   `json:"quota_effective"`
-	Counts         map[string]int `json:"counts"`
-	Credentials    []struct {
+	ID             int    `json:"id"`
+	Name           string `json:"name"`
+	Channel        string `json:"channel_id"`
+	Enabled        bool   `json:"enabled"`
+	Current        int    `json:"current"`
+	OverrideLimit  *int   `json:"override_limit"`
+	EffectiveLimit int    `json:"effective_limit"`
+	// An engine before per-group credential limits sends none; an explicit 0
+	// is a real limit and must not fall back to the pool default.
+	CredentialLimit *int           `json:"credential_limit"`
+	QuotaSupported  bool           `json:"quota_supported"`
+	QuotaEffective  engineBudget   `json:"quota_effective"`
+	Counts          map[string]int `json:"counts"`
+	Credentials     []struct {
 		ID            int          `json:"id"`
 		Name          string       `json:"name"`
 		Status        string       `json:"status"`
@@ -542,17 +549,18 @@ func readEnginePool(base, key string) EnginePool {
 	})
 	for _, group := range snapshot.Groups {
 		row := EngineGroup{
-			ID:             group.ID,
-			Name:           group.Name,
-			Channel:        group.Channel,
-			Provider:       ChannelProvider(group.Channel),
-			Enabled:        group.Enabled,
-			InFlight:       group.Current,
-			EffectiveLimit: group.EffectiveLimit,
-			OverrideLimit:  group.OverrideLimit,
-			Accounts:       len(group.Credentials),
-			Counts:         group.Counts,
-			QuotaBudget:    group.QuotaSupported && group.QuotaEffective.Enabled,
+			ID:              group.ID,
+			Name:            group.Name,
+			Channel:         group.Channel,
+			Provider:        ChannelProvider(group.Channel),
+			Enabled:         group.Enabled,
+			InFlight:        group.Current,
+			EffectiveLimit:  group.EffectiveLimit,
+			OverrideLimit:   group.OverrideLimit,
+			CredentialLimit: group.CredentialLimit,
+			Accounts:        len(group.Credentials),
+			Counts:          group.Counts,
+			QuotaBudget:     group.QuotaSupported && group.QuotaEffective.Enabled,
 		}
 		if row.QuotaBudget {
 			row.FiveHourBudget = group.QuotaEffective.FiveHourPercent
@@ -610,7 +618,11 @@ func readEnginePool(base, key string) EnginePool {
 			pool.Accounts = append(pool.Accounts, account)
 		}
 		if group.Enabled {
-			row.Slots = row.Eligible * snapshot.CredentialLimit
+			limit := snapshot.CredentialLimit
+			if group.CredentialLimit != nil {
+				limit = *group.CredentialLimit
+			}
+			row.Slots = row.Eligible * limit
 			if group.EffectiveLimit > 0 {
 				row.Slots = min(row.Slots, group.EffectiveLimit)
 			}

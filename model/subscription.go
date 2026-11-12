@@ -47,9 +47,15 @@ var (
 // invitee. The invitee cannot then buy that plan.
 const SubscriptionSourceAffiliateGift = "affiliate_gift"
 
+// IsGiftSubscriptionSource reports a subscription that was given rather than
+// bought: bound by an administrator or an inviter's gift.
+func IsGiftSubscriptionSource(source string) bool {
+	return source == "admin" || source == SubscriptionSourceAffiliateGift
+}
+
 const (
 	subscriptionPlanCacheNamespace     = "new-api:subscription_plan:v1"
-	subscriptionPlanInfoCacheNamespace = "new-api:subscription_plan_info:v1"
+	subscriptionPlanInfoCacheNamespace = "new-api:subscription_plan_info:v2"
 )
 
 var (
@@ -1609,6 +1615,8 @@ func CleanupSubscriptionPreConsumeRecords(olderThanSeconds int64) (int64, error)
 type SubscriptionPlanInfo struct {
 	PlanId    int
 	PlanTitle string
+	// Source is the user subscription's source (UserSubscription.Source).
+	Source string
 }
 
 func GetSubscriptionPlanInfoByUserSubscriptionId(userSubscriptionId int) (*SubscriptionPlanInfo, error) {
@@ -1630,6 +1638,7 @@ func GetSubscriptionPlanInfoByUserSubscriptionId(userSubscriptionId int) (*Subsc
 	info := &SubscriptionPlanInfo{
 		PlanId:    sub.PlanId,
 		PlanTitle: plan.Title,
+		Source:    sub.Source,
 	}
 	_ = getSubscriptionPlanInfoCache().SetWithTTL(cacheKey, *info, subscriptionPlanInfoCacheTTL())
 	return info, nil

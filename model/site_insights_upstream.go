@@ -2,11 +2,13 @@ package model
 
 import (
 	"cmp"
+	"maps"
 	"math"
 	"net/url"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm/clause"
@@ -52,10 +54,36 @@ type insightChannel struct {
 	latency     histogram
 	reasons     map[string]int64
 	rescuedFrom map[string]int64
+	// clientErrors counts the failed attempts the customer's request caused
+	// (customerFault); rootRequests the served requests of root. Both are
+	// stored in Reasons under keys no reason can take, so they need no
+	// column; an hour stored before them reads zero.
+	clientErrors int64
+	rootRequests int64
 }
 
 // Failure reasons kept per channel and model in an hour.
 const insightChannelReasonsTopN = 10
+
+const (
+	channelCounterClientErrors = "\x00client_errors"
+	channelCounterRootRequests = "\x00root_requests"
+)
+
+// customerFault reports a failed attempt the customer's request caused
+// rather than the channel: a client error, except the upstream refusing the
+// key or the account (401 to 403), not serving the model (404) and timing
+// out (408), which are the channel's.
+func customerFault(content string) bool {
+	if classifyErrorLog(content) != ErrorClient {
+		return false
+	}
+	switch logStatusCode(content) {
+	case 401, 402, 403, 404, 408:
+		return false
+	}
+	return true
+}
 
 func (h *insightHour) channelOf(channelID int, modelName string) *insightChannel {
 	key := insightChannelKey{channelID, modelName}
@@ -76,20 +104,28 @@ func (h *insightHour) channelOf(channelID int, modelName string) *insightChannel
 func (c *insightChannel) addError(content string) {
 	c.row.Errors++
 	c.reasons[errorReason(content)]++
+	if customerFault(content) {
+		c.clientErrors++
+	}
 }
 
+// addConsumption counts a served attempt; its charge goes in through
+// insightHour.addQuota. A task log has no real duration and is left out of
+// the histograms.
 func (c *insightChannel) addConsumption(log insightLog, other logOtherFields, customer bool) {
 	c.row.Requests++
-	if customer {
-		c.row.Quota += int64(log.Quota)
+	if !customer {
+		c.rootRequests++
 	}
 	c.row.PromptTokens += int64(log.PromptTokens)
 	c.row.CacheRead += other.CacheTokens
 	c.row.CacheWrite += other.CacheCreationTokens
 	c.row.CompletionTokens += int64(log.CompletionTokens)
-	c.latency.add(int64(log.UseTime))
-	if log.IsStream && other.Frt > 0 {
-		c.ttft.add(int64(other.Frt))
+	if !other.IsTask {
+		c.latency.add(int64(log.UseTime))
+		if log.IsStream && other.Frt > 0 {
+			c.ttft.add(int64(other.Frt))
+		}
 	}
 	served := strconv.Itoa(log.ChannelId)
 	failedOn := map[string]bool{}
@@ -128,19 +164,32 @@ func decodeCounts(data string) map[string]int64 {
 func (c *insightChannel) encode() InsightChannelHour {
 	row := c.row
 	row.TTFT, row.Latency = c.ttft.encode(), c.latency.encode()
-	row.Reasons = encodeCounts(keepTop(c.reasons, insightChannelReasonsTopN))
+	reasons := maps.Clone(keepTop(c.reasons, insightChannelReasonsTopN))
+	if c.clientErrors > 0 {
+		reasons[channelCounterClientErrors] = c.clientErrors
+	}
+	if c.rootRequests > 0 {
+		reasons[channelCounterRootRequests] = c.rootRequests
+	}
+	row.Reasons = encodeCounts(reasons)
 	row.RescuedFrom = encodeCounts(c.rescuedFrom)
 	return row
 }
 
 func decodeInsightChannel(row InsightChannelHour) *insightChannel {
-	return &insightChannel{
-		row:         row,
-		ttft:        decodeHistogram(row.TTFT),
-		latency:     decodeHistogram(row.Latency),
-		reasons:     decodeCounts(row.Reasons),
-		rescuedFrom: decodeCounts(row.RescuedFrom),
+	reasons := decodeCounts(row.Reasons)
+	channel := &insightChannel{
+		row:          row,
+		ttft:         decodeHistogram(row.TTFT),
+		latency:      decodeHistogram(row.Latency),
+		reasons:      reasons,
+		rescuedFrom:  decodeCounts(row.RescuedFrom),
+		clientErrors: reasons[channelCounterClientErrors],
+		rootRequests: reasons[channelCounterRootRequests],
 	}
+	delete(reasons, channelCounterClientErrors)
+	delete(reasons, channelCounterRootRequests)
+	return channel
 }
 
 // UpstreamCost is one request as an upstream new-api site billed it, read
@@ -269,21 +318,39 @@ const (
 )
 
 // UpstreamChannel is one channel over the range. Attempts are Requests plus
-// Errors; FailureRate is Errors over them. RevenueUSD is what customers were
-// charged for the requests it served. CostUSD is the upstream's bill for the
-// range when the upstream's log is read (CostSource "upstream"), else the
-// monthly fee spread over the range ("fee"). LatestCostAt is the newest
-// upstream cost stored for the channel, at any time.
+// Errors; ClientErrors is the part of Errors the customers' requests caused
+// (customerFault), and FailureRate is the rest of Errors over the attempts.
+// CustomerRequests is Requests without root's. RevenueUSD is what customers
+// were charged for the requests it served. CostUSD is the upstream's bill for
+// the range when the upstream's log is read (CostSource "upstream"), else the
+// monthly fee spread over the range ("fee"). UnmatchedCostUSD is the part of
+// the bill whose model no model row of the channel takes, so it is in CostUSD
+// but in no UpstreamModel. LatestCostAt is the newest upstream cost stored for
+// the channel, at any time.
+//
+// A disabled channel is listed when it had traffic in the range or was
+// disabled automatically; StatusReason and StatusTime say why and when, or,
+// for a multi-key channel still enabled, why and when its latest key was.
+// KeyCount is how many keys the channel holds and DisabledKeys how many of
+// them are disabled. Tasks counts the async tasks submitted to it in the range.
 type UpstreamChannel struct {
 	ID               int          `json:"id"`
 	Name             string       `json:"name"`
 	Status           int          `json:"status"`
+	StatusReason     string       `json:"status_reason,omitempty"`
+	StatusTime       int64        `json:"status_time,omitempty"`
+	KeyCount         int          `json:"key_count"`
+	DisabledKeys     int          `json:"disabled_keys"`
 	Priority         int64        `json:"priority"`
 	Host             string       `json:"host"`
 	Requests         int64        `json:"requests"`
+	CustomerRequests int64        `json:"customer_requests"`
 	Errors           int64        `json:"errors"`
+	ClientErrors     int64        `json:"client_errors"`
 	FailureRate      float64      `json:"failure_rate"`
 	Rescued          int64        `json:"rescued"`
+	UnmatchedCostUSD float64      `json:"unmatched_cost_usd"`
+	Tasks            *TaskOutcome `json:"tasks,omitempty"`
 	RevenueUSD       float64      `json:"revenue_usd"`
 	CostUSD          float64      `json:"cost_usd"`
 	CostSource       string       `json:"cost_source"`
@@ -300,29 +367,71 @@ type UpstreamChannel struct {
 	Reasons          []NamedCount `json:"reasons"`
 }
 
-// UpstreamModel is one model on one channel over the range. CostUSD is the
-// upstream's bill for it; a fee is not split by model.
+// UpstreamModel is one model on one channel over the range, with the
+// UpstreamChannel figures of the same names. CostUSD is the upstream's bill
+// for it, matched by the name the upstream billed or, under the channel's
+// model mapping, by the name it was mapped from; a fee is not split by model.
 type UpstreamModel struct {
-	Model       string  `json:"model"`
-	ChannelID   int     `json:"channel_id"`
-	Requests    int64   `json:"requests"`
-	Errors      int64   `json:"errors"`
-	FailureRate float64 `json:"failure_rate"`
-	Rescued     int64   `json:"rescued"`
-	TTFTP50     int64   `json:"ttft_p50_ms"`
-	LatencyP50  int64   `json:"latency_p50_s"`
-	RevenueUSD  float64 `json:"revenue_usd"`
-	CostUSD     float64 `json:"cost_usd"`
+	Model            string  `json:"model"`
+	ChannelID        int     `json:"channel_id"`
+	Requests         int64   `json:"requests"`
+	CustomerRequests int64   `json:"customer_requests"`
+	Errors           int64   `json:"errors"`
+	ClientErrors     int64   `json:"client_errors"`
+	FailureRate      float64 `json:"failure_rate"`
+	Rescued          int64   `json:"rescued"`
+	TTFTP50          int64   `json:"ttft_p50_ms"`
+	LatencyP50       int64   `json:"latency_p50_s"`
+	RevenueUSD       float64 `json:"revenue_usd"`
+	CostUSD          float64 `json:"cost_usd"`
+}
+
+// UpstreamTaskCounts counts the async tasks submitted to a channel in a day
+// or an hour, by how they stand now, as TaskOutcome does.
+type UpstreamTaskCounts struct {
+	TaskSubmitted int64 `json:"task_submitted,omitempty"`
+	TaskSucceeded int64 `json:"task_succeeded,omitempty"`
+	TaskFailed    int64 `json:"task_failed,omitempty"`
+	TaskRunning   int64 `json:"task_running,omitempty"`
+}
+
+func (c *UpstreamTaskCounts) add(status string) {
+	c.TaskSubmitted++
+	switch status {
+	case TaskStatusSuccess:
+		c.TaskSucceeded++
+	case TaskStatusFailure:
+		c.TaskFailed++
+	default:
+		c.TaskRunning++
+	}
 }
 
 // UpstreamDay is one channel's day.
 type UpstreamDay struct {
-	Day        int64   `json:"day"`
-	ChannelID  int     `json:"channel_id"`
-	Requests   int64   `json:"requests"`
-	Errors     int64   `json:"errors"`
-	RevenueUSD float64 `json:"revenue_usd"`
-	CostUSD    float64 `json:"cost_usd"`
+	Day          int64   `json:"day"`
+	ChannelID    int     `json:"channel_id"`
+	Requests     int64   `json:"requests"`
+	Errors       int64   `json:"errors"`
+	ClientErrors int64   `json:"client_errors"`
+	RevenueUSD   float64 `json:"revenue_usd"`
+	CostUSD      float64 `json:"cost_usd"`
+	UpstreamTaskCounts
+}
+
+// UpstreamHour is one channel's UTC hour, with the UpstreamDay figures.
+// Revenue is bucketed by the hour our request began, an upstream bill by its
+// own created_at, so a request near an hour's end may land in two hours. A
+// task is bucketed by the hour it was submitted.
+type UpstreamHour struct {
+	Hour         int64   `json:"hour"`
+	ChannelID    int     `json:"channel_id"`
+	Requests     int64   `json:"requests"`
+	Errors       int64   `json:"errors"`
+	ClientErrors int64   `json:"client_errors"`
+	RevenueUSD   float64 `json:"revenue_usd"`
+	CostUSD      float64 `json:"cost_usd"`
+	UpstreamTaskCounts
 }
 
 // UpstreamRescue counts requests that failed on From and were served by To.
@@ -332,12 +441,19 @@ type UpstreamRescue struct {
 	Count int64 `json:"count"`
 }
 
+// UpstreamInsights is the upstream view. Hourly, like Daily, holds a row per
+// hour and channel with traffic or cost, for a range up to
+// insightsHourlySpan.
 type UpstreamInsights struct {
 	Channels  []UpstreamChannel `json:"channels"`
 	Models    []UpstreamModel   `json:"models"`
 	Daily     []UpstreamDay     `json:"daily"`
+	Hourly    []UpstreamHour    `json:"hourly,omitempty"`
 	Rescues   []UpstreamRescue  `json:"rescues"`
 	Truncated bool              `json:"truncated"`
+	// StaleHours counts the range's hours still stored under an older rollup
+	// version, until they are rebuilt; omitted when none.
+	StaleHours int `json:"stale_hours"`
 }
 
 type upstreamCostRow struct {
@@ -356,14 +472,21 @@ func upstreamHost(baseURL string) string {
 	return parsed.Hostname()
 }
 
-// GetUpstreamInsights reads the channel hours and the upstream costs over the
-// range. A channel appears when it is enabled or had traffic in the range;
-// requests that never reached a channel (channel 0) are left out.
+// GetUpstreamInsights reads the channel hours, the upstream costs and the
+// async tasks over the range. A channel appears when it is enabled, was
+// disabled automatically, or had traffic or tasks in the range; requests that
+// never reached a channel (channel 0) are left out.
 func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
-	hours, err := loadInsightHours(r)
+	hours, stale, err := loadInsightHoursStale(r)
 	if err != nil {
 		return nil, err
 	}
+	return upstreamInsightsFromHours(r, hours, stale)
+}
+
+// upstreamInsightsFromHours computes the upstream view from hours the caller
+// already loaded over r, so a view that also needs them reads the rollup once.
+func upstreamInsightsFromHours(r InsightsRange, hours []*insightHour, stale int) (*UpstreamInsights, error) {
 	type bucket struct {
 		row          UpstreamModel
 		ttft         histogram
@@ -374,6 +497,7 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 		reasons      map[string]int64
 		rescuedFrom  map[string]int64
 		quotaRevenue int64
+		rootRequests int64
 	}
 	newBucket := func() *bucket {
 		return &bucket{ttft: histogram{}, latency: histogram{}, reasons: map[string]int64{}, rescuedFrom: map[string]int64{}}
@@ -394,7 +518,18 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 		}
 		return entry
 	}
-	result := &UpstreamInsights{}
+	hourStarts := r.hourStarts()
+	hourly := map[dayKey]*UpstreamHour{}
+	hourOf := func(hour int64, channel int) *UpstreamHour {
+		key := dayKey{hour, channel}
+		entry := hourly[key]
+		if entry == nil {
+			entry = &UpstreamHour{Hour: hour, ChannelID: channel}
+			hourly[key] = entry
+		}
+		return entry
+	}
+	result := &UpstreamInsights{StaleHours: stale}
 	for _, hour := range hours {
 		result.Truncated = result.Truncated || hour.summary.Truncated
 		day := r.DayStart(hour.start)
@@ -417,6 +552,8 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 			for _, b := range []*bucket{model, total} {
 				b.row.Requests += row.Requests
 				b.row.Errors += row.Errors
+				b.row.ClientErrors += channel.clientErrors
+				b.rootRequests += channel.rootRequests
 				b.row.Rescued += row.Rescued
 				b.quotaRevenue += row.Quota
 				b.prompt += row.PromptTokens
@@ -430,10 +567,45 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 			entry := dayOf(day, key.channel)
 			entry.Requests += row.Requests
 			entry.Errors += row.Errors
+			entry.ClientErrors += channel.clientErrors
 			entry.RevenueUSD += float64(row.Quota) / common.QuotaPerUnit
+			if hourStarts != nil {
+				slot := hourOf(hour.start, key.channel)
+				slot.Requests += row.Requests
+				slot.Errors += row.Errors
+				slot.ClientErrors += channel.clientErrors
+				slot.RevenueUSD += float64(row.Quota) / common.QuotaPerUnit
+			}
 		}
 	}
 
+	tasks, tasksTruncated, err := readInsightTasks(r)
+	if err != nil {
+		return nil, err
+	}
+	result.Truncated = result.Truncated || tasksTruncated
+	now := time.Now().Unix()
+	taskOutcomes := map[int]*taskOutcomeBucket{}
+	for _, task := range tasks {
+		if task.ChannelId == 0 {
+			continue
+		}
+		outcome := taskOutcomes[task.ChannelId]
+		if outcome == nil {
+			outcome = newTaskOutcomeBucket(TaskOutcome{ChannelID: task.ChannelId})
+			taskOutcomes[task.ChannelId] = outcome
+		}
+		outcome.add(task, now)
+		dayOf(r.DayStart(task.SubmitTime), task.ChannelId).add(task.Status)
+		if hourStarts != nil {
+			hourOf(insightHourKey(task.SubmitTime), task.ChannelId).add(task.Status)
+		}
+	}
+
+	var known []*Channel
+	if err := DB.Omit("key").Find(&known).Error; err != nil {
+		return nil, err
+	}
 	var costs []upstreamCostRow
 	if err := DB.Model(&UpstreamCost{}).
 		Select("channel_id, model_name, created_at, quota, quota_per_unit").
@@ -443,11 +615,26 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 	}
 	costByModel := map[insightChannelKey]float64{}
 	costByChannel := map[int]float64{}
+	unmatchedCost := map[int]float64{}
+	served := make(map[insightChannelKey]int64, len(models))
+	for key, model := range models {
+		served[key] = model.row.Requests
+	}
+	costShares := upstreamCostModels(known, served)
 	for _, cost := range costs {
 		usd := float64(cost.Quota) / upstreamQuotaPerUnit(cost.QuotaPerUnit)
-		costByModel[insightChannelKey{cost.ChannelId, cost.ModelName}] += usd
+		shares := costShares(cost.ChannelId, cost.ModelName)
+		if len(shares) == 0 {
+			unmatchedCost[cost.ChannelId] += usd
+		}
+		for name, share := range shares {
+			costByModel[insightChannelKey{cost.ChannelId, name}] += usd * share
+		}
 		costByChannel[cost.ChannelId] += usd
 		dayOf(r.DayStart(cost.CreatedAt), cost.ChannelId).CostUSD += usd
+		if hourStarts != nil {
+			hourOf(insightHourKey(cost.CreatedAt), cost.ChannelId).CostUSD += usd
+		}
 	}
 	type latest struct {
 		ChannelId  int
@@ -469,31 +656,37 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	var known []*Channel
-	if err := DB.Omit("key").Find(&known).Error; err != nil {
-		return nil, err
-	}
 	span := float64(r.End-r.Start) / 86400
 	for _, channel := range known {
 		total := channels[channel.Id]
+		outcome := taskOutcomes[channel.Id]
 		if total == nil {
-			if channel.Status != common.ChannelStatusEnabled {
+			listed := channel.Status == common.ChannelStatusEnabled || channel.Status == common.ChannelStatusAutoDisabled
+			if !listed && outcome == nil {
 				continue
 			}
 			total = newBucket()
 		}
+		reason, at := channelDisableNote(channel)
+		keys, disabledKeys := channelKeyCounts(channel)
 		row := UpstreamChannel{
 			ID:               channel.Id,
 			Name:             channel.Name,
 			Status:           channel.Status,
+			StatusReason:     reason,
+			StatusTime:       at,
+			KeyCount:         keys,
+			DisabledKeys:     disabledKeys,
 			Priority:         channel.GetPriority(),
 			Host:             upstreamHost(channel.GetBaseURL()),
 			Requests:         total.row.Requests,
+			CustomerRequests: total.row.Requests - total.rootRequests,
 			Errors:           total.row.Errors,
+			ClientErrors:     total.row.ClientErrors,
 			Rescued:          total.row.Rescued,
-			FailureRate:      ratio(float64(total.row.Errors), float64(total.row.Requests+total.row.Errors)),
-			RevenueUSD:       float64(total.quotaRevenue) / common.QuotaPerUnit,
+			FailureRate:      channelFailureRate(total.row.Requests, total.row.Errors, total.row.ClientErrors),
+			UnmatchedCostUSD: unmatchedCost[channel.Id],
+			RevenueUSD:       float64(max(total.quotaRevenue, 0)) / common.QuotaPerUnit,
 			MonthlyFeeUSD:    fees[channel.Id],
 			TTFTP50:          total.ttft.percentile(0.5),
 			TTFTP95:          total.ttft.percentile(0.95),
@@ -503,6 +696,10 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 			CompletionTokens: total.completion,
 			Reasons:          topNamedCounts(total.reasons, 5),
 			CostSource:       UpstreamCostSourceNone,
+		}
+		if outcome != nil {
+			tasks := outcome.result()
+			row.Tasks = &tasks
 		}
 		if last, ok := latestOf[channel.Id]; ok {
 			row.CostSource = UpstreamCostSourceUpstream
@@ -515,6 +712,9 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 			row.CostUSD = fee * span / 30
 			for _, day := range r.days() {
 				dayOf(day, channel.Id).CostUSD += fee * float64(min(r.End, day+86400)-max(r.Start, day)) / 86400 / 30
+			}
+			for _, hour := range hourStarts {
+				hourOf(hour, channel.Id).CostUSD += fee * float64(min(r.End, hour+3600)-max(r.Start, hour)) / 86400 / 30
 			}
 		}
 		result.Channels = append(result.Channels, row)
@@ -531,21 +731,32 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 	})
 	for key, model := range models {
 		row := model.row
-		row.FailureRate = ratio(float64(row.Errors), float64(row.Requests+row.Errors))
+		row.CustomerRequests = row.Requests - model.rootRequests
+		row.FailureRate = channelFailureRate(row.Requests, row.Errors, row.ClientErrors)
 		row.TTFTP50 = model.ttft.percentile(0.5)
 		row.LatencyP50 = model.latency.percentile(0.5)
-		row.RevenueUSD = float64(model.quotaRevenue) / common.QuotaPerUnit
+		row.RevenueUSD = float64(max(model.quotaRevenue, 0)) / common.QuotaPerUnit
 		row.CostUSD = costByModel[key]
 		result.Models = append(result.Models, row)
 	}
 	slices.SortFunc(result.Models, func(a, b UpstreamModel) int {
 		return cmp.Or(cmp.Compare(a.Model, b.Model), cmp.Compare(b.Requests, a.Requests), cmp.Compare(a.ChannelID, b.ChannelID))
 	})
+	// A stored hour's revenue may be negative where a task refund outweighed
+	// its charges (addQuota); a sum is stopped at zero only once it is shown.
 	for _, entry := range days {
+		entry.RevenueUSD = max(entry.RevenueUSD, 0)
 		result.Daily = append(result.Daily, *entry)
 	}
 	slices.SortFunc(result.Daily, func(a, b UpstreamDay) int {
 		return cmp.Or(cmp.Compare(a.Day, b.Day), cmp.Compare(a.ChannelID, b.ChannelID))
+	})
+	for _, entry := range hourly {
+		entry.RevenueUSD = max(entry.RevenueUSD, 0)
+		result.Hourly = append(result.Hourly, *entry)
+	}
+	slices.SortFunc(result.Hourly, func(a, b UpstreamHour) int {
+		return cmp.Or(cmp.Compare(a.Hour, b.Hour), cmp.Compare(a.ChannelID, b.ChannelID))
 	})
 	slices.SortFunc(result.Rescues, func(a, b UpstreamRescue) int {
 		return cmp.Or(cmp.Compare(b.Count, a.Count), cmp.Compare(a.From, b.From), cmp.Compare(a.To, b.To))
@@ -563,6 +774,99 @@ func GetUpstreamInsights(r InsightsRange) (*UpstreamInsights, error) {
 		result.Rescues = []UpstreamRescue{}
 	}
 	return result, nil
+}
+
+// channelFailureRate is the attempts that failed through the channel's fault
+// over every attempt on it.
+func channelFailureRate(requests, errors, clientErrors int64) float64 {
+	return ratio(float64(errors-clientErrors), float64(requests+errors))
+}
+
+// channelDisableNote is why and when the channel was disabled, or, for a
+// multi-key channel, why and when its most recent key was.
+func channelDisableNote(channel *Channel) (string, int64) {
+	if channel.Status != common.ChannelStatusEnabled && channel.OtherInfo != "" {
+		var info struct {
+			StatusReason string `json:"status_reason"`
+			StatusTime   int64  `json:"status_time"`
+		}
+		if common.UnmarshalJsonStr(channel.OtherInfo, &info) == nil && (info.StatusReason != "" || info.StatusTime > 0) {
+			return info.StatusReason, info.StatusTime
+		}
+	}
+	var reason string
+	var at int64
+	for index, disabled := range channel.ChannelInfo.MultiKeyDisabledTime {
+		if status, ok := channel.ChannelInfo.MultiKeyStatusList[index]; ok && status != common.ChannelStatusEnabled && disabled > at {
+			reason, at = channel.ChannelInfo.MultiKeyDisabledReason[index], disabled
+		}
+	}
+	return reason, at
+}
+
+// channelKeyCounts is how many keys the channel holds and how many of them
+// are disabled.
+func channelKeyCounts(channel *Channel) (int, int) {
+	if !channel.ChannelInfo.IsMultiKey {
+		return 1, 0
+	}
+	disabled := 0
+	for _, status := range channel.ChannelInfo.MultiKeyStatusList {
+		if status != common.ChannelStatusEnabled {
+			disabled++
+		}
+	}
+	return channel.ChannelInfo.MultiKeySize, disabled
+}
+
+// upstreamCostModels returns how an upstream bill for a model on a channel
+// splits over the channel's model rows, keyed by the name our logs carry: all
+// to the row of the billed name when there is one, else over the rows of the
+// names the channel's model mapping sent upstream as it, by served requests.
+// It is empty when no row takes the bill.
+func upstreamCostModels(channels []*Channel, served map[insightChannelKey]int64) func(channel int, billed string) map[string]float64 {
+	mappedFrom := map[insightChannelKey][]string{}
+	for _, channel := range channels {
+		var mapping map[string]string
+		if common.UnmarshalJsonStr(channel.GetModelMapping(), &mapping) != nil {
+			continue
+		}
+		for from, to := range mapping {
+			if from != to {
+				key := insightChannelKey{channel.Id, to}
+				mappedFrom[key] = append(mappedFrom[key], from)
+			}
+		}
+	}
+	resolved := map[insightChannelKey]map[string]float64{}
+	return func(channel int, billed string) map[string]float64 {
+		key := insightChannelKey{channel, billed}
+		if shares, ok := resolved[key]; ok {
+			return shares
+		}
+		shares := map[string]float64{}
+		if _, ok := served[key]; ok {
+			shares[billed] = 1
+		} else {
+			var names []string
+			var total int64
+			for _, name := range mappedFrom[key] {
+				if requests, ok := served[insightChannelKey{channel, name}]; ok {
+					names = append(names, name)
+					total += requests
+				}
+			}
+			for _, name := range names {
+				if total > 0 {
+					shares[name] = float64(served[insightChannelKey{channel, name}]) / float64(total)
+				} else {
+					shares[name] = 1 / float64(len(names))
+				}
+			}
+		}
+		resolved[key] = shares
+		return shares
+	}
 }
 
 // upstreamQuotaPerUnit is new-api's default when the upstream did not say.

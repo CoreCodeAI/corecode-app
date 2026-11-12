@@ -23,9 +23,17 @@ import { useTranslation } from 'react-i18next'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 
+import type { Finding } from '../analysis'
 import { getUserSpend } from '../api'
-import { useChargeFormat, useInsightsFormat } from '../lib'
+import { spendFlags, type SpendFlag } from '../finance-analysis'
+import {
+  TONES,
+  useChargeFormat,
+  useInsightsFormat,
+  type InsightsTab,
+} from '../lib'
 import type { UserSpend, UserSpendHours, UserSpendRow } from '../types'
+import { Findings } from './insight-kit'
 import { Panel, SimpleTable } from './shared'
 
 const WINDOWS: UserSpendHours[] = [1, 5, 12, 24, 168]
@@ -35,7 +43,7 @@ const WINDOWS: UserSpendHours[] = [1, 5, 12, 24, 168]
  * the range at the top of the page: new-api's charge, gpt-load's cost shared
  * out to them, what they have paid and their balance.
  */
-export function UserSpendPanel() {
+export function UserSpendPanel(props: { onOpen?: (tab: InsightsTab) => void }) {
   const { t } = useTranslation()
   const [hours, setHours] = useState<UserSpendHours>(24)
   const query = useQuery({
@@ -104,8 +112,87 @@ export function UserSpendPanel() {
         >
           <UserSpendTable data={data} loading={query.isPending} />
         </div>
+        <SpendFindings data={data} onOpen={props.onOpen} />
       </div>
     </Panel>
+  )
+}
+
+/** Every flag each listed customer carries, by user id. */
+function useSpendFlags(data: UserSpend | undefined): Map<number, SpendFlag[]> {
+  const charge = useChargeFormat(data)
+  const engineRead = !!data?.engine_configured && !data.engine_error
+  return new Map(
+    (data?.users ?? []).map((row) => [
+      row.user_id,
+      spendFlags(row, data?.quota_usd ?? 0, charge.rate, engineRead),
+    ])
+  )
+}
+
+/**
+ * The customers to look at, as findings: those charged below official cost
+ * first by what they lose, then debtors, linked to the risk tab, then one
+ * customer holding too much of the window.
+ */
+function SpendFindings(props: {
+  data: UserSpend | undefined
+  onOpen?: (tab: InsightsTab) => void
+}) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const charge = useChargeFormat(props.data)
+  const flags = useSpendFlags(props.data)
+  const users = props.data?.users ?? []
+  const name = (row: UserSpendRow) => row.username || `#${row.user_id}`
+  const flagged = (flag: SpendFlag) =>
+    users.filter((row) => flags.get(row.user_id)?.includes(flag))
+  const below = flagged('below_cost')
+  const debtors = flagged('debt')
+  const concentrated = flagged('concentrated')
+  const items: Finding[] = []
+  if (below.length > 0) {
+    const loss = below.reduce(
+      (sum, row) => sum + row.engine_usd - charge.toUSD(row.quota_usd),
+      0
+    )
+    items.push({
+      key: 'below-cost',
+      tone: 'warning',
+      title: t(
+        '{{count}} customers were charged {{loss}} less than gpt-load’s official cost.',
+        { count: below.length, loss: fmt.usd(loss) }
+      ),
+      detail: below.slice(0, 5).map(name).join(t(', ')),
+      impact: loss,
+    })
+  }
+  if (debtors.length > 0) {
+    items.push({
+      key: 'debt',
+      tone: 'warning',
+      title: t('{{count}} customers are in debt.', { count: debtors.length }),
+      detail: debtors.slice(0, 5).map(name).join(t(', ')),
+      tab: 'risk',
+      impact: -debtors.reduce((sum, row) => sum + row.balance_usd, 0),
+    })
+  }
+  for (const row of concentrated) {
+    items.push({
+      key: `concentrated-${row.user_id}`,
+      tone: 'warning',
+      title: t('{{user}} used {{share}} of the window’s consumption.', {
+        user: name(row),
+        share: fmt.pct(row.quota_usd / (props.data?.quota_usd || 1)),
+      }),
+      impact: row.quota_usd,
+    })
+  }
+  if (items.length === 0) return null
+  return (
+    <div className='border-t pt-3'>
+      <Findings items={items} onOpen={props.onOpen} />
+    </div>
   )
 }
 
@@ -163,6 +250,7 @@ function UserSpendTable(props: {
   const engineRead = !!props.data?.engine_configured && !props.data.engine_error
   const engine = (row: UserSpendRow) =>
     engineRead ? fmt.usd(row.engine_usd) : '—'
+  const flags = useSpendFlags(props.data)
 
   return (
     <SimpleTable
@@ -175,7 +263,9 @@ function UserSpendTable(props: {
         {
           key: 'user',
           label: t('User'),
-          render: (row) => <UserIdentity row={row} />,
+          render: (row) => (
+            <UserIdentity row={row} flags={flags.get(row.user_id)} />
+          ),
         },
         {
           key: 'quota',
@@ -216,7 +306,7 @@ function UserSpendTable(props: {
       card={(row) => (
         <div className='grid gap-2'>
           <div className='flex items-start justify-between gap-3'>
-            <UserIdentity row={row} />
+            <UserIdentity row={row} flags={flags.get(row.user_id)} />
             <div className='shrink-0 text-right'>
               <Stacked
                 value={fmt.cny(row.quota_usd)}
@@ -254,7 +344,14 @@ function UserSpendTable(props: {
   )
 }
 
-function UserIdentity(props: { row: UserSpendRow }) {
+function UserIdentity(props: { row: UserSpendRow; flags?: SpendFlag[] }) {
+  const { t } = useTranslation()
+  const labels: Record<SpendFlag, string> = {
+    below_cost: t('Below official cost'),
+    debt: t('In debt'),
+    concentrated: t('Large share'),
+  }
+  const flags = props.flags ?? []
   return (
     <div className='min-w-0'>
       <p className='truncate font-medium'>
@@ -269,6 +366,11 @@ function UserIdentity(props: { row: UserSpendRow }) {
           title={props.row.email}
         >
           {props.row.email}
+        </p>
+      )}
+      {flags.length > 0 && (
+        <p className={cn('text-xs', TONES.warning)}>
+          {flags.map((flag) => labels[flag]).join(' · ')}
         </p>
       )}
     </div>

@@ -103,3 +103,25 @@ func ProcessChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		model.RecordErrorLog(c, userId, channelError.ChannelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(upstreamURLs...), tokenId, useTimeSeconds, common.GetContextKeyBool(c, constant.ContextKeyIsStream), userGroup, other)
 	}
 }
+
+// RecordNoChannelErrorLog records a request turned away because no channel of
+// its group serves its model: one error log on channel 0, which the site
+// insights count as a failure the customer saw and keep out of every channel's
+// figures. A model no channel lists at all is the customer's mistake and is
+// not recorded, so a caller cannot grow the logs table with made-up model
+// names. The check runs with or without the channel cache: the cache-free
+// path is one indexed count on the abilities table, which a refusal can afford.
+func RecordNoChannelErrorLog(c *gin.Context, modelName, group string, statusCode int) {
+	if !constant.ErrorLogEnabled || !model.IsModelListed(modelName) {
+		return
+	}
+	other := model.NewLogOther()
+	if c.Request != nil && c.Request.URL != nil {
+		other.SetPublic("request_path", c.Request.URL.Path)
+	}
+	other.SetPublic("error_type", types.ErrorTypeNewAPIError)
+	other.SetPublic("error_code", model.ErrorNoChannel)
+	other.SetPublic("status_code", statusCode)
+	model.RecordErrorLog(c, c.GetInt("id"), 0, modelName, c.GetString("token_name"), model.NoChannelErrorContent(statusCode, group),
+		c.GetInt("token_id"), 0, false, group, other)
+}

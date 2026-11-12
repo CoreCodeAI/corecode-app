@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import { RefreshCw } from 'lucide-react'
 import { Fragment, useEffect, useRef, useState } from 'react'
@@ -54,12 +54,18 @@ import { QualityTab } from './components/quality-tab'
 import { RiskTab } from './components/risk-tab'
 import { UpstreamTab } from './components/upstream-tab'
 import {
+  HOURLY_MAX_DAYS,
   INSIGHTS_PRESETS,
   INSIGHTS_TAB_GROUPS,
   OVERVIEW_VIEWS,
   POOL_REFRESH_CHOICES,
   readPoolRefresh,
+  sourceState,
+  STALE_VIEW_SECONDS,
+  useInsightsFormat,
   writePoolRefresh,
+  type InsightsRangeInfo,
+  type InsightsSources,
   type InsightsTab,
 } from './lib'
 import { InsightsSpanContext } from './partial-days'
@@ -95,14 +101,35 @@ function tabMaxDays(tab: InsightsTab) {
  */
 export function SiteInsights() {
   const { t } = useTranslation()
+  const fmt = useInsightsFormat()
   const search = route.useSearch()
   const navigate = route.useNavigate()
   const tab: InsightsTab = search.tab ?? 'overview'
   const days = Math.min(search.days ?? 7, tabMaxDays(tab))
-  // The end is fixed when the page or range changes, so cached results do
-  // not refetch on every render; Refresh moves it to now.
+  // The end is fixed at load, so cached results do not refetch on every
+  // render and a refetch re-reads the same window; only Refresh moves it to
+  // now. Changing the range keeps it.
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
+  // The clock the page compares its end with, to say when the figures are
+  // from; it does not move the end.
+  const [clock, setClock] = useState(() => Math.floor(Date.now() / 1000))
+  useEffect(() => {
+    const timer = setInterval(
+      () => setClock(Math.floor(Date.now() / 1000)),
+      30_000
+    )
+    return () => clearInterval(timer)
+  }, [])
+  const behind = clock - now > STALE_VIEW_SECONDS
   const [poolRefresh, setPoolRefresh] = useState(readPoolRefresh)
+  const range: InsightsRangeInfo = {
+    start: now - days * 86400,
+    end: now,
+    days,
+    hourly: days <= HOURLY_MAX_DAYS,
+  }
+  const openTab = (next: InsightsTab) =>
+    navigate({ search: (prev) => ({ ...prev, tab: next }) })
 
   const queryClient = useQueryClient()
   const viewDays = (view: InsightsView) =>
@@ -148,6 +175,8 @@ export function SiteInsights() {
       ],
       queryFn: () => getInsights(view, range, only, vendor),
       staleTime: PREVIOUS_STALE_MS,
+      // The tab names a failed comparison where its changes would be.
+      meta: { errorToast: false },
     }
   }
   const view = tab === 'overview' ? undefined : tab
@@ -193,17 +222,21 @@ export function SiteInsights() {
     meta: { errorToast: false },
   })
   // The finance, growth and quality tabs each show part of the business
-  // view, which has no tab of its own.
+  // view, which has no tab of its own. Its failure is named in the panels
+  // that read it, not as a toast.
   const readsBusiness =
     tab === 'finance' || tab === 'growth' || tab === 'quality'
   const business = useQuery({
     ...insightsQuery('business'),
     enabled: readsBusiness,
+    meta: { errorToast: false },
   })
   const businessPrevious = useQuery({
     ...previousQuery('business'),
-    enabled: tab === 'growth',
+    enabled: tab === 'growth' || tab === 'finance',
   })
+  // The overview's own queries, so Refresh shows them loading there too.
+  const overviewFetching = useIsFetching({ queryKey: ['site-insights'] })
   // The pool is live and has no earlier period.
   const previous = useQuery({
     ...previousQuery(view ?? 'capacity'),
@@ -242,7 +275,18 @@ export function SiteInsights() {
     value: String(seconds),
     label: refreshLabel(seconds),
   }))
-  const fetching = view ? query.isFetching : false
+  const fetching = view ? query.isFetching : overviewFetching > 0
+  // The pool is live and refreshes itself: its figures are from its last read.
+  const asOf = tab === 'pool' ? Math.floor(query.dataUpdatedAt / 1000) : now
+  const readsBusinessPrevious = tab === 'growth' || tab === 'finance'
+  const sources: InsightsSources = {
+    view: sourceState(query),
+    previous: sourceState(previous),
+    ...(readsBusiness && { business: sourceState(business) }),
+    ...(readsBusinessPrevious && {
+      businessPrevious: sourceState(businessPrevious),
+    }),
+  }
 
   // On a narrow screen the tabs scroll sideways in one row; the open one is
   // kept in view, including when the page opens on a later tab.
@@ -364,6 +408,16 @@ export function SiteInsights() {
                   ))}
                 </ToggleGroup>
               )}
+              {asOf > 0 && (
+                <span className='text-muted-foreground text-xs whitespace-nowrap tabular-nums'>
+                  {t('As of {{time}}', { time: fmt.clock(asOf) })}
+                </span>
+              )}
+              {behind && tab !== 'pool' && (
+                <span className='text-muted-foreground text-xs'>
+                  {t('Figures are from then; Refresh reads to now.')}
+                </span>
+              )}
               <Button
                 variant='outline'
                 size='icon-sm'
@@ -390,6 +444,9 @@ export function SiteInsights() {
                 view={view}
                 data={query.data}
                 previous={previous.data}
+                sources={sources}
+                range={range}
+                onOpen={openTab}
                 business={{
                   data: business.data,
                   previous: businessPrevious.data,
@@ -437,9 +494,8 @@ export function SiteInsights() {
                 current={(next) => insightsQuery(next, false)}
                 previous={(next) => previousQuery(next, false)}
                 refreshMs={REFRESH_MS}
-                onOpen={(next) =>
-                  navigate({ search: (prev) => ({ ...prev, tab: next }) })
-                }
+                onOpen={openTab}
+                range={range}
               />
             )}
           </InsightsSpanContext.Provider>
@@ -453,6 +509,9 @@ function InsightsView(props: {
   view: Exclude<InsightsView, 'business'>
   data: unknown
   previous: unknown
+  sources: InsightsSources
+  range: InsightsRangeInfo
+  onOpen: (tab: InsightsTab) => void
   business: { data: unknown; previous: unknown }
   models: { selected: string[]; onChange: (models: string[]) => void }
   pool: {
@@ -471,6 +530,11 @@ function InsightsView(props: {
   // Each query key includes the view, so data always matches it. The
   // previous period's key does too, and is undefined until it loads.
   const previous = props.previous as never
+  const range = props.range
+  const onOpen = props.onOpen
+  // Every tab but the pool gets its queries' states. A spread, so a tab that
+  // does not declare sources yet still type-checks.
+  const states = { sources: props.sources }
   switch (props.view) {
     case 'capacity':
       return (
@@ -479,6 +543,9 @@ function InsightsView(props: {
           previous={previous}
           vendor={props.capacity.vendor}
           onVendor={props.capacity.onVendor}
+          range={range}
+          onOpen={onOpen}
+          {...states}
         />
       )
     case 'finance':
@@ -487,10 +554,22 @@ function InsightsView(props: {
           data={props.data as never}
           previous={previous}
           business={props.business.data as never}
+          businessPrevious={props.business.previous as never}
+          range={range}
+          onOpen={onOpen}
+          {...states}
         />
       )
     case 'risk':
-      return <RiskTab data={props.data as never} previous={previous} />
+      return (
+        <RiskTab
+          data={props.data as never}
+          previous={previous}
+          range={range}
+          onOpen={onOpen}
+          {...states}
+        />
+      )
     case 'growth':
       return (
         <GrowthTab
@@ -498,10 +577,21 @@ function InsightsView(props: {
           previous={previous}
           business={props.business.data as never}
           businessPrevious={props.business.previous as never}
+          range={range}
+          onOpen={onOpen}
+          {...states}
         />
       )
     case 'activity':
-      return <ActivityTab data={props.data as never} previous={previous} />
+      return (
+        <ActivityTab
+          data={props.data as never}
+          previous={previous}
+          range={range}
+          onOpen={onOpen}
+          {...states}
+        />
+      )
     case 'quality':
       return (
         <QualityTab
@@ -509,13 +599,32 @@ function InsightsView(props: {
           previous={previous}
           models={props.models}
           business={props.business.data as never}
+          range={range}
+          onOpen={onOpen}
+          {...states}
         />
       )
     case 'pool':
       return <PoolTab data={props.data as never} {...props.pool} />
     case 'channels':
-      return <ChannelsTab data={props.data as never} />
+      return (
+        <ChannelsTab
+          data={props.data as never}
+          previous={previous}
+          range={range}
+          onOpen={onOpen}
+          {...states}
+        />
+      )
     case 'upstream':
-      return <UpstreamTab data={props.data as never} previous={previous} />
+      return (
+        <UpstreamTab
+          data={props.data as never}
+          previous={previous}
+          range={range}
+          onOpen={onOpen}
+          {...states}
+        />
+      )
   }
 }
