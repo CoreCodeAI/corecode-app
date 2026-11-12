@@ -8891,6 +8891,11 @@
     "Service failure rate {{rate}}; too few requests before to compare.": "Tỷ lệ lỗi dịch vụ {{rate}}; kỳ trước quá ít yêu cầu để so sánh.",
     "Service failure rate {{rate}}, no clear change from before.": "Tỷ lệ lỗi dịch vụ {{rate}}, không thay đổi rõ so với trước.",
     "Service failure rate {{rate}} ({{sign}}{{points}} points).": "Tỷ lệ lỗi dịch vụ {{rate}} ({{sign}}{{points}} điểm).",
-    "Card": "Thẻ"
+    "Card": "Thẻ",
+    "Daily quota ({{currency}})": "Hạn mức mỗi ngày ({{currency}})",
+    "0 means no daily limit. Daily use resets at 00:00 Beijing time (UTC+8).": "0 nghĩa là không giới hạn mỗi ngày. Mức dùng trong ngày được đặt lại lúc 00:00 giờ Bắc Kinh (UTC+8).",
+    "Daily quota": "Hạn mức mỗi ngày",
+    "Used today / daily quota": "Đã dùng hôm nay / hạn mức mỗi ngày",
+    "Daily quota exceeds valid range, maximum is {{max}}": "Hạn mức mỗi ngày vượt quá phạm vi hợp lệ, tối đa là {{max}}"
   }
 }

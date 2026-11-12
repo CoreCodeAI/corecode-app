@@ -30,6 +30,11 @@ export const apiKeySchema = z.object({
   remain_quota: z.number(),
   used_quota: z.number(),
   unlimited_quota: z.boolean(),
+  // Daily cap in quota units, 0 for none; today's use counts only while
+  // daily_used_until (a Unix time at a Beijing midnight) is in the future.
+  daily_quota: z.number().optional(),
+  daily_used_quota: z.number().optional(),
+  daily_used_until: z.number().optional(),
   expired_time: z.number(), // -1 for never expires
   created_time: z.number(),
   accessed_time: z.number(),
@@ -87,6 +92,7 @@ export interface SearchApiKeysParams {
 export interface ApiKeyFormData {
   name: string
   remain_quota: number
+  daily_quota: number
   expired_time: number
   unlimited_quota: boolean
   model_limits_enabled: boolean

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -12,25 +13,33 @@ import (
 )
 
 type Token struct {
-	Id                 int            `json:"id"`
-	UserId             int            `json:"user_id" gorm:"index"`
-	Key                string         `json:"key" gorm:"type:varchar(128);uniqueIndex"`
-	Status             int            `json:"status" gorm:"default:1"`
-	Name               string         `json:"name" gorm:"index" `
-	CreatedTime        int64          `json:"created_time" gorm:"bigint"`
-	AccessedTime       int64          `json:"accessed_time" gorm:"bigint"`
-	ExpiredTime        int64          `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
-	RemainQuota        int            `json:"remain_quota" gorm:"default:0"`
-	UnlimitedQuota     bool           `json:"unlimited_quota"`
-	ModelLimitsEnabled bool           `json:"model_limits_enabled"`
-	ModelLimits        string         `json:"model_limits" gorm:"type:text"`
-	AllowIps           *string        `json:"allow_ips" gorm:"default:''"`
-	UsedQuota          int            `json:"used_quota" gorm:"default:0"` // used quota
-	Group              string         `json:"group" gorm:"default:''"`
-	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
-	AutoGroups         string         `json:"-" gorm:"type:text"`
-	UpstreamKey        string         `json:"-" gorm:"type:varchar(256);default:''"`
-	DeletedAt          gorm.DeletedAt `gorm:"index"`
+	Id                 int     `json:"id"`
+	UserId             int     `json:"user_id" gorm:"index"`
+	Key                string  `json:"key" gorm:"type:varchar(128);uniqueIndex"`
+	Status             int     `json:"status" gorm:"default:1"`
+	Name               string  `json:"name" gorm:"index" `
+	CreatedTime        int64   `json:"created_time" gorm:"bigint"`
+	AccessedTime       int64   `json:"accessed_time" gorm:"bigint"`
+	ExpiredTime        int64   `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
+	RemainQuota        int     `json:"remain_quota" gorm:"default:0"`
+	UnlimitedQuota     bool    `json:"unlimited_quota"`
+	ModelLimitsEnabled bool    `json:"model_limits_enabled"`
+	ModelLimits        string  `json:"model_limits" gorm:"type:text"`
+	AllowIps           *string `json:"allow_ips" gorm:"default:''"`
+	UsedQuota          int     `json:"used_quota" gorm:"default:0"` // used quota
+	// DailyQuota caps what a limited token may use per Beijing day; 0 is no
+	// daily cap. It is ignored while UnlimitedQuota is on.
+	DailyQuota int `json:"daily_quota" gorm:"default:0"`
+	// DailyUsedQuota is what the token used in the day that ends at
+	// DailyUsedUntil (a Unix time at a Beijing midnight); an earlier
+	// DailyUsedUntil means nothing is used today. See tokenQuotaUpdates.
+	DailyUsedQuota  int            `json:"daily_used_quota" gorm:"default:0"`
+	DailyUsedUntil  int64          `json:"daily_used_until" gorm:"bigint;default:0"`
+	Group           string         `json:"group" gorm:"default:''"`
+	CrossGroupRetry bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
+	AutoGroups      string         `json:"-" gorm:"type:text"`
+	UpstreamKey     string         `json:"-" gorm:"type:varchar(256);default:''"`
+	DeletedAt       gorm.DeletedAt `gorm:"index"`
 	// 允许用此令牌查询所属用户的额度；新建令牌默认开启，已有令牌升级后保持关闭
 	AllowUserQuotaQuery bool   `json:"allow_user_quota_query"`
 	CacheExpiresAt      int64  `json:"-" gorm:"-"`
@@ -318,7 +327,7 @@ func (token *Token) Update() (err error) {
 		common.SysLog(common.LogText("failed to invalidate token cache before update: %s", cacheErr.Error()))
 	}
 	return DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "auto_groups",
+		"daily_quota", "model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "auto_groups",
 		"allow_user_quota_query").Updates(token).Error
 }
 
@@ -401,14 +410,7 @@ func IncreaseTokenQuota(tokenId int, key string, quota int) (err error) {
 }
 
 func increaseTokenQuota(id int, quota int) (err error) {
-	err = DB.Model(&Token{}).Where("id = ?", id).Updates(
-		map[string]any{
-			"remain_quota":  gorm.Expr("remain_quota + ?", quota),
-			"used_quota":    gorm.Expr("used_quota - ?", quota),
-			"accessed_time": common.GetTimestamp(),
-		},
-	).Error
-	return err
+	return DB.Model(&Token{}).Where("id = ?", id).Updates(tokenQuotaUpdates(-quota, time.Now())).Error
 }
 
 func DecreaseTokenQuota(id int, key string, quota int) (err error) {
@@ -430,14 +432,51 @@ func DecreaseTokenQuota(id int, key string, quota int) (err error) {
 }
 
 func decreaseTokenQuota(id int, quota int) (err error) {
-	err = DB.Model(&Token{}).Where("id = ?", id).Updates(
-		map[string]any{
-			"remain_quota":  gorm.Expr("remain_quota - ?", quota),
-			"used_quota":    gorm.Expr("used_quota + ?", quota),
-			"accessed_time": common.GetTimestamp(),
-		},
-	).Error
-	return err
+	return DB.Model(&Token{}).Where("id = ?", id).Updates(tokenQuotaUpdates(quota, time.Now())).Error
+}
+
+// beijing is UTC+8 without daylight saving, so a fixed zone needs no tzdata.
+var beijing = time.FixedZone("Asia/Shanghai", 8*60*60)
+
+// nextBeijingMidnight is the Unix time at which the Beijing day holding now
+// ends, and the daily token quota starts over.
+func nextBeijingMidnight(now time.Time) int64 {
+	local := now.In(beijing)
+	return time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, beijing).Unix()
+}
+
+// tokenQuotaUpdates is the column update for a token that used delta more
+// quota (negative for a refund): its remaining and used totals, and its use in
+// the current Beijing day, which starts from zero when DailyUsedUntil is from
+// an earlier day. A refund after midnight of a reservation made before it
+// lowers today's use, at most to zero.
+//
+// GORM writes map columns in name order, and MySQL evaluates SET left to
+// right, so daily_used_quota must sort before daily_used_until to read the old
+// day; PostgreSQL and SQLite read old values everywhere.
+func tokenQuotaUpdates(delta int, now time.Time) map[string]any {
+	until := nextBeijingMidnight(now)
+	return map[string]any{
+		"remain_quota":     gorm.Expr("remain_quota - ?", delta),
+		"used_quota":       gorm.Expr("used_quota + ?", delta),
+		"accessed_time":    now.Unix(),
+		"daily_used_quota": gorm.Expr("CASE WHEN daily_used_until = ? THEN daily_used_quota + ? ELSE ? END", until, delta, max(delta, 0)),
+		"daily_used_until": until,
+	}
+}
+
+// TokenDailyUsed reads what a token has used today (Beijing time) from the
+// database. It lags the batch update interval when batch updates are on.
+func TokenDailyUsed(id int, now time.Time) (int, error) {
+	var token Token
+	err := DB.Model(&Token{}).Select("daily_used_quota", "daily_used_until").Where("id = ?", id).Take(&token).Error
+	if err != nil {
+		return 0, err
+	}
+	if token.DailyUsedUntil != nextBeijingMidnight(now) {
+		return 0, nil
+	}
+	return max(token.DailyUsedQuota, 0), nil
 }
 
 // CountUserTokens returns total number of tokens for the given user, used for pagination

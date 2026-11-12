@@ -721,6 +721,41 @@ export function ApiKeysMutateDrawer({
                 />
               )}
 
+              {!unlimitedQuota && (
+                <FormField
+                  control={form.control}
+                  name='daily_quota_dollars'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {t('Daily quota ({{currency}})', {
+                          currency: currencyLabel,
+                        })}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type='number'
+                          step={tokensOnly ? 1 : 0.01}
+                          placeholder='0'
+                          onChange={(e) =>
+                            field.onChange(
+                              Number.parseFloat(e.target.value) || 0
+                            )
+                          }
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          '0 means no daily limit. Daily use resets at 00:00 Beijing time (UTC+8).'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
               <FormField
                 control={form.control}
                 name='unlimited_quota'

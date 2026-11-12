@@ -80,7 +80,7 @@ func SetRelayRouter(router *gin.Engine) {
 		// response.create event; each event runs the ordinary request limiter.
 		relayV1Router.GET("/responses", controller.ResponsesWebSocket)
 	}
-	relayV1Router.Use(middleware.UserConcurrencyLimit(), middleware.ModelRequestRateLimit())
+	relayV1Router.Use(middleware.TokenDailyQuota(), middleware.UserConcurrencyLimit(), middleware.ModelRequestRateLimit())
 	{
 		// WebSocket 路由（统一到 Relay）
 		wsRouter := relayV1Router.Group("")
@@ -214,7 +214,7 @@ func SetRelayRouter(router *gin.Engine) {
 	relayGeminiRouter.Use(middleware.RouteTag("relay"))
 	relayGeminiRouter.Use(middleware.SystemPerformanceCheck())
 	relayGeminiRouter.Use(middleware.TokenAuth())
-	relayGeminiRouter.Use(middleware.UserConcurrencyLimit(), middleware.ModelRequestRateLimit())
+	relayGeminiRouter.Use(middleware.TokenDailyQuota(), middleware.UserConcurrencyLimit(), middleware.ModelRequestRateLimit())
 	relayGeminiRouter.Use(middleware.Distribute())
 	{
 		// Gemini API 路径格式: /v1beta/models/{model_name}:{action}

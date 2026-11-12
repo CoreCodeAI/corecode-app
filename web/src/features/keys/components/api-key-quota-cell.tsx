@@ -79,6 +79,17 @@ export function ApiKeyQuotaCell(props: ApiKeyQuotaCellProps) {
   if (!props.apiKey.unlimited_quota) {
     details.push({ label: t('Remaining'), value: formattedRemaining })
   }
+  const dailyQuota = props.apiKey.daily_quota ?? 0
+  if (!props.apiKey.unlimited_quota && dailyQuota > 0) {
+    const usedToday =
+      (props.apiKey.daily_used_until ?? 0) * 1000 > now
+        ? Math.max(props.apiKey.daily_used_quota ?? 0, 0)
+        : 0
+    details.push({
+      label: t('Used today / daily quota'),
+      value: `${formatQuotaWithCurrency(usedToday, { showSymbol: false })} / ${formatQuotaWithCurrency(dailyQuota, { showSymbol: false })}`,
+    })
+  }
   details.push({ label: t('Used amount'), value: formattedUsed })
   if (!props.apiKey.unlimited_quota) {
     details.push({ label: t('Current total quota'), value: formattedTotal })

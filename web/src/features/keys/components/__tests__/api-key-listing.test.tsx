@@ -703,3 +703,23 @@ it('offers no logs link for a key without a name', async () => {
     screen.queryByRole('menuitem', { name: 'View logs' })
   ).not.toBeInTheDocument()
 })
+
+it('shows today’s use against the daily cap, and none from an earlier day', async () => {
+  const limited = {
+    ...key,
+    daily_quota: 1_000_000,
+    daily_used_quota: 250_000,
+    daily_used_until: now / 1000 + 3600,
+  }
+  const { unmount } = renderQuota(limited)
+  await userEvent.click(screen.getByRole('button'))
+  let detail = await screen.findByRole('dialog')
+  expect(detail).toHaveTextContent('Used today / daily quota')
+  expect(detail).toHaveTextContent('0.5 / 2')
+  unmount()
+
+  renderQuota({ ...limited, daily_used_until: now / 1000 - 1 })
+  await userEvent.click(screen.getByRole('button'))
+  detail = await screen.findByRole('dialog')
+  expect(detail).toHaveTextContent('0 / 2')
+})

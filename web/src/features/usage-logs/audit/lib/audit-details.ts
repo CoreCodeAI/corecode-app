@@ -108,6 +108,8 @@ export function auditFieldLabel(key: string, t: TFunction): string {
       return t('Remaining quota')
     case 'unlimited_quota':
       return t('Unlimited Quota')
+    case 'daily_quota':
+      return t('Daily quota')
     case 'model_limits_enabled':
       return t('Model limits enabled')
     case 'model_limits':

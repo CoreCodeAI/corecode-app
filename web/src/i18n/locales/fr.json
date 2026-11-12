@@ -8891,6 +8891,11 @@
     "Service failure rate {{rate}}; too few requests before to compare.": "Taux d’échec du service {{rate}} ; trop peu de requêtes avant pour comparer.",
     "Service failure rate {{rate}}, no clear change from before.": "Taux d’échec du service {{rate}}, sans changement net.",
     "Service failure rate {{rate}} ({{sign}}{{points}} points).": "Taux d’échec du service {{rate}} ({{sign}}{{points}} points).",
-    "Card": "Carte"
+    "Card": "Carte",
+    "Daily quota ({{currency}})": "Quota quotidien ({{currency}})",
+    "0 means no daily limit. Daily use resets at 00:00 Beijing time (UTC+8).": "0 signifie aucune limite quotidienne. L'usage quotidien est remis à zéro à 00:00, heure de Pékin (UTC+8).",
+    "Daily quota": "Quota quotidien",
+    "Used today / daily quota": "Utilisé aujourd'hui / quota quotidien",
+    "Daily quota exceeds valid range, maximum is {{max}}": "Le quota quotidien dépasse la plage valide, le maximum est {{max}}"
   }
 }

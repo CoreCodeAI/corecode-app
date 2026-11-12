@@ -3,6 +3,7 @@ package model
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
@@ -124,13 +125,7 @@ func persistTokenQuotaDelta(id int, delta int) error {
 		addNewRecord(BatchUpdateTypeTokenQuota, id, delta)
 		return nil
 	}
-	result := DB.Model(&Token{}).Where("id = ?", id).Updates(
-		map[string]any{
-			"remain_quota":  gorm.Expr("remain_quota + ?", delta),
-			"used_quota":    gorm.Expr("used_quota - ?", delta),
-			"accessed_time": common.GetTimestamp(),
-		},
-	)
+	result := DB.Model(&Token{}).Where("id = ?", id).Updates(tokenQuotaUpdates(-delta, time.Now()))
 	if result.Error != nil {
 		return result.Error
 	}
@@ -150,11 +145,7 @@ func reserveUserQuotaDB(id int, quota int) (bool, error) {
 func reserveTokenQuotaDB(id int, quota int) (bool, error) {
 	result := DB.Model(&Token{}).
 		Where("id = ? AND remain_quota >= ?", id, quota).
-		Updates(map[string]any{
-			"remain_quota":  gorm.Expr("remain_quota - ?", quota),
-			"used_quota":    gorm.Expr("used_quota + ?", quota),
-			"accessed_time": common.GetTimestamp(),
-		})
+		Updates(tokenQuotaUpdates(quota, time.Now()))
 	return result.RowsAffected == 1, result.Error
 }
 

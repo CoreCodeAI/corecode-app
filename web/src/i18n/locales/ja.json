@@ -8891,6 +8891,11 @@
     "Service failure rate {{rate}}; too few requests before to compare.": "サービス失敗率 {{rate}}。前期間のリクエストが少なく比較できません。",
     "Service failure rate {{rate}}, no clear change from before.": "サービス失敗率 {{rate}}、前期間から明確な変化なし。",
     "Service failure rate {{rate}} ({{sign}}{{points}} points).": "サービス失敗率 {{rate}}（{{sign}}{{points}} ポイント）。",
-    "Card": "カード"
+    "Card": "カード",
+    "Daily quota ({{currency}})": "1日の上限（{{currency}}）",
+    "0 means no daily limit. Daily use resets at 00:00 Beijing time (UTC+8).": "0 は1日の上限なしです。1日の使用量は北京時間 0:00（UTC+8）にリセットされます。",
+    "Daily quota": "1日の上限",
+    "Used today / daily quota": "本日の使用量 / 1日の上限",
+    "Daily quota exceeds valid range, maximum is {{max}}": "1日の上限が有効範囲を超えています。最大値は {{max}} です"
   }
 }
