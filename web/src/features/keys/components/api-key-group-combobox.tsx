@@ -72,11 +72,21 @@ export function ApiKeyGroupCombobox({
   const selectedOption = options.find((option) => option.value === value)
   const isAutoSelected = selectedOption?.value === 'auto'
 
+  // CoreCode fork: the server sends groups as a Go map, so they arrive sorted
+  // by byte order and uppercase names land ahead of `auto`. Auto always
+  // leads the list; the other groups keep the order they arrived in.
+  const orderedOptions = useMemo(() => {
+    const auto = options.filter((option) => option.value === 'auto')
+    return auto.length === 0
+      ? options
+      : [...auto, ...options.filter((option) => option.value !== 'auto')]
+  }, [options])
+
   const filteredOptions = useMemo(() => {
     const search = searchValue.trim().toLowerCase()
-    if (!search) return options
+    if (!search) return orderedOptions
 
-    return options.filter((option) => {
+    return orderedOptions.filter((option) => {
       const ratioText = String(option.ratio ?? '').toLowerCase()
       return (
         option.value.toLowerCase().includes(search) ||
@@ -85,7 +95,7 @@ export function ApiKeyGroupCombobox({
         ratioText.includes(search)
       )
     })
-  }, [options, searchValue])
+  }, [orderedOptions, searchValue])
 
   const handleSelect = (selectedValue: string) => {
     onValueChange(selectedValue)
