@@ -222,7 +222,9 @@ export function RiskGateDashboard() {
         )}
       </p>
 
-      <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]'>
+      {/* One column: the log has eight columns and needs the full width, which
+          a side-by-side layout left it with two thirds of. */}
+      <div className='grid gap-4'>
         <div className='flex min-w-0 flex-col gap-2'>
           <h4 className='text-sm font-medium'>{t('Hits today')}</h4>
           <p className='text-muted-foreground text-xs'>
@@ -235,7 +237,7 @@ export function RiskGateDashboard() {
               {t('Nothing was stopped today')}
             </p>
           ) : (
-            <div className='flex flex-col gap-1'>
+            <div className='grid gap-1 sm:grid-cols-2 xl:grid-cols-3'>
               {summary.data?.hits.map((hit) => (
                 <Button
                   key={`${hit.stage}:${hit.rule}`}
