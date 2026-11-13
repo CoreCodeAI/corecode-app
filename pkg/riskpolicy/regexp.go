@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Calcium-Ion/moejs"
+	"github.com/MoeForge/moejs"
 )
 
 // The same immutable script is loaded into exclusively-owned pooled runtimes.

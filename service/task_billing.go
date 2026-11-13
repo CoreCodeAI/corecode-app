@@ -86,6 +86,10 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo, task *model
 	if !info.StartTime.IsZero() {
 		useTime = int(max(time.Now().Unix()-info.StartTime.Unix(), 0))
 	}
+	if len(info.RequestPluginSteps) > 0 {
+		other.SetAdmin("request_plugins", info.RequestPluginSteps)
+	}
+	appendRequestPluginRecord(info, other)
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
 		ChannelId:      info.ChannelId,
 		ModelName:      info.OriginModelName,

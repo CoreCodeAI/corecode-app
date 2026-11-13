@@ -29,12 +29,9 @@ export const Route = createFileRoute(
 )({
   codeSplitGroupings: [['loader', 'component'], ['errorComponent']],
   loader: ({ params }) => {
+    // Sensitive words are a request processing instance now.
     if (params.section === 'sensitive-words') {
-      throw redirect({
-        to: '/system-settings/request-policies/$section',
-        params: { section: 'filtering' },
-        replace: true,
-      })
+      throw redirect({ to: '/request-processing', replace: true })
     }
     // Both moved to the risk control page beside site insights.
     if (

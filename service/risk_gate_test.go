@@ -419,8 +419,10 @@ func TestRiskGateStructuredPolicyFaultsFailOpen(t *testing.T) {
 	*operation_setting.GetViolationGuardSetting() = operation_setting.ViolationGuardSetting{}
 	const policy = `{"enabled":true,"skip_official":true,"skip_zero":true,"hard_needles":[],"needles":[],"patterns":[],"fingerprints":[],"structure":{"min_max_tokens":8192,"require_no_tools":true,"require_single_turn":true,"contest_pattern":""}}`
 	*operation_setting.GetRiskGateSetting() = operation_setting.RiskGateSetting{Enabled: true, Mode: "enforce", DistillEnabled: true, DistillRules: policy, HardRegexEnabled: true, HardRegexRules: `slow | (\w+)+\1x`}
+	// The leading x keeps (\w+)+\1x backtracking: the regex engine fails at
+	// once on a text without the x the pattern requires.
 	for i, body := range []string{
-		`{"model":"claude-opus-5-5","messages":[{"role":"user","content":"` + strings.Repeat("ab", 2000) + `"}]}`,
+		`{"model":"claude-opus-5-5","messages":[{"role":"user","content":"x` + strings.Repeat("ab", 2000) + `"}]}`,
 		`not a json object`,
 	} {
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())

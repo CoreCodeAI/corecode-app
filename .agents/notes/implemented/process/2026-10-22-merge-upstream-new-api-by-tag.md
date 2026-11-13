@@ -105,6 +105,15 @@ commits (N1–N5 and the theme) above upstream `633b4c5b1`, which is
   `model/token_cache_upstream_key_test.go` fails on either mistake.
   Read every Lua `ARGV` list and every positional argument list a sync touches,
   not only the conflicted hunks.
+- **A dependency upstream moves can change what CoreCode's tests assume.**
+  `v1.0.0-rc.50` moved `moejs` from `Calcium-Ion` to `MoeForge`. The merge left
+  `pkg/riskpolicy/regexp.go` and the Dockerfile's PGO step on the old path,
+  which only `go build` catches. The new regex engine also fails at once on a
+  text that lacks a literal the pattern requires, so the timeout tests'
+  `(\w+)+\1x` stopped backtracking on `abab…` and their texts now carry an
+  `x`; the 200 ms interrupt itself was checked and still fires. After a sync,
+  grep for the old module path and run the CoreCode-only tests, not only the
+  conflicted packages.
 - Dependabot's open pull requests (`corecode-app-pre-fork` #1–#5) stayed in the
   archived repository. Vulnerability alerts were off on the fork and are now on,
   matching the archived repository. Whether Dependabot version updates open pull

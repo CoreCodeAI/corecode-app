@@ -316,18 +316,37 @@ func getModelFromJSONBody(c *gin.Context) (*ModelRequest, error) {
 	if err != nil {
 		return nil, err
 	}
-	requestBody, err := storage.Bytes()
+	var keys jsonModelKeyCounter
+	if storage.IsDisk() {
+		reader, err := storage.NewReader()
+		if err != nil {
+			return nil, err
+		}
+		defer reader.Close()
+		valid, err := ojson.ValidReader(io.TeeReader(reader, &keys))
+		if err != nil {
+			return nil, err
+		}
+		if !valid {
+			return nil, errors.New("invalid JSON request body")
+		}
+	} else {
+		requestBody, err := storage.Bytes()
+		if err != nil {
+			return nil, err
+		}
+		if !ojson.ValidBytes(requestBody) {
+			return nil, errors.New("invalid JSON request body")
+		}
+		_, _ = keys.Write(requestBody)
+	}
+	if keys.count > 1 {
+		return nil, errors.New("model must be provided once")
+	}
+	values, err := common.ReadBodyJSONFields(storage, "model", "group")
 	if err != nil {
 		return nil, err
 	}
-	if !ojson.ValidBytes(requestBody) {
-		return nil, errors.New("invalid JSON request body")
-	}
-	if countTopLevelJSONKey(requestBody, "model") > 1 {
-		return nil, errors.New("model must be provided once")
-	}
-
-	values := ojson.GetManyBytes(requestBody, "model", "group")
 	model, err := getJSONStringValue(values[0], "model")
 	if err != nil {
 		return nil, err
@@ -348,51 +367,91 @@ func getModelFromJSONBody(c *gin.Context) (*ModelRequest, error) {
 	}, nil
 }
 
-// countTopLevelJSONKey counts the members of the top-level object named target.
-// It crosses a string with bytes.IndexByte instead of byte by byte: a Claude
-// Code body is mostly base64 strings of hundreds of kilobytes.
-func countTopLevelJSONKey(data []byte, target string) int {
-	depth := 0
-	expectingKey := false
-	count := 0
+// jsonModelKeyCounter counts top-level model keys while JSON validation reads
+// the body. An escaped spelling of "model" occupies at most 32 bytes with quotes.
+type jsonModelKeyCounter struct {
+	depth        int
+	rootObject   bool
+	inString     bool
+	escaped      bool
+	expectingKey bool
+	isKey        bool
+	key          [32]byte
+	keyLen       int
+	count        int
+}
+
+// Write crosses a value string with bytes.IndexByte instead of byte by byte:
+// a Claude Code body is mostly base64 strings of hundreds of kilobytes.
+func (c *jsonModelKeyCounter) Write(data []byte) (int, error) {
 	for index := 0; index < len(data); index++ {
-		switch data[index] {
-		case '"':
-			stringStart := index + 1
-			end := jsonStringEnd(data, stringStart)
-			if end < 0 {
-				return count
+		if c.inString && !c.isKey && !c.escaped {
+			rest := data[index:]
+			stop := bytes.IndexByte(rest, '"')
+			if stop < 0 {
+				stop = len(rest)
 			}
-			index = end
-			if depth == 1 && expectingKey {
-				key := string(data[stringStart:index])
-				var decodedKey string
-				if common.Unmarshal(data[stringStart-1:index+1], &decodedKey) == nil {
-					key = decodedKey
+			if slash := bytes.IndexByte(rest[:stop], '\\'); slash >= 0 {
+				stop = slash
+			}
+			index += stop
+			if index == len(data) {
+				break
+			}
+		}
+		current := data[index]
+		if c.inString {
+			if c.isKey {
+				if c.keyLen < len(c.key) {
+					c.key[c.keyLen] = current
 				}
-				cursor := index + 1
-				for cursor < len(data) && (data[cursor] == ' ' || data[cursor] == '\t' || data[cursor] == '\r' || data[cursor] == '\n') {
-					cursor++
+				c.keyLen++
+			}
+			if c.escaped {
+				c.escaped = false
+				continue
+			}
+			if current == '\\' {
+				c.escaped = true
+				continue
+			}
+			if current != '"' {
+				continue
+			}
+			c.inString = false
+			if c.isKey {
+				var key string
+				if c.keyLen <= len(c.key) && common.Unmarshal(c.key[:c.keyLen], &key) == nil && key == "model" {
+					c.count++
 				}
-				if cursor < len(data) && data[cursor] == ':' && key == target {
-					count++
-				}
-				expectingKey = false
+				c.expectingKey = false
+				c.isKey = false
+			}
+			continue
+		}
+		switch current {
+		case '"':
+			c.inString = true
+			c.isKey = c.rootObject && c.depth == 1 && c.expectingKey
+			if c.isKey {
+				c.key[0], c.keyLen = '"', 1
 			}
 		case '{':
-			depth++
-			if depth == 1 {
-				expectingKey = true
+			c.depth++
+			if c.depth == 1 {
+				c.rootObject, c.expectingKey = true, true
 			}
-		case '}':
-			depth--
+		case '[':
+			c.depth++
+		case '}', ']':
+			c.depth--
 		case ',':
-			if depth == 1 {
-				expectingKey = true
+			if c.depth == 1 {
+				c.expectingKey = true
 			}
 		}
 	}
-	return count
+	return len(data), nil
 }
 
 // jsonStringEnd returns the index of the quote that closes the string whose
@@ -681,7 +740,19 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	common.SetContextKey(c, constant.ContextKeyChannelType, channel.Type)
 	common.SetContextKey(c, constant.ContextKeyChannelCreateTime, channel.CreatedTime)
 	common.SetContextKey(c, constant.ContextKeyChannelSetting, channel.GetSetting())
-	common.SetContextKey(c, constant.ContextKeyChannelOtherSetting, channel.GetOtherSettings())
+	otherSettings := channel.GetOtherSettings()
+	// An ordinary request on a task plugin channel runs on the relay routes of
+	// its plugin, pinned for the request like a task relay pins its plugin.
+	var providerPlugin any
+	if channel.Type == constant.ChannelTypeTaskPlugin && c.GetString("expected_task_plugin_key") == "" {
+		generation := jsplugin.DefaultRegistry.Generation()
+		if plugin, ok := generation.Get(channel.GetSetting().TaskPluginKey); ok && plugin.Meta.HasProviderPart() {
+			providerPlugin = jsplugin.PinnedPlugin{Generation: generation, Plugin: plugin}
+			otherSettings.AdvancedCustom = plugin.Meta.ChannelRelayConfig(plugin.ChannelConfigFor(otherSettings.PluginConfig))
+		}
+	}
+	common.SetContextKey(c, constant.ContextKeyChannelOtherSetting, otherSettings)
+	common.SetContextKey(c, constant.ContextKeyProviderPlugin, providerPlugin)
 	switch channel.Type {
 	case constant.ChannelTypeTaskPlugin:
 		c.Set("task_plugin_key", channel.GetSetting().TaskPluginKey)
