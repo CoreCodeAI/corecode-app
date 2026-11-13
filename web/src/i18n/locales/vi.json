@@ -9423,6 +9423,14 @@
     "This group only admits Claude Code; test it from Claude Code": "Nhóm này chỉ nhận Claude Code; hãy kiểm tra trong Claude Code",
     "This group only admits Codex; test it from Codex": "Nhóm này chỉ nhận Codex; hãy kiểm tra trong Codex",
     "This group has no chat models to test": "Nhóm này không có mô hình chat để kiểm tra",
+    "Official upstream status": "Trạng thái chính thức của nhà cung cấp",
+    "View official status": "Xem trạng thái chính thức",
+    "{{vendor}} official status is abnormal (not a CoreCode issue):": "Trạng thái chính thức của {{vendor}} bất thường (không phải lỗi của CoreCode):",
+    "Under maintenance": "Đang bảo trì",
+    "Degraded performance": "Hiệu năng suy giảm",
+    "Partial outage": "Gián đoạn một phần",
+    "Major outage": "Gián đoạn nghiêm trọng",
+    "The official upstream status comes from the Anthropic and OpenAI status pages and covers only the components our requests pass through; it does not change our own status.": "Trạng thái chính thức lấy từ trang trạng thái của Anthropic và OpenAI, chỉ tính các thành phần mà yêu cầu của chúng tôi đi qua; không thay đổi trạng thái của chính chúng tôi.",
     "All platforms": "Tất cả nền tảng"
   }
 }

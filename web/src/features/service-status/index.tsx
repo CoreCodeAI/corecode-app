@@ -39,6 +39,7 @@ import { cn } from '@/lib/utils'
 
 import { SERVICE_STATUS_QUERY_KEY, getServiceStatus } from './api'
 import { GroupCard } from './components/group-card'
+import { OfficialStatusPanel } from './components/official-status'
 import { StatusStrip } from './components/status-strip'
 import {
   BUCKET_CLASS,
@@ -269,6 +270,13 @@ export function ServiceStatus() {
             </Card>
           )}
 
+          {data && !stale && data.official && (
+            <OfficialStatusPanel
+              entries={data.official}
+              vendor={activeVendor === ALL_VENDORS ? null : activeVendor}
+            />
+          )}
+
           {data && (
             <Section title={t('Group status')}>
               {groups && vendors.length > 1 && (
@@ -376,6 +384,9 @@ export function ServiceStatus() {
             <p className='text-muted-foreground text-xs leading-relaxed'>
               {t(
                 'Each cell is the share of requests in that period that succeeded, not counting requests the client cancelled. On the group cards only failures on our side (5xx, timeouts, rate limits) count; errors in the request itself, such as an invalid parameter or an empty balance, do not. Time to first token is the median of streaming requests; image and video groups do not stream, so they show the time of the whole request. Data updates every 2 minutes; if it has not updated for more than 10 minutes, this page shows "Status unknown" rather than normal.'
+              )}{' '}
+              {t(
+                'The official upstream status comes from the Anthropic and OpenAI status pages and covers only the components our requests pass through; it does not change our own status.'
               )}
             </p>
           )}

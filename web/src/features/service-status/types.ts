@@ -61,6 +61,38 @@ export interface StatusStripData {
   buckets: StatusBucket[]
 }
 
+/** A component's state on a vendor's status page (Atlassian Statuspage). */
+export type OfficialComponentStatus =
+  | 'operational'
+  | 'under_maintenance'
+  | 'degraded_performance'
+  | 'partial_outage'
+  | 'major_outage'
+
+/**
+ * A vendor's own status page, reduced by the monitor to the components our
+ * API reaches. It never changes our own `status`.
+ */
+export interface OfficialStatus {
+  vendor: 'anthropic' | 'openai'
+  /** Shown as is: Anthropic, OpenAI. */
+  name: string
+  /** The vendor's status page. */
+  url: string
+  state: 'ok' | 'maintenance' | 'degraded' | 'outage'
+  /** The page's own overall description, in English. */
+  description: string
+  components: { name: string; status: OfficialComponentStatus }[]
+  /** Open incidents touching those components, newest first. */
+  incidents: {
+    name: string
+    impact: string
+    status: string
+    started_at: number | null
+    url: string
+  }[]
+}
+
 export interface ServiceStatusData {
   version: number
   /** Unix seconds. */
@@ -76,6 +108,8 @@ export interface ServiceStatusData {
   day: StatusStripData
   week: StatusStripData
   groups?: StatusGroup[] | null
+  /** Missing before the monitor read the vendors' pages; a vendor it could not read is left out. */
+  official?: OfficialStatus[]
 }
 
 /** The data with the server's clock at the time it was read. */

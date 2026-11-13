@@ -9423,6 +9423,14 @@
     "This group only admits Claude Code; test it from Claude Code": "Ce groupe n’accepte que Claude Code ; testez-le depuis Claude Code",
     "This group only admits Codex; test it from Codex": "Ce groupe n’accepte que Codex ; testez-le depuis Codex",
     "This group has no chat models to test": "Ce groupe n’a aucun modèle de chat à tester",
+    "Official upstream status": "Statut officiel des fournisseurs",
+    "View official status": "Voir le statut officiel",
+    "{{vendor}} official status is abnormal (not a CoreCode issue):": "Statut officiel de {{vendor}} anormal (pas un problème CoreCode) :",
+    "Under maintenance": "En maintenance",
+    "Degraded performance": "Performances dégradées",
+    "Partial outage": "Panne partielle",
+    "Major outage": "Panne majeure",
+    "The official upstream status comes from the Anthropic and OpenAI status pages and covers only the components our requests pass through; it does not change our own status.": "Le statut officiel des fournisseurs provient des pages de statut d’Anthropic et d’OpenAI et ne couvre que les composants par lesquels passent nos requêtes ; il ne change pas notre propre statut.",
     "All platforms": "Toutes les plateformes"
   }
 }
