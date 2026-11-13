@@ -218,7 +218,7 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 	}
-	if option.Key == "rival_price_setting.feishu_webhook" {
+	if option.Key == "rival_price_setting.feishu_webhook" || option.Key == "topup_watch_setting.feishu_webhook" {
 		if err := service.ValidateFeishuBotWebhook(strings.TrimSpace(option.Value.(string))); err != nil {
 			common.ApiErrorT(c, "Invalid parameters")
 			return
@@ -451,6 +451,14 @@ func UpdateOption(c *gin.Context) {
 		"risk_gate_setting.decision_base_url":
 		field := strings.TrimPrefix(option.Key, "risk_gate_setting.")
 		err = operation_setting.ValidateRiskGateOption(field, option.Value.(string))
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	case "topup_watch_setting.mode", "topup_watch_setting.burst_count", "topup_watch_setting.daily_amount",
+		"topup_watch_setting.new_account_hours", "topup_watch_setting.new_account_amount",
+		"topup_watch_setting.failed_charges", "topup_watch_setting.distinct_cards", "topup_watch_setting.freeze_amount":
+		err = operation_setting.ValidateTopupWatchOption(strings.TrimPrefix(option.Key, "topup_watch_setting."), option.Value.(string))
 		if err != nil {
 			common.ApiError(c, err)
 			return

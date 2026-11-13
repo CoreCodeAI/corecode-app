@@ -23,6 +23,39 @@ func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(midjourneyPollHandler{})
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
 	service.RegisterSystemTaskHandler(systemTaskCleanupHandler{})
+	service.RegisterSystemTaskHandler(topupWatchHandler{})
+}
+
+// topupWatchHandler runs the top-up watch (service/topup_watch.go) every ten
+// minutes. The alerts already sent come from the newest successful run.
+type topupWatchHandler struct{}
+
+func (topupWatchHandler) Type() string { return model.SystemTaskTypeTopupWatch }
+
+func (topupWatchHandler) Enabled() bool { return operation_setting.GetTopupWatchSetting().Enabled }
+
+func (topupWatchHandler) Interval() time.Duration { return 10 * time.Minute }
+
+func (topupWatchHandler) NewPayload() any { return nil }
+
+func (topupWatchHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	previous := service.TopupWatchResult{}
+	last, _, err := model.ListSystemTasks(model.SystemTaskFilter{Type: model.SystemTaskTypeTopupWatch, Status: model.SystemTaskStatusSucceeded}, 0, 1)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	if len(last) > 0 && last[0].Result != "" {
+		if err := common.UnmarshalJsonStr(last[0].Result, &previous); err != nil {
+			common.SysLog(common.LogText("top-up watch: ignoring unreadable previous result: %v", err))
+		}
+	}
+	result, err := service.RunTopupWatch(ctx, common.GetTimestamp(), previous.Alerted)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, result, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, result, nil)
 }
 
 // systemTaskCleanupHandler deletes, once a day, the finished system tasks

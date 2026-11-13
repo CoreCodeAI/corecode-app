@@ -702,3 +702,36 @@ func RechargeWaffoPancake(tradeNo string) (err error) {
 
 	return nil
 }
+
+// CoreCode addition: the top-up watch reads recent card top-ups and their
+// accounts.
+
+// ListCardTopUpsSince returns the completed wallet top-ups paid through Stripe
+// Checkout with a card that were created at or after since.
+func ListCardTopUpsSince(since int64) ([]*TopUp, error) {
+	var topUps []*TopUp
+	err := DB.Where("status = ? AND payment_method IN ? AND create_time >= ?",
+		common.TopUpStatusSuccess, []string{PaymentMethodStripe, PaymentMethodStripeCard}, since).
+		Order("id").Find(&topUps).Error
+	return topUps, err
+}
+
+// ListUsersForTopupWatch returns the accounts with these IDs or these Stripe
+// customers, without credentials.
+func ListUsersForTopupWatch(ids []int, stripeCustomers []string) ([]*User, error) {
+	var users []*User
+	if len(ids) == 0 && len(stripeCustomers) == 0 {
+		return users, nil
+	}
+	query := DB.Omit("password", "access_token")
+	switch {
+	case len(ids) > 0 && len(stripeCustomers) > 0:
+		query = query.Where("id IN ? OR stripe_customer IN ?", ids, stripeCustomers)
+	case len(ids) > 0:
+		query = query.Where("id IN ?", ids)
+	default:
+		query = query.Where("stripe_customer IN ?", stripeCustomers)
+	}
+	err := query.Find(&users).Error
+	return users, err
+}
