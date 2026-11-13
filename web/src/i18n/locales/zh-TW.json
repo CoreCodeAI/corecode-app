@@ -9423,6 +9423,14 @@
     "This group only admits Claude Code; test it from Claude Code": "該分組僅限 Claude Code，請在 Claude Code 裡測試",
     "This group only admits Codex; test it from Codex": "該分組僅限 Codex，請在 Codex 裡測試",
     "This group has no chat models to test": "該分組沒有可測試的對話模型",
+    "Official upstream status": "上游官方狀態",
+    "View official status": "查看官方狀態",
+    "{{vendor}} official status is abnormal (not a CoreCode issue):": "{{vendor}} 官方狀態異常（非本站問題）：",
+    "Under maintenance": "維護中",
+    "Degraded performance": "效能下降",
+    "Partial outage": "部分中斷",
+    "Major outage": "嚴重中斷",
+    "The official upstream status comes from the Anthropic and OpenAI status pages and covers only the components our requests pass through; it does not change our own status.": "上游官方狀態取自 Anthropic 和 OpenAI 的官方狀態頁，只看本站請求經過的元件，不改變本站自己的狀態。",
     "All platforms": "全部平台"
   }
 }

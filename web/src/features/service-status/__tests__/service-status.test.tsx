@@ -238,3 +238,92 @@ it('shows no platform filter when every group has one vendor', async () => {
   await screen.findByText('Claude 满血（仅限CC）')
   expect(screen.queryByRole('group', { name: 'Platform' })).toBeNull()
 })
+
+const OFFICIAL: ServiceStatusData['official'] = [
+  {
+    vendor: 'anthropic',
+    name: 'Anthropic',
+    url: 'https://status.claude.com',
+    state: 'outage',
+    description: 'Partial System Outage',
+    components: [
+      { name: 'Claude API', status: 'partial_outage' },
+      { name: 'Claude Code', status: 'operational' },
+    ],
+    incidents: [
+      {
+        name: 'Elevated errors on the Claude API',
+        impact: 'major',
+        status: 'investigating',
+        started_at: NOW - 600,
+        url: 'https://stspg.io/x',
+      },
+    ],
+  },
+  {
+    vendor: 'openai',
+    name: 'OpenAI',
+    url: 'https://status.openai.com',
+    state: 'ok',
+    description: 'All Systems Operational',
+    components: [{ name: 'Codex API', status: 'operational' }],
+    incidents: [],
+  },
+]
+
+it('names an upstream outage as the vendor’s, beside our own state', async () => {
+  respond(statusData({ official: OFFICIAL }))
+  renderPage()
+  // Our own state is unchanged by the vendor's.
+  expect(await screen.findByText('All systems operational')).toBeTruthy()
+  const banner = screen.getByText(
+    'Anthropic official status is abnormal (not a CoreCode issue):'
+  ).parentElement?.parentElement
+  expect(banner?.textContent).toContain(
+    'Claude API Partial outage · Elevated errors on the Claude API'
+  )
+  expect(banner?.querySelector('a')?.getAttribute('href')).toBe(
+    'https://stspg.io/x'
+  )
+  expect(
+    screen.queryByText(
+      'OpenAI official status is abnormal (not a CoreCode issue):'
+    )
+  ).toBeNull()
+  const panel = screen.getByRole('region', { name: 'Official upstream status' })
+  expect(panel.textContent).toContain('Codex API')
+  expect(panel.textContent).toContain('Outage')
+})
+
+it('hides another vendor’s outage banner while filtering by platform', async () => {
+  const [base] = statusData().groups ?? []
+  respond(
+    statusData({
+      official: OFFICIAL,
+      groups: [base, { ...base, name: 'GPT', model: 'gpt-6.1-sol' }],
+    })
+  )
+  renderPage()
+  const banner = 'Anthropic official status is abnormal (not a CoreCode issue):'
+  expect(await screen.findByText(banner)).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: /^OpenAI/ }))
+  await waitFor(() => expect(screen.queryByText(banner)).toBeNull())
+  fireEvent.click(screen.getByRole('button', { name: /^Anthropic/ }))
+  expect(await screen.findByText(banner)).toBeTruthy()
+})
+
+it('shows no vendor status from stale or older data', async () => {
+  respond(statusData({ official: OFFICIAL }), NOW + 15 * 60)
+  renderPage()
+  expect(await screen.findByText('Status unknown')).toBeTruthy()
+  expect(
+    screen.queryByRole('region', { name: 'Official upstream status' })
+  ).toBeNull()
+  cleanup()
+  respond(statusData())
+  renderPage()
+  expect(await screen.findByText('All systems operational')).toBeTruthy()
+  expect(
+    screen.queryByRole('region', { name: 'Official upstream status' })
+  ).toBeNull()
+})
