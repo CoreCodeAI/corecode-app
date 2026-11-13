@@ -506,6 +506,7 @@ func SetApiRouter(router *gin.Engine) {
 			rivalPricesRoute.POST("/sites", controller.CreateRivalSite)
 			rivalPricesRoute.PUT("/sites/:id", controller.UpdateRivalSite)
 			rivalPricesRoute.POST("/sites/:id/check", controller.CheckRivalSite)
+			rivalPricesRoute.PUT("/group-kinds", controller.SetRivalGroupKind)
 		}
 
 		dataRoute := apiRouter.Group("/data")

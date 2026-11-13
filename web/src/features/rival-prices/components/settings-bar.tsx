@@ -33,14 +33,16 @@ export function SettingsBar({ board }: { board: RivalBoard }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [proxy, setProxy] = useState('')
+  const [webhook, setWebhook] = useState('')
   const save = useMutation({
     mutationFn: (v: {
-      key: 'rival_price_setting.enabled' | 'rival_price_setting.proxy'
+      key: Parameters<typeof setRivalOption>[0]
       value: boolean | string
     }) => setRivalOption(v.key, v.value),
     onSuccess: () => {
       toast.success(t('Saved successfully'))
       setProxy('')
+      setWebhook('')
       void queryClient.invalidateQueries({ queryKey: ['rival-prices'] })
     },
     onError: (error: Error) => toast.error(error.message),
@@ -90,6 +92,47 @@ export function SettingsBar({ board }: { board: RivalBoard }) {
             disabled={save.isPending}
             onClick={() =>
               save.mutate({ key: 'rival_price_setting.proxy', value: '' })
+            }
+          >
+            {t('Clear')}
+          </Button>
+        )}
+      </div>
+      <div className='flex min-w-0 basis-full items-center gap-2'>
+        <span className='text-muted-foreground shrink-0'>
+          {board.feishu_set
+            ? t('Price-drop alerts go to Feishu')
+            : t('No Feishu alerts')}
+        </span>
+        <Input
+          className='h-8 max-w-sm'
+          placeholder='https://open.feishu.cn/open-apis/bot/v2/hook/...'
+          value={webhook}
+          onChange={(e) => setWebhook(e.target.value)}
+        />
+        <Button
+          size='sm'
+          variant='outline'
+          disabled={save.isPending || webhook.trim() === ''}
+          onClick={() =>
+            save.mutate({
+              key: 'rival_price_setting.feishu_webhook',
+              value: webhook.trim(),
+            })
+          }
+        >
+          {t('Save')}
+        </Button>
+        {board.feishu_set && (
+          <Button
+            size='sm'
+            variant='ghost'
+            disabled={save.isPending}
+            onClick={() =>
+              save.mutate({
+                key: 'rival_price_setting.feishu_webhook',
+                value: '',
+              })
             }
           >
             {t('Clear')}

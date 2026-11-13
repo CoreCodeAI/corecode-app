@@ -81,11 +81,26 @@ export function checkRivalSite(id: number) {
 }
 
 export function setRivalOption(
-  key: 'rival_price_setting.enabled' | 'rival_price_setting.proxy',
+  key:
+    | 'rival_price_setting.enabled'
+    | 'rival_price_setting.proxy'
+    | 'rival_price_setting.feishu_webhook'
+    | 'rival_price_setting.feishu_secret',
   value: boolean | string
 ) {
   return unwrap(
     api.put<ApiResponse<null>>('/api/option/', { key, value }),
+    'Failed to save'
+  )
+}
+
+export function setRivalGroupKind(siteId: number, group: string, kind: string) {
+  return unwrap(
+    api.put<ApiResponse<null>>('/api/rival-prices/group-kinds', {
+      site_id: siteId,
+      group,
+      kind,
+    }),
     'Failed to save'
   )
 }

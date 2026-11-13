@@ -322,9 +322,12 @@ func readRivalDirectoryPages(ctx context.Context, client *rivalHTTPClient, now t
 
 func probeDueRivalSites(ctx context.Context, client *rivalHTTPClient, now time.Time) error {
 	sites, err := model.ClaimRivalSitesDue(now.Unix(), now.Add(rivalProbeHold).Unix(), rivalProbesPerTick)
-	if err != nil {
+	if err != nil || len(sites) == 0 {
 		return err
 	}
+	ref := rivalReferenceForAlerts(now)
+	var mu sync.Mutex
+	var alerts []string
 	work := make(chan model.RivalSite)
 	var wg sync.WaitGroup
 	for i := 0; i < rivalProbeWorkers; i++ {
@@ -338,8 +341,23 @@ func probeDueRivalSites(ctx context.Context, client *rivalHTTPClient, now time.T
 				if result.Status != model.RivalStatusOK {
 					next = checked.Add(rivalRecheckFailed)
 				}
-				if err := model.SaveRivalProbe(site.Id, result, checked.Unix(), next.Unix()); err != nil {
+				previous, baseline, err := model.SaveRivalProbe(site.Id, result, checked.Unix(), next.Unix())
+				if err != nil {
 					logger.LogWarn(ctx, common.LogText("rival prices: saving %s failed: %v", site.Slug, err))
+					continue
+				}
+				if baseline || result.Status != model.RivalStatusOK {
+					continue
+				}
+				overrides, err := model.RivalGroupKindOverrides(site.Id)
+				if err != nil {
+					continue
+				}
+				lines := RivalAlertLines(site, result.TopUpPrice, previous, result.Prices, overrides[site.Id], ref)
+				if len(lines) > 0 {
+					mu.Lock()
+					alerts = append(alerts, lines...)
+					mu.Unlock()
 				}
 			}
 		}()
@@ -349,7 +367,42 @@ func probeDueRivalSites(ctx context.Context, client *rivalHTTPClient, now time.T
 	}
 	close(work)
 	wg.Wait()
+	sendRivalAlerts(ctx, alerts)
 	return nil
+}
+
+// rivalMixDays is how far back our customers' traffic is read for the mix.
+const rivalMixDays = 7
+
+func rivalReferenceForAlerts(now time.Time) RivalReference {
+	mixes, err := model.RivalTokenMixes(now.Add(-rivalMixDays * 24 * time.Hour).Unix())
+	if err != nil {
+		mixes = nil
+	}
+	return BuildRivalReference(mixes)
+}
+
+const rivalAlertMaxLines = 30
+
+// sendRivalAlerts posts one Feishu message for a tick's alerts, when a
+// webhook is set.
+func sendRivalAlerts(ctx context.Context, lines []string) {
+	setting := system_setting.GetRivalPriceSetting()
+	if len(lines) == 0 || strings.TrimSpace(setting.FeishuWebhook) == "" {
+		return
+	}
+	more := 0
+	if len(lines) > rivalAlertMaxLines {
+		more = len(lines) - rivalAlertMaxLines
+		lines = lines[:rivalAlertMaxLines]
+	}
+	text := "【竞品降价】同类渠道（订阅号池）\n" + strings.Join(lines, "\n")
+	if more > 0 {
+		text += fmt.Sprintf("\n……另有 %d 条，见控制台「竞品价格 → 调价记录」", more)
+	}
+	if err := SendFeishuBotText(strings.TrimSpace(setting.FeishuWebhook), setting.FeishuSecret, text); err != nil {
+		logger.LogWarn(ctx, common.LogText("rival prices: Feishu alert failed: %v", err))
+	}
 }
 
 // RivalProbeCandidates lists the origins tried for a site's price list: the
@@ -434,8 +487,12 @@ type RivalPricing struct {
 		ModelRatio      float64  `json:"model_ratio"`
 		CompletionRatio float64  `json:"completion_ratio"`
 		CacheRatio      *float64 `json:"cache_ratio"`
-		BillingExpr     string   `json:"billing_expr"`
-		EnableGroups    []string `json:"enable_groups"`
+		// new-api names the cache-write ratio create_cache_ratio; some
+		// forks send cache_creation_ratio_5m instead.
+		CreateCacheRatio   *float64 `json:"create_cache_ratio"`
+		CacheCreation5mRat *float64 `json:"cache_creation_ratio_5m"`
+		BillingExpr        string   `json:"billing_expr"`
+		EnableGroups       []string `json:"enable_groups"`
 	} `json:"data"`
 }
 
@@ -472,10 +529,14 @@ func (p RivalPricing) ClaudePrices(topUpPrice float64) []model.RivalPrice {
 			if !ok || ratio <= 0 || group == "auto" {
 				continue
 			}
+			create := m.CreateCacheRatio
+			if create == nil {
+				create = m.CacheCreation5mRat
+			}
 			price := model.RivalPrice{
 				Model: name, GroupName: group, RawModel: m.ModelName,
 				ModelRatio: m.ModelRatio, CompletionRatio: m.CompletionRatio, CacheRatio: m.CacheRatio,
-				GroupRatio: ratio,
+				CreateCacheRatio: create, GroupRatio: ratio,
 			}
 			if topUpPrice > 0 {
 				input := roundRival(m.ModelRatio * 2 * ratio * topUpPrice)

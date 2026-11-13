@@ -51,6 +51,7 @@ export type RivalPrice = {
   model_ratio: number
   completion_ratio: number
   cache_ratio: number | null
+  create_cache_ratio: number | null
   group_ratio: number
   input_cny: number | null
   output_cny: number | null
@@ -58,14 +59,47 @@ export type RivalPrice = {
   updated_at: number
 }
 
+export type RivalKind =
+  | 'official'
+  | 'cloud'
+  | 'pool'
+  | 'kiro'
+  | 'reverse'
+  | 'default'
+  | 'other'
+
+export type RivalTrust = 'ok' | 'unknown' | 'default' | 'abnormal'
+
+/** A price row as the board sends it: with its kind and blended price. */
+export type RivalBoardPrice = RivalPrice & {
+  kind: RivalKind
+  kind_overridden: boolean
+  /** CNY for a million tokens of our customers' mix; null without a mix. */
+  blended_cny: number | null
+}
+
+/** Our customers' tokens of a model over 7 days, as shares of the total. */
+export type RivalShares = {
+  uncached: number
+  cache_read: number
+  cache_write: number
+  output: number
+  tokens: number
+  model: string
+}
+
 export type RivalOfficialPrice = {
   model: string
   input_cny: number
   output_cny: number
+  blended_cny: number | null
+  mix: RivalShares | null
 }
 
 export type RivalOwnPrice = {
   group: string
+  kind: RivalKind
+  blended_cny: number | null
   group_ratio: number
   input_cny: number
   output_cny: number
@@ -85,12 +119,15 @@ export type RivalCounts = {
 export type RivalBoard = {
   enabled: boolean
   proxy_set: boolean
+  feishu_set: boolean
+  our_kind: RivalKind
+  kinds: RivalKind[]
   model: string
   models: RivalOfficialPrice[]
   exchange_rate: number
   top_up_price: number
   ours: RivalOwnPrice[] | null
-  sites: (RivalSite & { prices: RivalPrice[] })[]
+  sites: (RivalSite & { trust: RivalTrust; prices: RivalBoardPrice[] })[]
   counts: RivalCounts
   directory: { synced_at: number; sites: number; error: string }
 }

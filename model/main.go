@@ -408,6 +408,7 @@ func migrateDB() error {
 		&RivalPrice{},
 		&RivalPriceChange{},
 		&RivalDirectoryState{},
+		&RivalGroupKind{},
 	)
 	if err != nil {
 		return err
