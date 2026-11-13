@@ -67,7 +67,7 @@ func TestDistributeAnswersUnlistedClaudeModelWithNotFound(t *testing.T) {
 			{name: "unlisted model on messages", path: "/v1/messages", model: "claude-sonnet-5", wantStatus: http.StatusNotFound,
 				wantBody: `{"type":"error","error":{"type":"not_found_error","message":"model: claude-sonnet-5 (request id: %s)"}}`},
 			{name: "listed model with every channel down", path: "/v1/messages", model: "claude-haiku-5-5", wantStatus: http.StatusServiceUnavailable, recorded: true},
-			{name: "unlisted model on chat completions", path: "/v1/chat/completions", model: "claude-sonnet-5", wantStatus: http.StatusServiceUnavailable},
+			{name: "unlisted model on chat completions", path: "/v1/chat/completions", model: "claude-sonnet-5", wantStatus: http.StatusNotFound},
 			{name: "served model", path: "/v1/messages", model: "claude-opus-5-5", wantStatus: http.StatusNoContent},
 		} {
 			t.Run(fmt.Sprintf("memory_cache=%t/%s", memoryCache, tc.name), func(t *testing.T) {
@@ -85,10 +85,12 @@ func TestDistributeAnswersUnlistedClaudeModelWithNotFound(t *testing.T) {
 				router.ServeHTTP(recorder, request)
 
 				require.Equal(t, tc.wantStatus, recorder.Code, recorder.Body.String())
-				switch tc.wantStatus {
-				case http.StatusNotFound:
+				switch {
+				case tc.wantStatus == http.StatusNotFound && tc.path != "/v1/messages":
+					assert.Contains(t, recorder.Body.String(), `"code":"model_not_found"`)
+				case tc.wantStatus == http.StatusNotFound:
 					assert.JSONEq(t, fmt.Sprintf(tc.wantBody, recorder.Header().Get(common.RequestIdKey)), recorder.Body.String())
-				case http.StatusServiceUnavailable:
+				case tc.wantStatus == http.StatusServiceUnavailable:
 					assert.Contains(t, recorder.Body.String(), `"code":"model_not_found"`)
 				}
 
