@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Link as RouterLink } from '@tanstack/react-router'
 import type { Row } from '@tanstack/react-table'
 import {
+  Brain,
   Trash2,
   Edit,
   Power,
@@ -68,6 +69,7 @@ import {
   getAnthropicBaseUrl,
   getSetupTitle,
 } from '../lib/client-setup'
+import { iqTestModels } from '../lib/iq-test-models'
 import { openDeepLink } from '../lib/open-deep-link'
 import { useSetupClients } from '../lib/use-setup-clients'
 import { apiKeySchema } from '../types'
@@ -106,7 +108,12 @@ export function DataTableRowActions<TData>({
   const isEnabled = apiKey.status === API_KEY_STATUS.ENABLED
   const { chatPresets, serverAddress } = useChatPresets()
   const { status } = useStatus()
-  const { clients: setupClients } = useSetupClients(apiKey)
+  const {
+    clients: setupClients,
+    clientOnly,
+    models: groupModels,
+  } = useSetupClients(apiKey)
+  const hasIqTestModels = iqTestModels(groupModels, apiKey).length > 0
   const [isTogglingStatus, setIsTogglingStatus] = useState(false)
   const isRealKeyLoading = Boolean(loadingKeys[apiKey.id])
 
@@ -215,6 +222,18 @@ export function DataTableRowActions<TData>({
   }
 
   const setupTitle = t(getSetupTitle(setupClients))
+  // A browser cannot send Claude Code's or Codex's headers, so keys of
+  // client-only groups are tested from the client itself.
+  let iqTestTip = t('IQ test')
+  if (clientOnly === 'claude-code') {
+    iqTestTip = t(
+      'This group only admits Claude Code; test it from Claude Code'
+    )
+  } else if (clientOnly === 'codex') {
+    iqTestTip = t('This group only admits Codex; test it from Codex')
+  } else if (!hasIqTestModels) {
+    iqTestTip = t('This group has no chat models to test')
+  }
 
   return (
     <div className='-ml-1.5 flex items-center gap-1'>
@@ -236,6 +255,29 @@ export function DataTableRowActions<TData>({
           <TerminalSquare />
         </TooltipTrigger>
         <TooltipContent>{setupTitle}</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant='ghost'
+              size='icon-sm'
+              onClick={() => {
+                setCurrentRow(apiKey)
+                setOpen('iq-test')
+              }}
+              disabled={!isEnabled || clientOnly !== null || !hasIqTestModels}
+              // Stays hoverable while disabled, so the tooltip can say why.
+              focusableWhenDisabled
+              className='data-disabled:cursor-not-allowed data-disabled:opacity-50'
+              aria-label={t('IQ test')}
+            />
+          }
+        >
+          <Brain />
+        </TooltipTrigger>
+        <TooltipContent>{iqTestTip}</TooltipContent>
       </Tooltip>
 
       <Tooltip>
