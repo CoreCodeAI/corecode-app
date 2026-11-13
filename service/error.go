@@ -118,6 +118,7 @@ func RelayErrorHandler(ctx context.Context, resp *http.Response, showBodyWhenFai
 		// General format error (OpenAI, Anthropic, Gemini, etc.)
 		oaiError := errResponse.TryToOpenAIError()
 		if oaiError != nil {
+			oaiError.Message = withThinkingSignatureHint(oaiError.Message)
 			newApiErr = types.WithOpenAIError(*oaiError, resp.StatusCode)
 			newApiErr.SetClaudeThreadCode(gjson.GetBytes(errResponse.Error, "details.error_code").String())
 			if showBodyWhenFail {
@@ -126,7 +127,7 @@ func RelayErrorHandler(ctx context.Context, resp *http.Response, showBodyWhenFai
 			return
 		}
 	}
-	message := errResponse.ToMessage()
+	message := withThinkingSignatureHint(errResponse.ToMessage())
 	if message == "" {
 		// The body parsed as JSON but carried no usable error message; log the
 		// raw body so the upstream failure remains diagnosable.
