@@ -343,13 +343,16 @@ func TestProviderChannelServesOnlyItsRoutes(t *testing.T) {
 	]};`)
 	harness.install(t, harness.pluginChannel("relay-paths", "sk-static"))
 
+	// No path the plugin serves takes the model there, so the request is the
+	// caller's mistake: a 400 a client does not retry, not a 503.
 	outcome := harness.post(t, "/v1/chat/completions", relayTestBody)
 
-	assert.Equal(t, http.StatusServiceUnavailable, outcome.status, outcome.body)
+	assert.Equal(t, http.StatusBadRequest, outcome.status, outcome.body)
+	assert.Contains(t, outcome.body, "is not served on /v1/chat/completions")
 	assert.Empty(t, harness.upstream.captured(), "the route is for another model")
 
 	outcome = harness.post(t, "/v1/embeddings", `{"model":"`+relayTestModel+`","input":"x"}`)
-	assert.Equal(t, http.StatusServiceUnavailable, outcome.status, outcome.body)
+	assert.Equal(t, http.StatusBadRequest, outcome.status, outcome.body)
 	assert.Empty(t, harness.upstream.captured())
 }
 
@@ -365,7 +368,8 @@ export function parseTaskResult() { return {status: "SUCCESS"}; }`)
 
 	outcome := harness.post(t, "/v1/chat/completions", relayTestBody)
 
-	assert.Equal(t, http.StatusServiceUnavailable, outcome.status, outcome.body)
+	assert.Equal(t, http.StatusBadRequest, outcome.status, outcome.body)
+	assert.Contains(t, outcome.body, "generates asynchronously", "a task model is submitted as a task")
 	assert.Empty(t, harness.upstream.captured())
 }
 

@@ -53,6 +53,10 @@ const (
 	MsgDistributorNoAvailableChannel           = "distributor.no_available_channel"
 	MsgDistributorNoAvailableChannelTaskPlugin = "distributor.no_available_channel_task_plugin"
 	MsgDistributorInvalidParseModel            = "distributor.invalid_request_parse_model"
+	MsgDistributorModelNotServed               = "distributor.model_not_served"
+	MsgDistributorModelInOtherGroups           = "distributor.model_in_other_groups"
+	MsgDistributorModelWrongEndpoint           = "distributor.model_wrong_endpoint"
+	MsgDistributorTaskModelWrongEndpoint       = "distributor.task_model_wrong_endpoint"
 
 	MsgQuotaUserInsufficient                  = "quota.user_insufficient"
 	MsgQuotaPreConsumeInsufficient            = "quota.pre_consume_insufficient"

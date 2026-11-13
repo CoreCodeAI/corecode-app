@@ -120,8 +120,7 @@ func Distribute() func(c *gin.Context) {
 				if selectErr.FilterKind == taskdto.FilterTaskPluginIdentity {
 					logTaskPluginChannelDecision(c, selectErr.Channel, modelRequest.Model, "channel_rejected", "identity_mismatch")
 				}
-				if selectErr.NoAvailableChannel && isClaudeMessagesRequest(c) && !model.IsModelListed(modelRequest.Model) {
-					abortWithClaudeModelNotFound(c, modelRequest.Model)
+				if selectErr.NoAvailableChannel && refuseUnservableModel(c, usingGroup, modelRequest.Model, constraints.Filters) {
 					return
 				}
 				message := selectErr.Message
@@ -151,12 +150,74 @@ func isClaudeMessagesRequest(c *gin.Context) bool {
 	return !pluginRoute && strings.HasPrefix(c.Request.URL.Path, "/v1/messages")
 }
 
-// abortWithClaudeModelNotFound answers a model no channel lists the way
-// Anthropic does: 404 not_found_error. Claude Code retries a 503 several times
-// before falling back from a model it asked for, such as auto mode's classifier
-// default; a 404 makes it fall back at once.
-func abortWithClaudeModelNotFound(c *gin.Context, modelName string) {
+// refuseUnservableModel answers a request no channel of its groups took when
+// retrying could never help, and reports whether it did. A 503 tells clients
+// to retry, and one misconfigured client resent such requests over a thousand
+// times a day, so a model this deployment does not serve is a 404, a model
+// only other groups serve is a 404 naming the groups the user may switch the
+// key to, and a model sent to an endpoint that does not serve it is a 400. An
+// outage, including every channel of the model being disabled, keeps the 503.
+// A task-plugin-pinned request keeps its own message.
+func refuseUnservableModel(c *gin.Context, usingGroup, modelName string, filters []taskdto.ChannelFilter) bool {
+	if _, pinned := c.Get(jsplugin.ContextKeyPinnedPlugin); pinned {
+		return false
+	}
+	userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+	groups := []string{usingGroup}
+	if usingGroup == "auto" {
+		groups = service.GetRequestAutoGroups(c, userGroup)
+	}
+	diagnosis := model.DiagnoseNoChannel(groups, modelName, filters)
+
+	switch diagnosis.Cause {
+	case model.NoChannelUnlisted:
+		if isClaudeMessagesRequest(c) {
+			abortWithClaudeModelNotFound(c, modelName, "")
+			return true
+		}
+		abortWithOpenAiMessage(c, http.StatusNotFound, i18n.T(c, i18n.MsgDistributorModelNotServed, map[string]any{"Model": modelName}), types.ErrorCodeModelNotFound)
+		return true
+	case model.NoChannelOtherGroups:
+		usable := service.GetUserUsableGroups(userGroup)
+		var offered []string
+		for _, group := range diagnosis.Groups {
+			if _, ok := usable[group]; ok && group != "auto" {
+				offered = append(offered, group)
+			}
+		}
+		message := i18n.T(c, i18n.MsgDistributorModelNotServed, map[string]any{"Model": modelName})
+		if len(offered) > 0 {
+			message = i18n.T(c, i18n.MsgDistributorModelInOtherGroups, map[string]any{"Model": modelName, "Group": usingGroup, "Groups": strings.Join(offered, ", ")})
+		}
+		service.RecordNoChannelErrorLog(c, modelName, usingGroup, http.StatusNotFound)
+		if isClaudeMessagesRequest(c) {
+			abortWithClaudeModelNotFound(c, modelName, message)
+			return true
+		}
+		abortWithOpenAiMessage(c, http.StatusNotFound, message, types.ErrorCodeModelNotFound)
+		return true
+	case model.NoChannelWrongEndpoint:
+		messageID := i18n.MsgDistributorModelWrongEndpoint
+		if diagnosis.TaskModel {
+			messageID = i18n.MsgDistributorTaskModelWrongEndpoint
+		}
+		service.RecordNoChannelErrorLog(c, modelName, usingGroup, http.StatusBadRequest)
+		abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, messageID, map[string]any{"Model": modelName, "Path": c.Request.URL.Path}), types.ErrorCodeInvalidRequest)
+		return true
+	}
+	return false
+}
+
+// abortWithClaudeModelNotFound answers a model the request cannot use the
+// way Anthropic does: 404 not_found_error. Claude Code retries a 503 several
+// times before falling back from a model it asked for, such as auto mode's
+// classifier default; a 404 makes it fall back at once. An empty detail
+// answers as Anthropic does for a model that does not exist.
+func abortWithClaudeModelNotFound(c *gin.Context, modelName, detail string) {
 	message := "model: " + modelName
+	if detail != "" {
+		message += ". " + detail
+	}
 	c.JSON(http.StatusNotFound, gin.H{
 		"type": "error",
 		"error": gin.H{
@@ -165,7 +226,9 @@ func abortWithClaudeModelNotFound(c *gin.Context, modelName string) {
 		},
 	})
 	c.Abort()
-	logger.LogError(c.Request.Context(), common.LogText("user %d | model not listed: %s", c.GetInt("id"), modelName))
+	if detail == "" {
+		logger.LogError(c.Request.Context(), common.LogText("user %d | model not listed: %s", c.GetInt("id"), modelName))
+	}
 }
 
 // noAvailableChannelMessage explains a 503 for a task-plugin-claimed model.
