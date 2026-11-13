@@ -41,19 +41,37 @@ function buildApiPath(endpoint: string, isAdmin: boolean): string {
   return isAdmin ? endpoint : `${endpoint}/self`
 }
 
-async function fetchLogs<T>(
+export function logsUrl<T>(
   endpoint: string,
   params: T,
   isAdmin: boolean
-): Promise<GetLogsResponse> {
+): string {
   const paramRecord = params as unknown as Record<string, unknown>
   const queryParams = buildQueryParams({
     p: paramRecord.p || 1,
     page_size: paramRecord.page_size || 20,
     ...params,
   })
-  const path = buildApiPath(endpoint, isAdmin)
-  const res = await api.get(`${path}?${queryParams}`)
+  return `${buildApiPath(endpoint, isAdmin)}?${queryParams}`
+}
+
+export function logStatsUrl<T>(
+  endpoint: string,
+  params: T,
+  isAdmin: boolean
+): string {
+  const queryParams = buildQueryParams(
+    params as unknown as Record<string, unknown>
+  )
+  return `${buildApiPath(endpoint, isAdmin)}/stat?${queryParams}`
+}
+
+async function fetchLogs<T>(
+  endpoint: string,
+  params: T,
+  isAdmin: boolean
+): Promise<GetLogsResponse> {
+  const res = await api.get(logsUrl(endpoint, params, isAdmin))
   return res.data
 }
 
@@ -62,11 +80,7 @@ async function fetchLogStats<T>(
   params: T,
   isAdmin: boolean
 ): Promise<GetLogStatsResponse> {
-  const queryParams = buildQueryParams(
-    params as unknown as Record<string, unknown>
-  )
-  const path = buildApiPath(endpoint, isAdmin)
-  const res = await api.get(`${path}/stat?${queryParams}`)
+  const res = await api.get(logStatsUrl(endpoint, params, isAdmin))
   return res.data
 }
 

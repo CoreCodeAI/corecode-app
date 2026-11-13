@@ -78,11 +78,14 @@ for (const [page, limitKB] of Object.entries(budget)) {
     ...locale.slice(0, route[3] + 1),
     ...route[2].map((i) => chunkFile(names[i])),
   ])
-  const kb = [...files].reduce((sum, file) => sum + size(file), 0) / 1024
-  const over = kb > limitKB
+  const bytes = [...files].reduce((sum, file) => sum + size(file), 0)
+  const room = limitKB * 1024 - bytes
+  const over = room < 0
   failed ||= over
+  // Bytes as well as KB: a rounded figure reads the same a few bytes either
+  // side of the limit.
   console.log(
-    `${over ? 'OVER' : 'ok  '} ${page.padEnd(22)} ${kb.toFixed(1).padStart(6)} KB of ${limitKB} KB, ${files.size} files`
+    `${over ? 'OVER' : 'ok  '} ${page.padEnd(22)} ${(bytes / 1024).toFixed(1).padStart(6)} KB of ${limitKB} KB, ${files.size} files, ${over ? `${-room} bytes over` : `${room} bytes left`}`
   )
 }
 if (failed) {

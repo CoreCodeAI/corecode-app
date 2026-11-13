@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import axios, { type AxiosRequestConfig } from 'axios'
+import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios'
 import { t } from 'i18next'
 
 import {
@@ -81,16 +81,36 @@ api.get = ((url: string, config: ApiRequestConfig = {}) => {
   return getOnce(url, config)
 }) as typeof api.get
 
+/** One key per session, URL and parameters, shared by the GETs below. */
+export function getRequestKey(url: string, config: ApiRequestConfig): string {
+  const params = config.params ? JSON.stringify(config.params) : '{}'
+  const sessionSID = useAuthStore.getState().auth.session?.sid || 'anonymous'
+  return `${sessionSID}:${url}?${params}`
+}
+
+type TakePrefetched = (
+  key: string,
+  send: () => Promise<AxiosResponse>
+) => Promise<AxiosResponse> | undefined
+
+// Installed by lib/prefetch-get.ts once a route loader prefetches a GET; it
+// returns the prefetched response for a key, if one is waiting. The code
+// lives there so the entry bundle carries only this hook.
+let takePrefetched: TakePrefetched | undefined
+
+export function installPrefetchTaker(take: TakePrefetched): void {
+  takePrefetched = take
+}
+
 function getOnce(url: string, config: ApiRequestConfig) {
   if (config.disableDuplicate) return originalGet(url, config)
 
-  const params = config.params ? JSON.stringify(config.params) : '{}'
-  const sessionSID = useAuthStore.getState().auth.session?.sid || 'anonymous'
-  const key = `${sessionSID}:${url}?${params}`
+  const key = getRequestKey(url, config)
   const existingRequest = inFlightGet.get(key)
   if (existingRequest) return existingRequest
 
-  const request = originalGet(url, config).finally(() => {
+  const send = (): Promise<AxiosResponse> => originalGet(url, config)
+  const request = (takePrefetched?.(key, send) ?? send()).finally(() => {
     inFlightGet.delete(key)
   })
   inFlightGet.set(key, request)

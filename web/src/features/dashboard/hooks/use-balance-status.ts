@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
+import { queryOptions, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { getSelfSubscriptionFull } from '@/features/subscriptions/api'
@@ -73,6 +73,15 @@ export function summarizeSubscriptionQuota(
   return { remaining, unlimited }
 }
 
+/** The signed-in user's subscriptions; the overview's and the wallet's loaders prefetch it. */
+export const selfSubscriptionsQueryOptions = queryOptions({
+  queryKey: ['subscription', 'self'],
+  queryFn: async () =>
+    requireServerSuccess(await getSelfSubscriptionFull()).data?.subscriptions ??
+    [],
+  staleTime: 60 * 1000,
+})
+
 /**
  * How healthy the spendable quota is and how long it lasts at the last
  * week's spend. Requests draw on the wallet and on active subscriptions, so a
@@ -85,13 +94,7 @@ export function useBalanceStatus(balance: number, daily: DailySpend[]) {
   const neverSpent = useAuthStore((state) =>
     state.auth.user ? isFirstRun(state.auth.user) : false
   )
-  const subscriptionsQuery = useQuery({
-    queryKey: ['subscription', 'self'],
-    queryFn: async () =>
-      requireServerSuccess(await getSelfSubscriptionFull()).data
-        ?.subscriptions ?? [],
-    staleTime: 60 * 1000,
-  })
+  const subscriptionsQuery = useQuery(selfSubscriptionsQueryOptions)
   const subscription = summarizeSubscriptionQuota(
     Array.isArray(subscriptionsQuery.data) ? subscriptionsQuery.data : []
   )

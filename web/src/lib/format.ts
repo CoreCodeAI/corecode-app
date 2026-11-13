@@ -32,12 +32,30 @@ import {
 // Number Formatting
 // ============================================================================
 
+// Built once per locale and option set: constructing an Intl.NumberFormat
+// costs far more than formatting with it, and a table formats thousands of
+// numbers. lib/currency.ts keeps its own cache the same way.
+const numberFormats = new Map<string, Intl.NumberFormat>()
+
+function getNumberFormat(
+  locales: Intl.LocalesArgument | undefined,
+  options: Intl.NumberFormatOptions
+): Intl.NumberFormat {
+  const key = `${String(locales ?? '')}|${JSON.stringify(options)}`
+  let format = numberFormats.get(key)
+  if (!format) {
+    format = new Intl.NumberFormat(locales, options)
+    numberFormats.set(key, format)
+  }
+  return format
+}
+
 export function formatNumber(
   value: number | null | undefined,
   locales?: Intl.LocalesArgument
 ): string {
   if (value == null || Number.isNaN(value as number)) return '-'
-  return Intl.NumberFormat(locales, { maximumFractionDigits: 2 }).format(
+  return getNumberFormat(locales, { maximumFractionDigits: 2 }).format(
     value as number
   )
 }
@@ -55,7 +73,7 @@ export function formatBytes(
     value /= 1000
     unit += 1
   }
-  return `${Intl.NumberFormat(locales, { maximumFractionDigits: 1 }).format(value)} ${BYTE_UNITS[unit]}`
+  return `${getNumberFormat(locales, { maximumFractionDigits: 1 }).format(value)} ${BYTE_UNITS[unit]}`
 }
 
 /**
@@ -69,7 +87,7 @@ export function formatCompactNumber(
   )
 ): string {
   if (value == null || Number.isNaN(value as number)) return '-'
-  return Intl.NumberFormat(locales, {
+  return getNumberFormat(locales, {
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(value as number)
@@ -77,7 +95,7 @@ export function formatCompactNumber(
 
 export function formatPercent(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value as number)) return '-'
-  return Intl.NumberFormat(undefined, {
+  return getNumberFormat(undefined, {
     style: 'percent',
     maximumFractionDigits: 2,
   }).format((value as number) / 100)

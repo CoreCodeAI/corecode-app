@@ -29,9 +29,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { PanelWrapper } from '@/features/dashboard/components/ui/panel-wrapper'
 import { planTextReader } from '@/features/subscriptions/lib/plan-text'
-import { getUserLogs } from '@/features/usage-logs/api'
 import { LOG_TYPE_ENUM } from '@/features/usage-logs/constants'
-import type { UsageLog } from '@/features/usage-logs/data/schema'
 import {
   parseLogOther,
   renderAuditContent,
@@ -39,31 +37,15 @@ import {
 } from '@/features/usage-logs/lib/format'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatTimestampRelative } from '@/lib/format'
-import {
-  requireServerSuccess,
-  translateServerText,
-} from '@/lib/server-error-message'
+import { translateServerText } from '@/lib/server-error-message'
 
-const VISIBLE_CREDITS = 5
+import { recentCreditsQueryOptions } from '../lib/recent-credits'
 
 export function RecentCreditsCard() {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
 
-  const query = useQuery({
-    queryKey: ['wallet', 'recent-credits'],
-    queryFn: async () => {
-      const result = requireServerSuccess(
-        await getUserLogs({
-          p: 1,
-          page_size: VISIBLE_CREDITS,
-          type: LOG_TYPE_ENUM.TOPUP,
-        })
-      )
-      return (result.data?.items ?? []) as UsageLog[]
-    },
-    staleTime: 30 * 1000,
-  })
+  const query = useQuery(recentCreditsQueryOptions)
   const credits = query.data ?? []
 
   return (

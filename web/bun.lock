@@ -93,6 +93,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "react-i18next@17.1.0": "patches/react-i18next@17.1.0.patch",
+  },
   "overrides": {
     "brace-expansion": "5.0.12",
     "dompurify": "3.4.17",
