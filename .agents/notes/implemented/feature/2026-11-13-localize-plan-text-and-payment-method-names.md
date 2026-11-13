@@ -23,12 +23,29 @@ to the wallet from a paid campaign.
   maps the Chinese title and subtitle of each plan on sale on 2026-11-13
   (新人体验包, 新人福利包, 渠道体验包) to an English key, translated in all
   eight locales. A plan whose text is not listed, or was edited, shows its
-  text as written. Translating free text per plan in the database would need
-  a schema and admin-form change; three plans did not justify it.
+  text as written.
 - **Kept off the first load.** `payment-names.ts` is not exported from
   `features/wallet/lib/index.ts`, because the overview imports that barrel
   and the locale split would then move `Card` into the core part. The
   partition diff against main shows only the six new keys, all in `rest`.
+
+## Alternatives considered
+
+- **Per-language title and subtitle columns on `subscription_plans`.** Covers
+  any plan an operator writes, but needs a migration, an admin form for each
+  language and an upstream divergence in the plan model. Three plans on sale
+  did not justify it; revisit if operators add plans often.
+- **Hiding the subtitle outside Chinese.** The card already shows price,
+  validity, credit and limit, but the title would still be Chinese.
+
+## Verification
+
+- `src/features/wallet/lib/localized-names.test.ts`: Russian names for the
+  known payment types, the operator name for USDT / USDC and unknown types,
+  Russian plan text, unchanged Chinese, and untouched unknown plan text.
+- `bun run typecheck`, `bun run lint:check`, wallet and subscriptions tests
+  (105 passed), `bun run build`, `bun run first-load:check` (sign-in 354.2,
+  overview 532.1, keys 614.0 KB, all within budget).
 
 ## When operators change a plan
 
