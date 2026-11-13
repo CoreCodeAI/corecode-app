@@ -1,0 +1,64 @@
+diff --git a/dist/commonjs/useTranslation.js b/dist/commonjs/useTranslation.js
+index 793258f035711ad28f0a1fc116bc022849885916..98ff216f2f66e476b83b693b1d85b7c64a7db0ff 100644
+--- a/dist/commonjs/useTranslation.js
++++ b/dist/commonjs/useTranslation.js
+@@ -131,22 +131,11 @@ const useTranslation = (ns, props = {}) => {
+   const wrapperRef = (0, _react.useRef)(null);
+   const wrapperLangRef = (0, _react.useRef)();
+   const languageKey = inst => `${inst.language}|${inst.resolvedLanguage}|${inst.languages?.join(',')}`;
+-  const createI18nWrapper = original => {
+-    const descriptors = Object.getOwnPropertyDescriptors(original);
+-    if (descriptors.__original) delete descriptors.__original;
+-    const wrapper = Object.create(Object.getPrototypeOf(original), descriptors);
+-    if (!Object.prototype.hasOwnProperty.call(wrapper, '__original')) {
+-      try {
+-        Object.defineProperty(wrapper, '__original', {
+-          value: original,
+-          writable: false,
+-          enumerable: false,
+-          configurable: false
+-        });
+-      } catch (_) {}
+-    }
+-    return wrapper;
+-  };
++  // Patched (react-i18next 18's wrapper): a Proxy instead of a copy of every
++  // property of the instance, which each mounted component paid for.
++  const createI18nWrapper = original => new Proxy(original, {
++    get: (target, prop) => prop === '__original' ? target : Reflect.get(target, prop)
++  });
+   const ret = (0, _react.useMemo)(() => {
+     const original = finalI18n;
+     const lang = original && languageKey(original);
+diff --git a/dist/es/useTranslation.js b/dist/es/useTranslation.js
+index 856e7baabc3f0d2214a26d533907dae4fa6d5158..f40a067b50eecdd63c22c9854c2091be3a5fa51a 100644
+--- a/dist/es/useTranslation.js
++++ b/dist/es/useTranslation.js
+@@ -125,22 +125,11 @@ export const useTranslation = (ns, props = {}) => {
+   const wrapperRef = useRef(null);
+   const wrapperLangRef = useRef();
+   const languageKey = inst => `${inst.language}|${inst.resolvedLanguage}|${inst.languages?.join(',')}`;
+-  const createI18nWrapper = original => {
+-    const descriptors = Object.getOwnPropertyDescriptors(original);
+-    if (descriptors.__original) delete descriptors.__original;
+-    const wrapper = Object.create(Object.getPrototypeOf(original), descriptors);
+-    if (!Object.prototype.hasOwnProperty.call(wrapper, '__original')) {
+-      try {
+-        Object.defineProperty(wrapper, '__original', {
+-          value: original,
+-          writable: false,
+-          enumerable: false,
+-          configurable: false
+-        });
+-      } catch (_) {}
+-    }
+-    return wrapper;
+-  };
++  // Patched (react-i18next 18's wrapper): a Proxy instead of a copy of every
++  // property of the instance, which each mounted component paid for.
++  const createI18nWrapper = original => new Proxy(original, {
++    get: (target, prop) => prop === '__original' ? target : Reflect.get(target, prop)
++  });
+   const ret = useMemo(() => {
+     const original = finalI18n;
+     const lang = original && languageKey(original);
