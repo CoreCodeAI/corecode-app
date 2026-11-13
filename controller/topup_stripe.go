@@ -443,8 +443,10 @@ func sessionExpired(ctx context.Context, event stripe.Event) {
 }
 
 // stripeCheckoutParams builds a one-time Checkout Session: one line item,
-// productName, described with its CNY price payMoney, charging hkdCents in
-// HKD only: Adaptive Pricing is off, so Checkout offers no local currency
+// named "productName ¥payMoney" so the CNY price, which the customer
+// thinks in, sits in the larger product name, and described with the HKD
+// amount, since Checkout always shows the charged currency biggest. It
+// charges hkdCents in HKD only: Adaptive Pricing is off, so Checkout offers no local currency
 // at Stripe's own, marked-up rate. methodTypes limits the Stripe payment
 // methods offered; empty offers every method the dashboard enables for HKD
 // and the amount. customerId is the customer's Stripe customer, or
@@ -468,8 +470,8 @@ func stripeCheckoutParams(referenceId string, customerId string, email string, p
 					Currency:   stripe.String(stripeCheckoutCurrency),
 					UnitAmount: stripe.Int64(hkdCents),
 					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
-						Name:        stripe.String(productName),
-						Description: stripe.String(fmt.Sprintf("人民币价 ¥%.2f", payMoney)),
+						Name:        stripe.String(fmt.Sprintf("%s ¥%.2f", productName, payMoney)),
+						Description: stripe.String(fmt.Sprintf("折合 HK$%.2f，按当日汇率", float64(hkdCents)/100)),
 					},
 				},
 				Quantity: stripe.Int64(1),
