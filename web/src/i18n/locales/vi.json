@@ -9390,6 +9390,7 @@
     "Download HTML": "Tải HTML",
     "This group only admits Claude Code; test it from Claude Code": "Nhóm này chỉ nhận Claude Code; hãy kiểm tra trong Claude Code",
     "This group only admits Codex; test it from Codex": "Nhóm này chỉ nhận Codex; hãy kiểm tra trong Codex",
-    "This group has no chat models to test": "Nhóm này không có mô hình chat để kiểm tra"
+    "This group has no chat models to test": "Nhóm này không có mô hình chat để kiểm tra",
+    "All platforms": "Tất cả nền tảng"
   }
 }

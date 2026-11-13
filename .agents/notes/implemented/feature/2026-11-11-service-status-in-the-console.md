@@ -45,6 +45,15 @@ that opens a page inside the console.
   relays use, to the first plain card. The strip's title and readout sit above the
   cells so that a finger on the strip does not cover them.
 
+- **A 平台 filter above the group cards (2026-11-13).** One toggle per vendor with
+  its logo and number of groups, after 全部平台, the largest first; groups of no
+  known vendor fall under 其他. The vendor is the card's own (`lib/vendor.ts`), so
+  the filter and the card tags always agree. It shows only when the groups span two
+  or more vendors. The choice is page state, not a URL parameter, so the route file
+  and the first load stay as they were; a vendor that leaves the data after a
+  refresh shows every group again. The owner asked for it after zzshu.cc's
+  渠道状态 page.
+
 ## Alternatives considered
 
 - **Embed `/status/` in an iframe.** That is the least code, but it nests the public

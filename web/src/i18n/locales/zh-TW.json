@@ -9390,6 +9390,7 @@
     "Download HTML": "下載 HTML",
     "This group only admits Claude Code; test it from Claude Code": "該分組僅限 Claude Code，請在 Claude Code 裡測試",
     "This group only admits Codex; test it from Codex": "該分組僅限 Codex，請在 Codex 裡測試",
-    "This group has no chat models to test": "該分組沒有可測試的對話模型"
+    "This group has no chat models to test": "該分組沒有可測試的對話模型",
+    "All platforms": "全部平台"
   }
 }

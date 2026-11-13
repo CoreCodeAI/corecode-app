@@ -9390,6 +9390,7 @@
     "Download HTML": "HTML 다운로드",
     "This group only admits Claude Code; test it from Claude Code": "이 그룹은 Claude Code 전용입니다. Claude Code에서 테스트하세요",
     "This group only admits Codex; test it from Codex": "이 그룹은 Codex 전용입니다. Codex에서 테스트하세요",
-    "This group has no chat models to test": "이 그룹에는 테스트할 채팅 모델이 없습니다"
+    "This group has no chat models to test": "이 그룹에는 테스트할 채팅 모델이 없습니다",
+    "All platforms": "전체 플랫폼"
   }
 }

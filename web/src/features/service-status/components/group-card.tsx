@@ -26,7 +26,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { toIntlLocale } from '@/i18n/languages'
 import { getLobeIcon } from '@/lib/lobe-icon'
-import { resolveModelProvider } from '@/lib/model-provider'
 import { cn } from '@/lib/utils'
 
 import {
@@ -37,6 +36,7 @@ import {
   formatRate,
   rateTone,
 } from '../lib/format'
+import { groupVendor } from '../lib/vendor'
 import type { BucketState, StatusGroup } from '../types'
 import { StatusStrip } from './status-strip'
 
@@ -91,10 +91,7 @@ export function GroupCard(props: { group: StatusGroup }) {
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const group = props.group
   const streams = group.latency === 'ttft'
-  // The busiest model names the vendor; a group with no traffic falls back
-  // to its own name, such as WAN3.0.
-  const provider =
-    resolveModelProvider(group.model ?? '') ?? resolveModelProvider(group.name)
+  const provider = groupVendor(group)
   const stateLabel: Record<BucketState, string> = {
     ok: t('Normal'),
     degraded: t('Degraded'),

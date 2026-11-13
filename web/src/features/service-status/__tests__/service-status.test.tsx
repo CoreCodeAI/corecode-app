@@ -204,3 +204,37 @@ it('reads out the hour under the pointer, and the last active hour otherwise', a
     expect(strip.parentElement?.textContent).toMatch(/No requests/)
   )
 })
+
+it('filters the group cards by platform', async () => {
+  const [base] = statusData().groups ?? []
+  respond(
+    statusData({
+      groups: [
+        base,
+        { ...base, name: 'GPT', model: 'gpt-6.1-sol' },
+        { ...base, name: 'GPT 福利', model: 'gpt-6.1-sol' },
+      ],
+    })
+  )
+  renderPage()
+  const filter = await screen.findByRole('group', { name: 'Platform' })
+  expect(filter.textContent).toContain('All platforms3')
+  expect(filter.textContent).toContain('OpenAI2')
+  expect(filter.textContent).toContain('Anthropic1')
+
+  fireEvent.click(screen.getByRole('button', { name: /^OpenAI/ }))
+  await waitFor(() =>
+    expect(screen.queryByText('Claude 满血（仅限CC）')).toBeNull()
+  )
+  expect(screen.getByText('GPT 福利')).toBeTruthy()
+
+  fireEvent.click(screen.getByRole('button', { name: /^All platforms/ }))
+  expect(await screen.findByText('Claude 满血（仅限CC）')).toBeTruthy()
+})
+
+it('shows no platform filter when every group has one vendor', async () => {
+  respond(statusData())
+  renderPage()
+  await screen.findByText('Claude 满血（仅限CC）')
+  expect(screen.queryByRole('group', { name: 'Platform' })).toBeNull()
+})

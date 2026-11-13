@@ -9390,6 +9390,7 @@
     "Download HTML": "Download HTML",
     "This group only admits Claude Code; test it from Claude Code": "This group only admits Claude Code; test it from Claude Code",
     "This group only admits Codex; test it from Codex": "This group only admits Codex; test it from Codex",
-    "This group has no chat models to test": "This group has no chat models to test"
+    "This group has no chat models to test": "This group has no chat models to test",
+    "All platforms": "All platforms"
   }
 }
