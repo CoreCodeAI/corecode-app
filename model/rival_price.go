@@ -68,11 +68,14 @@ type RivalPrice struct {
 	ModelRatio      float64  `json:"model_ratio"`
 	CompletionRatio float64  `json:"completion_ratio"`
 	CacheRatio      *float64 `json:"cache_ratio"`
-	GroupRatio      float64  `json:"group_ratio"`
-	InputCNY        *float64 `json:"input_cny"`
-	OutputCNY       *float64 `json:"output_cny"`
-	CacheReadCNY    *float64 `json:"cache_read_cny"`
-	UpdatedAt       int64    `json:"updated_at"`
+	// CreateCacheRatio prices a cache write against input; nil when the
+	// site does not say.
+	CreateCacheRatio *float64 `json:"create_cache_ratio"`
+	GroupRatio       float64  `json:"group_ratio"`
+	InputCNY         *float64 `json:"input_cny"`
+	OutputCNY        *float64 `json:"output_cny"`
+	CacheReadCNY     *float64 `json:"cache_read_cny"`
+	UpdatedAt        int64    `json:"updated_at"`
 }
 
 // RivalPriceChange records a price that moved, appeared or went away. A
@@ -243,9 +246,11 @@ type RivalProbeResult struct {
 }
 
 // SaveRivalProbe stores a probe: the site's status and, when it read a price
-// list, replaces the site's prices and records what changed.
-func SaveRivalProbe(siteId int, result RivalProbeResult, now, nextCheckAt int64) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
+// list, replaces the site's prices and records what changed. It returns the
+// prices it replaced, and whether this was the site's first price list (a
+// baseline, compared against nothing).
+func SaveRivalProbe(siteId int, result RivalProbeResult, now, nextCheckAt int64) (previous []RivalPrice, baseline bool, err error) {
+	err = DB.Transaction(func(tx *gorm.DB) error {
 		var site RivalSite
 		if err := tx.First(&site, siteId).Error; err != nil {
 			return err
@@ -281,6 +286,7 @@ func SaveRivalProbe(siteId int, result RivalProbeResult, now, nextCheckAt int64)
 		if err := tx.Where("site_id = ?", siteId).Find(&old).Error; err != nil {
 			return err
 		}
+		previous, baseline = old, site.PricedAt == 0
 		if site.PricedAt > 0 {
 			changes := DiffRivalPrices(old, rows, now)
 			if len(changes) > 0 {
@@ -297,6 +303,7 @@ func SaveRivalProbe(siteId int, result RivalProbeResult, now, nextCheckAt int64)
 		}
 		return tx.CreateInBatches(rows, 100).Error
 	})
+	return previous, baseline, err
 }
 
 func countRivalModels(prices []RivalPrice) int {
@@ -400,4 +407,78 @@ func GetRivalSite(id int) (RivalSite, error) {
 
 func UpdateRivalSite(id int, updates map[string]any) error {
 	return DB.Model(&RivalSite{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// RivalGroupKind is an admin's channel type for one site's group, overriding
+// the type its name suggests (service.ClassifyRivalGroup).
+type RivalGroupKind struct {
+	SiteId    int    `json:"site_id" gorm:"primaryKey;autoIncrement:false"`
+	GroupName string `json:"group" gorm:"primaryKey;type:varchar(128)"`
+	Kind      string `json:"kind" gorm:"type:varchar(16)"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
+// RivalGroupKindOverrides maps site id, then group, to an admin's kind.
+func RivalGroupKindOverrides(siteIds ...int) (map[int]map[string]string, error) {
+	var rows []RivalGroupKind
+	q := DB.Model(&RivalGroupKind{})
+	if len(siteIds) > 0 {
+		q = q.Where("site_id IN ?", siteIds)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := map[int]map[string]string{}
+	for _, row := range rows {
+		if out[row.SiteId] == nil {
+			out[row.SiteId] = map[string]string{}
+		}
+		out[row.SiteId][row.GroupName] = row.Kind
+	}
+	return out, nil
+}
+
+// SetRivalGroupKind stores an admin's kind for a group; an empty kind returns
+// the group to the type its name suggests.
+func SetRivalGroupKind(siteId int, group, kind string, now int64) error {
+	if kind == "" {
+		return DB.Where("site_id = ? AND group_name = ?", siteId, group).Delete(&RivalGroupKind{}).Error
+	}
+	row := RivalGroupKind{SiteId: siteId, GroupName: group, Kind: kind, UpdatedAt: now}
+	return DB.Save(&row).Error
+}
+
+// RivalTokenMix is how many tokens of each kind customers used.
+type RivalTokenMix struct {
+	Uncached   int64 `json:"uncached"`
+	CacheRead  int64 `json:"cache_read"`
+	CacheWrite int64 `json:"cache_write"`
+	Output     int64 `json:"output"`
+}
+
+func (m RivalTokenMix) Total() int64 { return m.Uncached + m.CacheRead + m.CacheWrite + m.Output }
+
+// RivalTokenMixes sums each model's customer tokens since a time, over the
+// hours whose rollup counted output (InsightModelHour.Output), so the four
+// figures always come from the same hours.
+func RivalTokenMixes(since int64) (map[string]RivalTokenMix, error) {
+	var rows []struct {
+		ModelName  string
+		Uncached   int64
+		CacheRead  int64
+		CacheWrite int64
+		Output     int64
+	}
+	err := DB.Model(&InsightModelHour{}).
+		Select("model_name, SUM(uncached) AS uncached, SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(output) AS output").
+		Where("hour_start >= ? AND output > 0", since).
+		Group("model_name").Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]RivalTokenMix, len(rows))
+	for _, r := range rows {
+		out[r.ModelName] = RivalTokenMix{Uncached: r.Uncached, CacheRead: r.CacheRead, CacheWrite: r.CacheWrite, Output: r.Output}
+	}
+	return out, nil
 }

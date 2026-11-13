@@ -16,7 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { RivalBoard, RivalPrice, RivalSite } from './types'
+import type {
+  RivalBoard,
+  RivalBoardPrice,
+  RivalKind,
+  RivalSite,
+  RivalTrust,
+} from './types'
+
+export type Metric = 'blended' | 'input'
+
+export type BoardOptions = {
+  /** Only groups of this kind; 'all' for every kind. */
+  kind: RivalKind | 'all'
+  metric: Metric
+  /** Rank sites whose top-up price cannot be trusted. */
+  includeUntrusted: boolean
+}
 
 /** One line of the board: a site's cheapest group, or one of our groups. */
 export type BoardRow = {
@@ -25,60 +41,106 @@ export type BoardRow = {
   name: string
   url: string
   group: string
+  kind: RivalKind
   groupRatio: number
   /** CNY per million tokens; null when the site's top-up price is unknown. */
   input: number | null
-  output: number | null
+  blended: number | null
   cacheRead: number | null
-  /** input as a share of the official price; null when input is. */
+  cacheRatio: number | null
+  /** The ranked figure as a share of the official one. */
   share: number | null
   topUpPrice: number
-  /** Every group of the site, cheapest first. */
-  groups: RivalPrice[]
+  trust: RivalTrust
+  /** Every group of the site in the chosen kind, cheapest first. */
+  groups: RivalBoardPrice[]
   site?: RivalSite
 }
 
-/** Orders prices cheapest first; a price without a CNY figure goes last, by ratio. */
-export function cheapestFirst(a: RivalPrice, b: RivalPrice): number {
-  if (a.input_cny != null && b.input_cny != null) {
-    return a.input_cny - b.input_cny
+function metricOf(
+  metric: Metric,
+  input: number | null,
+  blended: number | null
+): number | null {
+  return metric === 'blended' ? blended : input
+}
+
+/** Ranks by the metric; a row without one goes last, by group ratio. */
+function byMetric(
+  metric: Metric
+): (
+  a: { input: number | null; blended: number | null; groupRatio: number },
+  b: { input: number | null; blended: number | null; groupRatio: number }
+) => number {
+  return (a, b) => {
+    const x = metricOf(metric, a.input, a.blended)
+    const y = metricOf(metric, b.input, b.blended)
+    if (x != null && y != null) return x - y
+    if (x != null) return -1
+    if (y != null) return 1
+    return a.groupRatio - b.groupRatio
   }
-  if (a.input_cny != null) return -1
-  if (b.input_cny != null) return 1
-  return a.model_ratio * a.group_ratio - b.model_ratio * b.group_ratio
+}
+
+/** The metric falls back to input when the board has no traffic mix. */
+export function effectiveMetric(board: RivalBoard, metric: Metric): Metric {
+  const official = board.models.find((m) => m.model === board.model)
+  return metric === 'blended' && official?.blended_cny == null
+    ? 'input'
+    : metric
 }
 
 /**
  * Builds the board for the selected model: each site at its cheapest group
- * and each of our groups, cheapest first, priced against the official
- * input price. Rows without a CNY price follow, as the site reported them.
+ * of the chosen kind, and our groups, ranked by the metric and priced against
+ * the official figure. Untrusted sites are left out unless asked for.
  */
-export function buildBoardRows(board: RivalBoard): BoardRow[] {
+export function buildBoardRows(
+  board: RivalBoard,
+  options: BoardOptions
+): BoardRow[] {
+  const metric = effectiveMetric(board, options.metric)
   const official = board.models.find((m) => m.model === board.model)
-  const share = (input: number | null) =>
-    input != null && official && official.input_cny > 0
-      ? input / official.input_cny
-      : null
+  const officialFigure =
+    metric === 'blended' ? official?.blended_cny : official?.input_cny
+  const share = (value: number | null) =>
+    value != null && officialFigure ? value / officialFigure : null
+  const inKind = (kind: RivalKind) =>
+    options.kind === 'all' || kind === options.kind
 
   const rows: BoardRow[] = []
   for (const own of board.ours ?? []) {
+    if (!inKind(own.kind)) continue
     rows.push({
       key: `ours:${own.group}`,
       ours: true,
       name: 'CoreCode',
       url: '',
       group: own.group,
+      kind: own.kind,
       groupRatio: own.group_ratio,
       input: own.input_cny,
-      output: own.output_cny,
+      blended: own.blended_cny,
       cacheRead: own.cache_read_cny,
-      share: share(own.input_cny),
+      cacheRatio: own.cache_ratio,
+      share: share(metricOf(metric, own.input_cny, own.blended_cny)),
       topUpPrice: board.top_up_price,
+      trust: 'ok',
       groups: [],
     })
   }
   for (const site of board.sites) {
-    const groups = [...site.prices].sort(cheapestFirst)
+    if (!options.includeUntrusted && site.trust !== 'ok') continue
+    const groups = site.prices
+      .filter((p) => inKind(p.kind))
+      .map((p) => ({
+        p,
+        input: p.input_cny,
+        blended: p.blended_cny,
+        groupRatio: p.group_ratio,
+      }))
+      .sort(byMetric(metric))
+      .map((x) => x.p)
     const best = groups[0]
     if (!best) continue
     rows.push({
@@ -87,39 +149,82 @@ export function buildBoardRows(board: RivalBoard): BoardRow[] {
       name: site.name || site.slug,
       url: site.site_url || site.api_base,
       group: best.group,
+      kind: best.kind,
       groupRatio: best.group_ratio,
       input: best.input_cny,
-      output: best.output_cny,
+      blended: best.blended_cny,
       cacheRead: best.cache_read_cny,
-      share: share(best.input_cny),
+      cacheRatio: best.cache_ratio,
+      share: share(metricOf(metric, best.input_cny, best.blended_cny)),
       topUpPrice: site.top_up_price,
+      trust: site.trust,
       groups,
       site,
     })
   }
-  return rows.sort((a, b) => {
-    if (a.input != null && b.input != null) return a.input - b.input
-    if (a.input != null) return -1
-    if (b.input != null) return 1
-    return a.groupRatio - b.groupRatio
-  })
+  return rows.sort(byMetric(metric))
 }
 
-/** Where our cheapest group places among the priced rows, 1-based. */
-export function ourRank(rows: BoardRow[]): { rank: number; of: number } | null {
-  const priced = rows.filter((r) => r.input != null)
-  const first = priced.findIndex((r) => r.ours)
-  if (first < 0) return null
-  const others = priced.filter((r) => !r.ours).length
-  return { rank: first + 1, of: others + 1 }
+export type BoardStats = {
+  /** Other sites with a figure. */
+  sites: number
+  p10: number | null
+  median: number | null
+  p90: number | null
+  cheapest: number | null
+  /** Our cheapest figure. */
+  ours: number | null
+  /** Sites cheaper than our cheapest. */
+  cheaper: number
+  /** Our cheapest as a percentile among the sites, 0 = cheapest of all. */
+  percentile: number | null
 }
 
-export function formatCNY(value: number | null): string {
+function quantile(sorted: number[], q: number): number | null {
+  if (sorted.length === 0) return null
+  const pos = (sorted.length - 1) * q
+  const lo = Math.floor(pos)
+  const hi = Math.ceil(pos)
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo)
+}
+
+/** The spread of the other sites' figures, and where our cheapest falls. */
+export function boardStats(
+  rows: BoardRow[],
+  board: RivalBoard,
+  metric: Metric
+): BoardStats {
+  const m = effectiveMetric(board, metric)
+  const figures = rows
+    .filter((r) => !r.ours)
+    .map((r) => metricOf(m, r.input, r.blended))
+    .filter((v): v is number => v != null)
+    .sort((a, b) => a - b)
+  const oursList = rows
+    .filter((r) => r.ours)
+    .map((r) => metricOf(m, r.input, r.blended))
+    .filter((v): v is number => v != null)
+  const ours = oursList.length > 0 ? Math.min(...oursList) : null
+  const cheaper = ours == null ? 0 : figures.filter((v) => v < ours).length
+  return {
+    sites: figures.length,
+    p10: quantile(figures, 0.1),
+    median: quantile(figures, 0.5),
+    p90: quantile(figures, 0.9),
+    cheapest: figures[0] ?? null,
+    ours,
+    cheaper,
+    percentile:
+      ours == null || figures.length === 0 ? null : cheaper / figures.length,
+  }
+}
+
+export function formatCNY(value: number | null | undefined): string {
   if (value == null) return '-'
   return `¥${value < 1 ? value.toFixed(3) : value.toFixed(2)}`
 }
 
-export function formatShare(value: number | null): string {
+export function formatShare(value: number | null | undefined): string {
   if (value == null) return '-'
   return `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}%`
 }

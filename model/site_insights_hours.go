@@ -106,8 +106,11 @@ type InsightModelHour struct {
 	CacheRead  int64  `gorm:"not null;default:0"`
 	CacheWrite int64  `gorm:"not null;default:0"`
 	Uncached   int64  `gorm:"not null;default:0"`
-	TTFT       string `gorm:"column:ttft;type:text"`
-	Latency    string `gorm:"type:text"`
+	// Output is the hour's completion tokens. Rows stored before it existed
+	// hold 0, so a reader that needs it reads only hours where it is set.
+	Output  int64  `gorm:"not null;default:0"`
+	TTFT    string `gorm:"column:ttft;type:text"`
+	Latency string `gorm:"type:text"`
 }
 
 // insightSummary is an hour's site-wide figures. Staff (customerRoleBound and
@@ -576,6 +579,7 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 		model.row.CacheRead += other.CacheTokens
 		model.row.CacheWrite += other.CacheCreationTokens
 		model.row.Uncached += uncachedPrompt(log, other)
+		model.row.Output += int64(log.CompletionTokens)
 	}
 	summary.ErrorReasons, summary.ErrorReasonsOther = trimTop(summary.ErrorReasons, insightHourTopN)
 	summary.Clients = keepTop(summary.Clients, insightHourTopN)

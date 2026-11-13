@@ -289,6 +289,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"POST /api/rival-prices/sites":           accessTokenScopeRule("ops:write"),
 	"PUT /api/rival-prices/sites/:id":        accessTokenScopeRule("ops:write"),
 	"POST /api/rival-prices/sites/:id/check": accessTokenScopeRule("ops:write"),
+	"PUT /api/rival-prices/group-kinds":      accessTokenScopeRule("ops:write"),
 
 	// router/api-router.go: /api/plugin/task
 	"GET /api/plugin/task":                           accessTokenScopeRule("plugin:read"),

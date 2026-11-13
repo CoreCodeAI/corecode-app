@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -9,36 +8,26 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 )
 
 // The rival price board: other relays' Claude prices beside our own, as CNY
-// per million tokens and as a share of the official price. The official
-// price is our own model ratio divided by its official_price_markup, the
-// figure the pricing page compares against, converted at our
-// usd_exchange_rate, so every site is measured against one yardstick.
+// per million tokens, as a blend over our customers' own traffic, and as a
+// share of the official price. service.BuildRivalReference has the
+// yardstick; service.ClassifyRivalGroup the channel kinds compared.
 
-type rivalOfficialPrice struct {
-	Model     string  `json:"model"`
-	InputCNY  float64 `json:"input_cny"`
-	OutputCNY float64 `json:"output_cny"`
-}
-
-type rivalOwnPrice struct {
-	Group      string   `json:"group"`
-	GroupRatio float64  `json:"group_ratio"`
-	InputCNY   float64  `json:"input_cny"`
-	OutputCNY  float64  `json:"output_cny"`
-	CacheRead  *float64 `json:"cache_read_cny"`
-	CacheRatio *float64 `json:"cache_ratio"`
+type rivalPriceRow struct {
+	model.RivalPrice
+	Kind           string   `json:"kind"`
+	KindOverridden bool     `json:"kind_overridden"`
+	BlendedCNY     *float64 `json:"blended_cny"`
 }
 
 type rivalSiteRow struct {
 	model.RivalSite
-	Prices []model.RivalPrice `json:"prices"`
+	Trust  string          `json:"trust"`
+	Prices []rivalPriceRow `json:"prices"`
 }
 
 type rivalCounts struct {
@@ -50,62 +39,31 @@ type rivalCounts struct {
 	Disabled    int `json:"disabled"`
 }
 
-// rivalReference lists our Claude models priced per token, with their
-// official prices, and our own price of each in each group.
-func rivalReference() ([]rivalOfficialPrice, map[string][]rivalOwnPrice) {
-	exchange := operation_setting.USDExchangeRate
-	var official []rivalOfficialPrice
-	ours := map[string][]rivalOwnPrice{}
-	for _, p := range model.GetPricing() {
-		if !strings.Contains(strings.ToLower(p.ModelName), "claude") {
-			continue
-		}
-		if p.QuotaType != 0 || p.ModelRatio <= 0 || p.BillingExpr != "" {
-			continue
-		}
-		name := service.NormalizeRivalModel(p.ModelName)
-		markup := 1.0
-		if p.OfficialPriceMarkup != nil && *p.OfficialPriceMarkup > 0 {
-			markup = *p.OfficialPriceMarkup
-		}
-		officialInput := p.ModelRatio / markup * 2 * exchange
-		official = append(official, rivalOfficialPrice{
-			Model: name, InputCNY: officialInput, OutputCNY: officialInput * p.CompletionRatio,
-		})
-		for _, group := range p.EnableGroup {
-			if group == "auto" {
-				continue
-			}
-			ratio := ratio_setting.GetGroupRatio(group)
-			input := p.ModelRatio * 2 * ratio * operation_setting.Price
-			own := rivalOwnPrice{Group: group, GroupRatio: ratio, InputCNY: input,
-				OutputCNY: input * p.CompletionRatio, CacheRatio: p.CacheRatio}
-			if p.CacheRatio != nil {
-				cache := input * *p.CacheRatio
-				own.CacheRead = &cache
-			}
-			ours[name] = append(ours[name], own)
-		}
-	}
-	sort.Slice(official, func(i, j int) bool { return official[i].Model < official[j].Model })
-	return official, ours
-}
-
 // GetRivalPrices answers the board for one model (?model=, a normalized
-// name; our first Opus when absent): every site with a price for it, our
-// own groups, and the official price.
+// name; our latest Opus when absent): every site with a price for it, each
+// group with its kind and blended price, our own groups, and the official
+// price.
 func GetRivalPrices(c *gin.Context) {
-	official, ours := rivalReference()
+	mixes, err := model.RivalTokenMixes(time.Now().Add(-7 * 24 * time.Hour).Unix())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	ref := service.BuildRivalReference(mixes)
 	selected := service.NormalizeRivalModel(c.Query("model"))
 	if selected == "" {
-		for _, o := range official {
-			if strings.Contains(o.Model, "opus") && (selected == "" || o.Model > selected) {
-				selected = o.Model
+		for _, m := range ref.Models {
+			if strings.Contains(m.Model, "opus") && (selected == "" || m.Model > selected) {
+				selected = m.Model
 			}
 		}
-		if selected == "" && len(official) > 0 {
-			selected = official[0].Model
+		if selected == "" && len(ref.Models) > 0 {
+			selected = ref.Models[0].Model
 		}
+	}
+	var mix *service.RivalShares
+	if m := ref.Model(selected); m != nil {
+		mix = m.Mix
 	}
 	sites, err := model.ListRivalSites()
 	if err != nil {
@@ -117,9 +75,31 @@ func GetRivalPrices(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	bySite := map[int][]model.RivalPrice{}
+	overrides, err := model.RivalGroupKindOverrides()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	bySite := map[int][]rivalPriceRow{}
 	for _, p := range prices {
-		bySite[p.SiteId] = append(bySite[p.SiteId], p)
+		_, overridden := overrides[p.SiteId][p.GroupName]
+		bySite[p.SiteId] = append(bySite[p.SiteId], rivalPriceRow{
+			RivalPrice:     p,
+			Kind:           service.RivalKindOf(p.GroupName, overrides[p.SiteId]),
+			KindOverridden: overridden,
+			BlendedCNY:     service.RivalBlended(p.InputCNY, p.CacheRatio, p.CreateCacheRatio, p.CompletionRatio, mix),
+		})
+	}
+	// A site added by hand and the same site from the directory read one
+	// price list; the board shows it once, the hand-added entry first.
+	shown := map[string]int{}
+	for _, site := range sites {
+		if !site.Enabled || site.APIBase == "" || len(bySite[site.Id]) == 0 {
+			continue
+		}
+		if _, ok := shown[site.APIBase]; !ok || site.Source == model.RivalSourceManual {
+			shown[site.APIBase] = site.Id
+		}
 	}
 	var counts rivalCounts
 	rows := []rivalSiteRow{}
@@ -137,8 +117,8 @@ func GetRivalPrices(c *gin.Context) {
 		default:
 			counts.Pending++
 		}
-		if site.Enabled && len(bySite[site.Id]) > 0 {
-			rows = append(rows, rivalSiteRow{RivalSite: site, Prices: bySite[site.Id]})
+		if site.Enabled && len(bySite[site.Id]) > 0 && shown[site.APIBase] == site.Id {
+			rows = append(rows, rivalSiteRow{RivalSite: site, Trust: service.RivalTrust(site.TopUpPrice), Prices: bySite[site.Id]})
 		}
 	}
 	directory, err := model.GetRivalDirectoryState(model.RivalSourceDirectory)
@@ -147,18 +127,55 @@ func GetRivalPrices(c *gin.Context) {
 		return
 	}
 	setting := system_setting.GetRivalPriceSetting()
+	ours := ref.Ours[selected]
+	if ours == nil {
+		ours = []service.RivalOwnPrice{}
+	}
 	common.ApiSuccess(c, gin.H{
 		"enabled":       setting.Enabled,
 		"proxy_set":     strings.TrimSpace(setting.Proxy) != "",
+		"feishu_set":    strings.TrimSpace(setting.FeishuWebhook) != "",
 		"model":         selected,
-		"models":        official,
-		"exchange_rate": operation_setting.USDExchangeRate,
-		"top_up_price":  operation_setting.Price,
-		"ours":          ours[selected],
+		"models":        ref.Models,
+		"exchange_rate": ref.ExchangeRate,
+		"top_up_price":  ref.TopUpPrice,
+		"our_kind":      service.RivalOurKind,
+		"kinds":         service.RivalKinds,
+		"ours":          ours,
 		"sites":         rows,
 		"counts":        counts,
 		"directory":     directory,
 	})
+}
+
+type rivalGroupKindRequest struct {
+	SiteId int    `json:"site_id"`
+	Group  string `json:"group"`
+	Kind   string `json:"kind"`
+}
+
+// SetRivalGroupKind sets the kind of one site's group; an empty kind returns
+// it to the kind its name suggests.
+func SetRivalGroupKind(c *gin.Context) {
+	var req rivalGroupKindRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	group := strings.TrimSpace(req.Group)
+	if req.SiteId <= 0 || group == "" || len([]rune(group)) > 128 || (req.Kind != "" && !service.IsRivalKind(req.Kind)) {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	if _, err := model.GetRivalSite(req.SiteId); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.SetRivalGroupKind(req.SiteId, group, req.Kind, time.Now().Unix()); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
 }
 
 func GetRivalSites(c *gin.Context) {

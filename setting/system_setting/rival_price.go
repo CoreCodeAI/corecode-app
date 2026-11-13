@@ -11,6 +11,11 @@ type RivalPriceSetting struct {
 	// Proxy is an http(s):// or socks5:// URL the probes go through; empty
 	// sends them directly.
 	Proxy string `json:"proxy"`
+	// FeishuWebhook is a Feishu custom bot that hears when a rival of our
+	// kind undercuts us; empty sends nothing. FeishuSecret signs it when the
+	// bot asks for a signature.
+	FeishuWebhook string `json:"feishu_webhook"`
+	FeishuSecret  string `json:"feishu_secret"`
 }
 
 var defaultRivalPriceSetting = RivalPriceSetting{}

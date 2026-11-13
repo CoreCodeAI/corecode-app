@@ -64,6 +64,7 @@ func TestMain(m *testing.M) {
 		&model.RivalPrice{},
 		&model.RivalPriceChange{},
 		&model.RivalDirectoryState{},
+		&model.RivalGroupKind{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}
