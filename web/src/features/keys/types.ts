@@ -120,3 +120,4 @@ export type ApiKeysDialogType =
   | 'batch-delete'
   | 'cc-switch'
   | 'setup'
+  | 'iq-test'

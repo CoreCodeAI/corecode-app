@@ -35,6 +35,8 @@ const EMPTY_MODELS: string[] = []
 export function useSetupClients(key: Pick<ApiKey, 'group'> | null): {
   clients: SetupClient[]
   models: string[]
+  /** the only client the key's group admits, or null */
+  clientOnly: 'claude-code' | 'codex' | null
 } {
   const group = key?.group ?? ''
   const groupsQuery = useQuery({
@@ -65,5 +67,8 @@ export function useSetupClients(key: Pick<ApiKey, 'group'> | null): {
     codexOnly,
     models: groupsQuery.isSuccess ? models : EMPTY_MODELS,
   })
-  return { clients, models }
+  let clientOnly: 'claude-code' | 'codex' | null = null
+  if (claudeCodeOnly) clientOnly = 'claude-code'
+  else if (codexOnly) clientOnly = 'codex'
+  return { clients, models, clientOnly }
 }

@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
@@ -28,6 +29,11 @@ import { ApiKeysMutateDrawer } from './api-keys-mutate-drawer'
 import { useApiKeys } from './api-keys-provider'
 import { ClientSetupGuide } from './client-setup-guide'
 import { CCSwitchDialog } from './dialogs/cc-switch-dialog'
+
+// The IQ test is opened rarely, so it is not part of the keys page's first load.
+const IqTestDialog = lazy(() =>
+  import('./dialogs/iq-test-dialog').then((m) => ({ default: m.IqTestDialog }))
+)
 
 /**
  * The setup dialog's title, from the clients the key's group admits. The
@@ -66,6 +72,15 @@ export function ApiKeysDialogs() {
       >
         <ClientSetupGuide keys={currentRow ? [currentRow] : []} />
       </Dialog>
+      {open === 'iq-test' && currentRow !== null && (
+        <Suspense fallback={null}>
+          <IqTestDialog
+            key={currentRow.id}
+            apiKey={currentRow}
+            onOpenChange={(isOpen) => !isOpen && setOpen(null)}
+          />
+        </Suspense>
+      )}
     </>
   )
 }
