@@ -47,7 +47,8 @@ func TestStripeCheckoutChargesThePriceInHKD(t *testing.T) {
 	assert.Nil(t, item.Price, "no dashboard Price: the order sets the amount")
 	assert.Equal(t, "hkd", *item.PriceData.Currency, "the settlement currency: no Stripe conversion fee")
 	assert.Equal(t, int64(11689), *item.PriceData.UnitAmount)
-	assert.Equal(t, "人民币价 ¥100.00", *item.PriceData.ProductData.Description)
+	assert.Equal(t, "CoreCode 余额充值 ¥100.00", *item.PriceData.ProductData.Name)
+	assert.Equal(t, "折合 HK$116.89，按当日汇率", *item.PriceData.ProductData.Description)
 	assert.Equal(t, int64(1), *item.Quantity)
 	assert.False(t, *params.AdaptivePricing.Enabled, "HKD only: no local currency at Stripe's rate")
 
@@ -137,8 +138,8 @@ func TestStripeCheckoutOffersTheChosenMethod(t *testing.T) {
 	assert.Equal(t, "3495", form.Get("line_items[0][price_data][unit_amount]"), "¥29.9 × 1.1748 × 0.995 = HK$34.95")
 	assert.Equal(t, "hkd", form.Get("line_items[0][price_data][currency]"))
 	assert.Equal(t, "false", form.Get("adaptive_pricing[enabled]"))
-	assert.Equal(t, "人民币价 ¥29.90", form.Get("line_items[0][price_data][product_data][description]"))
-	assert.Equal(t, "新人福利包", form.Get("line_items[0][price_data][product_data][name]"))
+	assert.Equal(t, "折合 HK$34.95，按当日汇率", form.Get("line_items[0][price_data][product_data][description]"))
+	assert.Equal(t, "新人福利包 ¥29.90", form.Get("line_items[0][price_data][product_data][name]"))
 	assert.Equal(t, paymentReturnPath("/wallet"), form.Get("success_url"))
 	var orders []model.SubscriptionOrder
 	require.NoError(t, db.Where("plan_id = ?", plan.Id).Order("id").Find(&orders).Error)
