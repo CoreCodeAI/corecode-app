@@ -20,6 +20,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { planText } from '@/features/subscriptions/lib/plan-text'
 import { formatQuota, formatTimestampToDate } from '@/lib/format'
 
 import type { Invitee } from '../types'
@@ -92,9 +93,10 @@ export function useInviteeColumns(giftPlanTitle: string): ColumnDef<Invitee>[] {
       },
     ]
     if (giftPlanTitle) {
+      const giftTitle = planText(giftPlanTitle, t)
       columns.push({
         id: 'gift',
-        header: giftPlanTitle,
+        header: giftTitle,
         size: 130,
         cell: ({ row }) => {
           if (row.original.gift_plan === 'gifted') {
@@ -109,7 +111,7 @@ export function useInviteeColumns(giftPlanTitle: string): ColumnDef<Invitee>[] {
           }
           return <span className='text-muted-foreground'>-</span>
         },
-        meta: { label: giftPlanTitle },
+        meta: { label: giftTitle },
       })
     }
     return columns

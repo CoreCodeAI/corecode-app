@@ -61,6 +61,7 @@ import type {
   UserSubscriptionRecord,
 } from '@/features/subscriptions/types'
 import { formatQuota } from '@/lib/format'
+import { groupText } from '@/lib/group-text'
 import { handleServerError } from '@/lib/handle-server-error'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
@@ -580,7 +581,7 @@ export function SubscriptionPlansCard({
                   : `${t('Total Quota')}: ${t('Unlimited')}`,
                 limit > 0 ? `${t('Purchase Limit')}: ${limit}` : null,
                 plan.upgrade_group
-                  ? `${t('Upgrade Group')}: ${plan.upgrade_group}`
+                  ? `${t('Upgrade Group')}: ${groupText(t, plan.upgrade_group)}`
                   : null,
               ].filter(Boolean) as string[]
 

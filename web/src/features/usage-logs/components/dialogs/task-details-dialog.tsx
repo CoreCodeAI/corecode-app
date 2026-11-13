@@ -24,6 +24,7 @@ import { Dialog } from '@/components/dialog'
 import { StatusBadge } from '@/components/status-badge'
 import { Label } from '@/components/ui/label'
 import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
+import { groupText } from '@/lib/group-text'
 import { translateServerText } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
@@ -184,7 +185,10 @@ export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
               value={`#${props.log.channel_id}`}
               mono
             />
-            <DetailRow label={t('Group')} value={props.log.group || '-'} />
+            <DetailRow
+              label={t('Group')}
+              value={props.log.group ? groupText(t, props.log.group) : '-'}
+            />
             <DetailRow
               label={t('Quota')}
               value={formatLogQuota(props.log.quota)}

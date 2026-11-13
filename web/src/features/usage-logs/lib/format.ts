@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { StatusBadgeProps } from '@/components/status-badge'
+import { displayKeyName } from '@/features/canvas-studio/lib/canvas-link'
 import {
   BILLING_PRICING_VARS,
   normalizeTierLabel,
@@ -576,11 +577,31 @@ const AUDIT_TEMPLATES: Record<string, string> = {
  */
 export function renderLogContent(
   other: LogOtherData | null | undefined,
-  t: (key: string, opts?: Record<string, unknown>) => string
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  planTitle: PlanTitleText = identityPlanTitle
 ): string | null {
   const parts = other?.content_parts
   if (!Array.isArray(parts) || parts.length === 0) return null
-  return parts.map((part) => t(part.key, part.params)).join(', ')
+  return parts
+    .map((part) => t(part.key, withPlanTitle(part.params, planTitle)))
+    .join(', ')
+}
+
+/**
+ * The plan title parameter, a stored Chinese title, in the reader's language.
+ * Passed in rather than imported: this module is in the overview's first load,
+ * and the plan titles' locale keys must stay out of its core part.
+ */
+export type PlanTitleText = (title: string) => string
+
+const identityPlanTitle: PlanTitleText = (title) => title
+
+function withPlanTitle(
+  params: Record<string, string | number | boolean> | undefined,
+  planTitle: PlanTitleText
+): Record<string, string | number | boolean> | undefined {
+  if (!params || typeof params.plan !== 'string') return params
+  return { ...params, plan: planTitle(params.plan) }
 }
 
 /**
@@ -593,7 +614,7 @@ export function logTokenName(
 ): string {
   return log.token_id === 0
     ? translateServerText(t, log.token_name)
-    : log.token_name
+    : displayKeyName(log.token_name, t)
 }
 
 /**
@@ -603,7 +624,8 @@ export function logTokenName(
  */
 export function renderAuditContent(
   other: LogOtherData | null | undefined,
-  t: (key: string, opts?: Record<string, unknown>) => string
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  planTitle: PlanTitleText = identityPlanTitle
 ): string | null {
   const op = other?.op
   if (!op?.action) return null
@@ -637,5 +659,8 @@ export function renderAuditContent(
     return `${quotaOperation.summary} · ${quotaOperation.description}`
   }
   const params = { ...op.params }
+  if (typeof params.plan_title === 'string') {
+    params.plan_title = planTitle(params.plan_title)
+  }
   return t(template, params)
 }

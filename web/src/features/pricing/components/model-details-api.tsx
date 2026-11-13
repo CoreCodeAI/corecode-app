@@ -39,6 +39,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStatus } from '@/hooks/use-status'
+import { groupText } from '@/lib/group-text'
 
 import {
   API_KEY_ENV,
@@ -716,7 +717,7 @@ function RateLimitsSection(props: { model: PricingModel }) {
             header: t('Group'),
             className: 'h-9',
             cellClassName: 'py-2 font-mono',
-            cell: (limit) => limit.group,
+            cell: (limit) => groupText(t, limit.group),
           },
           {
             id: 'rpm',

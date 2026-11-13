@@ -21,6 +21,7 @@ import { ArrowRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { displayKeyName } from '@/features/canvas-studio/lib/canvas-link'
 import { CacheMissTooltip } from '@/features/usage-logs/components/cache-miss-tooltip'
 import type { UsageLog } from '@/features/usage-logs/data/schema'
 import {
@@ -118,7 +119,7 @@ export function RecentRequestsPanel(props: {
               <span className='text-muted-foreground truncate pl-4 text-xs'>
                 {[
                   formatTimestampRelative(log.created_at, 'seconds', locale),
-                  log.token_name,
+                  displayKeyName(log.token_name ?? '', t),
                   t('{{input}} in / {{output}} out', {
                     input: formatTokens(totalInput),
                     output: formatTokens(log.completion_tokens),

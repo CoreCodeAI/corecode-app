@@ -60,6 +60,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { groupText } from '@/lib/group-text'
 import { cn } from '@/lib/utils'
 
 import { formatGroupDetail } from './model-group-selector/group-detail'
@@ -404,6 +405,7 @@ export const GroupSelector: React.FC<GroupSelectorProps> = React.memo(
           const searchTerm = search.toLowerCase()
           const searchableFields = [
             group.label,
+            groupText(t, group.label),
             group.description || '',
             group.value,
           ]
@@ -437,7 +439,7 @@ export const GroupSelector: React.FC<GroupSelectorProps> = React.memo(
                 <div className='flex min-w-0 flex-1 items-center gap-2 pr-4'>
                   <div className='flex min-w-0 flex-1 flex-col'>
                     <span className='text-foreground truncate text-[11px] font-medium'>
-                      {group.label}
+                      {groupText(t, group.label)}
                     </span>
                     {(group.desc || group.description) && (
                       <div className='text-muted-foreground truncate text-[9px] leading-tight'>
@@ -463,7 +465,9 @@ export const GroupSelector: React.FC<GroupSelectorProps> = React.memo(
       <Drawer open={open} onOpenChange={setOpen}>
         <DrawerTrigger asChild>
           <GroupTriggerButton
-            currentLabel={currentGroup?.label || t('Group')}
+            currentLabel={
+              currentGroup ? groupText(t, currentGroup.label) : t('Group')
+            }
             triggerClassName={className}
             isDisabled={disabled}
             aria-expanded={open}
@@ -519,7 +523,9 @@ export const GroupSelector: React.FC<GroupSelectorProps> = React.memo(
         <PopoverTrigger
           render={
             <GroupTriggerButton
-              currentLabel={currentGroup?.label || t('Group')}
+              currentLabel={
+                currentGroup ? groupText(t, currentGroup.label) : t('Group')
+              }
               triggerClassName={className}
               isDisabled={disabled}
               aria-expanded={open}
@@ -664,7 +670,7 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
         {currentModel?.label || t('Model')}
       </span>
       <span className='bg-muted text-muted-foreground hidden max-w-20 shrink-0 rounded px-1.5 py-0.5 text-[10px] sm:inline-flex'>
-        {currentGroup?.label || t('Group')}
+        {currentGroup ? groupText(t, currentGroup.label) : t('Group')}
       </span>
       <ChevronsUpDown className='text-muted-foreground ml-auto size-3.5 shrink-0 opacity-60' />
     </Button>

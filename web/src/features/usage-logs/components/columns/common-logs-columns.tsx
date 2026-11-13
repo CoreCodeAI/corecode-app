@@ -48,6 +48,7 @@ import {
 import { pluginUsageSchema } from '@/features/pricing/lib/plugin-pricing'
 import { taskUsageUnitLabel } from '@/features/pricing/lib/task-price-display'
 import type { BillingUsageSchema } from '@/features/pricing/types'
+import { planTextReader } from '@/features/subscriptions/lib/plan-text'
 import { toIntlLocale } from '@/i18n/languages'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
@@ -161,7 +162,10 @@ function buildTypeDetailSegments(
 ): DetailSegment[] {
   // Top-up, audit, and login logs can carry a localized operation descriptor.
   if (log.type === 1 || log.type === 3 || log.type === 7) {
-    const text = renderAuditContent(other, t) ?? renderLogContent(other, t)
+    const planTitle = planTextReader(t)
+    const text =
+      renderAuditContent(other, t, planTitle) ??
+      renderLogContent(other, t, planTitle)
     return text ? [{ text }] : []
   }
 
@@ -940,7 +944,7 @@ export function useCommonLogsColumns(
           } else if (log.content) {
             detailPreview = (
               <span className='text-muted-foreground truncate group-hover:underline'>
-                {renderLogContent(other, t) ?? log.content}
+                {renderLogContent(other, t, planTextReader(t)) ?? log.content}
               </span>
             )
           }

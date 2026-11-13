@@ -69,6 +69,7 @@ type FlowNodeRank = {
 
 type FlowPathContext = {
   deletedTokenLabel?: (tokenId: number) => string
+  groupLabel?: (group: string) => string
 }
 
 type FlowGraphOptions = {
@@ -204,11 +205,11 @@ function deletedTokenLabel(tokenID: number, ctx: FlowPathContext): string {
   return ctx.deletedTokenLabel?.(tokenID) ?? `token-${tokenID}`
 }
 
-function groupNode(row: FlowQuotaDataItem): FlowPathNode {
+function groupNode(row: FlowQuotaDataItem, ctx: FlowPathContext): FlowPathNode {
   const useGroup = row.use_group || 'unknown'
   return {
     id: `group:${useGroup}`,
-    label: useGroup,
+    label: ctx.groupLabel?.(useGroup) ?? useGroup,
     kind: 'group',
   }
 }
@@ -982,6 +983,7 @@ export function buildDashboardFlowData(
   const palette = options.colorPalette
   const ctx = {
     deletedTokenLabel: options.deletedTokenLabel,
+    groupLabel: options.groupLabel,
   }
   const stages = resolveVisibleStages(role, options.visibleStages)
   const userFilteredRows = filterRows(rows, options)

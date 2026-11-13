@@ -66,6 +66,7 @@ import { RelatedPolicyLink } from '@/features/system-settings/request-policies/r
 import { useStatus } from '@/hooks/use-status'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
+import { groupText } from '@/lib/group-text'
 import { handleServerError } from '@/lib/handle-server-error'
 import { ROLE } from '@/lib/roles'
 import {
@@ -196,12 +197,15 @@ export function ApiKeysMutateDrawer({
   const models = modelsData?.data || []
   const groups = useMemo<ApiKeyGroupOption[]>(
     () =>
-      Object.entries(groupsData?.data || {}).map(([key, info]) => ({
-        value: key,
-        label: key,
-        desc: info.desc ? translateServerText(t, info.desc) : key,
-        ratio: info.ratio,
-      })),
+      Object.entries(groupsData?.data || {}).map(([key, info]) => {
+        const label = groupText(t, key)
+        return {
+          value: key,
+          label,
+          desc: info.desc ? translateServerText(t, info.desc) : label,
+          ratio: info.ratio,
+        }
+      }),
     [groupsData, t]
   )
   const backendHasAuto = groups.some((g) => g.value === 'auto')

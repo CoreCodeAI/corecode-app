@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { groupText } from '@/lib/group-text'
 import { cn } from '@/lib/utils'
 
 import { StatusBadge, type StatusBadgeProps } from './status-badge'
@@ -70,12 +71,13 @@ function getGroupLabel(params: {
   groupName?: string
   isAutoGroup: boolean
   isEmptyGroup: boolean
-  t: (key: string) => string
+  t: (key: string, options?: Record<string, unknown>) => string
 }): string {
   if (params.labelOverride) return params.labelOverride
   if (params.isEmptyGroup) return params.t('User Group')
   if (params.isAutoGroup) return params.t('Auto')
-  return params.groupName ?? ''
+  // A stored group name is Chinese server text; the locale carries its name.
+  return params.groupName ? groupText(params.t, params.groupName) : ''
 }
 
 export function GroupBadge(props: GroupBadgeProps) {
@@ -107,6 +109,7 @@ export function GroupBadge(props: GroupBadgeProps) {
     <StatusBadge
       {...badgeProps}
       copyable={copyable}
+      copyText={badgeProps.copyText ?? (isSpecialGroup ? undefined : groupName)}
       label={label}
       showDot={showDot ?? (isSpecialGroup ? false : undefined)}
       variant={isSpecialGroup ? 'neutral' : undefined}

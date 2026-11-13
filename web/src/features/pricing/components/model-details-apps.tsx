@@ -29,6 +29,7 @@ import {
   StaticDataTable,
   staticDataTableClassNames as tableStyles,
 } from '@/components/data-table'
+import { formatCompactNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import {
@@ -37,11 +38,6 @@ import {
   type AppRanking,
 } from '../lib/mock-stats'
 import type { PricingModel } from '../types'
-
-const COMPACT_NUMBER = new Intl.NumberFormat(undefined, {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-})
 
 function RankBadge(props: { rank: number }) {
   const rank = props.rank
@@ -140,7 +136,7 @@ export function ModelDetailsApps(props: { model: PricingModel }) {
             {t('Monthly tokens')}
           </div>
           <div className='text-foreground mt-1 font-mono text-lg font-semibold tabular-nums'>
-            {COMPACT_NUMBER.format(totalMonthlyTokens)}
+            {formatCompactNumber(totalMonthlyTokens)}
           </div>
           <p className='text-muted-foreground/70 text-[11px]'>
             {t('Aggregated across the apps below')}

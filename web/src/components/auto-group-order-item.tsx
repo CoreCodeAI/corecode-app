@@ -31,6 +31,8 @@ import { Button } from '@/components/ui/button'
 
 type AutoGroupOrderItemProps = {
   group: string
+  /** The name shown in place of `group`, for a stored name a locale translates. */
+  label?: string
   /** The reorder value when it differs from the shown name; defaults to `group`. */
   value?: string
   index: number
@@ -44,6 +46,7 @@ type AutoGroupOrderItemProps = {
 export function AutoGroupOrderItem(props: AutoGroupOrderItemProps) {
   const { t } = useTranslation()
   const dragControls = useDragControls()
+  const name = props.label ?? props.group
 
   const handleDragStart = (event: PointerEvent<HTMLButtonElement>) => {
     dragControls.start(event)
@@ -73,8 +76,8 @@ export function AutoGroupOrderItem(props: AutoGroupOrderItemProps) {
         variant='ghost'
         size='icon-sm'
         className='text-muted-foreground cursor-grab touch-none font-mono active:cursor-grabbing'
-        aria-label={t('Drag {{group}} to reorder', { group: props.group })}
-        title={t('Drag {{group}} to reorder', { group: props.group })}
+        aria-label={t('Drag {{group}} to reorder', { group: name })}
+        title={t('Drag {{group}} to reorder', { group: name })}
         onPointerDown={handleDragStart}
         onKeyDown={handleDragKeyDown}
       >
@@ -82,11 +85,8 @@ export function AutoGroupOrderItem(props: AutoGroupOrderItemProps) {
       </Button>
       {props.leading}
       <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
-        <span
-          className='min-w-0 truncate text-sm font-medium'
-          title={props.group}
-        >
-          {props.group}
+        <span className='min-w-0 truncate text-sm font-medium' title={name}>
+          {name}
         </span>
         {props.children}
       </div>

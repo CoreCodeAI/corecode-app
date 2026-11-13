@@ -30,6 +30,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from '@/components/ui/empty'
+import { groupText } from '@/lib/group-text'
 import { cn } from '@/lib/utils'
 
 import {
@@ -220,6 +221,7 @@ export function AutoGroupOrderEditor(props: AutoGroupOrderEditorProps) {
             <AutoGroupOrderItem
               key={group}
               group={group}
+              label={groupText(t, group)}
               index={index}
               count={props.value.length}
               onMove={handleMove}

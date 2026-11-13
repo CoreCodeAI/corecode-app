@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { TFunction } from 'i18next'
 
 import { loginMethodLabel } from '@/features/security/components/login-session-utils'
+import { planTextReader } from '@/features/subscriptions/lib/plan-text'
 import type { PermissionResourceDef } from '@/lib/admin-permissions'
 import dayjs from '@/lib/dayjs'
 import { ROLE } from '@/lib/roles'
@@ -454,7 +455,8 @@ export function buildAuditDetails(
           success: entry.success,
         },
       },
-      t
+      t,
+      planTextReader(t)
     ) || (entry.content && entry.content !== action ? entry.content : fallback)
   const admin = isAuditDetailObject(metadata.admin_info)
     ? metadata.admin_info

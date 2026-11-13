@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { CopyButton } from '@/components/copy-button'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { groupText } from '@/lib/group-text'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
@@ -385,13 +386,19 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
             <div className='flex min-w-0 items-baseline gap-1.5'>
               <dt className='text-muted-foreground shrink-0'>{t('Groups')}</dt>
               <dd className='flex min-w-0 items-baseline gap-1'>
-                <span className='truncate' title={groups.join(', ')}>
-                  {groups[0]}
+                <span
+                  className='truncate'
+                  title={groups.map((group) => groupText(t, group)).join(', ')}
+                >
+                  {groupText(t, groups[0])}
                 </span>
                 {groups.length > 1 && (
                   <span
                     className='text-muted-foreground shrink-0'
-                    title={groups.slice(1).join(', ')}
+                    title={groups
+                      .slice(1)
+                      .map((group) => groupText(t, group))
+                      .join(', ')}
                   >
                     +{groups.length - 1}
                   </span>

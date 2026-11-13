@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { planTextReader } from '@/features/subscriptions/lib/plan-text'
 import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
 
 import type { UsageLog } from '../data/schema'
@@ -90,7 +91,7 @@ export function getLogCsvRow(
     isTimingLogType(log.type) ? `${log.use_time ?? 0}s` : '',
     log.ip ?? '',
     log.request_id ?? '',
-    renderLogContent(other, t) ?? log.content ?? '',
+    renderLogContent(other, t, planTextReader(t)) ?? log.content ?? '',
   ]
 }
 

@@ -36,6 +36,18 @@ export const CANVAS_KEY_NAME = '创作台'
 export const CANVAS_KEY_GROUP = 'auto'
 
 /**
+ * A key or token name as the console shows it. The canvas key's stored name is
+ * Chinese, so every reader sees the locale's "Creation Studio" instead; the
+ * stored name stays the one the lookups above match.
+ */
+export function displayKeyName(
+  name: string,
+  t: (key: string) => string
+): string {
+  return name === CANVAS_KEY_NAME ? t('Creation Studio') : name
+}
+
+/**
  * Pick the key to hand the canvas: an enabled key named exactly
  * {@link CANVAS_KEY_NAME}, else the first enabled key in the `auto` group.
  * Returns undefined when neither exists.

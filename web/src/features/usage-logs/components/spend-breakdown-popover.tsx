@@ -36,6 +36,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { displayKeyName } from '@/features/canvas-studio/lib/canvas-link'
 import { getFlowQuotaDates } from '@/features/dashboard/api'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber, formatQuota } from '@/lib/format'
@@ -70,7 +71,9 @@ function SpendList(props: {
                 type='button'
                 onClick={() => props.onPick(row.name)}
                 className='hover:bg-accent focus-visible:ring-ring/50 relative flex w-full items-center gap-3 overflow-hidden rounded-md px-2 py-1.5 text-left text-sm outline-none focus-visible:ring-3'
-                aria-label={t('Show logs for {{name}}', { name: row.name })}
+                aria-label={t('Show logs for {{name}}', {
+                  name: displayKeyName(row.name, t),
+                })}
               >
                 <span
                   className='bg-primary/10 absolute inset-y-0 left-0'
@@ -78,7 +81,7 @@ function SpendList(props: {
                   aria-hidden
                 />
                 <span className='relative min-w-0 flex-1 truncate'>
-                  {row.name}
+                  {displayKeyName(row.name, t)}
                 </span>
                 <span className='text-muted-foreground relative text-xs tabular-nums'>
                   {t('{{value}} requests', {

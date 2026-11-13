@@ -25,6 +25,7 @@ import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { toIntlLocale } from '@/i18n/languages'
+import { groupText } from '@/lib/group-text'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
@@ -90,6 +91,7 @@ export function GroupCard(props: { group: StatusGroup }) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const group = props.group
+  const groupName = groupText(t, group.name)
   const streams = group.latency === 'ttft'
   const provider = groupVendor(group)
   const stateLabel: Record<BucketState, string> = {
@@ -129,14 +131,14 @@ export function GroupCard(props: { group: StatusGroup }) {
               getLobeIcon(provider.icon, 26)
             ) : (
               <span className='text-muted-foreground text-lg font-semibold'>
-                {group.name.charAt(0)}
+                {groupName.charAt(0)}
               </span>
             )}
           </span>
           <div className='flex min-w-0 flex-1 flex-col gap-2'>
             <div className='flex items-start justify-between gap-2'>
               <h3 className='min-w-0 truncate text-base leading-6 font-semibold'>
-                {group.name}
+                {groupName}
               </h3>
               <StatusBadge
                 label={stateLabel[group.state] ?? t('Unknown')}
@@ -195,7 +197,7 @@ export function GroupCard(props: { group: StatusGroup }) {
           cells={cells}
           title={t('Last 24 hours')}
           label={t('{{name}}: success rate each hour over the last 24 hours', {
-            name: group.name,
+            name: groupName,
           })}
           startLabel={t('24 hours ago')}
           endLabel={t('Now')}

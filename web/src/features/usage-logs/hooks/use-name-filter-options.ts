@@ -18,8 +18,10 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import type { ComboboxInputOption } from '@/components/ui/combobox-input'
+import { displayKeyName } from '@/features/canvas-studio/lib/canvas-link'
 import { getApiKeys } from '@/features/keys/api'
 import { getUserModels } from '@/lib/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
@@ -27,10 +29,13 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 // The token list endpoint caps a page at 100 keys.
 const KEY_NAME_PAGE_SIZE = 100
 
-function toOptions(names: readonly string[]): ComboboxInputOption[] {
+function toOptions(
+  names: readonly string[],
+  labelOf: (name: string) => string = (name) => name
+): ComboboxInputOption[] {
   return [...new Set(names.filter((name) => typeof name === 'string' && name))]
     .sort((a, b) => a.localeCompare(b))
-    .map((name) => ({ label: name, value: name }))
+    .map((name) => ({ label: labelOf(name), value: name }))
 }
 
 /**
@@ -42,6 +47,7 @@ export function useNameFilterOptions(isAdminView: boolean): {
   tokenOptions: ComboboxInputOption[]
   modelOptions: ComboboxInputOption[]
 } {
+  const { t } = useTranslation()
   const { data: keyNames } = useQuery({
     queryKey: ['usage-logs-filter', 'key-names'],
     queryFn: async () => {
@@ -65,8 +71,11 @@ export function useNameFilterOptions(isAdminView: boolean): {
     meta: { errorToast: false },
   })
   const tokenOptions = useMemo(
-    () => (isAdminView ? [] : toOptions(keyNames ?? [])),
-    [isAdminView, keyNames]
+    () =>
+      isAdminView
+        ? []
+        : toOptions(keyNames ?? [], (name) => displayKeyName(name, t)),
+    [isAdminView, keyNames, t]
   )
   const modelOptions = useMemo(() => toOptions(models ?? []), [models])
   return { tokenOptions, modelOptions }

@@ -35,6 +35,7 @@ import {
   formatNumber,
   formatTimestampToDate,
 } from '@/lib/format'
+import { groupText } from '@/lib/group-text'
 
 import type { UsageLog } from '../data/schema'
 import { formatModelName, logTokenName, parseLogOther } from '../lib/format'
@@ -118,7 +119,7 @@ export function CommonLogMobileCard<TData>(props: {
     },
     group: {
       label: t('Group'),
-      value: group,
+      value: groupText(t, group),
       visible: displayable && props.cells.has('token_name') && !!group,
       sensitive: true,
     },
@@ -231,7 +232,7 @@ export function CommonLogMobileCard<TData>(props: {
             if (id === 'group') {
               fieldContent = (
                 <GroupBadge
-                  group={field.value}
+                  group={group}
                   type='text'
                   className='max-w-full text-sm'
                 />
