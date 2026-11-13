@@ -494,6 +494,20 @@ var reservedRouteNamespaces = []string{
 	"/usage-logs",
 	"/users",
 	"/wallet",
+	// CoreCode console and public pages.
+	"/affiliates",
+	"/email-login",
+	"/enterprise",
+	"/enterprise-applications",
+	"/feedback",
+	"/feedback-admin",
+	"/invitations",
+	"/invoice",
+	"/invoice-management",
+	"/risk-control",
+	"/service-status",
+	"/site-insights",
+	"/topups",
 }
 
 func (g *RoutingGeneration) Get(key string) (*LoadedPlugin, bool) {
