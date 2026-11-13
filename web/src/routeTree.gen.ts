@@ -56,6 +56,7 @@ import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
 import { Route as AuthenticatedRequestProcessingIndexRouteImport } from './routes/_authenticated/request-processing/index'
 import { Route as AuthenticatedRiskControlIndexRouteImport } from './routes/_authenticated/risk-control/index'
+import { Route as AuthenticatedRivalPricesIndexRouteImport } from './routes/_authenticated/rival-prices/index'
 import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security/index'
 import { Route as AuthenticatedServiceStatusIndexRouteImport } from './routes/_authenticated/service-status/index'
 import { Route as AuthenticatedSiteInsightsIndexRouteImport } from './routes/_authenticated/site-insights/index'
@@ -340,6 +341,12 @@ const AuthenticatedRiskControlIndexRoute =
     path: '/risk-control/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedRivalPricesIndexRoute =
+  AuthenticatedRivalPricesIndexRouteImport.update({
+    id: '/rival-prices/',
+    path: '/rival-prices/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSecurityIndexRoute =
   AuthenticatedSecurityIndexRouteImport.update({
     id: '/security/',
@@ -573,6 +580,7 @@ export interface FileRoutesByFullPath {
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/request-processing/': typeof AuthenticatedRequestProcessingIndexRoute
   '/risk-control/': typeof AuthenticatedRiskControlIndexRoute
+  '/rival-prices/': typeof AuthenticatedRivalPricesIndexRoute
   '/security/': typeof AuthenticatedSecurityIndexRoute
   '/service-status/': typeof AuthenticatedServiceStatusIndexRoute
   '/site-insights/': typeof AuthenticatedSiteInsightsIndexRoute
@@ -650,6 +658,7 @@ export interface FileRoutesByTo {
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
   '/request-processing': typeof AuthenticatedRequestProcessingIndexRoute
   '/risk-control': typeof AuthenticatedRiskControlIndexRoute
+  '/rival-prices': typeof AuthenticatedRivalPricesIndexRoute
   '/security': typeof AuthenticatedSecurityIndexRoute
   '/service-status': typeof AuthenticatedServiceStatusIndexRoute
   '/site-insights': typeof AuthenticatedSiteInsightsIndexRoute
@@ -731,6 +740,7 @@ export interface FileRoutesById {
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/_authenticated/request-processing/': typeof AuthenticatedRequestProcessingIndexRoute
   '/_authenticated/risk-control/': typeof AuthenticatedRiskControlIndexRoute
+  '/_authenticated/rival-prices/': typeof AuthenticatedRivalPricesIndexRoute
   '/_authenticated/security/': typeof AuthenticatedSecurityIndexRoute
   '/_authenticated/service-status/': typeof AuthenticatedServiceStatusIndexRoute
   '/_authenticated/site-insights/': typeof AuthenticatedSiteInsightsIndexRoute
@@ -811,6 +821,7 @@ export interface FileRouteTypes {
     | '/redemption-codes/'
     | '/request-processing/'
     | '/risk-control/'
+    | '/rival-prices/'
     | '/security/'
     | '/service-status/'
     | '/site-insights/'
@@ -888,6 +899,7 @@ export interface FileRouteTypes {
     | '/redemption-codes'
     | '/request-processing'
     | '/risk-control'
+    | '/rival-prices'
     | '/security'
     | '/service-status'
     | '/site-insights'
@@ -968,6 +980,7 @@ export interface FileRouteTypes {
     | '/_authenticated/redemption-codes/'
     | '/_authenticated/request-processing/'
     | '/_authenticated/risk-control/'
+    | '/_authenticated/rival-prices/'
     | '/_authenticated/security/'
     | '/_authenticated/service-status/'
     | '/_authenticated/site-insights/'
@@ -1350,6 +1363,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRiskControlIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/rival-prices/': {
+      id: '/_authenticated/rival-prices/'
+      path: '/rival-prices'
+      fullPath: '/rival-prices/'
+      preLoaderRoute: typeof AuthenticatedRivalPricesIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/security/': {
       id: '/_authenticated/security/'
       path: '/security'
@@ -1686,6 +1706,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedRedemptionCodesIndexRoute: typeof AuthenticatedRedemptionCodesIndexRoute
   AuthenticatedRequestProcessingIndexRoute: typeof AuthenticatedRequestProcessingIndexRoute
   AuthenticatedRiskControlIndexRoute: typeof AuthenticatedRiskControlIndexRoute
+  AuthenticatedRivalPricesIndexRoute: typeof AuthenticatedRivalPricesIndexRoute
   AuthenticatedSecurityIndexRoute: typeof AuthenticatedSecurityIndexRoute
   AuthenticatedServiceStatusIndexRoute: typeof AuthenticatedServiceStatusIndexRoute
   AuthenticatedSiteInsightsIndexRoute: typeof AuthenticatedSiteInsightsIndexRoute
@@ -1729,6 +1750,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedRequestProcessingIndexRoute:
     AuthenticatedRequestProcessingIndexRoute,
   AuthenticatedRiskControlIndexRoute: AuthenticatedRiskControlIndexRoute,
+  AuthenticatedRivalPricesIndexRoute: AuthenticatedRivalPricesIndexRoute,
   AuthenticatedSecurityIndexRoute: AuthenticatedSecurityIndexRoute,
   AuthenticatedServiceStatusIndexRoute: AuthenticatedServiceStatusIndexRoute,
   AuthenticatedSiteInsightsIndexRoute: AuthenticatedSiteInsightsIndexRoute,

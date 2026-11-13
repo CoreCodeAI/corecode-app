@@ -60,6 +60,10 @@ func TestMain(m *testing.M) {
 		&SystemTask{},
 		&SystemTaskLock{},
 		&UserAccessToken{},
+		&RivalSite{},
+		&RivalPrice{},
+		&RivalPriceChange{},
+		&RivalDirectoryState{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}

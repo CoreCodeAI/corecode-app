@@ -218,6 +218,12 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 	}
+	if option.Key == "rival_price_setting.proxy" && strings.TrimSpace(option.Value.(string)) != "" {
+		if err := service.ValidateProxyURL(strings.TrimSpace(option.Value.(string))); err != nil {
+			common.ApiErrorT(c, "Invalid parameters")
+			return
+		}
+	}
 	if option.Key == "TaskPublicAddress" && option.Value.(string) != "" {
 		if err := service.ValidateTaskArtifactBaseURL(option.Value.(string)); err != nil {
 			common.ApiError(c, err)

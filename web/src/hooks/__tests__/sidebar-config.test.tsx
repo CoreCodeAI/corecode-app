@@ -316,6 +316,7 @@ describe('sidebar group order', () => {
       admin?.items.map((item) => ('url' in item ? item.url : item.title))
     ).toEqual([
       '/site-insights',
+      '/rival-prices',
       '/risk-control',
       '/feedback-admin',
       '/enterprise-applications',

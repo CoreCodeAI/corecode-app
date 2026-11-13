@@ -282,6 +282,13 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/site-insights/risk":                                                            accessTokenScopeRule("user:read"),
 	"GET /api/site-insights/growth":                                                          accessTokenScopeRule("user:read"),
 	"GET /api/site-insights/activity":                                                        accessTokenScopeRule("user:read"),
+	// router/api-router.go: /api/rival-prices, root only
+	"GET /api/rival-prices":                  accessTokenScopeRule("ops:read"),
+	"GET /api/rival-prices/changes":          accessTokenScopeRule("ops:read"),
+	"GET /api/rival-prices/sites":            accessTokenScopeRule("ops:read"),
+	"POST /api/rival-prices/sites":           accessTokenScopeRule("ops:write"),
+	"PUT /api/rival-prices/sites/:id":        accessTokenScopeRule("ops:write"),
+	"POST /api/rival-prices/sites/:id/check": accessTokenScopeRule("ops:write"),
 
 	// router/api-router.go: /api/plugin/task
 	"GET /api/plugin/task":                           accessTokenScopeRule("plugin:read"),
