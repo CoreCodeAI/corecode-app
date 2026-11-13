@@ -73,6 +73,11 @@ const (
 
 	ContextKeySystemPromptOverride ContextKey = "system_prompt_override"
 
+	// ContextKeyClaudeDefaultCacheTTL marks a Claude request whose cache
+	// breakpoints the relay gave the default ttl, so the outbound headers
+	// carry the extended cache ttl beta.
+	ContextKeyClaudeDefaultCacheTTL ContextKey = "claude_default_cache_ttl"
+
 	// ContextKeyFileSourcesToCleanup stores file sources that need cleanup when request ends
 	ContextKeyFileSourcesToCleanup ContextKey = "file_sources_to_cleanup"
 

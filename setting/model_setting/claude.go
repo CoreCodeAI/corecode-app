@@ -3,6 +3,7 @@ package model_setting
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -21,6 +22,14 @@ type ClaudeSettings struct {
 	DefaultMaxTokens                      map[string]int                 `json:"default_max_tokens"`
 	ThinkingAdapterEnabled                bool                           `json:"thinking_adapter_enabled"`
 	ThinkingAdapterBudgetTokensPercentage float64                        `json:"thinking_adapter_budget_tokens_percentage"`
+	// DefaultPromptCacheTTL is the ttl given to the cache breakpoints of a
+	// streamed request to an Anthropic channel whose client set none. "1h"
+	// turns it on; any other value sends the breakpoints as the client did.
+	DefaultPromptCacheTTL string `json:"default_prompt_cache_ttl"`
+	// DefaultPromptCacheTTLMinTokens is the estimated prompt size from which
+	// DefaultPromptCacheTTL applies. Below it a pause rewrites little, and the
+	// 1h write price on every turn would cost more than the pauses save.
+	DefaultPromptCacheTTLMinTokens int `json:"default_prompt_cache_ttl_min_tokens"`
 }
 
 // 默认配置
@@ -31,6 +40,8 @@ var defaultClaudeSettings = ClaudeSettings{
 		"default": 8192,
 	},
 	ThinkingAdapterBudgetTokensPercentage: 0.8,
+	DefaultPromptCacheTTL:                 "1h",
+	DefaultPromptCacheTTLMinTokens:        200000,
 }
 
 // 全局实例
@@ -105,6 +116,24 @@ func ValidateClaudeDefaultMaxTokens(value string) error {
 	for model, maxTokens := range settings {
 		if maxTokens < 0 {
 			return fmt.Errorf("negative Claude default max_tokens %d for %q", maxTokens, model)
+		}
+	}
+	return nil
+}
+
+// ValidateClaudeDefaultPromptCacheTTLOption checks the two default cache ttl
+// options before they are stored: the config loader drops a value it cannot
+// parse without reporting it, which would leave the running setting unchanged.
+func ValidateClaudeDefaultPromptCacheTTLOption(key, value string) error {
+	switch key {
+	case "claude.default_prompt_cache_ttl":
+		if value != "" && value != "1h" && value != "off" {
+			return fmt.Errorf("Claude default prompt cache ttl must be \"1h\", or \"off\" or empty to send breakpoints as the client did")
+		}
+	case "claude.default_prompt_cache_ttl_min_tokens":
+		tokens, err := strconv.Atoi(value)
+		if err != nil || tokens < 0 {
+			return fmt.Errorf("Claude default prompt cache ttl min tokens must be a non-negative integer")
 		}
 	}
 	return nil

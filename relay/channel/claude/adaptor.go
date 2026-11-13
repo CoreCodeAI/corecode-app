@@ -6,8 +6,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/relay/channel"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -107,6 +110,12 @@ func CommonClaudeHeadersOperation(c *gin.Context, req *http.Header, info *relayc
 	// A client may send several anthropic-beta lines; the API reads one
 	// comma-separated list, so forward all of them.
 	anthropicBeta := strings.Join(c.Request.Header.Values("anthropic-beta"), ",")
+	if common.GetContextKeyBool(c, constant.ContextKeyClaudeDefaultCacheTTL) &&
+		!slices.ContainsFunc(strings.Split(anthropicBeta, ","), func(beta string) bool {
+			return strings.TrimSpace(beta) == relaycommon.ExtendedCacheTTLBeta
+		}) {
+		anthropicBeta = strings.Trim(anthropicBeta+","+relaycommon.ExtendedCacheTTLBeta, ",")
+	}
 	if anthropicBeta != "" {
 		req.Set("anthropic-beta", anthropicBeta)
 	}
