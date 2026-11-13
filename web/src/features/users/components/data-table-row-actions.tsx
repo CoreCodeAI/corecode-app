@@ -29,6 +29,7 @@ import {
   Link2,
   CreditCard,
   Gift,
+  KeySquare,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -64,6 +65,7 @@ import {
 import { getUserActionMessage } from '../lib'
 import type { User } from '../types'
 import { UserAffiliateDialog } from './dialogs/user-affiliate-dialog'
+import { UserApiKeysDialog } from './dialogs/user-api-keys-dialog'
 import { UserBindingDialog } from './dialogs/user-binding-dialog'
 import { useUsers } from './users-provider'
 
@@ -93,6 +95,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const [bindingDialogOpen, setBindingDialogOpen] = useState(false)
   const [subscriptionsDialogOpen, setSubscriptionsDialogOpen] = useState(false)
   const [affiliateDialogOpen, setAffiliateDialogOpen] = useState(false)
+  const [apiKeysDialogOpen, setApiKeysDialogOpen] = useState(false)
   // Managing the invitation program is root's.
   const viewerIsRoot = useAuthStore(
     (s) => s.auth.user?.role === ROLE.SUPER_ADMIN
@@ -284,6 +287,18 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           </DropdownMenuShortcut>
         </DropdownMenuItem>
 
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault()
+            setApiKeysDialogOpen(true)
+          }}
+        >
+          {t('View API keys')}
+          <DropdownMenuShortcut>
+            <KeySquare size={16} />
+          </DropdownMenuShortcut>
+        </DropdownMenuItem>
+
         {viewerIsRoot && (
           <DropdownMenuItem
             onSelect={(event) => {
@@ -375,6 +390,14 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         <UserAffiliateDialog
           open={affiliateDialogOpen}
           onOpenChange={setAffiliateDialogOpen}
+          user={{ id: user.id, username: user.username }}
+        />
+      )}
+
+      {apiKeysDialogOpen && (
+        <UserApiKeysDialog
+          open={apiKeysDialogOpen}
+          onOpenChange={setApiKeysDialogOpen}
           user={{ id: user.id, username: user.username }}
         />
       )}
