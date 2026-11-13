@@ -51,7 +51,11 @@ import {
   updateBillingPreference,
 } from '@/features/subscriptions/api'
 import { SubscriptionPurchaseDialog } from '@/features/subscriptions/components/dialogs/subscription-purchase-dialog'
-import { formatDuration, formatResetPeriod } from '@/features/subscriptions/lib'
+import {
+  formatDuration,
+  formatResetPeriod,
+  planText,
+} from '@/features/subscriptions/lib'
 import type {
   PlanRecord,
   UserSubscriptionRecord,
@@ -246,11 +250,11 @@ export function SubscriptionPlansCard({
     const map = new Map<number, string>()
     for (const p of plans) {
       if (p?.plan?.id) {
-        map.set(p.plan.id, p.plan.title || '')
+        map.set(p.plan.id, planText(p.plan.title, t))
       }
     }
     return map
-  }, [plans])
+  }, [plans, t])
 
   const getRemainingDays = (sub: UserSubscriptionRecord) => {
     const endTime = sub?.subscription?.end_time || 0
@@ -590,11 +594,11 @@ export function SubscriptionPlansCard({
                     <div className='mb-2 flex items-start justify-between gap-3'>
                       <div className='min-w-0'>
                         <h4 className='truncate font-semibold'>
-                          {plan.title || t('Subscription Plans')}
+                          {planText(plan.title, t) || t('Subscription Plans')}
                         </h4>
                         {plan.subtitle && (
                           <p className='text-muted-foreground truncate text-xs'>
-                            {plan.subtitle}
+                            {planText(plan.subtitle, t)}
                           </p>
                         )}
                       </div>

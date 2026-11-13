@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+export { planText } from './plan-text'
 export { formatDuration, formatResetPeriod, formatTimestamp } from './format'
 export {
   getPlanFormSchema,

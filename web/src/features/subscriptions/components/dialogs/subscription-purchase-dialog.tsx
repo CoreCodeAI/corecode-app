@@ -33,6 +33,7 @@ import {
   openPaymentPage,
   paysThroughEpay,
 } from '@/features/wallet/lib'
+import { paymentMethodName } from '@/features/wallet/lib/payment-names'
 import type { NowPaymentsCurrency } from '@/features/wallet/types'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { formatQuota } from '@/lib/format'
@@ -47,7 +48,7 @@ import {
   paySubscriptionBalance,
   paySubscriptionNowPayments,
 } from '../../api'
-import { formatDuration, formatResetPeriod } from '../../lib'
+import { formatDuration, formatResetPeriod, planText } from '../../lib'
 import type { PlanRecord } from '../../types'
 
 interface PaymentMethod {
@@ -341,7 +342,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
               {t('Plan Name')}
             </span>
             <span className='max-w-[200px] truncate text-sm font-medium'>
-              {plan.title}
+              {planText(plan.title, t)}
             </span>
           </div>
           <div className='flex items-center justify-between'>
@@ -463,7 +464,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
                 <Combobox
                   options={(props.checkoutMethods || []).map((m) => ({
                     value: m.type,
-                    label: m.name || m.type,
+                    label: paymentMethodName(m, t),
                   }))}
                   value={selectedMethod}
                   onValueChange={(v) => v !== null && setSelectedMethod(v)}
