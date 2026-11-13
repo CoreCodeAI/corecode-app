@@ -9390,6 +9390,7 @@
     "Download HTML": "HTML をダウンロード",
     "This group only admits Claude Code; test it from Claude Code": "このグループは Claude Code 専用です。Claude Code でテストしてください",
     "This group only admits Codex; test it from Codex": "このグループは Codex 専用です。Codex でテストしてください",
-    "This group has no chat models to test": "このグループにはテストできるチャットモデルがありません"
+    "This group has no chat models to test": "このグループにはテストできるチャットモデルがありません",
+    "All platforms": "すべてのプラットフォーム"
   }
 }

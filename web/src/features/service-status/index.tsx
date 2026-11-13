@@ -25,14 +25,16 @@ import {
   RefreshCw,
   type LucideIcon,
 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { toIntlLocale } from '@/i18n/languages'
+import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
 import { SERVICE_STATUS_QUERY_KEY, getServiceStatus } from './api'
@@ -47,6 +49,7 @@ import {
   formatRate,
   stripSummary,
 } from './lib/format'
+import { groupVendorKey, vendorCounts } from './lib/vendor'
 import type { OverallStatus, StatusStripData } from './types'
 
 type BannerState = OverallStatus | 'unknown'
@@ -70,6 +73,16 @@ function Stat(props: { label: string; value: string; note?: string }) {
   )
 }
 
+const ALL_VENDORS = '*'
+
+function Count(props: { value: number }) {
+  return (
+    <span className='bg-muted text-muted-foreground rounded-full px-1.5 text-[11px] tabular-nums'>
+      {props.value}
+    </span>
+  )
+}
+
 function Section(props: { title: string; children: ReactNode }) {
   return (
     <section className='flex flex-col gap-3'>
@@ -82,6 +95,7 @@ function Section(props: { title: string; children: ReactNode }) {
 export function ServiceStatus() {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const [vendor, setVendor] = useState(ALL_VENDORS)
   const query = useQuery({
     queryKey: SERVICE_STATUS_QUERY_KEY,
     queryFn: getServiceStatus,
@@ -163,6 +177,15 @@ export function ServiceStatus() {
   }
   const current = data?.current
   const groups = data?.groups
+  const vendors = groups ? vendorCounts(groups) : []
+  // A vendor that left the data after a refresh shows every group again.
+  const activeVendor = vendors.some((item) => item.key === vendor)
+    ? vendor
+    : ALL_VENDORS
+  const shownGroups =
+    activeVendor === ALL_VENDORS
+      ? groups
+      : groups?.filter((group) => groupVendorKey(group) === activeVendor)
   let currentNote: string | undefined
   if (level && current) {
     currentNote = current.requests
@@ -248,9 +271,42 @@ export function ServiceStatus() {
 
           {data && (
             <Section title={t('Group status')}>
-              {groups && groups.length > 0 ? (
+              {groups && vendors.length > 1 && (
+                <ToggleGroup
+                  variant='outline'
+                  size='sm'
+                  spacing={2}
+                  aria-label={t('Platform')}
+                  className='w-full flex-wrap'
+                  value={[activeVendor]}
+                  onValueChange={(value: string[]) =>
+                    setVendor(value.at(-1) ?? ALL_VENDORS)
+                  }
+                >
+                  <ToggleGroupItem value={ALL_VENDORS} className='gap-1.5'>
+                    {t('All platforms')}
+                    <Count value={groups.length} />
+                  </ToggleGroupItem>
+                  {vendors.map((item) => (
+                    <ToggleGroupItem
+                      key={item.key || 'other'}
+                      value={item.key}
+                      className='gap-1.5'
+                    >
+                      {item.icon && (
+                        <span aria-hidden className='flex'>
+                          {getLobeIcon(item.icon, 14)}
+                        </span>
+                      )}
+                      {item.key || t('Other')}
+                      <Count value={item.count} />
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              )}
+              {shownGroups && shownGroups.length > 0 ? (
                 <div className='grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3'>
-                  {groups.map((group) => (
+                  {shownGroups.map((group) => (
                     <GroupCard key={group.name} group={group} />
                   ))}
                 </div>
