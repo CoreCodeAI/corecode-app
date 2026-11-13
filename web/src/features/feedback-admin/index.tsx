@@ -22,7 +22,11 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { DataTablePage, useDataTable } from '@/components/data-table'
+import {
+  DataTablePage,
+  TruncatedCell,
+  useDataTable,
+} from '@/components/data-table'
 import { SectionPageLayout } from '@/components/layout'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
@@ -66,7 +70,7 @@ function useFeedbackColumns(
       {
         accessorKey: 'created_time',
         header: t('Submitted'),
-        size: 170,
+        size: 150,
         cell: ({ row }) => (
           <span className='font-mono tabular-nums'>
             {formatTimestampToDate(row.original.created_time)}
@@ -75,18 +79,22 @@ function useFeedbackColumns(
         meta: { label: t('Submitted') },
       },
       {
+        // The one flexible column: it takes the room the others leave and
+        // cuts a long title short, with the whole title in a tooltip.
         accessorKey: 'title',
         header: t('Title'),
-        size: 260,
+        size: 200,
         cell: ({ row }) => (
-          <span className='truncate font-medium'>{row.original.title}</span>
+          <TruncatedCell cellClassName='font-medium'>
+            {row.original.title}
+          </TruncatedCell>
         ),
         meta: { label: t('Title'), mobileTitle: true },
       },
       {
         accessorKey: 'category',
         header: t('Type'),
-        size: 110,
+        size: 90,
         cell: ({ row }) => {
           const config = FEEDBACK_CATEGORY_CONFIG[row.original.category]
           return t(config?.label ?? row.original.category)
@@ -96,7 +104,7 @@ function useFeedbackColumns(
       {
         accessorKey: 'user_id',
         header: t('Account'),
-        size: 90,
+        size: 80,
         cell: ({ row }) => (
           <span className='font-mono'>#{row.original.user_id}</span>
         ),
@@ -105,7 +113,7 @@ function useFeedbackColumns(
       {
         accessorKey: 'status',
         header: t('Status'),
-        size: 110,
+        size: 100,
         cell: ({ row }) => {
           const config = FEEDBACK_STATUS_CONFIG[row.original.status]
           return (
@@ -122,7 +130,7 @@ function useFeedbackColumns(
       {
         accessorKey: 'reward_quota',
         header: t('Reward'),
-        size: 100,
+        size: 90,
         cell: ({ row }) =>
           row.original.reward_quota > 0
             ? formatQuotaWithCurrency(row.original.reward_quota)

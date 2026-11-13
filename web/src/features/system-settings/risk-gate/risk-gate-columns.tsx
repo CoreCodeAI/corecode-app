@@ -20,7 +20,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { TruncatedCell } from '@/components/data-table'
+import { BadgeCell, TruncatedCell } from '@/components/data-table'
 import { StatusBadge, type StatusVariant } from '@/components/status-badge'
 import { formatTimestampToDate } from '@/lib/format'
 
@@ -56,11 +56,14 @@ export function useRiskGateColumns(): ColumnDef<RiskGateEvent>[] {
       fail_open: t('Model failed, let through'),
     }
 
+    // Eight columns must fit a full-width table on a laptop, so each is kept
+    // narrow and cuts long text short, with the whole text in a tooltip. The
+    // widths add up to what DataTablePage uses as the table's minimum width.
     return [
       {
         accessorKey: 'created_at',
         header: t('Time'),
-        size: 170,
+        size: 150,
         cell: ({ row }) => (
           <span className='font-mono tabular-nums'>
             {formatTimestampToDate(row.original.created_at)}
@@ -69,38 +72,45 @@ export function useRiskGateColumns(): ColumnDef<RiskGateEvent>[] {
         meta: { label: t('Time'), mobileTitle: true },
       },
       {
+        // The stage and its rule stack, since one names the other.
         id: 'stage',
         header: t('Stage'),
-        size: 200,
+        size: 140,
         cell: ({ row }) => (
-          <span className='flex flex-wrap items-center gap-1'>
-            <StatusBadge
-              label={stageLabels[row.original.stage]}
-              variant='neutral'
-              copyable={false}
-            />
-            <span className='font-mono text-xs'>{row.original.rule}</span>
-          </span>
+          <div className='flex min-w-0 flex-col items-start gap-0.5'>
+            <BadgeCell>
+              <StatusBadge
+                label={stageLabels[row.original.stage]}
+                variant='neutral'
+                copyable={false}
+              />
+            </BadgeCell>
+            <TruncatedCell cellClassName='text-muted-foreground font-mono text-xs'>
+              {row.original.rule}
+            </TruncatedCell>
+          </div>
         ),
         meta: { label: t('Stage') },
       },
       {
         id: 'action',
         header: t('Action'),
-        size: 150,
+        size: 120,
         cell: ({ row }) => (
-          <StatusBadge
-            label={actionLabels[row.original.action]}
-            variant={ACTION_VARIANTS[row.original.action]}
-            copyable={false}
-          />
+          <BadgeCell>
+            <StatusBadge
+              label={actionLabels[row.original.action]}
+              variant={ACTION_VARIANTS[row.original.action]}
+              copyable={false}
+            />
+          </BadgeCell>
         ),
         meta: { label: t('Action') },
       },
       {
         accessorKey: 'detail',
         header: t('Detail'),
-        size: 140,
+        size: 100,
         cell: ({ row }) =>
           row.original.detail ? (
             <TruncatedCell>{row.original.detail}</TruncatedCell>
@@ -112,30 +122,33 @@ export function useRiskGateColumns(): ColumnDef<RiskGateEvent>[] {
       {
         id: 'user',
         header: t('User'),
-        size: 150,
+        size: 120,
         cell: ({ row }) => (
-          <span>
+          <TruncatedCell
+            tooltipContent={`${row.original.username} #${row.original.user_id}`}
+          >
             {row.original.username}{' '}
             <span className='text-muted-foreground'>
               #{row.original.user_id}
             </span>
-          </span>
+          </TruncatedCell>
         ),
         meta: { label: t('User') },
       },
       {
         accessorKey: 'model_name',
         header: t('Model'),
-        size: 160,
+        size: 120,
         cell: ({ row }) => (
           <TruncatedCell>{row.original.model_name}</TruncatedCell>
         ),
         meta: { label: t('Model') },
       },
       {
+        // The one flexible column: it takes the room the others leave.
         accessorKey: 'excerpt',
         header: t('Message'),
-        size: 260,
+        size: 160,
         cell: ({ row }) =>
           row.original.excerpt ? (
             <TruncatedCell tooltipClassName='max-w-md whitespace-pre-wrap break-words'>
@@ -149,7 +162,7 @@ export function useRiskGateColumns(): ColumnDef<RiskGateEvent>[] {
       {
         accessorKey: 'request_id',
         header: t('Request ID'),
-        size: 200,
+        size: 120,
         cell: ({ row }) => (
           <TruncatedCell>
             <span className='font-mono'>{row.original.request_id}</span>
