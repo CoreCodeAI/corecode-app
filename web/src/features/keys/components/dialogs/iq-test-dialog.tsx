@@ -31,6 +31,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { groupText } from '@/lib/group-text'
 
 import {
   IQ_QUESTIONS,
@@ -143,7 +144,9 @@ export function IqTestDialog(props: Props) {
     setError('')
   }
 
-  const groupLabel = props.apiKey.group || t('Account default group')
+  const groupLabel = props.apiKey.group
+    ? groupText(t, props.apiKey.group)
+    : t('Account default group')
   let startLabel = t('Start test')
   if (phase !== 'idle') startLabel = t('Test again')
 

@@ -28,6 +28,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { PanelWrapper } from '@/features/dashboard/components/ui/panel-wrapper'
+import { planTextReader } from '@/features/subscriptions/lib/plan-text'
 import { getUserLogs } from '@/features/usage-logs/api'
 import { LOG_TYPE_ENUM } from '@/features/usage-logs/constants'
 import type { UsageLog } from '@/features/usage-logs/data/schema'
@@ -95,8 +96,8 @@ export function RecentCreditsCard() {
         {credits.map((log) => {
           const other = parseLogOther(log.other)
           const text =
-            renderAuditContent(other, t) ??
-            renderLogContent(other, t) ??
+            renderAuditContent(other, t, planTextReader(t)) ??
+            renderLogContent(other, t, planTextReader(t)) ??
             translateServerText(t, log.content)
           return (
             <li

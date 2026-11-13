@@ -16,8 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { TFunction } from 'i18next'
-
 // Operators write plan titles and subtitles in Chinese, and the server returns
 // them as stored. The plans on sale have English keys here, so other languages
 // read them translated; a plan not listed shows its text as written.
@@ -33,8 +31,18 @@ const PLAN_TEXT_KEYS: Readonly<Record<string, string>> = {
     '$3 of trial credit, valid 7 days, given only on sign-up through a channel invitation',
 }
 
+/** planText bound to a translation function, for log renderers that take one. */
+export function planTextReader(
+  t: (key: string) => string
+): (text: string) => string {
+  return (text) => planText(text, t)
+}
+
 /** A plan's title or subtitle in the reader's language, when it has a key. */
-export function planText(text: string | undefined, t: TFunction): string {
+export function planText(
+  text: string | undefined,
+  t: (key: string) => string
+): string {
   if (!text) return ''
   const key = PLAN_TEXT_KEYS[text.trim()]
   return key ? t(key) : text

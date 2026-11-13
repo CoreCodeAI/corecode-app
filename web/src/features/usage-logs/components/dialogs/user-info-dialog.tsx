@@ -25,6 +25,7 @@ import { Label } from '@/components/ui/label'
 import { getUserSubscriptions } from '@/features/subscriptions/api'
 import { getUserAffiliate } from '@/features/users/api'
 import { formatQuota, formatCompactNumber } from '@/lib/format'
+import { groupText } from '@/lib/group-text'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import { getUserInfo } from '../../api'
@@ -178,7 +179,10 @@ export function UserInfoDialog({
               value={formatCompactNumber(userInfo.request_count)}
             />
             {userInfo.group && (
-              <InfoItem label={t('User Group')} value={userInfo.group} />
+              <InfoItem
+                label={t('User Group')}
+                value={groupText(t, userInfo.group)}
+              />
             )}
           </div>
 

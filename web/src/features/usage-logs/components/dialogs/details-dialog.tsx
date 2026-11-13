@@ -64,6 +64,10 @@ import {
   tierDisplayLabel,
 } from '@/features/pricing/lib/billing-expr'
 import { pluginUsageSchema } from '@/features/pricing/lib/plugin-pricing'
+import {
+  planText,
+  planTextReader,
+} from '@/features/subscriptions/lib/plan-text'
 import { PolicyDecisionRecord } from '@/features/system-settings/request-policies/decision-record'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { toIntlLocale } from '@/i18n/languages'
@@ -74,6 +78,7 @@ import {
   formatTokens,
   formatUseTime,
 } from '@/lib/format'
+import { groupText } from '@/lib/group-text'
 import { translateServerText } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
@@ -104,12 +109,12 @@ import {
 import { USAGE_BILLING_PATH, type LogOtherData } from '../../types'
 import { ResponseModelDetails } from '../model-badge'
 import { PluginAuthorLink } from '../plugin-author-link'
-import { CopyableDetailValue } from './copyable-detail-value'
-import { CostCheckSection } from './cost-check-section'
 import {
   RequestPluginAdminSteps,
   RequestPluginRecord,
 } from '../request-plugin-record'
+import { CopyableDetailValue } from './copyable-detail-value'
+import { CostCheckSection } from './cost-check-section'
 import { DetailRow, DetailSection } from './log-detail-layout'
 
 // Maps a channel-update changed-field token (as recorded by the backend audit)
@@ -630,10 +635,10 @@ export function DetailsDialog(props: DetailsDialogProps) {
         t
       )
     : null
-  const operationText = renderAuditContent(other, t)
+  const operationText = renderAuditContent(other, t, planTextReader(t))
   const details =
     (isTopup ? operationText : null) ??
-    renderLogContent(other, t) ??
+    renderLogContent(other, t, planTextReader(t)) ??
     props.log.content ??
     ''
   const auditRoute = isManage && props.isAdmin ? other?.audit_info : undefined
@@ -778,7 +783,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
           {(props.log.group || other?.group) && (
             <DetailRow
               label={t('Group')}
-              value={props.log.group || other?.group || ''}
+              value={groupText(t, props.log.group || other?.group || '')}
               mono
             />
           )}
@@ -1353,7 +1358,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
             {other.subscription_plan_id && (
               <DetailRow
                 label={t('Plan')}
-                value={`#${other.subscription_plan_id} ${other.subscription_plan_title || ''}`.trim()}
+                value={`#${other.subscription_plan_id} ${planText(other.subscription_plan_title, t)}`.trim()}
               />
             )}
             {other.subscription_id && (

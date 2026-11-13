@@ -85,6 +85,7 @@ import type {
   FlowRole,
 } from '@/features/dashboard/types'
 import { formatQuota } from '@/lib/format'
+import { groupText } from '@/lib/group-text'
 import { ROLE } from '@/lib/roles'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { useThemeColor } from '@/lib/theme-color'
@@ -360,6 +361,7 @@ export function FlowCharts(props: FlowChartsProps) {
         overflowMode,
         maskSensitive,
         deletedTokenLabel: (tokenId) => t('Deleted ({{id}})', { id: tokenId }),
+        groupLabel: (group) => groupText(t, group),
         otherNodeLabel: (kind) => t(FLOW_OTHER_NODE_LABEL_KEYS[kind]),
       }),
     [

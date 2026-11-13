@@ -35,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { groupText } from '@/lib/group-text'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
@@ -297,7 +298,8 @@ export function PriceBoard(props: {
     (usd / markup) * props.usdExchangeRate
   const showsDiscount = (name: string, groupCombined: number) =>
     tokenGroups.has(name) && getDiscountKind(groupCombined) === 'discount'
-  const description = group ? groupDescription(props.usableGroup[group]) : ''
+  const rawDescription = group ? groupDescription(props.usableGroup[group]) : ''
+  const description = rawDescription ? groupText(t, rawDescription) : ''
 
   const renderPrice = (usd: number, markup: number) => {
     if (!Number.isFinite(usd)) {
@@ -440,7 +442,7 @@ export function PriceBoard(props: {
             size={featured ? 22 : 18}
           />
           <span className={cn('truncate font-medium', featured && 'text-base')}>
-            {name}
+            {groupText(t, name)}
           </span>
           {isDiscount && (
             <span className='bg-primary/10 text-primary shrink-0 rounded px-1.5 py-0.5 font-mono text-xs font-semibold'>
@@ -512,7 +514,9 @@ export function PriceBoard(props: {
           {groups.length === 1 && (
             <div className='border-primary bg-primary/5 mx-auto flex max-w-full items-center gap-3 rounded-xl border px-6 py-4'>
               <VendorIcon icon={vendors.get(group)?.icon} size={22} />
-              <span className='truncate text-lg font-semibold'>{group}</span>
+              <span className='truncate text-lg font-semibold'>
+                {groupText(t, group)}
+              </span>
               {saving > 0 && (
                 <span className='bg-primary/10 text-primary shrink-0 rounded px-2 py-0.5 font-mono text-sm font-semibold'>
                   {discountLabel(combined)}
@@ -524,7 +528,10 @@ export function PriceBoard(props: {
           {groups.length > 1 && (
             <div className='md:hidden'>
               <Select
-                items={groups.map((name) => ({ value: name, label: name }))}
+                items={groups.map((name) => ({
+                  value: name,
+                  label: groupText(t, name),
+                }))}
                 value={group}
                 onValueChange={(value) => setSelected(value)}
               >
@@ -535,7 +542,7 @@ export function PriceBoard(props: {
                   <SelectGroup>
                     {groups.map((name) => (
                       <SelectItem key={name} value={name}>
-                        {name}
+                        {groupText(t, name)}
                         {showsDiscount(
                           name,
                           discountAt(

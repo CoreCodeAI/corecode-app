@@ -16,6 +16,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import i18next from 'i18next'
+
+import { toIntlLocale } from '@/i18n/languages'
 import dayjs from '@/lib/dayjs'
 
 import {
@@ -55,9 +58,15 @@ export function formatBytes(
   return `${Intl.NumberFormat(locales, { maximumFractionDigits: 1 }).format(value)} ${BYTE_UNITS[unit]}`
 }
 
+/**
+ * A count in short form, such as 4.2K or 4.2万. Without a locale it follows the
+ * console's language, not the browser's, so a Russian reader does not see 万.
+ */
 export function formatCompactNumber(
   value: number | null | undefined,
-  locales?: Intl.LocalesArgument
+  locales: Intl.LocalesArgument | undefined = toIntlLocale(
+    i18next.resolvedLanguage ?? i18next.language
+  )
 ): string {
   if (value == null || Number.isNaN(value as number)) return '-'
   return Intl.NumberFormat(locales, {

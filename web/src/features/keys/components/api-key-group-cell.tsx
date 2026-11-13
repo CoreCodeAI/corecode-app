@@ -27,6 +27,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useMediaQuery } from '@/hooks'
+import { groupText } from '@/lib/group-text'
 import { cn } from '@/lib/utils'
 
 import { GroupRatioBadge, type GroupRatio } from './auto-group-visuals'
@@ -50,7 +51,7 @@ export function ApiKeyGroupCell(props: ApiKeyGroupCellProps) {
       <TruncatedCell
         className={isMobile ? 'w-full' : 'max-w-50'}
         tabIndex={0}
-        tooltipContent={group || t('Follow user group')}
+        tooltipContent={group ? groupText(t, group) : t('Follow user group')}
         tooltipClassName='break-all'
       >
         <GroupBadge

@@ -91,6 +91,8 @@ export interface FlowBuildOptions {
   // Resolves the label for a token whose record no longer exists (deleted).
   // Lets the caller inject a localized string such as "Deleted (123)".
   deletedTokenLabel?: (tokenId: number) => string
+  // Shows a group node in the reader's language; the node id keeps the name.
+  groupLabel?: (group: string) => string
   otherNodeLabel?: (kind: FlowNodeKind) => string
 }
 

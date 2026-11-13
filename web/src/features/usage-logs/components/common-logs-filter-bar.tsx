@@ -43,6 +43,7 @@ import {
 import { getGroups } from '@/features/users/api'
 import { useMediaQuery } from '@/hooks'
 import { getUserGroups } from '@/lib/api'
+import { groupText } from '@/lib/group-text'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
@@ -149,8 +150,8 @@ export function CommonLogsFilterBar<TData>(
       : Object.keys(userGroups?.data ?? {})
     return groups
       .filter((group) => group !== 'auto')
-      .map((group) => ({ label: group, value: group }))
-  }, [isAdmin, adminGroups, userGroups])
+      .map((group) => ({ label: groupText(t, group), value: group }))
+  }, [isAdmin, adminGroups, userGroups, t])
 
   const searchState = useMemo<CommonLogDraft>(() => {
     const { start, end } = getDefaultTimeRange()

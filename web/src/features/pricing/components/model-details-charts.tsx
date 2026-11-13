@@ -21,6 +21,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { getSuccessRateColor } from '@/features/performance-metrics/lib/format'
+import { groupText } from '@/lib/group-text'
 import { useThemeRadiusPx } from '@/lib/theme-radius'
 import { useChartTheme } from '@/lib/use-chart-theme'
 import { cn } from '@/lib/utils'
@@ -369,7 +370,9 @@ export function ThroughputBarChart(props: {
       ],
       tooltip: {
         mark: {
-          title: { value: (d: { group: string }) => d.group },
+          title: {
+            value: (d: { group: string }) => groupText(t, d.group),
+          },
           content: [
             {
               key: t('Throughput'),

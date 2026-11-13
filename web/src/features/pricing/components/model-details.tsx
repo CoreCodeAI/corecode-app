@@ -58,6 +58,7 @@ import {
 import { PluginIcon } from '@/features/task-plugins/components/plugin-icon'
 import { useDocumentTitle } from '@/hooks/use-document-title'
 import { useNoIndex } from '@/hooks/use-no-index'
+import { groupText } from '@/lib/group-text'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
@@ -546,7 +547,7 @@ function ModelBackendProviderSection(props: { model: PricingModel }) {
   if (groups.length > 0) {
     cells.push(
       <CatalogInfoCell key='groups' label={t('Groups')}>
-        <CatalogPillList items={groups} />
+        <CatalogPillList items={groups.map((group) => groupText(t, group))} />
       </CatalogInfoCell>
     )
   }

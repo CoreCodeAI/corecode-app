@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
+import { groupText } from '@/lib/group-text'
 import { cn } from '@/lib/utils'
 
 import {
@@ -256,7 +257,7 @@ export function BillingExplainer(props: {
                     <SelectGroup>
                       {groups.map((item) => (
                         <SelectItem key={item} value={item}>
-                          {item} · ×
+                          {groupText(t, item)} · ×
                           {trimNumber(
                             getConfiguredGroupRatio(
                               model.group_ratio || {},
@@ -309,7 +310,7 @@ export function BillingExplainer(props: {
                   />
                   {group && (
                     <p className='text-muted-foreground mt-1 pl-7 text-xs'>
-                      {group}
+                      {groupText(t, group)}
                     </p>
                   )}
                 </div>
