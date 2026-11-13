@@ -141,7 +141,8 @@ func genStripeSubscriptionLink(referenceId string, customerId string, email stri
 				Quantity: stripe.Int64(1),
 			},
 		},
-		Mode: stripe.String(string(stripe.CheckoutSessionModeSubscription)),
+		Mode:                 stripe.String(string(stripe.CheckoutSessionModeSubscription)),
+		PaymentMethodOptions: &stripe.CheckoutSessionPaymentMethodOptionsParams{Card: stripeCardChallenge()},
 	}
 
 	if "" == customerId {

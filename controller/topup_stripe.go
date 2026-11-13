@@ -492,12 +492,17 @@ func stripeCheckoutParams(referenceId string, customerId string, email string, p
 	if len(methodTypes) > 0 {
 		params.PaymentMethodTypes = stripe.StringSlice(methodTypes)
 	}
+	options := &stripe.CheckoutSessionPaymentMethodOptionsParams{}
+	if len(methodTypes) == 0 || slices.Contains(methodTypes, "card") {
+		options.Card = stripeCardChallenge()
+	}
 	if slices.Contains(methodTypes, "wechat_pay") {
 		// Stripe requires the client when wechat_pay is listed; Checkout is
 		// a web page.
-		params.PaymentMethodOptions = &stripe.CheckoutSessionPaymentMethodOptionsParams{
-			WeChatPay: &stripe.CheckoutSessionPaymentMethodOptionsWeChatPayParams{Client: stripe.String("web")},
-		}
+		options.WeChatPay = &stripe.CheckoutSessionPaymentMethodOptionsWeChatPayParams{Client: stripe.String("web")}
+	}
+	if options.Card != nil || options.WeChatPay != nil {
+		params.PaymentMethodOptions = options
 	}
 
 	if customerId == "" {
@@ -509,6 +514,15 @@ func stripeCheckoutParams(referenceId string, customerId string, email string, p
 		params.Customer = stripe.String(customerId)
 	}
 	return params
+}
+
+// stripeCardChallenge asks the issuer to challenge every card payment with
+// 3D Secure. A frictionless or data-only authentication leaves fraud
+// disputes with us; a completed challenge moves them to the issuer.
+func stripeCardChallenge() *stripe.CheckoutSessionPaymentMethodOptionsCardParams {
+	return &stripe.CheckoutSessionPaymentMethodOptionsCardParams{
+		RequestThreeDSecure: stripe.String(string(stripe.CheckoutSessionPaymentMethodOptionsCardRequestThreeDSecureChallenge)),
+	}
 }
 
 // genStripeLink opens a Checkout Session and returns the page the customer
