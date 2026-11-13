@@ -85,6 +85,33 @@ import {
   type CurrencyDisplayType,
 } from '@/stores/system-config-store'
 
+/**
+ * Shared Intl formatters. Constructing an Intl.NumberFormat resolves locale
+ * data and costs far more than formatting with it; a table renders thousands
+ * of numbers, so each distinct locale and option set is built once and reused.
+ */
+const numberFormats = new Map<string, Intl.NumberFormat>()
+
+function localeKey(locales: Intl.LocalesArgument | undefined): string {
+  if (locales == null) return ''
+  if (Array.isArray(locales)) return locales.map(String).join(',')
+  return String(locales)
+}
+
+/** A cached `new Intl.NumberFormat(locales, options)`. */
+function getNumberFormat(
+  locales?: Intl.LocalesArgument,
+  options?: Intl.NumberFormatOptions
+): Intl.NumberFormat {
+  const key = `${localeKey(locales)}|${options ? JSON.stringify(options) : ''}`
+  let format = numberFormats.get(key)
+  if (!format) {
+    format = new Intl.NumberFormat(locales, options)
+    numberFormats.set(key, format)
+  }
+  return format
+}
+
 export interface CurrencyFormatOptions {
   /** Fraction digits to use when |value| >= 1 */
   digitsLarge?: number
@@ -304,7 +331,7 @@ function formatCurrencyValue(
 ): string {
   if (meta.kind === 'tokens') {
     if (options.compact) {
-      return new Intl.NumberFormat(options.locale, {
+      return getNumberFormat(options.locale, {
         notation: 'compact',
         maximumFractionDigits: 1,
       }).format(value)
@@ -326,14 +353,14 @@ function formatCurrencyValue(
 
   if (meta.kind === 'currency') {
     if (!options.showSymbol) {
-      return new Intl.NumberFormat(options.locale, {
+      return getNumberFormat(options.locale, {
         notation: options.compact ? 'compact' : 'standard',
         minimumFractionDigits: 0,
         maximumFractionDigits: options.compact ? 1 : digits,
       }).format(adjustedValue)
     }
 
-    const formatted = new Intl.NumberFormat(options.locale, {
+    const formatted = getNumberFormat(options.locale, {
       style: 'currency',
       currency: meta.currencyCode,
       currencyDisplay: 'narrowSymbol',
@@ -344,7 +371,7 @@ function formatCurrencyValue(
     return formatted
   }
 
-  const decimal = new Intl.NumberFormat(options.locale, {
+  const decimal = getNumberFormat(options.locale, {
     notation: options.compact ? 'compact' : 'standard',
     minimumFractionDigits: 0,
     maximumFractionDigits: options.compact ? 1 : digits,
@@ -417,7 +444,7 @@ export function formatCurrencyFromUSD(
   if (meta.kind === 'tokens') {
     const tokens = amountUSD * config.quotaPerUnit
     if (merged.compact) {
-      return new Intl.NumberFormat(merged.locale, {
+      return getNumberFormat(merged.locale, {
         notation: 'compact',
         maximumFractionDigits: 1,
       }).format(tokens)
