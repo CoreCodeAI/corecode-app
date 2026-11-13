@@ -49,6 +49,7 @@ import {
   isBonusEligiblePayment,
   isNowPaymentsPayment,
 } from '../../lib'
+import { paymentMethodName } from '../../lib/payment-names'
 import type { NowPaymentsCurrency, PaymentMethod } from '../../types'
 
 interface PaymentConfirmDialogProps {
@@ -264,9 +265,11 @@ export function PaymentConfirmDialog({
                   paymentMethod?.type,
                   'h-4 w-4',
                   paymentMethod?.icon,
-                  paymentMethod?.name
+                  paymentMethodName(paymentMethod, t)
                 )}
-                <span className='font-medium'>{paymentMethod?.name}</span>
+                <span className='font-medium'>
+                  {paymentMethodName(paymentMethod, t)}
+                </span>
               </div>
             </div>
           </div>
