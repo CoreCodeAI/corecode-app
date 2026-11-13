@@ -62,6 +62,7 @@ func (s *BillingSession) Settle(actualQuota int) error {
 	delta := actualQuota - s.preConsumedQuota
 	if delta == 0 {
 		s.settled = true
+		s.releaseSubscriptionReservations()
 		return nil
 	}
 	// 1) 调整资金来源（仅在尚未提交时执行，防止重复调用）
@@ -90,7 +91,22 @@ func (s *BillingSession) Settle(actualQuota int) error {
 	}
 	s.relayInfo.BillingOverflowQuota = s.overflowQuota
 	s.settled = true
+	s.releaseSubscriptionReservations()
 	return errors.Join(fundingErr, tokenErr)
+}
+
+// releaseSubscriptionReservations marks the request's subscription reservations
+// settled, so the console stops counting them as held by a running request.
+func (s *BillingSession) releaseSubscriptionReservations() {
+	for _, source := range []FundingSource{s.funding, s.overflow} {
+		sub, ok := source.(*SubscriptionFunding)
+		if !ok || sub.preConsumed <= 0 {
+			continue
+		}
+		if err := model.MarkSubscriptionPreConsumeSettled(sub.requestId); err != nil {
+			common.SysLog(common.LogText("error marking subscription reservation settled (requestId=%s): %s", sub.requestId, err.Error()))
+		}
+	}
 }
 
 // settleFunding 把差额分给资金来源。补扣先由主来源在其余额内承担，再由 overflow

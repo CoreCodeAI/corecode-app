@@ -84,6 +84,11 @@ func GetSubscriptionSelf(c *gin.Context) {
 		activeSubscriptions = []model.SubscriptionSummary{}
 	}
 
+	// Quota reserved for requests still running is not spent yet; showing it as
+	// used makes the balance swing with every concurrent request.
+	activeSubscriptions = model.WithoutInFlightReservations(userId, activeSubscriptions)
+	allSubscriptions = model.WithoutInFlightReservations(userId, allSubscriptions)
+
 	common.ApiSuccess(c, gin.H{
 		"billing_preference": pref,
 		"subscriptions":      activeSubscriptions, // all active subscriptions
