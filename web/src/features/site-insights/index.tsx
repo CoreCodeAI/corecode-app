@@ -346,7 +346,10 @@ export function SiteInsights() {
       <SectionPageLayout.Content>
         {/* A minmax track, so the tab row's width cannot widen the page. */}
         <div className='grid grid-cols-[minmax(0,1fr)] gap-4'>
-          <div className='flex flex-wrap items-center justify-between gap-2'>
+          {/* Pinned to the top of the scrolling content, so a tab is one click
+              away at any depth. The negative top and margins cover the content's
+              padding, so nothing shows above or beside it. */}
+          <div className='bg-background sticky -top-1 z-20 -mx-3 -mt-1 flex flex-wrap items-center justify-between gap-2 px-3 py-1 sm:-top-1.5 sm:-mx-4 sm:-mt-1.5 sm:px-4 sm:py-1.5'>
             <Tabs
               className='max-w-full min-w-0'
               value={tab}
