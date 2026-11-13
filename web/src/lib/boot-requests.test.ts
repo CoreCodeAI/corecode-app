@@ -24,9 +24,8 @@ import type { AxiosAdapter } from 'axios'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { getUptimeStatus } from '@/features/dashboard/api'
-import { prefetchCustomerOverview } from '@/features/dashboard/hooks/use-customer-overview'
+import { prefetchOverviewPage } from '@/features/dashboard/lib/prefetch-overview'
 import { prefetchApiKeys } from '@/features/keys/api-keys-query'
-import { getSelfSubscriptionFull } from '@/features/subscriptions/api'
 import { api } from '@/lib/api'
 
 // The inline script in index.html that sends the boot requests.
@@ -98,9 +97,10 @@ describe('the page data index.html fetches', () => {
   test('serves every request the overview starts, with the refresh token', async () => {
     runBootScript('/dashboard/overview')
     const queryClient = new QueryClient()
-    prefetchCustomerOverview(queryClient)
-    // The balance card's and the uptime panel's requests, sent on mount.
-    await Promise.all([getSelfSubscriptionFull(), getUptimeStatus()])
+    prefetchOverviewPage(queryClient)
+    // The uptime panel's request, sent on mount; the balance card reads the
+    // subscriptions through the query the loader prefetched.
+    await getUptimeStatus()
     await vi.waitFor(() => expect(queryClient.isFetching()).toBe(0))
 
     expect(dataRequests()).toHaveLength(6)

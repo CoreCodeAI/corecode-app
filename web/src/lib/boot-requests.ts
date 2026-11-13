@@ -46,10 +46,10 @@ declare global {
 
 // A boot data response serves only the page load that sent it: once the page
 // has been open this long, the data may be older than what a request returns.
-const BOOT_DATA_MAX_AGE_MS = 10_000
+export const BOOT_DATA_MAX_AGE_MS = 10_000
 
 /** A URL with its query parameters in a fixed order, for comparison. */
-function normalizeUrl(url: string): string {
+export function normalizeUrl(url: string): string {
   const parsed = new URL(url, 'http://boot.invalid')
   parsed.searchParams.sort()
   return parsed.pathname + parsed.search

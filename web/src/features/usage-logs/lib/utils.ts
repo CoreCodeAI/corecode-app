@@ -74,14 +74,34 @@ export function isPerCallBilling(modelPrice?: number): boolean {
   return (modelPrice ?? 0) > 0
 }
 
+// The range a call returns is reused for this long, so the requests a route
+// loader prefetches and the ones the page then sends carry the same
+// timestamps (lib/http-client.ts prefetchGet matches by URL).
+const DEFAULT_TIME_RANGE_REUSE_MS = 10_000
+let lastDefaultTimeRange: { at: number; start: number; end: number } | null =
+  null
+
 /**
  * Get default time range (today 00:00:00 to now + 1 hour)
  */
 export function getDefaultTimeRange(): { start: Date; end: Date } {
   const now = new Date()
+  const last = lastDefaultTimeRange
+  if (
+    last &&
+    now.getTime() >= last.at &&
+    now.getTime() - last.at < DEFAULT_TIME_RANGE_REUSE_MS
+  ) {
+    return { start: new Date(last.start), end: new Date(last.end) }
+  }
   const start = new Date(now)
   start.setHours(0, 0, 0, 0)
   const end = new Date(now.getTime() + 3600 * 1000) // +1 hour
+  lastDefaultTimeRange = {
+    at: now.getTime(),
+    start: start.getTime(),
+    end: end.getTime(),
+  }
 
   return { start, end }
 }

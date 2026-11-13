@@ -20,6 +20,7 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
 import z from 'zod'
 
 import { UsageLogs } from '@/features/usage-logs'
+import { prefetchCommonLogsPage } from '@/features/usage-logs/lib/prefetch'
 import {
   isUsageLogsSectionId,
   USAGE_LOGS_DEFAULT_SECTION,
@@ -82,5 +83,13 @@ export const Route = createFileRoute('/_authenticated/usage-logs/$section')({
     }
   },
   validateSearch: usageLogsSearchSchema,
+  // The loader shares the component's lazy chunk, as the keys page's does, so
+  // its request code stays out of the entry bundle. The router runs it when it
+  // preloads the route, while the pointer rests on a link here.
+  codeSplitGroupings: [['loader', 'component'], ['errorComponent']],
+  loaderDeps: ({ search }) => search,
+  loader: ({ params, deps }) => {
+    if (params.section === 'common') prefetchCommonLogsPage(deps)
+  },
   component: UsageLogs,
 })

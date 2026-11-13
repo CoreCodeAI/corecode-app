@@ -84,10 +84,12 @@ export async function getFlowQuotaDates(
   return res.data
 }
 
+export const UPTIME_STATUS_URL = '/api/uptime/status'
+
 // Get uptime monitoring status for all services
 export async function getUptimeStatus() {
   const res = await api.get<{ success: boolean; data: UptimeGroupResult[] }>(
-    '/api/uptime/status'
+    UPTIME_STATUS_URL
   )
   return res.data
 }

@@ -20,6 +20,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 
 import { Wallet } from '@/features/wallet'
+import { prefetchWalletPage } from '@/features/wallet/lib/prefetch'
 
 const walletSearchSchema = z.object({
   show_history: z.boolean().optional(),
@@ -28,6 +29,10 @@ const walletSearchSchema = z.object({
 export const Route = createFileRoute('/_authenticated/wallet/')({
   component: RouteComponent,
   validateSearch: walletSearchSchema,
+  // The loader shares the component's lazy chunk; the router runs it while
+  // the pointer rests on a link here, so the page's requests start early.
+  codeSplitGroupings: [['loader', 'component'], ['errorComponent']],
+  loader: ({ context }) => prefetchWalletPage(context.queryClient),
 })
 
 function RouteComponent() {

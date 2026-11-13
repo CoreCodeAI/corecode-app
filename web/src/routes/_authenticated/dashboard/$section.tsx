@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
 import { Dashboard } from '@/features/dashboard'
-import { prefetchCustomerOverview } from '@/features/dashboard/hooks/use-customer-overview'
+import { prefetchOverviewPage } from '@/features/dashboard/lib/prefetch-overview'
 import {
   DASHBOARD_SECTION_IDS,
   DASHBOARD_DEFAULT_SECTION,
@@ -41,7 +41,7 @@ export const Route = createFileRoute('/_authenticated/dashboard/$section')({
   codeSplitGroupings: [['loader', 'component'], ['errorComponent']],
   loader: ({ params, context }) => {
     if (params.section === 'overview') {
-      prefetchCustomerOverview(context.queryClient)
+      prefetchOverviewPage(context.queryClient)
     }
   },
   component: Dashboard,
