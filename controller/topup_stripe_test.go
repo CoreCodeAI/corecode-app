@@ -135,6 +135,7 @@ func TestStripeCheckoutOffersTheChosenMethod(t *testing.T) {
 	assert.Equal(t, []string{"wechat_pay"}, form["payment_method_types[0]"])
 	assert.Empty(t, form.Get("payment_method_types[1]"))
 	assert.Equal(t, "web", form.Get("payment_method_options[wechat_pay][client]"))
+	assert.Empty(t, form.Get("payment_method_options[card][request_three_d_secure]"), "no card offered")
 	assert.Equal(t, "3495", form.Get("line_items[0][price_data][unit_amount]"), "¥29.9 × 1.1748 × 0.995 = HK$34.95")
 	assert.Equal(t, "hkd", form.Get("line_items[0][price_data][currency]"))
 	assert.Equal(t, "false", form.Get("adaptive_pricing[enabled]"))
@@ -148,17 +149,28 @@ func TestStripeCheckoutOffersTheChosenMethod(t *testing.T) {
 	assert.Equal(t, model.PaymentProviderStripe, orders[0].PaymentProvider)
 	assert.InDelta(t, 29.9, orders[0].Money, 1e-9)
 
-	// Card: cards only, no WeChat client.
+	// Card: cards only, no WeChat client, and every card payment asks the
+	// issuer for a 3D Secure challenge, which moves fraud disputes to it.
 	assert.Contains(t, post(SubscriptionRequestStripePay, `{"plan_id":7401,"payment_method":"stripe_card"}`), "cs_test_1")
 	assert.Equal(t, []string{"card"}, form["payment_method_types[0]"])
 	assert.Empty(t, form.Get("payment_method_options[wechat_pay][client]"))
+	assert.Equal(t, "challenge", form.Get("payment_method_options[card][request_three_d_secure]"))
 	require.NoError(t, db.Where("plan_id = ?", plan.Id).Order("id").Find(&orders).Error)
 	require.Len(t, orders, 2)
 	assert.Equal(t, model.PaymentMethodStripeCard, orders[1].PaymentMethod)
 
-	// No method: every method the dashboard enables.
+	// No method: every method the dashboard enables, cards challenged.
 	assert.Contains(t, post(SubscriptionRequestStripePay, `{"plan_id":7401}`), "cs_test_1")
 	assert.Empty(t, form.Get("payment_method_types[0]"))
+	assert.Equal(t, "challenge", form.Get("payment_method_options[card][request_three_d_secure]"))
+
+	// A plan sold through a dashboard Price is a Stripe subscription; its
+	// cards are challenged too.
+	require.NoError(t, db.Create(&model.SubscriptionPlan{Id: 7451, Title: "月卡", PriceAmount: 99, TotalAmount: 100 * 500000,
+		DurationUnit: "month", DurationValue: 1, QuotaResetPeriod: "never", Enabled: true, StripePriceId: "price_1"}).Error)
+	assert.Contains(t, post(SubscriptionRequestStripePay, `{"plan_id":7451,"payment_method":"stripe_card"}`), "cs_test_1")
+	assert.Equal(t, "subscription", form.Get("mode"))
+	assert.Equal(t, "challenge", form.Get("payment_method_options[card][request_three_d_secure]"))
 
 	// An unknown method opens no checkout.
 	post(RequestStripePay, `{"amount":100,"payment_method":"stripe_paypal"}`)
