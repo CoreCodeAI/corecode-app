@@ -34,7 +34,11 @@ export interface ApiResponse<T = unknown> {
  */
 export type TopupInfoResponse = ApiResponse<TopupInfo>
 export type RedemptionResponse = ApiResponse<number>
-export type AmountResponse = ApiResponse<string>
+/**
+ * CoreCode: a Stripe quote also carries hkd_amount, what Checkout will charge
+ * in Hong Kong dollars. It is absent when no exchange rate was available.
+ */
+export type AmountResponse = ApiResponse<string> & { hkd_amount?: string }
 export type PaymentResponse = ApiResponse<Record<string, unknown>> & {
   url?: string
 }

@@ -64,3 +64,38 @@ it('clears the failure once a later calculation succeeds', async () => {
   expect(result.current.calculationFailed).toBe(false)
   expect(result.current.amount).toBe(7.5)
 })
+
+it('keeps the HKD amount a Stripe quote carries, and drops a bad one', async () => {
+  const post = vi
+    .spyOn(api, 'post')
+    .mockResolvedValueOnce({
+      data: {
+        success: true,
+        message: 'success',
+        data: '300.00',
+        hkd_amount: '351.15',
+      },
+    })
+    .mockResolvedValueOnce({
+      data: {
+        success: true,
+        message: 'success',
+        data: '300.00',
+        hkd_amount: 'oops',
+      },
+    })
+  const { result } = renderHook(() => usePayment())
+
+  await act(async () => {
+    await result.current.calculatePaymentAmount(300, 'stripe_card')
+  })
+  expect(result.current.amount).toBe(300)
+  expect(result.current.hkdAmount).toBe(351.15)
+
+  await act(async () => {
+    await result.current.calculatePaymentAmount(300, 'stripe_card')
+  })
+  expect(result.current.amount).toBe(300)
+  expect(result.current.hkdAmount).toBeUndefined()
+  expect(post).toHaveBeenCalledTimes(2)
+})

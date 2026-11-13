@@ -65,11 +65,17 @@ const defaultPaymentAmountCalculators: PaymentAmountCalculators = {
   nowPayments: calculateNowPaymentsAmount,
 }
 
-export async function requestPaymentAmount(
+export interface PaymentQuote {
+  amount: number
+  /** What Stripe charges in Hong Kong dollars; undefined when not quoted */
+  hkdAmount?: number
+}
+
+export async function requestPaymentQuote(
   topupAmount: number,
   paymentType: string,
   calculators: PaymentAmountCalculators = defaultPaymentAmountCalculators
-): Promise<number> {
+): Promise<PaymentQuote> {
   let calculator = calculators.regular
   if (isStripePayment(paymentType)) {
     calculator = calculators.stripe
@@ -90,11 +96,29 @@ export async function requestPaymentAmount(
   if (!Number.isFinite(amount)) {
     throw new Error('Failed to calculate payment amount')
   }
-  return amount
+  // The HKD figure only explains the charge, so a bad one is dropped rather
+  // than failing a quote that has a good CNY price.
+  const hkdAmount = Number.parseFloat(response.hkd_amount ?? '')
+  return {
+    amount,
+    hkdAmount:
+      Number.isFinite(hkdAmount) && hkdAmount > 0 ? hkdAmount : undefined,
+  }
+}
+
+export async function requestPaymentAmount(
+  topupAmount: number,
+  paymentType: string,
+  calculators: PaymentAmountCalculators = defaultPaymentAmountCalculators
+): Promise<number> {
+  return (await requestPaymentQuote(topupAmount, paymentType, calculators))
+    .amount
 }
 
 export function usePayment() {
   const [amount, setAmount] = useState<number>(0)
+  // What Stripe charges in HKD for `amount`, when the server quoted it
+  const [hkdAmount, setHkdAmount] = useState<number | undefined>()
   const [calculating, setCalculating] = useState(false)
   const [calculationFailed, setCalculationFailed] = useState(false)
   const [processing, setProcessing] = useState(false)
@@ -109,17 +133,16 @@ export function usePayment() {
       const requestId = ++latestRequestRef.current
       try {
         setCalculating(true)
-        const calculatedAmount = await requestPaymentAmount(
-          topupAmount,
-          paymentType
-        )
+        const quote = await requestPaymentQuote(topupAmount, paymentType)
         if (requestId !== latestRequestRef.current) return null
-        setAmount(calculatedAmount)
+        setAmount(quote.amount)
+        setHkdAmount(quote.hkdAmount)
         setCalculationFailed(false)
-        return calculatedAmount
+        return quote.amount
       } catch {
         if (requestId !== latestRequestRef.current) return null
         setAmount(0)
+        setHkdAmount(undefined)
         setCalculationFailed(true)
         return null
       } finally {
@@ -133,6 +156,7 @@ export function usePayment() {
   const resetCalculation = useCallback(() => {
     latestRequestRef.current += 1
     setAmount(0)
+    setHkdAmount(undefined)
     setCalculating(false)
     setCalculationFailed(false)
   }, [])
@@ -219,6 +243,7 @@ export function usePayment() {
 
   return {
     amount,
+    hkdAmount,
     calculating,
     processing,
     calculationFailed,
