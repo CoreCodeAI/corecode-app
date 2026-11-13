@@ -206,3 +206,26 @@ func TestRunTopupWatchFreezesAndAlertsOnce(t *testing.T) {
 		})
 	}
 }
+
+// Restricted keys get no card fingerprint, so a card farm must still count as
+// many cards from brand, last four digits and expiry.
+func TestTopupWatchChargeIdentityWithoutFingerprint(t *testing.T) {
+	card := func(last4 string, month, year int64) *stripe.Charge {
+		return &stripe.Charge{ID: "ch_" + last4, PaymentMethodDetails: &stripe.ChargePaymentMethodDetails{
+			Card: &stripe.ChargePaymentMethodDetailsCard{Brand: "visa", Last4: last4, ExpMonth: month, ExpYear: year},
+		}}
+	}
+	a := topupWatchChargeFrom(card("6835", 2, 2031))
+	b := topupWatchChargeFrom(card("7787", 2, 2031))
+	c := topupWatchChargeFrom(card("6835", 6, 2030))
+	again := topupWatchChargeFrom(card("6835", 2, 2031))
+	require.NotEmpty(t, a.Fingerprint)
+	require.Equal(t, a.Fingerprint, again.Fingerprint)
+	require.NotEqual(t, a.Fingerprint, b.Fingerprint)
+	require.NotEqual(t, a.Fingerprint, c.Fingerprint)
+
+	withPrint := &stripe.Charge{PaymentMethodDetails: &stripe.ChargePaymentMethodDetails{
+		Card: &stripe.ChargePaymentMethodDetailsCard{Fingerprint: "fp_real", Last4: "6835", ExpMonth: 2, ExpYear: 2031},
+	}}
+	require.Equal(t, "fp_real", topupWatchChargeFrom(withPrint).Fingerprint)
+}

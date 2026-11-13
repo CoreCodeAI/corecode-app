@@ -280,6 +280,11 @@ func topupWatchChargeFrom(charge *stripe.Charge) topupWatchCharge {
 	if charge.PaymentMethodDetails != nil && charge.PaymentMethodDetails.Card != nil {
 		card := charge.PaymentMethodDetails.Card
 		result.Fingerprint, result.Last4, result.Issuer, result.Country = card.Fingerprint, card.Last4, card.Issuer, card.Country
+		if result.Fingerprint == "" && card.Last4 != "" {
+			// Stripe leaves fingerprint out for restricted keys, so the watch
+			// tells cards apart by brand, last four digits and expiry instead.
+			result.Fingerprint = fmt.Sprintf("%s-%s-%02d/%d", card.Brand, card.Last4, card.ExpMonth, card.ExpYear)
+		}
 	}
 	return result
 }

@@ -31,6 +31,12 @@ the account on the strongest signal.
   | `blocked` | any charge Stripe blocked |
   | `cards` | `distinct_cards` (3) different cards within 24 hours |
 
+  Stripe leaves `fingerprint` out of charges read with a restricted key, so
+  when it is missing a card is told apart by brand, last four digits and
+  expiry. The first production run on 2026-11-14 read the farmed account's
+  charges with no fingerprints and missed `cards`, so it could not freeze;
+  brand, last four and expiry tell its 59 charges apart as 45 cards.
+
   Every early fraud warning and dispute is also reported once, with its user
   when the Stripe customer maps to one.
 - **Freeze on `cards` plus at least `freeze_amount` (¥1,000) within 24 hours**,
@@ -89,5 +95,8 @@ the account on the strongest signal.
     instance available).
 - Removing the allowlist check, or the card condition from the freeze rule,
   makes the tests fail.
+- `TestTopupWatchChargeIdentityWithoutFingerprint` builds charges the way the
+  restricted key returns them, with no fingerprint; it fails without the
+  brand, last four and expiry fallback.
 - No schema change: the watch reads `top_ups` and `users`, and keeps its memory
   in `system_tasks.result`.
