@@ -1,0 +1,111 @@
+{
+ "success": true,
+ "group_ratio": {
+  "cc": 2.5,
+  "cc-expensive": 2.8,
+  "claude-officially": 7,
+  "codex": 0.5,
+  "auto": 1
+ },
+ "usable_group": {},
+ "data": [
+  {
+   "model_name": "claude-opus-5-5",
+   "vendor_id": 1,
+   "quota_type": 0,
+   "model_ratio": 2,
+   "model_price": 0,
+   "owner_by": "",
+   "completion_ratio": 5,
+   "cache_ratio": 0.05,
+   "cache_creation_ratio_5m": 1.25,
+   "enable_groups": [
+    "cc-expensive",
+    "claude-officially",
+    "cc",
+    "private-vip",
+    "auto"
+   ],
+   "supported_endpoint_types": [
+    "anthropic"
+   ]
+  },
+  {
+   "model_name": "claude-haiku-5-5",
+   "vendor_id": 1,
+   "quota_type": 0,
+   "model_ratio": 0.05,
+   "model_price": 0,
+   "owner_by": "",
+   "completion_ratio": 5,
+   "cache_ratio": 0.1,
+   "cache_creation_ratio_5m": 1.25,
+   "tiers": [
+    {
+     "threshold": 100000,
+     "ratio": 5
+    }
+   ],
+   "enable_groups": [
+    "cc-expensive",
+    "cc"
+   ],
+   "supported_endpoint_types": [
+    "anthropic"
+   ]
+  },
+  {
+   "model_name": "gpt-5.5",
+   "vendor_id": 2,
+   "quota_type": 0,
+   "model_ratio": 2.5,
+   "model_price": 0,
+   "owner_by": "",
+   "completion_ratio": 6,
+   "cache_ratio": 0.1,
+   "enable_groups": [],
+   "supported_endpoint_types": [
+    "openai",
+    "openai-response"
+   ]
+  },
+  {
+   "model_name": "claude-sonnet-4-5-20250929",
+   "vendor_id": 1,
+   "quota_type": 0,
+   "model_ratio": 1.5,
+   "model_price": 0,
+   "owner_by": "",
+   "completion_ratio": 5,
+   "cache_ratio": 0.1,
+   "cache_creation_ratio_5m": 1.25,
+   "enable_groups": [
+    "cc-expensive"
+   ],
+   "supported_endpoint_types": [
+    "anthropic"
+   ]
+  },
+  {
+   "model_name": "claude-haiku-9",
+   "quota_type": 0,
+   "model_ratio": 0.05,
+   "completion_ratio": 5,
+   "billing_mode": "tiered_expr",
+   "billing_expr": "tier(...)",
+   "enable_groups": [
+    "cc"
+   ]
+  },
+  {
+   "model_name": "claude-image",
+   "quota_type": 1,
+   "model_ratio": 0,
+   "model_price": 0.1,
+   "completion_ratio": 1,
+   "enable_groups": [
+    "cc"
+   ]
+  }
+ ]
+}

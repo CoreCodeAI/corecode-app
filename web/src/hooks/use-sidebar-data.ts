@@ -49,6 +49,7 @@ import {
   Users,
   Wallet,
   Workflow,
+  Scale,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -190,6 +191,12 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             title: t('Site Insights'),
             url: '/site-insights',
             icon: ChartNoAxesCombined,
+            requiredRole: ROLE.SUPER_ADMIN,
+          },
+          {
+            title: t('Rival prices'),
+            url: '/rival-prices',
+            icon: Scale,
             requiredRole: ROLE.SUPER_ADMIN,
           },
           {
