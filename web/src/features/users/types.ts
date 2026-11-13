@@ -155,3 +155,21 @@ export interface ManageUserQuotaPayload {
 // ============================================================================
 
 export type UsersDialogType = 'create' | 'update' | 'delete'
+
+/** One API key of another user, as GET /api/admin/users/:id/tokens returns it. */
+export interface UserApiKey {
+  id: number
+  name: string
+  /** Masked by the server. */
+  key: string
+  status: number
+  /** Empty means the key follows the user's group. */
+  group: string
+  auto_groups?: string[] | null
+  created_time: number
+  accessed_time: number
+  expired_time: number
+  remain_quota: number
+  unlimited_quota: boolean
+  used_quota: number
+}
