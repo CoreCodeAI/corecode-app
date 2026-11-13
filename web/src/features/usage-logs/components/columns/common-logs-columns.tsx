@@ -892,6 +892,9 @@ export function useCommonLogsColumns(
         cell: function DetailsCell({ row }) {
           const { t, i18n } = useTranslation()
           const [dialogOpen, setDialogOpen] = useState(false)
+          // The dialog mounts on first open: a page holds a hundred rows,
+          // and a mounted dialog per row cost more than the rows themselves.
+          const [dialogMounted, setDialogMounted] = useState(false)
           const log = row.original
           const other = parseLogOther(log.other)
 
@@ -954,18 +957,23 @@ export function useCommonLogsColumns(
               <button
                 type='button'
                 className='group flex max-w-[200px] items-center gap-1 text-left text-xs'
-                onClick={() => setDialogOpen(true)}
+                onClick={() => {
+                  setDialogMounted(true)
+                  setDialogOpen(true)
+                }}
                 title={t('Click to view full details')}
               >
                 {detailPreview}
               </button>
-              <DetailsDialog
-                log={log}
-                isAdmin={isAdmin}
-                isRoot={isRoot}
-                open={dialogOpen}
-                onOpenChange={setDialogOpen}
-              />
+              {dialogMounted && (
+                <DetailsDialog
+                  log={log}
+                  isAdmin={isAdmin}
+                  isRoot={isRoot}
+                  open={dialogOpen}
+                  onOpenChange={setDialogOpen}
+                />
+              )}
             </>
           )
         },
