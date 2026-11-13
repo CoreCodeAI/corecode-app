@@ -1349,7 +1349,7 @@ type SubscriptionPreConsumeRecord struct {
 	UserId             int    `json:"user_id" gorm:"index"`
 	UserSubscriptionId int    `json:"user_subscription_id" gorm:"index"`
 	PreConsumed        int64  `json:"pre_consumed" gorm:"type:bigint;not null;default:0"`
-	Status             string `json:"status" gorm:"type:varchar(32);index"` // consumed/refunded
+	Status             string `json:"status" gorm:"type:varchar(32);index"` // reserved/consumed/refunded; reserved until the request settles
 	CreatedAt          int64  `json:"created_at" gorm:"bigint"`
 	UpdatedAt          int64  `json:"updated_at" gorm:"bigint;index"`
 }
@@ -1504,7 +1504,7 @@ func preConsumeUserSubscription(requestId string, userId int, amount int64, part
 				UserId:             userId,
 				UserSubscriptionId: sub.Id,
 				PreConsumed:        take,
-				Status:             "consumed",
+				Status:             SubscriptionPreConsumeReserved,
 			}
 			if err := tx.Create(record).Error; err != nil {
 				var dup SubscriptionPreConsumeRecord
@@ -1542,6 +1542,79 @@ func preConsumeUserSubscription(requestId string, userId int, amount int64, part
 		return nil, err
 	}
 	return returnValue, nil
+}
+
+// Pre-consume record states. A record stays reserved while its request is in
+// flight and turns consumed when the request settles, so the reservation can be
+// told apart from quota the request really spent. Records written before this
+// split are consumed and never count as in flight.
+const (
+	SubscriptionPreConsumeReserved = "reserved"
+	// subscriptionInFlightWindow bounds how long a reservation counts as in
+	// flight, so a request that died without settling or refunding stops
+	// inflating the balance shown.
+	subscriptionInFlightWindow int64 = 15 * 60
+)
+
+// MarkSubscriptionPreConsumeSettled ends a reservation's in-flight state once
+// its request has settled. A record already refunded stays refunded.
+func MarkSubscriptionPreConsumeSettled(requestId string) error {
+	if strings.TrimSpace(requestId) == "" {
+		return nil
+	}
+	return DB.Model(&SubscriptionPreConsumeRecord{}).
+		Where("request_id = ? AND status = ?", requestId, SubscriptionPreConsumeReserved).
+		Updates(map[string]any{"status": "consumed", "updated_at": common.GetTimestamp()}).Error
+}
+
+// SubscriptionInFlightReserved returns, per subscription, the quota held by
+// requests that have not settled. A reservation is far larger than what the
+// request ends up charging, so the balance shown subtracts the reservation
+// until it settles and swings by several dollars with each concurrent request.
+func SubscriptionInFlightReserved(userId int) (map[int]int64, error) {
+	rows := []struct {
+		UserSubscriptionId int
+		Total              int64
+	}{}
+	err := DB.Model(&SubscriptionPreConsumeRecord{}).
+		Select("user_subscription_id, COALESCE(SUM(pre_consumed), 0) AS total").
+		Where("user_id = ? AND status = ? AND created_at > ?", userId, SubscriptionPreConsumeReserved,
+			common.GetTimestamp()-subscriptionInFlightWindow).
+		Group("user_subscription_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	reserved := make(map[int]int64, len(rows))
+	for _, row := range rows {
+		reserved[row.UserSubscriptionId] = row.Total
+	}
+	return reserved, nil
+}
+
+// WithoutInFlightReservations returns the subscriptions as the customer should
+// see them: amount_used without the quota reserved for requests still running,
+// which settle for a fraction of it or refund.
+func WithoutInFlightReservations(userId int, summaries []SubscriptionSummary) []SubscriptionSummary {
+	reserved, err := SubscriptionInFlightReserved(userId)
+	if err != nil || len(reserved) == 0 {
+		return summaries
+	}
+	adjusted := make([]SubscriptionSummary, len(summaries))
+	for i, summary := range summaries {
+		adjusted[i] = summary
+		if summary.Subscription == nil {
+			continue
+		}
+		held := reserved[summary.Subscription.Id]
+		if held <= 0 {
+			continue
+		}
+		sub := *summary.Subscription
+		sub.AmountUsed = max(sub.AmountUsed-held, 0)
+		adjusted[i].Subscription = &sub
+	}
+	return adjusted
 }
 
 // RefundSubscriptionPreConsume is idempotent and refunds pre-consumed subscription quota by requestId.
