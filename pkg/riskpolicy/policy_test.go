@@ -338,6 +338,8 @@ func TestVerdictCache(t *testing.T) {
 
 func TestRegexFaultCarriesStageAndIsNotCached(t *testing.T) {
 	// (\w+)+\1x backtracks past the match timeout on a long "abab..." text.
+	// The text carries an x: the regex engine fails at once on a text that
+	// lacks a literal the pattern requires, without backtracking.
 	const slow = `(\w+)+\1x`
 	slowPatternConfig := testConfig(`"patterns":[]`, `"patterns":["(\\w+)+\\1x","ababab"]`)
 	tests := []struct {
@@ -354,7 +356,7 @@ func TestRegexFaultCarriesStageAndIsNotCached(t *testing.T) {
 		{"hard rule after a pattern timeout", testConfig(`"patterns":[]`, `"patterns":["(\\w+)+\\1x"]`), "later | ababab", true, "hard_regex", "later", ""},
 		{"pattern timeout alone", testConfig(`"patterns":[]`, `"patterns":["(\\w+)+\\1x"]`), "", true, "", "", "distill"},
 	}
-	input := testInput(`{"input":"` + strings.Repeat("ab", 2000) + `"}`)
+	input := testInput(`{"input":"x` + strings.Repeat("ab", 2000) + `"}`)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for range 2 {

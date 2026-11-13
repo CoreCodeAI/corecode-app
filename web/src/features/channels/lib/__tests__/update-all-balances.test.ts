@@ -187,7 +187,9 @@ test('a refused update shows the server message and checks no progress', async (
   await handleUpdateAllBalances(queryClient)
   await vi.advanceTimersByTimeAsync(30_000)
 
-  expect(error).toHaveBeenCalledWith('Balance updates are turned off')
+  expect(error).toHaveBeenCalledWith('Balance updates are turned off', {
+    id: 'Balance updates are turned off',
+  })
   expect(get).toHaveBeenCalledOnce()
   expect(invalidate).not.toHaveBeenCalled()
 })

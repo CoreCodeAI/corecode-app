@@ -329,6 +329,7 @@ describe('sidebar group order', () => {
       '/subscriptions',
       '/system-info',
       '/task-plugins',
+      '/request-processing',
       '/system-settings/site',
     ])
   })

@@ -122,9 +122,6 @@
     "react(iframe-missing-sandbox)": 1,
     "react(no-array-index-key)": 1
   },
-  "src/components/confirm-dialog.tsx": {
-    "oxc(const-comparisons)": 1
-  },
   "src/components/copy-button.tsx": {
     "react(self-closing-comp)": 1,
     "typescript(no-import-type-side-effects)": 1
@@ -169,10 +166,6 @@
   },
   "src/components/page-transition.tsx": {
     "react(jsx-no-useless-fragment)": 1
-  },
-  "src/components/risk-acknowledgement-dialog.tsx": {
-    "react(no-array-index-key)": 2,
-    "unicorn(prefer-spread)": 1
   },
   "src/components/skip-to-main.tsx": {
     "react(jsx-curly-brace-presence)": 1
