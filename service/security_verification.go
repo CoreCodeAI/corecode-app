@@ -46,7 +46,11 @@ const (
 	VerificationScopeAdminUserPasskeyReset = "admin.user.passkey.reset"
 	VerificationScopeAdminUserTwoFADisable = "admin.user.2fa.disable"
 	VerificationScopeAdminUserBindingClear = "admin.user.binding.clear"
-	verificationScopeAdminUserPrefix       = "admin.user."
+	// VerificationScopeAdminTopUpRefund binds the exact set of orders being
+	// marked refunded. It sits under the admin.user. prefix so only
+	// administrators can obtain it.
+	VerificationScopeAdminTopUpRefund = "admin.user.topup.refund"
+	verificationScopeAdminUserPrefix  = "admin.user."
 )
 
 // adminUserManageActions are the ManageUser actions that change a user's
@@ -90,6 +94,33 @@ type AdminUserContext struct {
 type AdminUserManageContext struct {
 	UserID int    `json:"user_id"`
 	Action string `json:"action"`
+}
+
+// AdminTopUpRefundContext names the orders an administrator marks refunded,
+// as NormalizeTopUpRefundTradeNos returns them.
+type AdminTopUpRefundContext struct {
+	TradeNos []string `json:"trade_nos"`
+}
+
+// MaxTopUpRefundBatch bounds one refund marking, which locks every order.
+const MaxTopUpRefundBatch = 100
+
+// NormalizeTopUpRefundTradeNos trims, de-duplicates and sorts order numbers,
+// so a proof issued for a selection matches the request that applies it
+// whatever order the console sent them in. It reports false for an empty,
+// oversized or malformed list.
+func NormalizeTopUpRefundTradeNos(tradeNos []string) ([]string, bool) {
+	normalized := make([]string, 0, len(tradeNos))
+	for _, tradeNo := range tradeNos {
+		tradeNo = strings.TrimSpace(tradeNo)
+		if tradeNo == "" || len(tradeNo) > 255 {
+			return nil, false
+		}
+		normalized = append(normalized, tradeNo)
+	}
+	slices.Sort(normalized)
+	normalized = slices.Compact(normalized)
+	return normalized, len(normalized) > 0 && len(normalized) <= MaxTopUpRefundBatch
 }
 
 // AdminUserBindingContext names exactly one binding: a built-in binding type
@@ -221,6 +252,16 @@ func BindVerificationOperation(operation VerificationOperation) (VerificationBin
 			return VerificationBinding{}, ErrVerificationContextInvalid
 		}
 		normalized = context
+	case VerificationScopeAdminTopUpRefund:
+		var context AdminTopUpRefundContext
+		if len(fields) != 1 || common.Unmarshal(fields["trade_nos"], &context.TradeNos) != nil {
+			return VerificationBinding{}, ErrVerificationContextInvalid
+		}
+		tradeNos, ok := NormalizeTopUpRefundTradeNos(context.TradeNos)
+		if !ok {
+			return VerificationBinding{}, ErrVerificationContextInvalid
+		}
+		normalized = AdminTopUpRefundContext{TradeNos: tradeNos}
 	case VerificationScopeAdminUserCreate:
 		var context AdminUserCreateContext
 		if len(fields) != 1 || common.Unmarshal(fields["role"], &context.Role) != nil || context.Role < common.RoleAdminUser || !common.IsValidateRole(context.Role) {
@@ -331,7 +372,7 @@ func securityVerificationPolicy(scope string, state model.UserVerificationState)
 		VerificationScopePasswordSet, VerificationScopePasswordChange, VerificationScopeAccountDelete,
 		VerificationScopeAdminUserCreate, VerificationScopeAdminUserUpdate, VerificationScopeAdminUserDelete,
 		VerificationScopeAdminUserManage, VerificationScopeAdminUserPasskeyReset,
-		VerificationScopeAdminUserTwoFADisable, VerificationScopeAdminUserBindingClear:
+		VerificationScopeAdminUserTwoFADisable, VerificationScopeAdminUserBindingClear, VerificationScopeAdminTopUpRefund:
 		if scope == VerificationScopeAccountDelete && state.Role == common.RoleRootUser {
 			return nil, ErrVerificationForbidden
 		}
@@ -402,7 +443,7 @@ func GetVerificationRequirements(identity AuthIdentity, scope string) (*Verifica
 			case VerificationScopeAccountBind, VerificationScopeAccountUnbind, VerificationScopePasswordSet, VerificationScopePasswordChange, VerificationScopeAccountDelete,
 				VerificationScopeAdminUserCreate, VerificationScopeAdminUserUpdate, VerificationScopeAdminUserDelete,
 				VerificationScopeAdminUserManage, VerificationScopeAdminUserPasskeyReset,
-				VerificationScopeAdminUserTwoFADisable, VerificationScopeAdminUserBindingClear:
+				VerificationScopeAdminUserTwoFADisable, VerificationScopeAdminUserBindingClear, VerificationScopeAdminTopUpRefund:
 				methods[i].Available, methods[i].Reason = false, "Password authentication is disabled."
 			}
 		}

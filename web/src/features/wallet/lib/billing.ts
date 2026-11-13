@@ -50,6 +50,11 @@ export const STATUS_CONFIG: Record<TopupStatus, StatusConfig> = {
     variant: 'danger',
     label: 'Expired',
   },
+  // Paid, then returned to the payer; it no longer counts as paid.
+  refunded: {
+    variant: 'neutral',
+    label: 'Refunded',
+  },
 }
 
 /**

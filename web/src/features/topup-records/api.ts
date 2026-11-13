@@ -43,6 +43,33 @@ export function getTopupRecords(
   )
 }
 
+export interface TopupRefundResult {
+  refunded: { trade_no: string; user_id: number; money: number }[]
+  already_refunded: number
+}
+
+/**
+ * Mark paid orders refunded; requires an `admin.user.topup.refund` proof bound
+ * to the same orders. The proof is single-use, so the request is never
+ * replayed by the auth-refresh interceptor.
+ */
+export function refundTopups(
+  tradeNos: string[],
+  proofToken: string
+): Promise<TopupRefundResult> {
+  return unwrap(
+    api.post(
+      '/api/user/topup/refund',
+      { trade_nos: tradeNos },
+      {
+        headers: { 'X-Security-Proof': proofToken },
+        singleUseAuthorization: true,
+      }
+    ),
+    'Failed to mark orders refunded'
+  )
+}
+
 export function getTopupStats(
   filters: TopupReportFilters
 ): Promise<TopupStats> {

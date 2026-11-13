@@ -25,10 +25,19 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { DataTablePage, useDataTable } from '@/components/data-table'
+import {
+  DataTableBulkActions,
+  DataTablePage,
+  useDataTable,
+} from '@/components/data-table'
 import { SectionPageLayout } from '@/components/layout'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  SecureVerificationDialog,
+  useSecureVerification,
+} from '@/features/auth/secure-verification'
 import { completeOrder, isApiSuccess } from '@/features/wallet/api'
 import { formatPaymentMoney } from '@/features/wallet/lib'
 import {
@@ -41,7 +50,7 @@ import { formatTimestampToDate } from '@/lib/format'
 import { handleServerError } from '@/lib/handle-server-error'
 import { createServerError } from '@/lib/server-error-message'
 
-import { getTopupRecords, getTopupStats } from './api'
+import { getTopupRecords, getTopupStats, refundTopups } from './api'
 import { TopupFilterBar } from './components/topup-filter-bar'
 import { TopupSummary } from './components/topup-summary'
 import type { TopupReportFilters, TopupReportRecord } from './types'
@@ -51,11 +60,39 @@ const EMPTY: TopupReportRecord[] = []
 const RECORDS_KEY = ['topup-records'] as const
 
 function useTopupColumns(
-  onComplete: (record: TopupReportRecord) => void
+  onComplete: (record: TopupReportRecord) => void,
+  onRefund: (records: TopupReportRecord[]) => void
 ): ColumnDef<TopupReportRecord>[] {
   const { t } = useTranslation()
   return useMemo(
     () => [
+      {
+        id: 'select',
+        header: ({ table }) => (
+          <Checkbox
+            checked={table.getIsAllPageRowsSelected()}
+            indeterminate={table.getIsSomePageRowsSelected()}
+            onCheckedChange={(value) =>
+              table.toggleAllPageRowsSelected(!!value)
+            }
+            aria-label={t('Select all')}
+            className='translate-y-[2px]'
+          />
+        ),
+        // Only paid orders can be marked refunded.
+        cell: ({ row }) =>
+          row.getCanSelect() ? (
+            <Checkbox
+              checked={row.getIsSelected()}
+              onCheckedChange={(value) => row.toggleSelected(!!value)}
+              aria-label={t('Select row')}
+              className='translate-y-[2px]'
+            />
+          ) : null,
+        enableSorting: false,
+        enableHiding: false,
+        size: 40,
+      },
       {
         accessorKey: 'create_time',
         header: t('Time'),
@@ -150,20 +187,35 @@ function useTopupColumns(
       {
         id: 'actions',
         header: '',
-        size: 110,
-        cell: ({ row }) =>
-          row.original.status === 'pending' ? (
-            <Button
-              size='sm'
-              variant='outline'
-              onClick={() => onComplete(row.original)}
-            >
-              {t('Complete Order')}
-            </Button>
-          ) : null,
+        size: 130,
+        cell: ({ row }) => {
+          if (row.original.status === 'pending') {
+            return (
+              <Button
+                size='sm'
+                variant='outline'
+                onClick={() => onComplete(row.original)}
+              >
+                {t('Complete Order')}
+              </Button>
+            )
+          }
+          if (row.original.status === 'success') {
+            return (
+              <Button
+                size='sm'
+                variant='ghost'
+                onClick={() => onRefund([row.original])}
+              >
+                {t('Mark refunded')}
+              </Button>
+            )
+          }
+          return null
+        },
       },
     ],
-    [t, onComplete]
+    [t, onComplete, onRefund]
   )
 }
 
@@ -223,7 +275,36 @@ export function TopupRecords() {
       handleServerError(error, i18next.t('Failed to complete order')),
   })
 
-  const columns = useTopupColumns(setCompleting)
+  const verification = useSecureVerification()
+  const [refunding, setRefunding] = useState<TopupReportRecord[]>([])
+  const refund = useMutation({
+    mutationFn: async (records: TopupReportRecord[]) => {
+      const tradeNos = records.map((record) => record.trade_no)
+      const proof = await verification.requestVerification({
+        scope: 'admin.user.topup.refund',
+        context: { trade_nos: tradeNos },
+        title: i18next.t('Verify to mark orders refunded'),
+        description: i18next.t(
+          'Confirm your identity before marking {{count}} orders refunded.',
+          { count: tradeNos.length }
+        ),
+      })
+      if (!proof) return false
+      await refundTopups(tradeNos, proof.proof_token)
+      return true
+    },
+    onSuccess: async (done) => {
+      if (!done) return
+      toast.success(i18next.t('Orders marked refunded'))
+      setRefunding([])
+      table.resetRowSelection()
+      await queryClient.invalidateQueries({ queryKey: RECORDS_KEY })
+    },
+    onError: (error) =>
+      handleServerError(error, i18next.t('Failed to mark orders refunded')),
+  })
+
+  const columns = useTopupColumns(setCompleting, setRefunding)
   const { table } = useDataTable<TopupReportRecord>({
     columns,
     data: records.data?.items ?? EMPTY,
@@ -240,7 +321,7 @@ export function TopupRecords() {
         }),
       })
     },
-    enableRowSelection: false,
+    enableRowSelection: (row) => row.original.status === 'success',
     enableSorting: false,
     manualFiltering: true,
     manualPagination: true,
@@ -292,6 +373,23 @@ export function TopupRecords() {
               }
               className='h-auto min-h-0'
               applyHeaderSize
+              bulkActions={
+                <DataTableBulkActions table={table} entityName={t('orders')}>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    onClick={() =>
+                      setRefunding(
+                        table
+                          .getFilteredSelectedRowModel()
+                          .rows.map((row) => row.original)
+                      )
+                    }
+                  >
+                    {t('Mark refunded')}
+                  </Button>
+                </DataTableBulkActions>
+              }
             />
           </div>
         </SectionPageLayout.Content>
@@ -308,6 +406,25 @@ export function TopupRecords() {
         isLoading={complete.isPending}
         handleConfirm={() => completing && complete.mutate(completing.trade_no)}
       />
+      <ConfirmDialog
+        open={refunding.length > 0 && !verification.isActive}
+        onOpenChange={(open) => !open && setRefunding([])}
+        title={t('Mark orders refunded')}
+        desc={t(
+          "Mark {{count}} paid orders ({{money}}) refunded? They stop counting as revenue, invoiceable payments and affiliate payments. The users' balances are not changed; adjust them separately.",
+          {
+            count: refunding.length,
+            money: formatPaymentMoney(
+              refunding.reduce((sum, record) => sum + record.money, 0)
+            ),
+          }
+        )}
+        confirmText={t('Mark refunded')}
+        destructive
+        isLoading={refund.isPending}
+        handleConfirm={() => refund.mutate(refunding)}
+      />
+      <SecureVerificationDialog {...verification.dialogProps} />
     </>
   )
 }
