@@ -294,6 +294,8 @@ func StripeWebhook(c *gin.Context) {
 		sessionAsyncPaymentSucceeded(ctx, event, callerIp)
 	case stripe.EventTypeCheckoutSessionAsyncPaymentFailed:
 		sessionAsyncPaymentFailed(ctx, event, callerIp)
+	case stripe.EventTypeChargeRefunded:
+		chargeRefunded(ctx, event, callerIp)
 	default:
 		logger.LogInfo(ctx, common.LogText("Stripe webhook ignored event event_type=%s client_ip=%s", string(event.Type), callerIp))
 	}

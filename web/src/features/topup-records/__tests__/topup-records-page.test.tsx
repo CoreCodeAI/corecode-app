@@ -65,16 +65,36 @@ const pending: TopupReportRecord = {
   status: 'pending',
 }
 
-function renderPage() {
-  const get = vi.spyOn(api, 'get').mockImplementation(async (url: string) => ({
-    data: {
-      success: true,
-      data:
-        url === '/api/user/topup/stats'
-          ? stats
-          : { items: [pending], total: 1, page: 1, page_size: 20 },
-    },
-  }))
+const paid: TopupReportRecord[] = [
+  { ...pending, id: 10, trade_no: 'ORD_10', money: 200, status: 'success' },
+  { ...pending, id: 11, trade_no: 'ORD_11', money: 100, status: 'success' },
+]
+
+function renderPage(items: TopupReportRecord[] = [pending]) {
+  const get = vi.spyOn(api, 'get').mockImplementation(async (url: string) => {
+    if (url === '/api/verify/methods') {
+      return {
+        data: {
+          success: true,
+          data: {
+            scope: 'admin.user.topup.refund',
+            methods: [{ method: '2fa', available: true }],
+            oauth_providers: [],
+            password_encryption_enabled: false,
+          },
+        },
+      }
+    }
+    return {
+      data: {
+        success: true,
+        data:
+          url === '/api/user/topup/stats'
+            ? stats
+            : { items, total: items.length, page: 1, page_size: 20 },
+      },
+    }
+  })
   const root = createRootRoute()
   const auth = createRoute({ getParentRoute: () => root, id: '_authenticated' })
   const topups = createRoute({
@@ -235,4 +255,74 @@ it('completes a pending order after confirmation and reloads the report', async 
     })
   )
   await waitFor(() => expect(get.mock.calls.length).toBeGreaterThan(before))
+})
+
+it('marks the selected paid orders refunded with a proof bound to them', async () => {
+  renderPage([pending, ...paid])
+  const post = vi.spyOn(api, 'post').mockImplementation(async (url) => {
+    if (url === '/api/verify') {
+      return {
+        data: {
+          success: true,
+          data: {
+            proof_token: 'refund-proof',
+            method: '2fa',
+            scope: 'admin.user.topup.refund',
+            expires_at: Math.floor(Date.now() / 1000) + 60,
+          },
+        },
+      }
+    }
+    if (url === '/api/user/topup/refund') {
+      return {
+        data: { success: true, data: { refunded: [], already_refunded: 0 } },
+      }
+    }
+    throw new Error(`Unexpected POST ${url}`)
+  })
+  const user = userEvent.setup()
+  await screen.findAllByText('alice')
+
+  // Only paid orders can be selected; the pending one has no checkbox.
+  const rows = screen.getAllByRole('checkbox', { name: 'Select row' })
+  expect(rows).toHaveLength(2)
+  await user.click(screen.getByRole('checkbox', { name: 'Select all' }))
+  const bulk = await screen.findByRole('toolbar')
+  await user.click(within(bulk).getByRole('button', { name: 'Mark refunded' }))
+
+  const dialog = await screen.findByRole('alertdialog')
+  expect(dialog).toHaveTextContent(formatPaymentMoney(300))
+  expect(dialog).toHaveTextContent('balances are not changed')
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Mark refunded' })
+  )
+  expect(post).not.toHaveBeenCalledWith(
+    '/api/user/topup/refund',
+    expect.anything(),
+    expect.anything()
+  )
+
+  await user.type(
+    await screen.findByLabelText('Authenticator code or backup code'),
+    '123456'
+  )
+  await user.click(screen.getByRole('button', { name: 'Verify' }))
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      '/api/user/topup/refund',
+      { trade_nos: ['ORD_10', 'ORD_11'] },
+      expect.objectContaining({
+        headers: { 'X-Security-Proof': 'refund-proof' },
+        singleUseAuthorization: true,
+      })
+    )
+  )
+  expect(post).toHaveBeenCalledWith(
+    '/api/verify',
+    expect.objectContaining({
+      scope: 'admin.user.topup.refund',
+      context: { trade_nos: ['ORD_10', 'ORD_11'] },
+    }),
+    expect.anything()
+  )
 })

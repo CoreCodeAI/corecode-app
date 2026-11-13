@@ -302,4 +302,8 @@ const (
 	TopUpStatusSuccess = "success"
 	TopUpStatusFailed  = "failed"
 	TopUpStatusExpired = "expired"
+	// TopUpStatusRefunded marks a paid order whose payment went back to the
+	// payer. It no longer counts as paid anywhere; the balance it credited is
+	// adjusted separately by an administrator.
+	TopUpStatusRefunded = "refunded"
 )

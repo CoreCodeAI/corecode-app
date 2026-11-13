@@ -264,6 +264,7 @@ type OrderMethodFunnel struct {
 	Paid           int64   `json:"paid"`
 	Failed         int64   `json:"failed"`
 	Expired        int64   `json:"expired"`
+	Refunded       int64   `json:"refunded"`
 	Pending        int64   `json:"pending"`
 	PendingStale   int64   `json:"pending_stale"`
 	PlanOrders     int64   `json:"plan_orders"`
@@ -652,6 +653,8 @@ func readOrderFunnel(r InsightsRange, now int64) ([]OrderMethodFunnel, error) {
 			row.Failed++
 		case common.TopUpStatusExpired:
 			row.Expired++
+		case common.TopUpStatusRefunded:
+			row.Refunded++
 		case common.TopUpStatusPending:
 			row.Pending++
 			if order.CreateTime < now-3600 {

@@ -299,7 +299,12 @@ export interface UserWalletData {
 /**
  * Topup record status
  */
-export type TopupStatus = 'success' | 'pending' | 'failed' | 'expired'
+export type TopupStatus =
+  | 'success'
+  | 'pending'
+  | 'failed'
+  | 'expired'
+  | 'refunded'
 
 /**
  * Topup billing record
