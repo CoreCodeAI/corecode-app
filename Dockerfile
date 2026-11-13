@@ -39,8 +39,8 @@ ADD tokenkit/go.mod ./tokenkit/go.mod
 # and the build reads a profile from "/default.pgo".
 RUN --mount=type=cache,id=new-api-go-mod,target=/go/pkg/mod \
     go mod download \
-    && go mod download github.com/Calcium-Ion/moejs \
-    && pgo_dir=$(go list -m -f '{{.Dir}}' github.com/Calcium-Ion/moejs) \
+    && go mod download github.com/MoeForge/moejs \
+    && pgo_dir=$(go list -m -f '{{.Dir}}' github.com/MoeForge/moejs) \
     && test -n "$pgo_dir" \
     && cp "$pgo_dir/default.pgo" /build/default.pgo \
     && echo "build: PGO profile copied from $pgo_dir"

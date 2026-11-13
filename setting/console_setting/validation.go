@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"maps"
 	"net/url"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
 	"time"
 	"unicode/utf16"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/QuantumNous/new-api/common"
 )
 

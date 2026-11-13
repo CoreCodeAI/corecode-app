@@ -29,28 +29,11 @@ const ClaudeCodeClientsSection = lazySection(() =>
   )
 )
 
-const RequestChecksSection = lazySection(() =>
-  import('./request-checks-section').then((m) => m.RequestChecksSection)
-)
-
 const RoutingPolicySection = lazySection(() =>
   import('./routing-section').then((m) => m.RoutingPolicySection)
 )
 
 const POLICY_SECTIONS = [
-  {
-    id: 'filtering',
-    titleKey: 'Request checks',
-    build: (settings: RequestPolicySettings) => (
-      <RequestChecksSection
-        defaultValues={{
-          CheckSensitiveEnabled: settings.CheckSensitiveEnabled,
-          CheckSensitiveOnPromptEnabled: settings.CheckSensitiveOnPromptEnabled,
-          SensitiveWords: settings.SensitiveWords,
-        }}
-      />
-    ),
-  },
   {
     id: 'clients',
     titleKey: 'Claude Code clients',

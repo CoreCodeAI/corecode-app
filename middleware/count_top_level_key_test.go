@@ -10,85 +10,102 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// countTopLevelJSONKeyByByte is the byte-at-a-time scanner that
-// countTopLevelJSONKey replaced, kept as the reference it must agree with.
-func countTopLevelJSONKeyByByte(data []byte, target string) int {
-	depth := 0
-	inString := false
-	escaped := false
-	stringStart := 0
-	expectingKey := false
-	count := 0
-	for index, current := range data {
-		if inString {
-			if escaped {
-				escaped = false
+// countModelKeysByByte is upstream's byte-at-a-time jsonModelKeyCounter.Write,
+// kept as the reference the IndexByte version must agree with.
+func countModelKeysByByte(data []byte) int {
+	var c jsonModelKeyCounter
+	for _, current := range data {
+		if c.inString {
+			if c.isKey {
+				if c.keyLen < len(c.key) {
+					c.key[c.keyLen] = current
+				}
+				c.keyLen++
+			}
+			if c.escaped {
+				c.escaped = false
 				continue
 			}
 			if current == '\\' {
-				escaped = true
+				c.escaped = true
 				continue
 			}
 			if current != '"' {
 				continue
 			}
-			inString = false
-			if depth == 1 && expectingKey {
-				key := string(data[stringStart:index])
-				var decodedKey string
-				if common.Unmarshal(data[stringStart-1:index+1], &decodedKey) == nil {
-					key = decodedKey
+			c.inString = false
+			if c.isKey {
+				var key string
+				if c.keyLen <= len(c.key) && common.Unmarshal(c.key[:c.keyLen], &key) == nil && key == "model" {
+					c.count++
 				}
-				cursor := index + 1
-				for cursor < len(data) && (data[cursor] == ' ' || data[cursor] == '\t' || data[cursor] == '\r' || data[cursor] == '\n') {
-					cursor++
-				}
-				if cursor < len(data) && data[cursor] == ':' && key == target {
-					count++
-				}
-				expectingKey = false
+				c.expectingKey = false
+				c.isKey = false
 			}
 			continue
 		}
 		switch current {
 		case '"':
-			inString = true
-			stringStart = index + 1
-		case '{':
-			depth++
-			if depth == 1 {
-				expectingKey = true
+			c.inString = true
+			c.isKey = c.rootObject && c.depth == 1 && c.expectingKey
+			if c.isKey {
+				c.key[0], c.keyLen = '"', 1
 			}
-		case '}':
-			depth--
+		case '{':
+			c.depth++
+			if c.depth == 1 {
+				c.rootObject, c.expectingKey = true, true
+			}
+		case '[':
+			c.depth++
+		case '}', ']':
+			c.depth--
 		case ',':
-			if depth == 1 {
-				expectingKey = true
+			if c.depth == 1 {
+				c.expectingKey = true
 			}
 		}
 	}
-	return count
+	return c.count
 }
 
-func TestCountTopLevelJSONKey(t *testing.T) {
-	require.Equal(t, 2, countTopLevelJSONKey([]byte(`{"model":"a","x":{"model":"n"},"model":"b"}`), "model"))
-	require.Equal(t, 0, countTopLevelJSONKey([]byte(`{"messages":[{"model":"n"}]}`), "model"))
-	require.Equal(t, 1, countTopLevelJSONKey([]byte(`{"a":"\\","model":"x"}`), "model"))
-	require.Equal(t, 0, countTopLevelJSONKey([]byte(`{"a":"say \"model\": 1"}`), "model"))
-	require.Equal(t, 1, countTopLevelJSONKey([]byte(`{"model":"x","data":"`+strings.Repeat("QUJD", 50000)+`"}`), "model"))
+// countModelKeys writes data to a counter in chunks of the given size, as
+// ojson.ValidReader does through a TeeReader; 0 writes it whole.
+func countModelKeys(data []byte, chunk int) int {
+	var c jsonModelKeyCounter
+	if chunk <= 0 {
+		chunk = len(data) + 1
+	}
+	for start := 0; start < len(data); start += chunk {
+		_, _ = c.Write(data[start:min(start+chunk, len(data))])
+	}
+	return c.count
 }
 
-// TestCountTopLevelJSONKeyMatchesByteScan compares the two scanners on
-// random strings built from the characters the scanner reacts to.
-func TestCountTopLevelJSONKeyMatchesByteScan(t *testing.T) {
+func TestJSONModelKeyCounter(t *testing.T) {
+	require.Equal(t, 2, countModelKeys([]byte(`{"model":"a","x":{"model":"n"},"model":"b"}`), 0))
+	require.Equal(t, 0, countModelKeys([]byte(`{"messages":[{"model":"n"}]}`), 0))
+	require.Equal(t, 1, countModelKeys([]byte(`{"a":"\\","model":"x"}`), 0))
+	require.Equal(t, 0, countModelKeys([]byte(`{"a":"say \"model\": 1"}`), 0))
+	require.Equal(t, 2, countModelKeys([]byte(`{"model":"a","model":"b"}`), 0))
+	require.Equal(t, 1, countModelKeys([]byte(`{"model":"x","data":"`+strings.Repeat("QUJD", 50000)+`"}`), 0))
+}
+
+// TestJSONModelKeyCounterMatchesByteScan compares the two scanners on random
+// strings built from the characters the scanner reacts to, written whole and
+// split into chunks that cut escapes and keys apart.
+func TestJSONModelKeyCounterMatchesByteScan(t *testing.T) {
 	rng := rand.New(rand.NewSource(11))
-	pieces := []string{`"`, `\`, `\"`, `\\`, `{`, `}`, `[`, `]`, `,`, `:`, ` `, "\n", `model`, `"model"`, `"model"`, `x`, `"x"`, `é`, `{"model":1}`, `,"model":`}
+	pieces := []string{`"`, `\`, `\"`, `\\`, `{`, `}`, `[`, `]`, `,`, `:`, ` `, "\n", `model`, `"model"`, `"model"`, `x`, `"x"`, `é`, `{"model":1}`, `,"model":`, `"model"`}
 	for i := 0; i < 20000; i++ {
 		var b strings.Builder
 		for j := rng.Intn(24); j > 0; j-- {
 			b.WriteString(pieces[rng.Intn(len(pieces))])
 		}
 		data := []byte(b.String())
-		require.Equal(t, countTopLevelJSONKeyByByte(data, "model"), countTopLevelJSONKey(data, "model"), "%q", data)
+		want := countModelKeysByByte(data)
+		for _, chunk := range []int{0, 1, 2, 3, 7} {
+			require.Equal(t, want, countModelKeys(data, chunk), "chunk %d: %q", chunk, data)
+		}
 	}
 }

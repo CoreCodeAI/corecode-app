@@ -52,6 +52,7 @@ relay.model_price_not_configured: "模型 {{.Model}} 的價格尚未由管理員
 relay.model_price_not_configured_admin: "模型 {{.Model}} 的價格未設定。請前往「系統設定 → 營運設定」開啟自用模式，或在「系統設定 → 分組與模型定價設定」中為該模型設定價格"
 relay.task_usage_price_unsupported: "模型 {{.Model}} 使用了任務用量表達式；請為一般轉發設定常規定價，並為插件單獨設定計費表達式"
 relay.shared_task_price_needs_override: "模型 {{.Model}} 與任務插件 {{.Plugin}} 共用了計費表達式；請先為插件設定獨立的計費表達式，再使用一般轉發定價"
+relay.task_price_not_configured: "模型 {{.Model}} 沒有插件 {{.Plugin}} 的任務價格，請在模型定價中為該插件單獨設定價格"
 relay.task_channel_disabled: "該任務所屬管道已被停用"
 relay.group_saturated: "目前分組負載已飽和，請稍後再試，或升級帳戶以提升服務品質。"
 relay.group_upstream_saturated: "目前分組上游負載已飽和，請稍後再試"
@@ -59,6 +60,9 @@ relay.task_upstream_unavailable: "生成服務暫時無法使用，本次未扣�
 relay.retry_get_channel_failed: "獲取分組 {{.Group}} 下模型 {{.Model}} 的可用管道失敗（retry）：{{.Error}}"
 relay.retry_no_available_channel: "分組 {{.Group}} 下模型 {{.Model}} 的可用管道不存在（retry）"
 relay.access_token_unsupported: "暫不支援使用 access token"
+relay.request_rejected: "請求被策略拒絕"
+relay.request_plugin_failed: "請求處理插件執行失敗"
+relay.response_rejected: "回覆被策略中止"
 
 # Emails and the name of the token created at registration
 user.default_token_name: "{{.Username}}的初始令牌"
@@ -128,3 +132,5 @@ channel.upstream_update_failed_channels: "失敗管道 ID（顯示 {{.Shown}}/{{
 channel.upstream_update_more_omitted: "（其餘 {{.Count}} 個已省略）"
 enterprise.application_subject: "新的企業服務申請：{{.Company}}"
 enterprise.application_content: "公司：{{.Company}}<br>聯絡人：{{.ContactName}}<br>信箱：{{.Email}}<br>其他聯絡方式：{{.OtherContact}}<br>預計月消費：{{.MonthlySpend}}<br>主要模型與用途：{{.UseCase}}<br>補充說明：{{.Message}}<br><br>請在控制台的「企業申請」中處理。"
+
+channel.notify_scheduled_subject: "渠道「{{.Name}}」(#{{.Id}}) 外掛通知"

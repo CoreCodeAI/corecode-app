@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { ChannelAffinitySettings } from '../general/channel-affinity/types'
-import type { SecuritySettings } from '../types'
 import type { ClaudeCodeClientSettings } from './claude-code-clients-section'
 
 export type RetrySettings = {
@@ -38,13 +37,8 @@ export type HealthSettings = {
     | 'auto_ban_only'
     | 'passive_recovery'
 }
-export type FilteringSettings = Pick<
-  SecuritySettings,
-  'CheckSensitiveEnabled' | 'CheckSensitiveOnPromptEnabled' | 'SensitiveWords'
->
 export type RequestPolicySettings = RetrySettings &
   HealthSettings &
-  FilteringSettings &
   ClaudeCodeClientSettings &
   Pick<ChannelAffinitySettings, keyof ChannelAffinitySettings>
 
@@ -68,9 +62,6 @@ export const defaultRequestPolicySettings: RequestPolicySettings = {
   'channel_affinity_setting.max_entries': 100000,
   'channel_affinity_setting.default_ttl_seconds': 3600,
   'channel_affinity_setting.rules': '[]',
-  CheckSensitiveEnabled: false,
-  CheckSensitiveOnPromptEnabled: false,
-  SensitiveWords: '',
   'claude_code_client_setting.groups': '[]',
   'claude_code_client_setting.min_version': '',
   'claude_code_client_setting.max_version': '',

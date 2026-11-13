@@ -60,7 +60,7 @@ declare module '@tanstack/react-query' {
 }
 
 export function createAppQueryClient(): QueryClient {
-  return new QueryClient({
+  const client: QueryClient = new QueryClient({
     defaultOptions: {
       queries: {
         retry: (failureCount, error) =>
@@ -70,6 +70,10 @@ export function createAppQueryClient(): QueryClient {
       },
     },
     mutationCache: new MutationCache({
+      // A saved change goes out to every node; show its progress at once.
+      onSuccess: () => {
+        void client.invalidateQueries({ queryKey: ['node-sync'] })
+      },
       onError: (error, _variables, _context, mutation) => {
         // A mutation-specific callback owns its fallback or inline error state.
         if (mutation.meta?.errorToast !== false && !mutation.options.onError) {
@@ -85,4 +89,5 @@ export function createAppQueryClient(): QueryClient {
       },
     }),
   })
+  return client
 }
