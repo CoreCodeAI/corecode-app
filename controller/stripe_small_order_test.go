@@ -251,3 +251,74 @@ func TestSmallStripeWeChatTopUpGoesThroughEpay(t *testing.T) {
 	assert.Equal(t, "wxpay", planOrders[0].PaymentMethod)
 	assert.Equal(t, model.PaymentProviderEpay, planOrders[0].PaymentProvider)
 }
+
+// TestStripeAmountQuoteCarriesTheHKDCharge reads the amount the console
+// quotes before its confirm dialog: the CNY price as before, plus the HKD
+// Checkout will charge while a rate is available, and no HKD field, with the
+// CNY quote intact, while none is.
+func TestStripeAmountQuoteCarriesTheHKDCharge(t *testing.T) {
+	confirmPaymentComplianceForTest(t)
+	previous := struct {
+		price               float64
+		minTopUp            int
+		discount            float64
+		apiSecret, whSecret string
+		redis               bool
+		db, logDB           *gorm.DB
+	}{operation_setting.Price, operation_setting.MinTopUp, setting.StripeHKDDiscount,
+		setting.StripeApiSecret, setting.StripeWebhookSecret, common.RedisEnabled, model.DB, model.LOG_DB}
+	previousPath, previousMaster := common.SQLitePath, common.IsMasterNode
+	t.Setenv("SQL_DSN", "")
+	common.SQLitePath, common.IsMasterNode, common.RedisEnabled = t.TempDir()+"/quote.db", true, false
+	require.NoError(t, model.InitDB())
+	db := model.DB
+	model.LOG_DB = db
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	previousSources := hkdPerCNYSources
+	t.Cleanup(func() {
+		common.SQLitePath, common.IsMasterNode = previousPath, previousMaster
+		operation_setting.Price, operation_setting.MinTopUp = previous.price, previous.minTopUp
+		setting.StripeHKDDiscount = previous.discount
+		setting.StripeApiSecret, setting.StripeWebhookSecret = previous.apiSecret, previous.whSecret
+		model.DB, model.LOG_DB, common.RedisEnabled = previous.db, previous.logDB, previous.redis
+		hkdPerCNYSources = previousSources
+		require.NoError(t, sqlDB.Close())
+	})
+	operation_setting.Price, operation_setting.MinTopUp = 1, 10
+	setting.StripeHKDDiscount = 0
+	setting.StripeApiSecret, setting.StripeWebhookSecret = "sk_test_123", "whsec_test"
+	user := &model.User{Username: "quote_buyer", Status: common.UserStatusEnabled, Group: "default"}
+	require.NoError(t, db.Create(user).Error)
+
+	gin.SetMode(gin.TestMode)
+	quote := func() map[string]any {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodPost, "/api/user/stripe/amount", strings.NewReader(`{"amount":100}`))
+		ctx.Request.Header.Set("Content-Type", "application/json")
+		ctx.Set("id", user.Id)
+		RequestStripeAmount(ctx)
+		var body map[string]any
+		require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &body))
+		return body
+	}
+
+	setHKDPerCNYForTest(t, "1.1748")
+	body := quote()
+	assert.Equal(t, "success", body["message"])
+	assert.Equal(t, "100.00", body["data"], "the CNY quote is unchanged")
+	assert.Equal(t, "117.48", body["hkd_amount"], "the HKD Checkout charges for it")
+
+	// Every source is down and nothing is cached: still a CNY quote.
+	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	t.Cleanup(down.Close)
+	resetHKDPerCNYForTest(t)
+	hkdPerCNYSources = []hkdPerCNYSource{{name: "down", url: down.URL, parse: previousSources[0].parse}}
+	body = quote()
+	assert.Equal(t, "success", body["message"])
+	assert.Equal(t, "100.00", body["data"])
+	assert.NotContains(t, body, "hkd_amount", "no rate: the console explains instead of guessing")
+}

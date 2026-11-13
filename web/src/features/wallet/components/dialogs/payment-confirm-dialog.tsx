@@ -48,9 +48,12 @@ import {
   getPaymentIcon,
   isBonusEligiblePayment,
   isNowPaymentsPayment,
+  isStripePayment,
+  paysThroughEpay,
 } from '../../lib'
 import { paymentMethodName } from '../../lib/payment-names'
 import type { NowPaymentsCurrency, PaymentMethod } from '../../types'
+import { StripeHkdNotice } from './stripe-hkd-notice'
 
 interface PaymentConfirmDialogProps {
   open: boolean
@@ -58,6 +61,8 @@ interface PaymentConfirmDialogProps {
   onConfirm: () => void
   topupAmount: number
   paymentAmount: number
+  /** What Stripe charges in HKD for paymentAmount; absent without a rate */
+  hkdAmount?: number
   paymentMethod: PaymentMethod | undefined
   calculating: boolean
   processing: boolean
@@ -82,6 +87,7 @@ export function PaymentConfirmDialog({
   onConfirm,
   topupAmount,
   paymentAmount,
+  hkdAmount,
   paymentMethod,
   calculating,
   processing,
@@ -108,6 +114,12 @@ export function PaymentConfirmDialog({
   const originalAmount = hasDiscount ? paymentAmount / discountRate : 0
   const discountAmount = hasDiscount ? originalAmount - paymentAmount : 0
   const hasBonus = bonusRate > 0 && isBonusEligiblePayment(paymentMethod?.type)
+  // Stripe Checkout charges HKD; an order the server sends to epay does not
+  const chargedByStripe =
+    isStripePayment(paymentMethod?.type) &&
+    !paysThroughEpay(paymentMethod, paymentAmount) &&
+    !calculating &&
+    paymentAmount > 0
   const displayTopup = topupAmount * usdExchangeRate
   const displayBonus = hasBonus ? displayTopup * bonusRate : 0
   const currencyOptions = {
@@ -203,6 +215,15 @@ export function PaymentConfirmDialog({
                 </span>
               </div>
             </div>
+          )}
+
+          {chargedByStripe && (
+            <StripeHkdNotice
+              paymentType={paymentMethod?.type}
+              locale={locale}
+              cnyText={formatMoney(paymentAmount)}
+              hkdAmount={hkdAmount}
+            />
           )}
 
           {isCrypto && (

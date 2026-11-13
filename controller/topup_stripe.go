@@ -143,7 +143,15 @@ func (*StripeAdaptor) RequestAmount(c *gin.Context, req *StripePayRequest) {
 	if !ok {
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "success", "data": strconv.FormatFloat(payMoney, 'f', 2, 64)})
+	resp := gin.H{"message": "success", "data": strconv.FormatFloat(payMoney, 'f', 2, 64)}
+	// hkd_amount is what Checkout will charge, so the console can show the
+	// HKD figure before the customer sees it on Stripe's page. It is left out
+	// when no rate is available: the quote itself never depends on the rate,
+	// and an order the console sends to epay is not charged in HKD at all.
+	if rate, err := stripeHKDPerCNY(c.Request.Context()); err == nil {
+		resp["hkd_amount"] = decimal.NewFromInt(stripeHKDCents(payMoney, rate)).Div(decimal.NewFromInt(100)).StringFixed(2)
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 func (*StripeAdaptor) RequestPay(c *gin.Context, req *StripePayRequest) {
