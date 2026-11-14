@@ -9436,6 +9436,13 @@
     "Partial outage": "Частичный сбой",
     "Major outage": "Серьёзный сбой",
     "The official upstream status comes from the Anthropic and OpenAI status pages and covers only the components our requests pass through; it does not change our own status.": "Официальный статус поставщиков берётся со страниц статуса Anthropic и OpenAI и учитывает только компоненты, через которые проходят наши запросы; на наш собственный статус он не влияет.",
-    "All platforms": "Все платформы"
+    "All platforms": "Все платформы",
+    "Receipt": "Квитанция",
+    "(opens Stripe in a new tab)": "(откроет Stripe в новой вкладке)",
+    "Opening the Stripe receipt…": "Открываем квитанцию Stripe…",
+    "Failed to load the receipt": "Не удалось загрузить квитанцию",
+    "This order has no Stripe receipt": "У этого заказа нет квитанции Stripe",
+    "A Stripe receipt proves payment; it is not a VAT invoice.": "Квитанция Stripe подтверждает оплату, но не является счётом-фактурой с НДС.",
+    "Request an invoice in the invoice center": "Запросить счёт в центре счетов"
   }
 }

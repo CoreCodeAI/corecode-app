@@ -9436,6 +9436,13 @@
     "Partial outage": "Panne partielle",
     "Major outage": "Panne majeure",
     "The official upstream status comes from the Anthropic and OpenAI status pages and covers only the components our requests pass through; it does not change our own status.": "Le statut officiel des fournisseurs provient des pages de statut d’Anthropic et d’OpenAI et ne couvre que les composants par lesquels passent nos requêtes ; il ne change pas notre propre statut.",
-    "All platforms": "Toutes les plateformes"
+    "All platforms": "Toutes les plateformes",
+    "Receipt": "Reçu",
+    "(opens Stripe in a new tab)": "(ouvre Stripe dans un nouvel onglet)",
+    "Opening the Stripe receipt…": "Ouverture du reçu Stripe…",
+    "Failed to load the receipt": "Impossible de charger le reçu",
+    "This order has no Stripe receipt": "Cette commande n’a pas de reçu Stripe",
+    "A Stripe receipt proves payment; it is not a VAT invoice.": "Un reçu Stripe atteste le paiement ; ce n’est pas une facture avec TVA.",
+    "Request an invoice in the invoice center": "Demander une facture dans le centre de facturation"
   }
 }

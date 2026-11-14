@@ -335,3 +335,89 @@ func TestStripeWebhookCreditsAmountAndBonusOnce(t *testing.T) {
 	_, _, status = state("ref_untracked")
 	assert.Equal(t, common.TopUpStatusSuccess, status)
 }
+
+// TestTopUpReceiptReadsTheOrdersCharge drives the receipt endpoint against a
+// stub Stripe API: it finds the order's Checkout Session among those created
+// around the order, reads the paid charge's receipt, and answers only the
+// order's owner or an administrator, and only for a paid Stripe order.
+func TestTopUpReceiptReadsTheOrdersCharge(t *testing.T) {
+	previous := struct {
+		apiSecret string
+		db        *gorm.DB
+	}{setting.StripeApiSecret, model.DB}
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.TopUp{}))
+	model.DB = db
+	setting.StripeApiSecret = "rk_test_123"
+
+	const created = int64(1763100000)
+	var requests []string
+	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.URL.Path+"?"+r.URL.RawQuery)
+		query := r.URL.Query()
+		switch r.URL.Path {
+		case "/v1/checkout/sessions":
+			assert.Equal(t, "complete", query.Get("status"))
+			assert.Equal(t, fmt.Sprint(created-600), query.Get("created[gte]"))
+			assert.Equal(t, fmt.Sprint(created+60), query.Get("created[lte]"))
+			_, _ = w.Write([]byte(`{"object":"list","has_more":false,"data":[
+				{"id":"cs_other","object":"checkout.session","client_reference_id":"ref_other","payment_intent":"pi_other"},
+				{"id":"cs_paid","object":"checkout.session","client_reference_id":"ref_paid","payment_intent":"pi_paid"}]}`))
+		case "/v1/charges":
+			if query.Get("payment_intent") != "pi_paid" {
+				_, _ = w.Write([]byte(`{"object":"list","has_more":false,"data":[]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"object":"list","has_more":false,"data":[
+				{"id":"ch_declined","object":"charge","paid":false,"receipt_url":""},
+				{"id":"ch_paid","object":"charge","paid":true,"receipt_url":"https://pay.stripe.com/receipts/payment/abc"}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	stripe.SetBackend(stripe.APIBackend, stripe.GetBackendWithConfig(stripe.APIBackend, &stripe.BackendConfig{URL: stripe.String(stub.URL)}))
+	t.Cleanup(func() {
+		stripe.SetBackend(stripe.APIBackend, nil)
+		stub.Close()
+		setting.StripeApiSecret, model.DB = previous.apiSecret, previous.db
+	})
+
+	const owner, stranger = 7, 8
+	for _, order := range []model.TopUp{
+		{TradeNo: "ref_paid", Status: common.TopUpStatusSuccess, PaymentProvider: model.PaymentProviderStripe},
+		{TradeNo: "ref_refunded_elsewhere", Status: common.TopUpStatusRefunded, PaymentProvider: model.PaymentProviderStripe},
+		{TradeNo: "ref_open", Status: common.TopUpStatusPending, PaymentProvider: model.PaymentProviderStripe},
+		{TradeNo: "ref_epay", Status: common.TopUpStatusSuccess, PaymentProvider: model.PaymentProviderEpay},
+	} {
+		order.UserId, order.CreateTime, order.PaymentMethod = owner, created, model.PaymentMethodStripeCard
+		require.NoError(t, db.Create(&order).Error)
+	}
+
+	gin.SetMode(gin.TestMode)
+	receipt := func(tradeNo string, userId int, role int) string {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "/api/user/topup/receipt?trade_no="+tradeNo, nil)
+		ctx.Set("id", userId)
+		ctx.Set("role", role)
+		GetTopUpReceipt(ctx)
+		return recorder.Body.String()
+	}
+
+	assert.Contains(t, receipt("ref_paid", owner, common.RoleCommonUser), `"url":"https://pay.stripe.com/receipts/payment/abc"`)
+	assert.Contains(t, receipt("ref_paid", stranger, common.RoleAdminUser), `"url":"https://pay.stripe.com/receipts/payment/abc"`)
+
+	// Stripe is asked nothing for an order the caller cannot see, or one
+	// that has no Stripe payment.
+	requests = nil
+	assert.Contains(t, receipt("ref_paid", stranger, common.RoleCommonUser), "This order has no Stripe receipt")
+	assert.Contains(t, receipt("ref_missing", owner, common.RoleCommonUser), "This order has no Stripe receipt")
+	assert.Contains(t, receipt("ref_open", owner, common.RoleCommonUser), "This order has no Stripe receipt")
+	assert.Contains(t, receipt("ref_epay", owner, common.RoleCommonUser), "This order has no Stripe receipt")
+	assert.Empty(t, requests)
+
+	// A paid order whose session Stripe does not list has no receipt to show.
+	assert.Contains(t, receipt("ref_refunded_elsewhere", owner, common.RoleCommonUser), "This order has no Stripe receipt")
+	assert.Len(t, requests, 1, "no charge lookup without a session")
+}

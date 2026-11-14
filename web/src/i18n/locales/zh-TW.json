@@ -9436,6 +9436,13 @@
     "Partial outage": "部分中斷",
     "Major outage": "嚴重中斷",
     "The official upstream status comes from the Anthropic and OpenAI status pages and covers only the components our requests pass through; it does not change our own status.": "上游官方狀態取自 Anthropic 和 OpenAI 的官方狀態頁，只看本站請求經過的元件，不改變本站自己的狀態。",
-    "All platforms": "全部平台"
+    "All platforms": "全部平台",
+    "Receipt": "收據",
+    "(opens Stripe in a new tab)": "（在新分頁開啟 Stripe）",
+    "Opening the Stripe receipt…": "正在開啟 Stripe 收據…",
+    "Failed to load the receipt": "收據載入失敗，請稍後再試",
+    "This order has no Stripe receipt": "這筆訂單沒有 Stripe 收據",
+    "A Stripe receipt proves payment; it is not a VAT invoice.": "Stripe 收據僅作付款憑證，不是增值稅發票。",
+    "Request an invoice in the invoice center": "前往開票中心申請發票"
   }
 }

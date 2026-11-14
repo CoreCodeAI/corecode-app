@@ -397,6 +397,7 @@ export function Wallet(props: WalletProps) {
       <BillingHistoryDialog
         open={billingDialogOpen}
         onOpenChange={setBillingDialogOpen}
+        invoiceEnabled={status?.invoice_enabled === true}
       />
 
       <CreemConfirmDialog

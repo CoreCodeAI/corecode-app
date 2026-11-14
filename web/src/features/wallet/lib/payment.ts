@@ -66,6 +66,43 @@ export function openPaymentPage(url: string): 'new-tab' | 'same-tab' {
 }
 
 /**
+ * Open a new tab for a page whose address is fetched after the click. The
+ * tab opens during the click, while every browser still allows a popup, and
+ * shows `waiting` until `go` sends it on; `close` drops it when the request
+ * fails. Where the popup is blocked anyway, `go` opens the page in this tab.
+ */
+export function openPendingPage(waiting: string): {
+  go: (url: string) => void
+  close: () => void
+} {
+  let tab: Window | null = null
+  try {
+    tab = window.open('', '_blank')
+  } catch {
+    tab = null
+  }
+  if (tab) {
+    tab.opener = null
+    tab.document.title = waiting
+    tab.document.body.style.cssText =
+      'margin:0;min-height:100vh;display:grid;place-items:center;font:14px system-ui,sans-serif;color:#71717a'
+    tab.document.body.textContent = waiting
+  }
+  return {
+    go(url) {
+      if (tab && !tab.closed) {
+        tab.location.href = url
+        return
+      }
+      window.location.assign(url)
+    },
+    close() {
+      tab?.close()
+    },
+  }
+}
+
+/**
  * Check if browser is Safari
  */
 function isSafariBrowser(): boolean {
