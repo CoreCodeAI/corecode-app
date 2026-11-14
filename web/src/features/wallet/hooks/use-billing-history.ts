@@ -27,10 +27,23 @@ import { handleServerError } from '@/lib/handle-server-error'
 import {
   getUserBillingHistory,
   getAllBillingHistory,
+  getTopupReceipt,
   completeOrder,
   isApiSuccess,
 } from '../api'
+import { openPendingPage } from '../lib/payment'
 import type { TopupRecord } from '../types'
+
+/**
+ * Whether Stripe holds a receipt for an order: one Stripe took the payment
+ * for. A refunded order keeps its receipt, which then shows the refund.
+ */
+export function hasStripeReceipt(record: TopupRecord): boolean {
+  return (
+    record.payment_provider === 'stripe' &&
+    (record.status === 'success' || record.status === 'refunded')
+  )
+}
 
 // ============================================================================
 // Billing History Hook
@@ -61,6 +74,8 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
   const requestIdRef = useRef(0)
   const [loading, setLoading] = useState(false)
   const [completing, setCompleting] = useState(false)
+  // The order whose receipt is being fetched, so its button shows progress.
+  const [openingReceipt, setOpeningReceipt] = useState<string | null>(null)
   const [wasEnabled, setWasEnabled] = useState(enabled)
 
   // Drop the list from the last opening before it can paint.
@@ -139,6 +154,29 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
   )
 
   /**
+   * Open an order's Stripe receipt in a new tab. The tab opens on the click,
+   * before the link is known, so the browser does not block it.
+   */
+  const handleOpenReceipt = useCallback(async (tradeNo: string) => {
+    const tab = openPendingPage(i18next.t('Opening the Stripe receipt…'))
+    setOpeningReceipt(tradeNo)
+    try {
+      const response = await getTopupReceipt(tradeNo)
+      if (isApiSuccess(response) && response.data?.url) {
+        tab.go(response.data.url)
+        return
+      }
+      tab.close()
+      handleServerError(response, i18next.t('Failed to load the receipt'))
+    } catch (error) {
+      tab.close()
+      handleServerError(error, i18next.t('Failed to load the receipt'))
+    } finally {
+      setOpeningReceipt(null)
+    }
+  }, [])
+
+  /**
    * Change page
    */
   const handlePageChange = useCallback((newPage: number) => {
@@ -177,11 +215,13 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
     keyword,
     loading,
     completing,
+    openingReceipt,
     isAdmin,
     handlePageChange,
     handlePageSizeChange,
     handleSearch,
     handleCompleteOrder,
+    handleOpenReceipt,
     refresh: fetchBillingHistory,
   }
 }

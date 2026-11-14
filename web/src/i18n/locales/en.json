@@ -9436,6 +9436,13 @@
     "Partial outage": "Partial outage",
     "Major outage": "Major outage",
     "The official upstream status comes from the Anthropic and OpenAI status pages and covers only the components our requests pass through; it does not change our own status.": "The official upstream status comes from the Anthropic and OpenAI status pages and covers only the components our requests pass through; it does not change our own status.",
-    "All platforms": "All platforms"
+    "All platforms": "All platforms",
+    "Receipt": "Receipt",
+    "(opens Stripe in a new tab)": "(opens Stripe in a new tab)",
+    "Opening the Stripe receipt…": "Opening the Stripe receipt…",
+    "Failed to load the receipt": "Failed to load the receipt",
+    "This order has no Stripe receipt": "This order has no Stripe receipt",
+    "A Stripe receipt proves payment; it is not a VAT invoice.": "A Stripe receipt proves payment; it is not a VAT invoice.",
+    "Request an invoice in the invoice center": "Request an invoice in the invoice center"
   }
 }

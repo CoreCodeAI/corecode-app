@@ -16,7 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Search, Copy, Check, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import {
+  ArrowUpRight,
+  Search,
+  Copy,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Receipt,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -44,11 +53,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Spinner } from '@/components/ui/spinner'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { formatCurrencyFromUSD } from '@/lib/currency'
 import { formatQuota } from '@/lib/format'
 
-import { useBillingHistory } from '../../hooks/use-billing-history'
+import {
+  hasStripeReceipt,
+  useBillingHistory,
+} from '../../hooks/use-billing-history'
 import {
   getStatusConfig,
   getPaymentMethodName,
@@ -59,11 +72,14 @@ import { formatPaymentMoney } from '../../lib/format'
 interface BillingHistoryDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Whether the invoice center is on, so the dialog may point to it. */
+  invoiceEnabled?: boolean
 }
 
 export function BillingHistoryDialog({
   open,
   onOpenChange,
+  invoiceEnabled = false,
 }: BillingHistoryDialogProps) {
   const { t } = useTranslation()
   const {
@@ -74,11 +90,13 @@ export function BillingHistoryDialog({
     keyword,
     loading,
     completing,
+    openingReceipt,
     isAdmin,
     handlePageChange,
     handlePageSizeChange,
     handleSearch,
     handleCompleteOrder,
+    handleOpenReceipt,
   } = useBillingHistory({ enabled: open })
 
   const [confirmTradeNo, setConfirmTradeNo] = useState<string | null>(null)
@@ -87,6 +105,10 @@ export function BillingHistoryDialog({
   const totalPages = Math.ceil(total / pageSize)
   // A page change keeps the rows on screen until the next page arrives.
   const showSkeleton = loading && records.length === 0
+  // A receipt proves the payment; a customer who needs a tax invoice is
+  // pointed to the invoice center, where one is requested.
+  const showInvoiceNote =
+    !isAdmin && invoiceEnabled && records.some(hasStripeReceipt)
 
   const handleConfirmComplete = async () => {
     if (confirmTradeNo) {
@@ -149,6 +171,17 @@ export function BillingHistoryDialog({
           </div>
 
           {/* Records List */}
+          {showInvoiceNote && (
+            <p className='text-muted-foreground text-xs'>
+              {t('A Stripe receipt proves payment; it is not a VAT invoice.')}{' '}
+              <Link
+                to='/invoice'
+                className='text-foreground inline-block font-medium underline underline-offset-4'
+              >
+                {t('Request an invoice in the invoice center')}
+              </Link>
+            </p>
+          )}
           <div className='max-h-[min(54vh,520px)] overflow-y-auto pr-1'>
             {showSkeleton && (
               <div className='space-y-3'>
@@ -198,7 +231,7 @@ export function BillingHistoryDialog({
                     >
                       {/* Header Row */}
                       <div className='flex items-start justify-between gap-2'>
-                        <div className='flex-1 space-y-1'>
+                        <div className='min-w-0 flex-1 space-y-1'>
                           <div className='flex min-w-0 items-center gap-2'>
                             <code className='text-foreground truncate font-mono text-sm'>
                               {record.trade_no}
@@ -279,17 +312,51 @@ export function BillingHistoryDialog({
                         </div>
                       )}
 
-                      {/* Admin Actions */}
-                      {isAdmin && record.status === 'pending' && (
-                        <div className='mt-4 flex justify-end'>
-                          <Button
-                            size='sm'
-                            variant='outline'
-                            onClick={() => setConfirmTradeNo(record.trade_no)}
-                            disabled={completing}
-                          >
-                            {t('Complete Order')}
-                          </Button>
+                      {/* Order Actions */}
+                      {(hasStripeReceipt(record) ||
+                        (isAdmin && record.status === 'pending')) && (
+                        <div className='mt-3 flex flex-wrap justify-end gap-2 sm:mt-4'>
+                          {hasStripeReceipt(record) && (
+                            <Button
+                              size='sm'
+                              variant='outline'
+                              className='relative after:absolute pointer-coarse:after:-inset-x-1 pointer-coarse:after:-inset-y-2'
+                              onClick={() => handleOpenReceipt(record.trade_no)}
+                              disabled={openingReceipt === record.trade_no}
+                              aria-busy={openingReceipt === record.trade_no}
+                            >
+                              {openingReceipt === record.trade_no ? (
+                                <Spinner
+                                  data-icon='inline-start'
+                                  aria-hidden='true'
+                                />
+                              ) : (
+                                <Receipt
+                                  data-icon='inline-start'
+                                  aria-hidden='true'
+                                />
+                              )}
+                              {t('Receipt')}
+                              <span className='sr-only'>
+                                {t('(opens Stripe in a new tab)')}
+                              </span>
+                              <ArrowUpRight
+                                data-icon='inline-end'
+                                aria-hidden='true'
+                                className='text-muted-foreground'
+                              />
+                            </Button>
+                          )}
+                          {isAdmin && record.status === 'pending' && (
+                            <Button
+                              size='sm'
+                              variant='outline'
+                              onClick={() => setConfirmTradeNo(record.trade_no)}
+                              disabled={completing}
+                            >
+                              {t('Complete Order')}
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>

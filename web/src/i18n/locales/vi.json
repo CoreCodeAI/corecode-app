@@ -9436,6 +9436,13 @@
     "Partial outage": "Gián đoạn một phần",
     "Major outage": "Gián đoạn nghiêm trọng",
     "The official upstream status comes from the Anthropic and OpenAI status pages and covers only the components our requests pass through; it does not change our own status.": "Trạng thái chính thức lấy từ trang trạng thái của Anthropic và OpenAI, chỉ tính các thành phần mà yêu cầu của chúng tôi đi qua; không thay đổi trạng thái của chính chúng tôi.",
-    "All platforms": "Tất cả nền tảng"
+    "All platforms": "Tất cả nền tảng",
+    "Receipt": "Biên lai",
+    "(opens Stripe in a new tab)": "(mở Stripe trong thẻ mới)",
+    "Opening the Stripe receipt…": "Đang mở biên lai Stripe…",
+    "Failed to load the receipt": "Không tải được biên lai",
+    "This order has no Stripe receipt": "Đơn hàng này không có biên lai Stripe",
+    "A Stripe receipt proves payment; it is not a VAT invoice.": "Biên lai Stripe chỉ xác nhận thanh toán, không phải hóa đơn VAT.",
+    "Request an invoice in the invoice center": "Yêu cầu hóa đơn tại trung tâm hóa đơn"
   }
 }

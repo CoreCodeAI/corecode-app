@@ -9436,6 +9436,13 @@
     "Partial outage": "一部停止",
     "Major outage": "大規模停止",
     "The official upstream status comes from the Anthropic and OpenAI status pages and covers only the components our requests pass through; it does not change our own status.": "上流の公式ステータスは Anthropic と OpenAI の公式ステータスページから取得し、当サイトのリクエストが通るコンポーネントのみを対象とします。当サイト自体のステータスには影響しません。",
-    "All platforms": "すべてのプラットフォーム"
+    "All platforms": "すべてのプラットフォーム",
+    "Receipt": "領収書",
+    "(opens Stripe in a new tab)": "（新しいタブで Stripe を開きます）",
+    "Opening the Stripe receipt…": "Stripe の領収書を開いています…",
+    "Failed to load the receipt": "領収書を読み込めませんでした",
+    "This order has no Stripe receipt": "この注文には Stripe の領収書がありません",
+    "A Stripe receipt proves payment; it is not a VAT invoice.": "Stripe の領収書は支払いの証明であり、付加価値税の請求書ではありません。",
+    "Request an invoice in the invoice center": "請求書センターで請求書を申請"
   }
 }

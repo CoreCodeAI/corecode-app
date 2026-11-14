@@ -279,6 +279,19 @@ export async function completeOrder(
   return res.data
 }
 
+/**
+ * Get the Stripe receipt page of a paid Stripe order. Stripe's receipt links
+ * expire after 30 days, so the server reads a fresh one on every call.
+ */
+export async function getTopupReceipt(
+  tradeNo: string
+): Promise<ApiResponse<{ url: string }>> {
+  const res = await api.get('/api/user/topup/receipt', {
+    params: { trade_no: tradeNo },
+  })
+  return res.data
+}
+
 // ----------------------------------------------------------------------------
 // Invitation commission program
 // ----------------------------------------------------------------------------

@@ -9436,6 +9436,13 @@
     "Partial outage": "부분 중단",
     "Major outage": "주요 중단",
     "The official upstream status comes from the Anthropic and OpenAI status pages and covers only the components our requests pass through; it does not change our own status.": "업스트림 공식 상태는 Anthropic과 OpenAI의 공식 상태 페이지에서 가져오며, 당사 요청이 거치는 구성 요소만 반영합니다. 당사 자체 상태는 바뀌지 않습니다.",
-    "All platforms": "전체 플랫폼"
+    "All platforms": "전체 플랫폼",
+    "Receipt": "영수증",
+    "(opens Stripe in a new tab)": "(새 탭에서 Stripe 열기)",
+    "Opening the Stripe receipt…": "Stripe 영수증을 여는 중…",
+    "Failed to load the receipt": "영수증을 불러오지 못했습니다",
+    "This order has no Stripe receipt": "이 주문에는 Stripe 영수증이 없습니다",
+    "A Stripe receipt proves payment; it is not a VAT invoice.": "Stripe 영수증은 결제 증빙이며 부가가치세 세금계산서가 아닙니다.",
+    "Request an invoice in the invoice center": "인보이스 센터에서 인보이스 신청"
   }
 }
