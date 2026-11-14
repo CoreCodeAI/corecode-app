@@ -312,6 +312,27 @@ it('hides another vendor’s outage banner while filtering by platform', async (
   expect(await screen.findByText(banner)).toBeTruthy()
 })
 
+it('shows no vendor status while every vendor is normal', async () => {
+  respond(
+    statusData({
+      official: OFFICIAL?.map((entry) => ({
+        ...entry,
+        state: 'ok' as const,
+        components: entry.components.map((component) => ({
+          ...component,
+          status: 'operational' as const,
+        })),
+        incidents: [],
+      })),
+    })
+  )
+  renderPage()
+  expect(await screen.findByText('All systems operational')).toBeTruthy()
+  expect(
+    screen.queryByRole('region', { name: 'Official upstream status' })
+  ).toBeNull()
+})
+
 it('shows no vendor status from stale or older data', async () => {
   respond(statusData({ official: OFFICIAL }), NOW + 15 * 60)
   renderPage()
