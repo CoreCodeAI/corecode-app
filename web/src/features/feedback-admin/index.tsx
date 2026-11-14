@@ -81,11 +81,14 @@ function useFeedbackColumns(
       {
         // The one flexible column: it takes the room the others leave and
         // cuts a long title short, with the whole title in a tooltip.
+        // `w-0 min-w-full` keeps the cell out of the table's content-width
+        // calculation: with `max-w-full` alone an auto-layout table still
+        // grows to the title's full length and runs past the page.
         accessorKey: 'title',
         header: t('Title'),
         size: 200,
         cell: ({ row }) => (
-          <TruncatedCell cellClassName='font-medium'>
+          <TruncatedCell cellClassName='w-0 min-w-full font-medium'>
             {row.original.title}
           </TruncatedCell>
         ),
