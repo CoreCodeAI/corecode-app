@@ -67,7 +67,8 @@ function OfficialLink(props: { href: string }) {
 /**
  * The vendors' own status pages: a banner for each one in trouble, so a
  * customer can tell an upstream fault from ours, and a row with each
- * vendor's state. `vendor` is the platform filter's key, or null for all.
+ * vendor's state. Nothing shows while every vendor is normal. `vendor` is
+ * the platform filter's key, or null for all.
  */
 export function OfficialStatusPanel(props: {
   entries: OfficialStatus[]
@@ -77,7 +78,7 @@ export function OfficialStatusPanel(props: {
   const entries = props.entries.filter(
     (entry) => OFFICIAL_VENDOR[entry.vendor] && STATE_VARIANT[entry.state]
   )
-  if (!entries.length) return null
+  if (entries.every((entry) => entry.state === 'ok')) return null
   const stateLabel: Record<OfficialStatus['state'], string> = {
     ok: t('Normal'),
     maintenance: t('Maintenance'),
