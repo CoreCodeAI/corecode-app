@@ -9,6 +9,12 @@ import (
 
 const outboundBuildTimingKey = "outbound_build_ms"
 
+// DefaultCacheTTLLogKey names the admin log field recording the relay's
+// default prompt cache ttl on a Claude request: the ttl it gave the
+// breakpoints, or "rejected" when the upstream refused them and the client's
+// body was resent.
+const DefaultCacheTTLLogKey = "default_cache_ttl"
+
 // TimeOutboundBuild starts timing the outbound body build of a relay attempt:
 // the request copy, model mapping, conversion, marshal and body staging that
 // run after a channel is chosen and before the upstream call. It returns the

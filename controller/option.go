@@ -304,6 +304,12 @@ func UpdateOption(c *gin.Context) {
 			common.ApiError(c, err)
 			return
 		}
+	case "claude.default_prompt_cache_ttl", "claude.default_prompt_cache_ttl_min_tokens":
+		err = model_setting.ValidateClaudeDefaultPromptCacheTTLOption(option.Key, fmt.Sprint(option.Value))
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	case "claude.default_max_tokens":
 		err = model_setting.ValidateClaudeDefaultMaxTokens(option.Value.(string))
 		if err != nil {
