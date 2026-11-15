@@ -159,6 +159,8 @@ type insightLog struct {
 	Other            string
 	ChannelId        int
 	RequestId        string
+	TokenId          int
+	TokenName        string
 	Group            string `gorm:"column:group"`
 }
 

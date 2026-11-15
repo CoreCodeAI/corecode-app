@@ -38,7 +38,9 @@ import type {
 } from './types'
 
 /** A tab of the page: one view, or the overview that reads several. */
-export type InsightsTab = 'overview' | Exclude<InsightsView, 'business'>
+export type InsightsTab =
+  | 'overview'
+  | Exclude<InsightsView, 'business' | 'keys'>
 
 /** Tabs in the order shown, grouped by what they answer. */
 export const INSIGHTS_TAB_GROUPS: { key: string; tabs: InsightsTab[] }[] = [
@@ -263,6 +265,8 @@ export type InsightsSources = {
   previous: SourceState
   business?: SourceState
   businessPrevious?: SourceState
+  /** The activity tab's keys view; absent on other tabs. */
+  keys?: SourceState
 }
 
 /** A query's state as a SourceState; a disabled query reads as pending. */

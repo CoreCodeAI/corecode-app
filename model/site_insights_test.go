@@ -17,7 +17,7 @@ import (
 func useInsightsTestDB(t *testing.T, dialect string) {
 	t.Helper()
 	useAffiliateTestDB(t, dialect)
-	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &UpstreamCost{}, &UpstreamBillDay{}, &UserConcurrencyRejection{}, &Task{}, &Checkin{}, &RiskGateEvent{}, &Option{}, &Channel{}, &Ability{}}
+	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &InsightKeyHour{}, &Token{}, &UpstreamCost{}, &UpstreamBillDay{}, &UserConcurrencyRejection{}, &Task{}, &Checkin{}, &RiskGateEvent{}, &Option{}, &Channel{}, &Ability{}}
 	require.NoError(t, DB.AutoMigrate(extra...))
 	resetInsightReadCaches()
 	t.Cleanup(func() {
@@ -27,7 +27,7 @@ func useInsightsTestDB(t *testing.T, dialect string) {
 }
 
 // resetInsightReadCaches forgets what a previous test's database read left in
-// the process-wide caches: the earliest log and the day profile.
+// the process-wide caches: the earliest log, the day profile and the open hours.
 func resetInsightReadCaches() {
 	insightLogsSince.mu.Lock()
 	insightLogsSince.value = 0
@@ -35,6 +35,9 @@ func resetInsightReadCaches() {
 	dayProfileCache.mu.Lock()
 	dayProfileCache.profile = nil
 	dayProfileCache.mu.Unlock()
+	openInsightHours.mu.Lock()
+	openInsightHours.byStart = nil
+	openInsightHours.mu.Unlock()
 }
 
 func TestSiteInsightsDatabaseMatrix(t *testing.T) {

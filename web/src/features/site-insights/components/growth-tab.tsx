@@ -59,6 +59,7 @@ import type {
   BusinessInsights,
   FunnelRow,
   GrowthInsights,
+  KeyInsights,
 } from '../types'
 import { useActivityVerdict, useGrowthVerdict } from '../verdicts'
 import { ACTIVATION_WARN, cohortJudgeable } from '../verdicts/growth'
@@ -75,6 +76,7 @@ import {
   PaymentTimingPanel,
   SignupDriversPanel,
 } from './growth-insights'
+import { ApiKeysPanel } from './key-insights'
 import {
   BarSeries,
   type BarPoint,
@@ -451,6 +453,8 @@ type SpendMeasure = 'usd' | 'cny' | 'engine'
 export function ActivityTab(props: {
   data: ActivityInsights | undefined
   previous?: ActivityInsights
+  /** The keys view; absent on a server that does not send it. */
+  keys?: KeyInsights
   range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
   sources?: InsightsSources
@@ -972,6 +976,12 @@ export function ActivityTab(props: {
         previous={previous}
         previousError={previousError}
         state={tableState(props.sources?.view, data?.top_users)}
+      />
+      <ApiKeysPanel
+        data={props.keys}
+        source={props.sources?.keys}
+        charge={charge}
+        range={range}
       />
     </div>
   )

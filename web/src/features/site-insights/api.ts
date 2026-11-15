@@ -32,6 +32,7 @@ import type {
   FinanceInsights,
   GrowthInsights,
   InsightsRange,
+  KeyInsights,
   PoolProvider,
   PoolUsage,
   QualityInsights,
@@ -47,6 +48,7 @@ export type InsightsView =
   | 'risk'
   | 'growth'
   | 'activity'
+  | 'keys'
   | 'quality'
   | 'business'
   | 'pool'
@@ -59,6 +61,7 @@ export type InsightsByView = {
   risk: RiskInsights
   growth: GrowthInsights
   activity: ActivityInsights
+  keys: KeyInsights
   quality: QualityInsights
   business: BusinessInsights
   pool: EnginePool
@@ -73,6 +76,7 @@ export const VIEW_MAX_DAYS: Record<InsightsView, number> = {
   risk: 92,
   growth: 366,
   activity: 366,
+  keys: 92,
   quality: 92,
   business: 92,
   // The pool is live; it takes no range.

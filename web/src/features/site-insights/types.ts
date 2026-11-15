@@ -1191,6 +1191,52 @@ export type ActivityInsights = {
   hourly?: ActivityHour[] | null
 }
 
+/** One model of an API key over the range; quota_usd is in quota dollars (yuan), as the activity view's. */
+export type KeyModelUsage = {
+  model: string
+  requests: number
+  quota_usd: number
+}
+
+/**
+ * One API key over the range. token_id 0 is the requests sent without a key;
+ * token_id -1 is the customers' keys an hour did not keep, summed. Failed
+ * requests are those not served; client_failures is the part the customer
+ * caused, and service_failure_rate is the rest over requests.
+ */
+export type APIKeyUsage = {
+  token_id: number
+  token_name: string
+  owner: UserRef
+  requests: number
+  failed_requests: number
+  client_failures: number
+  service_failure_rate: number
+  /** Quota dollars (yuan), as the activity view's quota_usd. */
+  quota_usd: number
+  /** The key's part of its side's spend: customers' or staff's. */
+  share: number
+  top_models: KeyModelUsage[]
+}
+
+export type KeyInsights = {
+  requests: number
+  failed_requests: number
+  client_failures: number
+  service_failure_rate: number
+  quota_usd: number
+  active_keys: number
+  /** Some keys were folded into other_keys in an hour, so active_keys is a lower bound. */
+  keys_truncated?: boolean
+  keys: APIKeyUsage[]
+  other_keys?: APIKeyUsage
+  staff_requests: number
+  staff_quota_usd: number
+  staff_keys: APIKeyUsage[]
+  /** Hours still stored under an older version; their keys are not in the figures. */
+  stale_hours: number
+}
+
 export type VendorQuality = {
   vendor: string
   models: string[] | null
