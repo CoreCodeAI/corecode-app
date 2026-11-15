@@ -92,7 +92,8 @@ describe('buildClientSetupSnippet', () => {
   test('the Magpie snippets add one provider for every agent and switch theirs to it', () => {
     const add = [
       'magpie provider add CoreCode anthropic=https://corecode.live \\',
-      '  url=https://corecode.live/v1 responses=https://corecode.live/v1 key=sk-full-secret-key',
+      '  url=https://corecode.live/v1 responses=https://corecode.live/v1 key=sk-full-secret-key \\',
+      "  balance=https://corecode.live/api/usage/token/ 'balance.path=$(data.user_quota.total_available + data.user_quota.subscription_available) / 500000'",
       'magpie provider test corecode',
     ]
     expect(buildClientSetupSnippet('magpie', args).split('\n')).toEqual([
@@ -227,6 +228,22 @@ describe('buildCCSwitchURL usage script', () => {
     })
   })
 
+  test('adds what is left on active subscriptions to the wallet', () => {
+    const { extractor } = loadUsageScript('claude', 'https://corecode.live')
+    const result = extractor({
+      data: {
+        unlimited_quota: true,
+        total_available: -8_000_000,
+        user_quota: {
+          total_available: 0,
+          total_used: 7_000_000,
+          subscription_available: 17_500_000,
+        },
+      },
+    })
+    expect(result).toMatchObject({ remaining: 35, used: 14, total: 49 })
+  })
+
   test('prefers the account balance over a limited key quota', () => {
     const { extractor } = loadUsageScript('claude', 'https://corecode.live')
     const result = extractor({
@@ -308,6 +325,17 @@ describe('buildMagpieImportURL', () => {
     expect(params.get('website')).toBe('https://corecode.live')
     expect(params.get('keys')).toBe('https://corecode.live/keys')
     expect(params.get('icon')).toBe('https://corecode.live/brand/logo.svg')
+  })
+
+  test('reads the account balance from the key usage query on the same host', () => {
+    const balance = params.get('balance') ?? ''
+    expect(balance).toBe('https://corecode.live/api/usage/token/')
+    expect(new URL(balance).host).toBe(
+      new URL(params.get('anthropic') ?? '').host
+    )
+    expect(params.get('balance_path')).toBe(
+      '$(data.user_quota.total_available + data.user_quota.subscription_available) / 500000'
+    )
   })
 
   test('encodes special characters', () => {

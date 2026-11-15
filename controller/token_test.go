@@ -679,12 +679,26 @@ func TestGetTokenUsageFollowsTheUserQuotaSwitchAndIPWhitelist(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := setupTokenControllerTestDB(t)
-			require.NoError(t, db.AutoMigrate(&model.User{}))
+			require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSubscription{}))
 			// Initialize production column quoting for the token key lookup.
 			t.Setenv("LOG_SQL_DSN", "")
 			require.NoError(t, model.InitLogDB())
 			user := &model.User{Username: "quota-owner", Password: "placeholder", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, Group: "default", Quota: 12345, UsedQuota: 678, AuthVersion: 1, AffCode: "quota-owner"}
 			require.NoError(t, db.Create(user).Error)
+			// Two spendable subscriptions add up (900 + 100); an expired one, one
+			// used past its total, and another user's are left out.
+			now := common.GetTimestamp()
+			other := &model.User{Username: "someone-else", Password: "placeholder", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, Group: "default", AuthVersion: 1, AffCode: "someone-else"}
+			require.NoError(t, db.Create(other).Error)
+			for _, sub := range []model.UserSubscription{
+				{UserId: user.Id, AmountTotal: 1000, AmountUsed: 100, StartTime: now - 60, EndTime: now + 3600, Status: "active"},
+				{UserId: user.Id, AmountTotal: 300, AmountUsed: 200, StartTime: now - 60, EndTime: now + 3600, Status: "active"},
+				{UserId: user.Id, AmountTotal: 5000, AmountUsed: 0, StartTime: now - 7200, EndTime: now - 60, Status: "active"},
+				{UserId: user.Id, AmountTotal: 500, AmountUsed: 700, StartTime: now - 60, EndTime: now + 3600, Status: "active"},
+				{UserId: other.Id, AmountTotal: 4000, AmountUsed: 0, StartTime: now - 60, EndTime: now + 3600, Status: "active"},
+			} {
+				require.NoError(t, db.Create(&sub).Error)
+			}
 			token := seedToken(t, db, user.Id, "usage-token", "usagekey1234")
 			updates := map[string]any{"allow_user_quota_query": tc.allow, "allow_ips": tc.allowIps, "used_quota": 30}
 			if tc.expired {
@@ -719,7 +733,7 @@ func TestGetTokenUsageFollowsTheUserQuotaSwitchAndIPWhitelist(t *testing.T) {
 			assert.JSONEq(t, `100`, string(response.Data["total_available"]))
 			assert.JSONEq(t, `30`, string(response.Data["total_used"]))
 			if tc.wantUserQuota {
-				assert.JSONEq(t, `{"total_available":12345,"total_used":678}`, string(response.Data["user_quota"]))
+				assert.JSONEq(t, `{"total_available":12345,"total_used":678,"subscription_available":1000}`, string(response.Data["user_quota"]))
 			}
 		})
 	}

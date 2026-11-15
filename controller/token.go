@@ -295,11 +295,17 @@ func GetTokenUsage(c *gin.Context) {
 		"expires_at":           expiredAt,
 	}
 	// 用户额度只在令牌允许时返回；IP 白名单已由 TokenAuthReadOnly 检查。
+	// total_available 是钱包余额；subscription_available 是有效订阅的剩余额度，
+	// 两者相加才是账户还能花的钱（客户端的余额卡片读这两个字段）。
 	if token.AllowUserQuotaQuery {
 		userQuota, err := model.GetUserQuota(token.UserId, false)
 		var userUsedQuota int
 		if err == nil {
 			userUsedQuota, err = model.GetUserUsedQuota(token.UserId)
+		}
+		var subscriptions map[int]int64
+		if err == nil {
+			subscriptions, err = model.UsersSubscriptionRemaining([]int{token.UserId})
 		}
 		if err != nil {
 			common.SysError(common.LogText("failed to get user quota: %s", err.Error()))
@@ -307,8 +313,9 @@ func GetTokenUsage(c *gin.Context) {
 			return
 		}
 		data["user_quota"] = gin.H{
-			"total_available": userQuota,
-			"total_used":      userUsedQuota,
+			"total_available":        userQuota,
+			"total_used":             userUsedQuota,
+			"subscription_available": subscriptions[token.UserId],
 		}
 	}
 
