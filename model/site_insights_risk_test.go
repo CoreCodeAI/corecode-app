@@ -1,15 +1,19 @@
 package model
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm/logger"
 )
 
 // riskTestUser registers an account created at created, with fields set.
@@ -304,4 +308,68 @@ func TestRiskAndChannelsSayWhenAnHourWasCut(t *testing.T) {
 	channels, err := GetChannelInsights(r)
 	require.NoError(t, err)
 	assert.True(t, channels.Truncated)
+}
+
+// statementCounter records the statements a database runs and the rows each
+// returns, so a test can count the reads of one table.
+type statementCounter struct {
+	logger.Interface
+	statements []string
+	rows       []int64
+}
+
+func (c *statementCounter) Trace(_ context.Context, _ time.Time, fc func() (string, int64), _ error) {
+	sql, rows := fc()
+	c.statements = append(c.statements, sql)
+	c.rows = append(c.rows, rows)
+}
+
+// readsOf counts the statements that read table and the rows they returned.
+func (c *statementCounter) readsOf(table string) (statements int, rows int64) {
+	for i, sql := range c.statements {
+		if strings.Contains(sql, "FROM `"+table+"`") || strings.Contains(sql, "FROM \""+table+"\"") {
+			statements++
+			rows += c.rows[i]
+		}
+	}
+	return statements, rows
+}
+
+// TestRiskReadsCustomerBalancesOnlyForDebtors seeds 2,000 customers, 1,000
+// with a balance, 500 in debt and 500 at zero, plus three sign-ups in the
+// range, and counts what GetRiskInsights reads from the users table. The
+// view shows the debtors only; the balance list it does not show is not read.
+func TestRiskReadsCustomerBalancesOnlyForDebtors(t *testing.T) {
+	useInsightsTestDB(t, "sqlite")
+	const day1 = int64(1759248000)
+	dollar := int64(common.QuotaPerUnit)
+	var users []User
+	for i := range 2000 {
+		quota := int64(0)
+		switch {
+		case i < 1000:
+			quota = dollar
+		case i < 1500:
+			quota = -dollar
+		}
+		users = append(users, User{Username: fmt.Sprintf("seed%04d", i), Password: "seed-password", Role: common.RoleCommonUser,
+			Status: common.UserStatusEnabled, AffCode: fmt.Sprintf("seedaff%04d", i), Quota: int(quota), CreatedAt: day1 - 86400})
+	}
+	for i := range 3 {
+		users = append(users, User{Username: fmt.Sprintf("signup%d", i), Password: "seed-password", Role: common.RoleCommonUser,
+			Status: common.UserStatusEnabled, AffCode: fmt.Sprintf("signupaff%d", i), CreatedAt: day1 + int64(100*i)})
+	}
+	require.NoError(t, DB.CreateInBatches(users, 200).Error)
+
+	counter := &statementCounter{Interface: DB.Logger}
+	DB.Config.Logger = counter
+	t.Cleanup(func() { DB.Config.Logger = counter.Interface })
+	risk, err := GetRiskInsights(InsightsRange{Start: day1, End: day1 + 2*86400})
+	require.NoError(t, err)
+	assert.EqualValues(t, 3, risk.Signups)
+	assert.Len(t, risk.Debtors, 500, "every debtor is listed")
+	statements, rows := counter.readsOf("users")
+	t.Logf("users table: %d statements, %d rows", statements, rows)
+	assert.EqualValues(t, 3+500, rows, "the view reads the sign-ups and the debtors from users, and no other balances")
+	assert.Equal(t, 3, statements, "the sign-ups, the staff ids and the debtors, once each")
 }

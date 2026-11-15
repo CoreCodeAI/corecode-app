@@ -1762,3 +1762,19 @@ func TestFinanceInsightsReadsHourRollupOnce(t *testing.T) {
 	require.NoError(t, err)
 	assert.LessOrEqual(t, userHourReads, 1, "the hour rollup is loaded once for the finance view")
 }
+
+// A range is settled once its last hour is final: the hour it ends in, or
+// the hour before its end when the end is on the hour.
+func TestInsightsRangeSettledWaitsForTheLastHour(t *testing.T) {
+	const base = int64(1768482000)
+	const finalAfterHour = 3600 + insightHourLookahead + insightHourSettle
+	onTheHour := InsightsRange{Start: base, End: base + 3*3600}
+	settledAt := base + 2*3600 + finalAfterHour
+	assert.False(t, InsightsRangeSettled(onTheHour, settledAt-1))
+	assert.True(t, InsightsRangeSettled(onTheHour, settledAt))
+
+	inTheHour := InsightsRange{Start: base, End: base + 3*3600 + 1}
+	settledAt = base + 3*3600 + finalAfterHour
+	assert.False(t, InsightsRangeSettled(inTheHour, settledAt-1))
+	assert.True(t, InsightsRangeSettled(inTheHour, settledAt))
+}
