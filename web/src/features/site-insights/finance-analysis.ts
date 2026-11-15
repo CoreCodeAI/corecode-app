@@ -533,6 +533,66 @@ export function marginTone(
   return 'good'
 }
 
+/** The costs the profit waterfall takes off revenue, in the order it takes them. */
+export type WaterfallCost =
+  | 'accounts'
+  | 'bills'
+  | 'fees'
+  | 'channels'
+  | 'commission'
+
+/** One cost step of the profit waterfall, in yuan. */
+export type WaterfallStep = { key: WaterfallCost; amount: number }
+
+export type ProfitWaterfall = {
+  /** The vendor panel's earned figure, in yuan. */
+  revenue: number
+  /** Accounts, upstream bills, upstream fees, channel fees, then commission. */
+  steps: WaterfallStep[]
+  /** Revenue less the first three steps: the gross margin financeMargins reports. */
+  grossMargin: number
+  /** Revenue less every step. Not net profit: the panel lists what is still missing. */
+  left: number
+}
+
+/**
+ * Revenue taken down to what is left, one cost the dashboard knows at a time.
+ * Accounts, bills and fees are the gross margin's; the channel fee (real US
+ * dollars, converted at the rate) and the commission credited as wallet quota
+ * follow. Undefined on a server that does not send channel_fee_usd.
+ */
+export function profitWaterfall(
+  data: FinanceInsights,
+  margins: FinanceMargins,
+  rate: number
+): ProfitWaterfall | undefined {
+  if (data.channel_fee_usd == null) return undefined
+  const upstream = data.vendor_upstream ?? []
+  const accounts = margins.rows.reduce((sum, row) => sum + row.accountCost, 0)
+  const bills =
+    upstream.reduce((sum, item) => sum + item.bill_usd, 0) +
+    (data.upstream_unattributed_bill_usd ?? 0)
+  const fees =
+    (upstream.reduce((sum, item) => sum + item.fee_usd, 0) +
+      (data.upstream_unattributed_fee_usd ?? 0)) *
+    rate
+  const channels = data.channel_fee_usd * rate
+  const commission = data.commission_usd
+  const grossMargin = margins.revenue - accounts - bills - fees
+  return {
+    revenue: margins.revenue,
+    steps: [
+      { key: 'accounts', amount: accounts },
+      { key: 'bills', amount: bills },
+      { key: 'fees', amount: fees },
+      { key: 'channels', amount: channels },
+      { key: 'commission', amount: commission },
+    ],
+    grossMargin,
+    left: grossMargin - channels - commission,
+  }
+}
+
 /** One row of the group margin table, in yuan. */
 export type GroupMarginRow = {
   group: string
@@ -632,13 +692,42 @@ export function groupCostExtremes<
   return least ? { most: sorted[0], least } : null
 }
 
-export type OrderFunnelRow = OrderMethodFunnel & {
-  /** The method's rate in the previous period; null without its checkouts there. */
-  previousRate: number | null
-  /** Enough checkouts (MIN_CHECKOUTS) to color the rate. */
-  judged: boolean
-  /** The rate fell to half the previous period's or less, over MIN_ORDERS checkouts in both. */
-  fell: boolean
+export type OrderFunnelRow = OrderMethodFunnel &
+  CheckoutValue & {
+    /** The method's rate in the previous period; null without its checkouts there. */
+    previousRate: number | null
+    /** Enough checkouts (MIN_CHECKOUTS) to color the rate. */
+    judged: boolean
+    /** The rate fell to half the previous period's or less, over MIN_ORDERS checkouts in both. */
+    fell: boolean
+  }
+
+/** What one payment method's checkouts settled at, and what its unpaid ones might be worth. */
+export type CheckoutValue = {
+  /** Checkouts that have finished or been open over an hour: all but the pending ones opened within the hour. */
+  settled: number
+  /** Settled checkouts not paid: failed, expired, and pending past the hour. A refund was a payment, so it is not here. */
+  unpaid: number
+  /** Paid over settled, as overview-signals' checkoutCompletion reads it; null with none settled. */
+  settledRate: number | null
+  /** Paid money over paid checkouts, in the payment currency; null with none paid. */
+  averagePaid: number | null
+  /** Unpaid times averagePaid: the most the unpaid checkouts could be worth. An upper estimate; null without an average. */
+  estimate: number | null
+}
+
+/** A method's checkout value, read from its funnel row. */
+export function checkoutValue(row: OrderMethodFunnel): CheckoutValue {
+  const settled = row.created - Math.max(row.pending - row.pending_stale, 0)
+  const unpaid = row.failed + row.expired + row.pending_stale
+  const averagePaid = row.paid > 0 ? row.paid_money / row.paid : null
+  return {
+    settled,
+    unpaid,
+    settledRate: settled > 0 ? row.paid / settled : null,
+    averagePaid,
+    estimate: averagePaid == null ? null : unpaid * averagePaid,
+  }
 }
 
 /**
@@ -666,6 +755,7 @@ export function orderFunnels(
       row.completion_rate <= previousRate / 2
     return {
       ...row,
+      ...checkoutValue(row),
       previousRate,
       judged: row.created >= MIN_CHECKOUTS,
       fell,

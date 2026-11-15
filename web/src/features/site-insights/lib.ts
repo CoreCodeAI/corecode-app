@@ -56,6 +56,7 @@ export const SECTIONS = {
   debtors: 'debtors',
   models: 'by-model',
   limitRejections: 'limit-rejections',
+  checkouts: 'checkouts',
 } as const
 
 /** The views the overview reads its signals from. */
