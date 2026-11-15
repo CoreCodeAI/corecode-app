@@ -47,7 +47,7 @@ func TestQualityCountsCustomersAndStaffApart(t *testing.T) {
 			assert.Equal(t, []NamedCount{{"502", 1}}, quality.StatusCodes)
 			assert.Equal(t, []NamedCount{{"bad gateway", 1}}, quality.ErrorReasons)
 			require.Len(t, quality.Hourly, 1)
-			assert.Equal(t, QualityHour{Hour: hour, Requests: 2, Errors: 1, ErrorRate: 0.5, TTFTP50: 0, TTFTP95: 0}, quality.Hourly[0])
+			assert.Equal(t, QualityHour{Hour: hour, Requests: 2, Errors: 1, ErrorRate: 0.5, TTFTP50: 0, TTFTP95: 0, ServiceRequests: int64Ptr(2), ServiceErrors: int64Ptr(1)}, quality.Hourly[0])
 
 			capacity, err := GetCapacityInsights(r, "")
 			require.NoError(t, err)

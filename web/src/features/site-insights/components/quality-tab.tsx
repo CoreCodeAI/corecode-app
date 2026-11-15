@@ -56,7 +56,6 @@ import { previousDayPartial, usePartialDays } from '../partial-days'
 import {
   abnormalStreams,
   attemptsOf,
-  clientErrorsOf,
   errorsOf,
   excessFailures,
   failingTaskModels,
@@ -72,6 +71,7 @@ import {
   onSale,
   rankByExcess,
   serviceFailureRate,
+  unservedOf,
   siteFailureRate,
   unplacedModels,
   withRemainder,
@@ -399,7 +399,7 @@ export function QualityTab(props: {
   // server's release that sends the staff figures apart.
   const customersOnly = data?.staff_requests != null
   const mediaVendor = data?.vendors?.find((vendor) => vendor.vendor === 'media')
-  const clientErrors = data ? clientErrorsOf(data) : 0
+  const unserved = data ? unservedOf(data) : 0
   // The breakdowns count failed tries, not failed requests: the status codes
   // and reasons sum to the tries, which the server sends as failed_tries.
   const tries = data
@@ -556,18 +556,19 @@ export function QualityTab(props: {
                   help: joinSentences(
                     corrected
                       ? t(
-                          'The failure rate without customers’ invalid requests (4xx): what the service itself failed. The engine’s limits and budgets, a request no channel served, and a key or wallet the upstream refused all count as the service’s.'
+                          'The failure rate without requests no channel could take and customers’ invalid requests (4xx): what the service itself failed. The engine’s limits and budgets and a key or wallet the upstream refused all count as the service’s.'
                         )
                       : t(
-                          'The failure rate without customers’ invalid requests (4xx). This server still files a key or wallet the upstream refused (401, 402, 403) as the customer’s, so this reads low until it counts the corrected way.'
+                          'The failure rate without requests no channel could take and customers’ invalid requests (4xx). This server still files a key or wallet the upstream refused (401, 402, 403) as the customer’s, so this reads low until it counts the corrected way.'
                         ),
                     t(
                       'An upstream’s 400 is a client error here, not a service failure.'
                     )
                   ),
-                  hint: t('Leaves out {{count}} client errors (4xx).', {
-                    count: fmt.num(clientErrors),
-                  }),
+                  hint: t(
+                    'Leaves out {{count}} requests no channel took or client errors (4xx).',
+                    { count: fmt.num(unserved) }
+                  ),
                   delta: {
                     current: serviceRate,
                     previous: previousServiceRate ?? undefined,
@@ -709,7 +710,7 @@ export function QualityTab(props: {
           rows={hourly}
           previous={previous}
           range={range}
-          rate={data.error_rate}
+          rate={serviceRate ?? data.error_rate}
         />
       )}
       <TTFTTrendPanel
@@ -1148,11 +1149,14 @@ function useQualityFindings(
       tone: 'warning',
       title:
         window.from.hour === window.to.hour
-          ? t('Failures peaked at {{time}}: {{rate}} of {{count}} requests.', {
-              time: fmt.time(window.worst.hour),
-              rate: fmt.pct(window.worst.error_rate),
-              count: fmt.num(window.worst.requests),
-            })
+          ? t(
+              'Failures peaked at {{time}}: {{rate}} of {{count}} service requests.',
+              {
+                time: fmt.time(window.worst.hour),
+                rate: fmt.pct(window.worst.error_rate),
+                count: fmt.num(window.worst.requests),
+              }
+            )
           : t(
               'Failures ran high from {{from}} to {{to}}, peaking at {{rate}}.',
               {

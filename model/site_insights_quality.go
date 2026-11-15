@@ -61,6 +61,15 @@ type QualityHour struct {
 	ErrorRate float64 `json:"error_rate"`
 	TTFTP50   int64   `json:"ttft_p50_ms"`
 	TTFTP95   int64   `json:"ttft_p95_ms"`
+	// ServiceRequests and ServiceErrors are the hour's requests the service
+	// could have served and the failed ones it caused, over the selected
+	// models: no-channel refusals and the customers' 4xx are left out
+	// (serviceFailureCounts). Absent on an hour stored before categories were
+	// kept that has failures. The categories are the range's own (the vendor
+	// filter applies, the model filter does not), so a model filter narrower
+	// than a vendor leaves them an approximation, as the range's rate is.
+	ServiceRequests *int64 `json:"service_requests,omitempty"`
+	ServiceErrors   *int64 `json:"service_errors,omitempty"`
 }
 
 // QualityInsights reads latency, cache use and failures from the request
@@ -425,8 +434,11 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	dailyTTFT := make(map[string]map[int64]histogram)
 	hourlyTTFT := make(map[string]map[int64]histogram)
 	type hourBucket struct {
-		hour QualityHour
-		ttft histogram
+		hour       QualityHour
+		ttft       histogram
+		categories map[string]int64
+		// unknown is set for an hour with failures stored before categories were kept.
+		unknown bool
 	}
 	hourStarts := r.hourStarts()
 	hourly := make(map[int64]*hourBucket, len(hourStarts))
@@ -479,13 +491,17 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 		}
 		// An hour without customers' requests holds no vendor split and no
 		// categories either.
+		hourCategories := hour.summary.Categories
 		if vendor != "" && hour.summary.Vendors != nil {
-			mergeCounts(categories, vendorSummary(hour.summary, vendor).Categories)
-		} else {
-			mergeCounts(categories, hour.summary.Categories)
+			hourCategories = vendorSummary(hour.summary, vendor).Categories
 		}
+		mergeCounts(categories, hourCategories)
 		day := days[r.DayStart(hour.start)]
 		slot := hourly[hour.start]
+		if slot != nil {
+			slot.categories = hourCategories
+			slot.unknown = hour.uncategorised && hour.summary.Errors > 0
+		}
 		for name, model := range hour.models {
 			row := model.row
 			bucket := models[name]
@@ -527,6 +543,7 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	}
 	for _, start := range hourStarts {
 		slot := hourly[start]
+		slot.hour.ServiceRequests, slot.hour.ServiceErrors = serviceFailureCounts(slot.unknown, slot.hour.Requests, slot.hour.Errors, slot.categories)
 		slot.hour.ErrorRate = ratio(float64(slot.hour.Errors), float64(slot.hour.Requests))
 		slot.hour.TTFTP50, slot.hour.TTFTP95 = slot.ttft.percentile(0.5), slot.ttft.percentile(0.95)
 		result.Hourly = append(result.Hourly, slot.hour)

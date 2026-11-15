@@ -20,21 +20,17 @@ For commercial licensing, please contact support@quantumnous.com
 // why the engine turned requests away, which hours failed far above their
 // usual rate, and when the daily peak reaches the slots.
 
-import {
-  alignPrevious,
-  isOpenHour,
-  linearSlope,
-  median,
-  rateIsAbove,
-} from './analysis'
+import { alignPrevious, isOpenHour, linearSlope } from './analysis'
 import type { Tone } from './components/shared'
 import {
-  FAILURE_WARNING_RATE,
+  isFailureSpike,
+  serviceFailureRows,
+  usualFailureRate,
+} from './failure-hours'
+import {
   HEADROOM_SHARE,
   HOUR_SAMPLE,
   rangeSpan,
-  SMALL_SAMPLE,
-  SPIKE_FACTOR,
   SPIKE_FLOOR,
   type InsightsRangeInfo,
 } from './lib'
@@ -242,7 +238,11 @@ export function diagnoseRejections(
   return { total, hours, worst, saturated, cause }
 }
 
-/** One hour's failure rate beside what is usual for the range. */
+/**
+ * One hour's service failure rate beside what is usual for the range. The
+ * requests and errors are the service's (failure-hours.ts) when the server
+ * sends them.
+ */
 export type FailureHour = {
   hour: number
   requests: number
@@ -254,10 +254,7 @@ export type FailureHour = {
   /** The median rate of the range's rated closed hours; null without one. */
   usual: number | null
   open: boolean
-  /**
-   * At least SMALL_SAMPLE requests and SPIKE_FLOOR failures, and a rate
-   * beyond chance above both SPIKE_FACTOR times usual and FAILURE_WARNING_RATE.
-   */
+  /** isFailureSpike: the hour failed far above usual, beyond chance. */
   spike: boolean
 }
 
@@ -269,37 +266,25 @@ function rateOf(
 }
 
 /**
- * Each hour's failure rate beside the range's usual hour: the median rate of
- * its rated closed hours, which one bad hour cannot move. A previous-period
+ * Each hour's service failure rate beside the range's usual hour (the median
+ * of its rated closed hours, which one bad hour cannot move). A previous-period
  * hour is shown for reference only. The open hour is drawn but never flagged
  * or used as the usual rate.
  */
 export function failureHours(
-  hourly: CapacityHour[],
-  previous: CapacityHour[] | null | undefined,
+  hourlyRows: CapacityHour[],
+  previousRows: CapacityHour[] | null | undefined,
   span: number | undefined,
   end: number
 ): FailureHour[] {
+  const hourly = serviceFailureRows(hourlyRows)
+  const previous = serviceFailureRows(previousRows ?? [])
   const before = span === undefined ? [] : alignPrevious(hourly, previous, span)
-  const closedRates = hourly
-    .filter((row) => !isOpenHour(row.hour, end))
-    .map(rateOf)
-    .filter((rate): rate is number => rate !== null)
-  const usual = closedRates.length ? median(closedRates) : null
+  const usual = usualFailureRate(hourly, end)
   return hourly.map((row, index) => {
     const open = isOpenHour(row.hour, end)
     const rate = rateOf(row)
-    const spike =
-      !open &&
-      rate !== null &&
-      usual !== null &&
-      row.requests >= SMALL_SAMPLE &&
-      row.errors >= SPIKE_FLOOR &&
-      rateIsAbove(
-        row.errors,
-        row.requests,
-        Math.max(SPIKE_FACTOR * usual, FAILURE_WARNING_RATE)
-      )
+    const spike = !open && isFailureSpike(row, usual)
     return {
       hour: row.hour,
       requests: row.requests,

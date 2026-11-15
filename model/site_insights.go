@@ -383,6 +383,21 @@ func classifyError(content string, other logOtherFields) string {
 	}
 }
 
+// serviceFailureCounts is what the service itself failed in an hour: the
+// requests it could have served and the failed ones it caused. The requests
+// no channel could take (ErrorNoChannel) and the customers' own errors
+// (ErrorClient) are left out of both. unknown says the hour's failures were
+// not categorised (an hour stored before insightHourCategories), so its counts
+// are absent (nil), not a zero the service did not earn.
+func serviceFailureCounts(unknown bool, requests, errors int64, categories map[string]int64) (*int64, *int64) {
+	if unknown {
+		return nil, nil
+	}
+	excluded := categories[ErrorNoChannel] + categories[ErrorClient]
+	serviceRequests, serviceErrors := max(0, requests-excluded), max(0, errors-excluded)
+	return &serviceRequests, &serviceErrors
+}
+
 // paidOrders returns successful gateway orders in [start, end) with whether
 // each is a subscription purchase. Wallet-paid orders are excluded, as in the
 // top-up report, because the wallet top-up already counted that money.
