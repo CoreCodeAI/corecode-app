@@ -65,13 +65,6 @@ export async function testNowPaymentsFeishu() {
   return res.data
 }
 
-export async function testSiteInsightsDigest() {
-  const res = await api.post<{ success: boolean; message: string }>(
-    '/api/option/site-insights-digest/feishu-test'
-  )
-  return res.data
-}
-
 export async function confirmPaymentCompliance() {
   const res = await api.post<ConfirmPaymentComplianceResponse>(
     '/api/option/payment_compliance',

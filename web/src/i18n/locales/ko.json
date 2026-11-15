@@ -6917,7 +6917,7 @@
     "Worker instances do not run master-only background tasks.": "워커 인스턴스는 마스터 전용 백그라운드 작업을 실행하지 않습니다.",
     "Worker metrics": "워커 지표",
     "Worker Proxy": "워커 프록시",
-    "Site insights digest": "사이트 데이터 일보",
+    "Daily Feishu digest": "Feishu 일일 요약",
     "Send hour, 0 to 23, Beijing time": "전송 시각 (베이징 시간 0~23시)",
     "Yesterday against the day before, sent once a day after the send hour.": "어제와 그 전날을 비교해 전송 시각 이후 하루 한 번 보냅니다.",
     "Worker URL": "워커 URL",

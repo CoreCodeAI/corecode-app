@@ -6917,7 +6917,7 @@
     "Worker instances do not run master-only background tasks.": "Экземпляры worker не выполняют фоновые задачи только для master.",
     "Worker metrics": "Метрики рабочих процессов",
     "Worker Proxy": "Прокси воркера",
-    "Site insights digest": "Ежедневная сводка по панели сайта",
+    "Daily Feishu digest": "Ежедневная сводка в Feishu",
     "Send hour, 0 to 23, Beijing time": "Час отправки, 0–23, по Пекину",
     "Yesterday against the day before, sent once a day after the send hour.": "Вчера в сравнении с позавчера, раз в день после часа отправки.",
     "Worker URL": "URL воркера",

@@ -266,3 +266,59 @@ export async function saveUpstreamFees(fees: Record<number, number>) {
     throw createServerError(res.data, 'Failed to save upstream fees')
   }
 }
+
+/** The daily Feishu digest's settings as saved; the signing secret is never sent back. */
+export type DigestSettings = { enabled: boolean; hour: string; webhook: string }
+
+const DIGEST_OPTION = {
+  enabled: 'site_insights_digest_setting.enabled',
+  hour: 'site_insights_digest_setting.hour',
+  webhook: 'site_insights_digest_setting.feishu_webhook',
+  secret: 'site_insights_digest_setting.feishu_secret',
+} as const
+
+/** Reads the digest's settings from the options; off at 9 o'clock without any. */
+export async function getDigestSettings(): Promise<DigestSettings> {
+  const res =
+    await api.get<ApiResponse<{ key: string; value: string }[]>>('/api/option/')
+  if (!res.data.success || !res.data.data) {
+    throw createServerError(res.data, 'Failed to load site insights')
+  }
+  const value = (key: string) =>
+    res.data.data?.find((option) => option.key === key)?.value
+  return {
+    enabled: value(DIGEST_OPTION.enabled) === 'true',
+    hour: value(DIGEST_OPTION.hour) || '9',
+    webhook: value(DIGEST_OPTION.webhook) ?? '',
+  }
+}
+
+/**
+ * Saves the digest settings given, one option each, and stops at the first
+ * the server refuses. A setting left out is not written.
+ */
+export async function saveDigestSettings(
+  changes: Partial<DigestSettings & { secret: string }>
+): Promise<void> {
+  for (const name of ['webhook', 'secret', 'hour', 'enabled'] as const) {
+    const value = changes[name]
+    if (value === undefined) continue
+    const res = await api.put<ApiResponse<unknown>>('/api/option/', {
+      key: DIGEST_OPTION[name],
+      value,
+    })
+    if (!res.data.success) {
+      throw createServerError(res.data, 'Failed to update settings')
+    }
+  }
+}
+
+/** Sends yesterday's digest to the saved webhook now; it does not use up the day's send. */
+export async function sendTestDigest(): Promise<void> {
+  const res = await api.post<ApiResponse<unknown>>(
+    '/api/option/site-insights-digest/feishu-test'
+  )
+  if (!res.data.success) {
+    throw createServerError(res.data, 'Failed to send the test message')
+  }
+}

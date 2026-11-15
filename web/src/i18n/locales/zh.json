@@ -6917,7 +6917,7 @@
     "Worker instances do not run master-only background tasks.": "worker 实例不执行仅限 master 的后台任务。",
     "Worker metrics": "工作进程指标",
     "Worker Proxy": "Worker 代理",
-    "Site insights digest": "站点数据日报",
+    "Daily Feishu digest": "飞书日报",
     "Send hour, 0 to 23, Beijing time": "发送时间（北京时间 0–23 点）",
     "Yesterday against the day before, sent once a day after the send hour.": "昨日与前一日对比，每天到点后发送一次。",
     "Worker URL": "Worker URL",

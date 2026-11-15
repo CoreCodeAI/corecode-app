@@ -6917,7 +6917,7 @@
     "Worker instances do not run master-only background tasks.": "worker 實例不執行僅限 master 的背景任務。",
     "Worker metrics": "工作程序指標",
     "Worker Proxy": "Worker 代理",
-    "Site insights digest": "站點數據日報",
+    "Daily Feishu digest": "飛書日報",
     "Send hour, 0 to 23, Beijing time": "發送時間（北京時間 0–23 點）",
     "Yesterday against the day before, sent once a day after the send hour.": "昨日與前一日對比，每天到點後發送一次。",
     "Worker URL": "Worker URL",

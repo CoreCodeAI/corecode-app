@@ -6917,7 +6917,7 @@
     "Worker instances do not run master-only background tasks.": "worker インスタンスは master 専用のバックグラウンドタスクを実行しません。",
     "Worker metrics": "ワーカー別メトリクス",
     "Worker Proxy": "Workerプロキシ",
-    "Site insights digest": "サイトデータ日報",
+    "Daily Feishu digest": "Feishu 日次ダイジェスト",
     "Send hour, 0 to 23, Beijing time": "送信時刻（北京時間 0〜23 時）",
     "Yesterday against the day before, sent once a day after the send hour.": "前日と前々日の比較を、送信時刻以降に 1 日 1 回送ります。",
     "Worker URL": "ワーカーURL",

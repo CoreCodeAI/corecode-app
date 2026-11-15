@@ -53,12 +53,6 @@ const PerformanceSection = lazySection(() =>
   import('../maintenance/performance-section').then((m) => m.PerformanceSection)
 )
 
-const SiteInsightsDigestSection = lazySection(() =>
-  import('../integrations/site-insights-digest-section').then(
-    (m) => m.SiteInsightsDigestSection
-  )
-)
-
 const UpdateCheckerSection = lazySection(() =>
   import('../maintenance/update-checker-section').then(
     (m) => m.UpdateCheckerSection
@@ -132,21 +126,6 @@ const OPERATIONS_SECTIONS = [
           WorkerValidKey: settings.WorkerValidKey,
           WorkerAllowHttpImageRequestEnabled:
             settings.WorkerAllowHttpImageRequestEnabled,
-        }}
-      />
-    ),
-  },
-  {
-    id: 'site-insights-digest',
-    titleKey: 'Site insights digest',
-    build: (settings: OperationsSettings) => (
-      <SiteInsightsDigestSection
-        defaultValues={{
-          Enabled: settings['site_insights_digest_setting.enabled'],
-          Hour: settings['site_insights_digest_setting.hour'],
-          FeishuWebhook:
-            settings['site_insights_digest_setting.feishu_webhook'],
-          FeishuSecret: settings['site_insights_digest_setting.feishu_secret'],
         }}
       />
     ),

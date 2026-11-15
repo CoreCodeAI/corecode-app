@@ -6917,7 +6917,7 @@
     "Worker instances do not run master-only background tasks.": "Phiên bản worker không chạy các tác vụ nền chỉ dành cho master.",
     "Worker metrics": "Số liệu từng worker",
     "Worker Proxy": "Proxy Nhân viên",
-    "Site insights digest": "Bản tóm tắt hằng ngày của bảng điều khiển",
+    "Daily Feishu digest": "Bản tin Feishu hằng ngày",
     "Send hour, 0 to 23, Beijing time": "Giờ gửi, 0–23, giờ Bắc Kinh",
     "Yesterday against the day before, sent once a day after the send hour.": "Hôm qua so với hôm kia, gửi mỗi ngày một lần sau giờ gửi.",
     "Worker URL": "URL của Worker",
