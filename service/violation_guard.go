@@ -47,6 +47,12 @@ func refusedMessagePreview(message string) string {
 // off, so the parallel requests of one incident still count once.
 const minViolationMergeSeconds = 10 * 60
 
+// warningMergeSeconds is how long after a warning other refusals still merge
+// into it. It covers the parallel requests of one incident, which arrive
+// within seconds, but not a customer who keeps opening new conversations the
+// upstream refuses.
+const warningMergeSeconds = 2 * 60
+
 // violationGuardState is what the relay checks on every request: suspended
 // users, the refused conversations of each user, and when each user's client
 // checks were refused within ClientCheckWindowSeconds, oldest first. It lives
@@ -394,8 +400,9 @@ func applyViolationStrike(setting operation_setting.ViolationGuardSetting, recor
 	}
 	if record.Action == model.ViolationActionWarn {
 		// A warning suspends no one, so only the refusals of its own incident,
-		// within ten minutes, merge into it; a later refusal is judged anew.
-		if err := model.ShortenViolationMerge(record.UserId, now, now-mergeSeconds+minViolationMergeSeconds); err != nil {
+		// within warningMergeSeconds, merge into it; a later refusal is judged
+		// anew.
+		if err := model.ShortenViolationMerge(record.UserId, now, now-mergeSeconds+warningMergeSeconds); err != nil {
 			return err
 		}
 	}
