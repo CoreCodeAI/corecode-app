@@ -140,6 +140,11 @@ func InitOptionMap() {
 	common.OptionMap["NowPaymentsPayCurrencies"] = setting.NowPaymentsPayCurrencies
 	common.OptionMap["NowPaymentsFeishuWebhook"] = setting.NowPaymentsFeishuWebhook
 	common.OptionMap["NowPaymentsFeishuSecret"] = setting.NowPaymentsFeishuSecret
+	common.OptionMap["DodoPaymentsApiKey"] = setting.DodoPaymentsApiKey
+	common.OptionMap["DodoPaymentsWebhookSecret"] = setting.DodoPaymentsWebhookSecret
+	common.OptionMap["DodoPaymentsProductId"] = setting.DodoPaymentsProductId
+	common.OptionMap["DodoPaymentsTestMode"] = strconv.FormatBool(setting.DodoPaymentsTestMode)
+	common.OptionMap["DodoPaymentsAdminOnly"] = strconv.FormatBool(setting.DodoPaymentsAdminOnly)
 	common.OptionMap["WaffoPancakeStoreID"] = setting.WaffoPancakeStoreID
 	common.OptionMap["WaffoPancakeProductID"] = setting.WaffoPancakeProductID
 	common.OptionMap["TopupGroupRatio"] = common.TopupGroupRatio2JSONString()
@@ -653,6 +658,16 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.NowPaymentsFeishuWebhook = value
 	case "NowPaymentsFeishuSecret":
 		setting.NowPaymentsFeishuSecret = value
+	case "DodoPaymentsApiKey":
+		setting.DodoPaymentsApiKey = value
+	case "DodoPaymentsWebhookSecret":
+		setting.DodoPaymentsWebhookSecret = value
+	case "DodoPaymentsProductId":
+		setting.DodoPaymentsProductId = value
+	case "DodoPaymentsTestMode":
+		setting.DodoPaymentsTestMode = value == "true"
+	case "DodoPaymentsAdminOnly":
+		setting.DodoPaymentsAdminOnly = value == "true"
 	case "TopupGroupRatio":
 		err = common.UpdateTopupGroupRatioByJSONString(value)
 	case "GitHubClientId":

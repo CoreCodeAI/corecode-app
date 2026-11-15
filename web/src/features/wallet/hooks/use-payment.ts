@@ -31,6 +31,7 @@ import {
   requestPayment,
   requestStripePayment,
   requestNowPaymentsPayment,
+  requestDodoPayment,
   isApiSuccess,
 } from '../api'
 import {
@@ -241,6 +242,28 @@ export function usePayment() {
     []
   )
 
+  // Open a Dodo Payments checkout, which returns the customer to the wallet.
+  const processDodoPayment = useCallback(async (topupAmount: number) => {
+    try {
+      setProcessing(true)
+      const response = await requestDodoPayment({
+        amount: Math.floor(topupAmount),
+      })
+      if (!isApiSuccess(response) || !response.data?.pay_link) {
+        handleServerError(response, i18next.t('Payment request failed'))
+        return false
+      }
+      openPaymentPage(response.data.pay_link)
+      toast.success(i18next.t('Redirecting to payment page...'))
+      return true
+    } catch (error) {
+      handleServerError(error, i18next.t('Payment request failed'))
+      return false
+    } finally {
+      setProcessing(false)
+    }
+  }, [])
+
   return {
     amount,
     hkdAmount,
@@ -251,6 +274,7 @@ export function usePayment() {
     resetCalculation,
     processPayment,
     processNowPaymentsPayment,
+    processDodoPayment,
     setAmount,
   }
 }

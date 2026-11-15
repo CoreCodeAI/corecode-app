@@ -120,6 +120,22 @@ func GetTopUpInfo(c *gin.Context) {
 		})
 	}
 
+	// CoreCode addition: Dodo Payments Checkout, shown to administrators only
+	// while DodoPaymentsAdminOnly is on. Its order is priced like epay's, so
+	// the console quotes it through /api/user/amount.
+	if canUseDodoPayments(c.GetInt("role")) {
+		name := "Dodo Payments"
+		if setting.DodoPaymentsTestMode {
+			name = "Dodo Payments (Test)"
+		}
+		payMethods = append(payMethods, map[string]string{
+			"name":      name,
+			"type":      model.PaymentMethodDodoPayments,
+			"color":     "#0F172A",
+			"min_topup": strconv.Itoa(operation_setting.MinTopUp),
+		})
+	}
+
 	data := gin.H{
 		"enable_online_topup":              isEpayTopUpEnabled(),
 		"enable_stripe_topup":              isStripeTopUpEnabled(),

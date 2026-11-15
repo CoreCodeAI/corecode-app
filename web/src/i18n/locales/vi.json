@@ -9445,6 +9445,12 @@
     "Failed to load the receipt": "Không tải được biên lai",
     "This order has no Stripe receipt": "Đơn hàng này không có biên lai Stripe",
     "A Stripe receipt proves payment; it is not a VAT invoice.": "Biên lai Stripe chỉ xác nhận thanh toán, không phải hóa đơn VAT.",
-    "Request an invoice in the invoice center": "Yêu cầu hóa đơn tại trung tâm hóa đơn"
+    "Request an invoice in the invoice center": "Yêu cầu hóa đơn tại trung tâm hóa đơn",
+    "Customers pay the top-up price in CNY on Dodo Payments Checkout. Bonus tiers and discounts apply as for Epay.": "Khách hàng thanh toán số tiền nạp bằng CNY trên trang Dodo Payments Checkout. Các mức thưởng và giảm giá áp dụng như với Epay.",
+    "The product must be a one-time, pay-what-you-want product priced in CNY with tax included; each order sets its price.": "Sản phẩm phải là sản phẩm thanh toán một lần, dạng \"Pay What You Want\", định giá bằng CNY đã gồm thuế; mỗi đơn hàng tự đặt giá.",
+    "The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.": "API key, webhook secret và sản phẩm thuộc cùng một chế độ. Hãy thay cả ba khi chuyển giữa chế độ thử nghiệm và chính thức.",
+    "Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.": "Gửi yêu cầu đến môi trường thử nghiệm của Dodo Payments, không có tiền thật bị trừ. Đơn thử nghiệm đã thanh toán vẫn được cộng vào tài khoản.",
+    "Administrators only": "Chỉ quản trị viên",
+    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Chỉ hiển thị phương thức Dodo Payments cho quản trị viên và từ chối đơn hàng của người dùng khác."
   }
 }

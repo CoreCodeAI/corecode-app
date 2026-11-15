@@ -9445,6 +9445,12 @@
     "Failed to load the receipt": "收據載入失敗，請稍後再試",
     "This order has no Stripe receipt": "這筆訂單沒有 Stripe 收據",
     "A Stripe receipt proves payment; it is not a VAT invoice.": "Stripe 收據僅作付款憑證，不是增值稅發票。",
-    "Request an invoice in the invoice center": "前往開票中心申請發票"
+    "Request an invoice in the invoice center": "前往開票中心申請發票",
+    "Customers pay the top-up price in CNY on Dodo Payments Checkout. Bonus tiers and discounts apply as for Epay.": "客戶在 Dodo Payments 收銀台以人民幣支付儲值金額。贈送檔位和折扣與易支付相同。",
+    "The product must be a one-time, pay-what-you-want product priced in CNY with tax included; each order sets its price.": "產品須為一次性、「自訂金額」（Pay What You Want）的產品，以人民幣定價且含稅；每筆訂單設定自己的價格。",
+    "The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.": "API 金鑰、Webhook 金鑰和產品屬於同一模式。在測試與正式之間切換時，三者都要替換。",
+    "Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.": "請求發往 Dodo Payments 測試環境，不產生真實扣款。已支付的測試訂單仍會給帳戶入帳。",
+    "Administrators only": "僅管理員可見",
+    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Dodo Payments 支付方式僅對管理員顯示，其他使用者的下單請求會被拒絕。"
   }
 }

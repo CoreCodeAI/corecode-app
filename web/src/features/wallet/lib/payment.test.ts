@@ -95,6 +95,10 @@ describe('payment dispatch', () => {
           calls.push('nowpayments')
           return false
         },
+        dodoPayments: async () => {
+          calls.push('dodopayments')
+          return false
+        },
       }
     )
 
@@ -116,6 +120,7 @@ describe('payment dispatch', () => {
         },
         waffoPancake: async () => false,
         nowPayments: async () => false,
+        dodoPayments: async () => false,
       }
     )
 
@@ -136,6 +141,7 @@ describe('payment dispatch', () => {
         calls.push(`nowpayments:${amount}:${payCurrency}`)
         return true
       },
+      dodoPayments: async () => false,
     }
     const method = { name: 'USDT / USDC', type: PAYMENT_TYPES.NOWPAYMENTS }
 
@@ -146,5 +152,30 @@ describe('payment dispatch', () => {
       await dispatchSelectedPayment(method, 100, null, processors, 'usdttrc20')
     ).toBe(true)
     expect(calls).toEqual(['nowpayments:100:usdttrc20'])
+  })
+
+  test('opens a Dodo Payments checkout, not an epay form', async () => {
+    const calls: string[] = []
+    const success = await dispatchSelectedPayment(
+      { name: 'Dodo Payments (Test)', type: PAYMENT_TYPES.DODOPAYMENTS },
+      50,
+      null,
+      {
+        regular: async () => {
+          calls.push('regular')
+          return true
+        },
+        waffo: async () => false,
+        waffoPancake: async () => false,
+        nowPayments: async () => false,
+        dodoPayments: async (amount: number) => {
+          calls.push(`dodopayments:${amount}`)
+          return true
+        },
+      }
+    )
+
+    expect(success).toBe(true)
+    expect(calls).toEqual(['dodopayments:50'])
   })
 })

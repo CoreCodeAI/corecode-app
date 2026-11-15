@@ -344,6 +344,11 @@ export type BillingSettings = {
   NowPaymentsPayCurrencies?: string
   NowPaymentsFeishuWebhook?: string
   NowPaymentsFeishuSecret?: string
+  DodoPaymentsApiKey?: string
+  DodoPaymentsWebhookSecret?: string
+  DodoPaymentsProductId?: string
+  DodoPaymentsTestMode: boolean
+  DodoPaymentsAdminOnly: boolean
   CreemApiKey: string
   CreemWebhookSecret: string
   CreemTestMode: boolean

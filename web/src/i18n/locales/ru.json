@@ -9445,6 +9445,12 @@
     "Failed to load the receipt": "Не удалось загрузить квитанцию",
     "This order has no Stripe receipt": "У этого заказа нет квитанции Stripe",
     "A Stripe receipt proves payment; it is not a VAT invoice.": "Квитанция Stripe подтверждает оплату, но не является счётом-фактурой с НДС.",
-    "Request an invoice in the invoice center": "Запросить счёт в центре счетов"
+    "Request an invoice in the invoice center": "Запросить счёт в центре счетов",
+    "Customers pay the top-up price in CNY on Dodo Payments Checkout. Bonus tiers and discounts apply as for Epay.": "Клиенты оплачивают сумму пополнения в юанях (CNY) на странице Dodo Payments Checkout. Бонусы и скидки действуют так же, как для Epay.",
+    "The product must be a one-time, pay-what-you-want product priced in CNY with tax included; each order sets its price.": "Товар должен быть разовым товаром «Pay What You Want» с ценой в CNY, включая налог; каждый заказ задаёт свою цену.",
+    "The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.": "API-ключ, секрет вебхука и товар относятся к одному режиму. При переключении между тестовым и боевым режимом замените все три.",
+    "Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.": "Запросы идут в тестовую среду Dodo Payments, где деньги не списываются. Оплаченные тестовые заказы всё равно зачисляются на счёт.",
+    "Administrators only": "Только администраторы",
+    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Способ оплаты Dodo Payments виден только администраторам, заказы остальных пользователей отклоняются."
   }
 }

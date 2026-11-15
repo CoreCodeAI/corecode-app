@@ -9445,6 +9445,12 @@
     "Failed to load the receipt": "領収書を読み込めませんでした",
     "This order has no Stripe receipt": "この注文には Stripe の領収書がありません",
     "A Stripe receipt proves payment; it is not a VAT invoice.": "Stripe の領収書は支払いの証明であり、付加価値税の請求書ではありません。",
-    "Request an invoice in the invoice center": "請求書センターで請求書を申請"
+    "Request an invoice in the invoice center": "請求書センターで請求書を申請",
+    "Customers pay the top-up price in CNY on Dodo Payments Checkout. Bonus tiers and discounts apply as for Epay.": "お客様は Dodo Payments のチェックアウトでチャージ金額を人民元で支払います。ボーナス段階と割引は Epay と同じく適用されます。",
+    "The product must be a one-time, pay-what-you-want product priced in CNY with tax included; each order sets its price.": "商品は人民元建て・税込みの単発「Pay What You Want」商品である必要があります。価格は注文ごとに設定されます。",
+    "The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.": "API キー、Webhook シークレット、商品は同じモードに属します。テストと本番を切り替えるときは 3 つすべてを置き換えてください。",
+    "Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.": "リクエストを Dodo Payments のテスト環境に送ります。実際の請求は発生しません。支払い済みのテスト注文もアカウントに入金されます。",
+    "Administrators only": "管理者のみ",
+    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Dodo Payments の支払い方法を管理者にのみ表示し、それ以外のユーザーの注文は拒否します。"
   }
 }

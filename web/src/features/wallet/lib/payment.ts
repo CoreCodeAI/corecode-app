@@ -197,11 +197,20 @@ export function isNowPaymentsPayment(paymentType: string | undefined): boolean {
   return paymentType === PAYMENT_TYPES.NOWPAYMENTS
 }
 
+/**
+ * Check if payment method is Dodo Payments, which opens its own checkout for
+ * a CNY price quoted like an epay order
+ */
+export function isDodoPayment(paymentType: string | undefined): boolean {
+  return paymentType === PAYMENT_TYPES.DODOPAYMENTS
+}
+
 export interface PaymentProcessors {
   regular: (topupAmount: number, paymentType: string) => Promise<boolean>
   waffo: (topupAmount: number, payMethodIndex: number) => Promise<boolean>
   waffoPancake: (topupAmount: number) => Promise<boolean>
   nowPayments: (topupAmount: number, payCurrency: string) => Promise<boolean>
+  dodoPayments: (topupAmount: number) => Promise<boolean>
 }
 
 export async function dispatchSelectedPayment(
@@ -227,6 +236,10 @@ export async function dispatchSelectedPayment(
 
   if (isWaffoPancakePayment(paymentMethod.type)) {
     return processors.waffoPancake(topupAmount)
+  }
+
+  if (isDodoPayment(paymentMethod.type)) {
+    return processors.dodoPayments(topupAmount)
   }
 
   return processors.regular(topupAmount, paymentMethod.type)

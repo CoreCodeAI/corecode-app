@@ -194,6 +194,11 @@ const paymentSchema = z.object({
       }
     ),
   NowPaymentsFeishuSecret: z.string(),
+  DodoPaymentsApiKey: z.string(),
+  DodoPaymentsWebhookSecret: z.string(),
+  DodoPaymentsProductId: z.string(),
+  DodoPaymentsTestMode: z.boolean(),
+  DodoPaymentsAdminOnly: z.boolean(),
   CreemApiKey: z.string(),
   CreemWebhookSecret: z.string(),
   CreemTestMode: z.boolean(),
@@ -534,6 +539,11 @@ export function PaymentSettingsSection({
       ),
       NowPaymentsFeishuWebhook: values.NowPaymentsFeishuWebhook.trim(),
       NowPaymentsFeishuSecret: values.NowPaymentsFeishuSecret.trim(),
+      DodoPaymentsApiKey: values.DodoPaymentsApiKey.trim(),
+      DodoPaymentsWebhookSecret: values.DodoPaymentsWebhookSecret.trim(),
+      DodoPaymentsProductId: values.DodoPaymentsProductId.trim(),
+      DodoPaymentsTestMode: values.DodoPaymentsTestMode,
+      DodoPaymentsAdminOnly: values.DodoPaymentsAdminOnly,
       CreemApiKey: values.CreemApiKey.trim(),
       CreemWebhookSecret: values.CreemWebhookSecret.trim(),
       CreemTestMode: values.CreemTestMode,
@@ -593,6 +603,12 @@ export function PaymentSettingsSection({
         initialRef.current.NowPaymentsFeishuWebhook.trim(),
       NowPaymentsFeishuSecret:
         initialRef.current.NowPaymentsFeishuSecret.trim(),
+      DodoPaymentsApiKey: initialRef.current.DodoPaymentsApiKey.trim(),
+      DodoPaymentsWebhookSecret:
+        initialRef.current.DodoPaymentsWebhookSecret.trim(),
+      DodoPaymentsProductId: initialRef.current.DodoPaymentsProductId.trim(),
+      DodoPaymentsTestMode: initialRef.current.DodoPaymentsTestMode,
+      DodoPaymentsAdminOnly: initialRef.current.DodoPaymentsAdminOnly,
       CreemApiKey: initialRef.current.CreemApiKey.trim(),
       CreemWebhookSecret: initialRef.current.CreemWebhookSecret.trim(),
       CreemTestMode: initialRef.current.CreemTestMode,
@@ -804,6 +820,47 @@ export function PaymentSettingsSection({
       updates.push({
         key: 'NowPaymentsFeishuSecret',
         value: sanitized.NowPaymentsFeishuSecret,
+      })
+    }
+
+    if (
+      sanitized.DodoPaymentsApiKey &&
+      sanitized.DodoPaymentsApiKey !== initial.DodoPaymentsApiKey
+    ) {
+      updates.push({
+        key: 'DodoPaymentsApiKey',
+        value: sanitized.DodoPaymentsApiKey,
+      })
+    }
+
+    if (
+      sanitized.DodoPaymentsWebhookSecret &&
+      sanitized.DodoPaymentsWebhookSecret !== initial.DodoPaymentsWebhookSecret
+    ) {
+      updates.push({
+        key: 'DodoPaymentsWebhookSecret',
+        value: sanitized.DodoPaymentsWebhookSecret,
+      })
+    }
+
+    if (sanitized.DodoPaymentsProductId !== initial.DodoPaymentsProductId) {
+      updates.push({
+        key: 'DodoPaymentsProductId',
+        value: sanitized.DodoPaymentsProductId,
+      })
+    }
+
+    if (sanitized.DodoPaymentsTestMode !== initial.DodoPaymentsTestMode) {
+      updates.push({
+        key: 'DodoPaymentsTestMode',
+        value: sanitized.DodoPaymentsTestMode,
+      })
+    }
+
+    if (sanitized.DodoPaymentsAdminOnly !== initial.DodoPaymentsAdminOnly) {
+      updates.push({
+        key: 'DodoPaymentsAdminOnly',
+        value: sanitized.DodoPaymentsAdminOnly,
       })
     }
 
@@ -1086,10 +1143,11 @@ export function PaymentSettingsSection({
           />
           <Tabs defaultValue='general' className='min-w-0'>
             <div className='overflow-x-auto pb-1'>
-              <TabsList className='grid min-w-[52rem] grid-cols-7'>
+              <TabsList className='grid min-w-[59rem] grid-cols-8'>
                 <TabsTrigger value='general'>{t('General')}</TabsTrigger>
                 <TabsTrigger value='epay'>Epay</TabsTrigger>
                 <TabsTrigger value='nowpayments'>NOWPayments</TabsTrigger>
+                <TabsTrigger value='dodopayments'>Dodo Payments</TabsTrigger>
                 <TabsTrigger value='stripe'>{t('Stripe')}</TabsTrigger>
                 <TabsTrigger value='creem'>Creem</TabsTrigger>
                 <TabsTrigger value='waffo-pancake'>Waffo Pancake</TabsTrigger>
@@ -1818,6 +1876,152 @@ export function PaymentSettingsSection({
                     {t('Uses the saved webhook. Save changes first.')}
                   </span>
                 </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent
+              value='dodopayments'
+              className={paymentTabContentClassName}
+            >
+              <div className='space-y-4'>
+                <div>
+                  <h3 className='text-lg font-medium'>Dodo Payments</h3>
+                  <p className='text-muted-foreground text-sm'>
+                    {t(
+                      'Customers pay the top-up price in CNY on Dodo Payments Checkout. Bonus tiers and discounts apply as for Epay.'
+                    )}
+                  </p>
+                </div>
+
+                <div className='bg-info/10 text-info rounded-md p-4 text-sm'>
+                  <ul className='list-inside list-disc space-y-1'>
+                    <li>
+                      {t('Webhook URL:')}{' '}
+                      <code className='bg-info/15 rounded px-1 py-0.5 text-xs'>
+                        {'<CallbackAddress>/api/dodopayments/webhook'}
+                      </code>
+                    </li>
+                    <li>
+                      {t(
+                        'The product must be a one-time, pay-what-you-want product priced in CNY with tax included; each order sets its price.'
+                      )}
+                    </li>
+                    <li>
+                      {t(
+                        'The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.'
+                      )}
+                    </li>
+                  </ul>
+                </div>
+
+                <div className='grid gap-6 md:grid-cols-2'>
+                  <FormField
+                    control={form.control}
+                    name='DodoPaymentsApiKey'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('API key')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='password'
+                            autoComplete='new-password'
+                            {...field}
+                            onChange={(event) =>
+                              field.onChange(event.target.value)
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('Leave blank unless updating')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='DodoPaymentsWebhookSecret'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Webhook secret')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='password'
+                            autoComplete='new-password'
+                            {...field}
+                            onChange={(event) =>
+                              field.onChange(event.target.value)
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('Leave blank unless updating')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name='DodoPaymentsProductId'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Product ID')}</FormLabel>
+                      <FormControl>
+                        <Input placeholder='pdt_...' {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='DodoPaymentsTestMode'
+                  render={({ field }) => (
+                    <SettingsSwitchItem>
+                      <SettingsSwitchContent>
+                        <FormLabel>{t('Test Mode')}</FormLabel>
+                        <FormDescription>
+                          {t(
+                            'Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.'
+                          )}
+                        </FormDescription>
+                      </SettingsSwitchContent>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </SettingsSwitchItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='DodoPaymentsAdminOnly'
+                  render={({ field }) => (
+                    <SettingsSwitchItem>
+                      <SettingsSwitchContent>
+                        <FormLabel>{t('Administrators only')}</FormLabel>
+                        <FormDescription>
+                          {t(
+                            'Show the Dodo Payments method to administrators only, and refuse orders from anyone else.'
+                          )}
+                        </FormDescription>
+                      </SettingsSwitchContent>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </SettingsSwitchItem>
+                  )}
+                />
               </div>
             </TabsContent>
 

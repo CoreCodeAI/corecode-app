@@ -79,7 +79,8 @@ interface SubscriptionPlansCardProps {
 
 // The methods a plan is bought with from the method picker: the epay methods
 // while epay is on, and the Stripe methods while Stripe is on. pay_methods
-// also lists gateways with their own purchase path (Creem, NOWPayments).
+// also lists gateways with their own purchase path (Creem, NOWPayments) and
+// Dodo Payments, which sells top-ups only.
 function getPlanCheckoutMethods(
   payMethods: PaymentMethod[] = [],
   enableEpay: boolean,
@@ -88,7 +89,11 @@ function getPlanCheckoutMethods(
   return payMethods.filter((m) => {
     if (!m?.type) return false
     if (isStripePayment(m.type)) return enableStripe
-    if (m.type === 'creem' || m.type === PAYMENT_TYPES.NOWPAYMENTS) {
+    if (
+      m.type === 'creem' ||
+      m.type === PAYMENT_TYPES.NOWPAYMENTS ||
+      m.type === PAYMENT_TYPES.DODOPAYMENTS
+    ) {
       return false
     }
     return enableEpay

@@ -3,6 +3,7 @@ package controller
 import (
 	"strings"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 )
@@ -106,6 +107,26 @@ func isNowPaymentsTopUpEnabled() bool {
 
 func isNowPaymentsWebhookEnabled() bool {
 	return isNowPaymentsTopUpEnabled()
+}
+
+// isDodoPaymentsTopUpEnabled needs the API key that opens checkouts, the
+// webhook secret that proves a payment, and the product the checkout prices.
+func isDodoPaymentsTopUpEnabled() bool {
+	if !isPaymentComplianceConfirmed() {
+		return false
+	}
+	return strings.TrimSpace(setting.DodoPaymentsApiKey) != "" &&
+		strings.TrimSpace(setting.DodoPaymentsWebhookSecret) != "" &&
+		strings.TrimSpace(setting.DodoPaymentsProductId) != ""
+}
+
+// canUseDodoPayments reports whether a user with this role may see and pay
+// through Dodo Payments: anyone once it is open, else administrators only.
+func canUseDodoPayments(role int) bool {
+	if !isDodoPaymentsTopUpEnabled() {
+		return false
+	}
+	return !setting.DodoPaymentsAdminOnly || role >= common.RoleAdminUser
 }
 
 func isEpayTopUpEnabled() bool {
