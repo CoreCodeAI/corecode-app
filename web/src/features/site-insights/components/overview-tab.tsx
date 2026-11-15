@@ -57,6 +57,7 @@ import type {
   RiskInsights,
   UpstreamInsights,
 } from '../types'
+import { DigestSettings } from './digest-settings'
 import { Findings, StaleNote, type Finding } from './insight-kit'
 import {
   closedTrend,
@@ -663,6 +664,7 @@ export function OverviewTab(props: {
 
       <Panel
         title={t('Needs attention')}
+        actions={<DigestSettings />}
         description={
           loading > 0
             ? t('Reading {{count}} more views…', { count: loading })

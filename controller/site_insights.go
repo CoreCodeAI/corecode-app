@@ -521,3 +521,17 @@ func GetDayProfile(c *gin.Context) {
 	}
 	common.ApiSuccess(c, profile)
 }
+
+// TestSiteInsightsDigest sends the digest for yesterday to the saved Feishu
+// bot now, so an admin can check the bot and the figures.
+func TestSiteInsightsDigest(c *gin.Context) {
+	if strings.TrimSpace(operation_setting.GetSiteInsightsDigestSetting().FeishuWebhook) == "" {
+		common.ApiErrorT(c, "Save a Feishu webhook first.")
+		return
+	}
+	if err := service.SendSiteInsightsDigestNow(time.Now()); err != nil {
+		common.ApiErrorT(c, "Feishu did not accept the message: {{error}}", map[string]any{"error": err.Error()})
+		return
+	}
+	common.ApiSuccessT(c, "Test message sent.", nil)
+}

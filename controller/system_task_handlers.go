@@ -24,6 +24,7 @@ func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
 	service.RegisterSystemTaskHandler(systemTaskCleanupHandler{})
 	service.RegisterSystemTaskHandler(topupWatchHandler{})
+	service.RegisterSystemTaskHandler(siteInsightsDigestHandler{})
 }
 
 // topupWatchHandler runs the top-up watch (service/topup_watch.go) every ten
@@ -51,6 +52,30 @@ func (topupWatchHandler) Run(ctx context.Context, task *model.SystemTask, runner
 		}
 	}
 	result, err := service.RunTopupWatch(ctx, common.GetTimestamp(), previous.Alerted)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, result, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, result, nil)
+}
+
+// siteInsightsDigestHandler posts the daily site insights digest
+// (service/site_insights_digest.go). It is checked every ten minutes: a run
+// before the send hour, or after the day was sent, changes nothing.
+type siteInsightsDigestHandler struct{}
+
+func (siteInsightsDigestHandler) Type() string { return model.SystemTaskTypeSiteInsightsDigest }
+
+func (siteInsightsDigestHandler) Enabled() bool {
+	return operation_setting.GetSiteInsightsDigestSetting().Ready()
+}
+
+func (siteInsightsDigestHandler) Interval() time.Duration { return 10 * time.Minute }
+
+func (siteInsightsDigestHandler) NewPayload() any { return nil }
+
+func (siteInsightsDigestHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	result, err := service.RunSiteInsightsDigest(ctx, time.Now())
 	if err != nil {
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, result, err)
 		return
