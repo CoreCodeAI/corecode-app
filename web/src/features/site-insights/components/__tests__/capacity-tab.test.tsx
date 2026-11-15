@@ -415,11 +415,12 @@ describe('capacity on the pool’s own terms', () => {
     data.pool_peak_at = 0
     data.peak_concurrency = 10
     render(<CapacityTab data={data} vendor='all' />, { wrapper })
+    // Once as a line of the verdict, once under the chart's title.
     expect(
-      screen.getByText(
+      screen.getAllByText(
         "No request was served through the pool in this range; the site's, every channel, was 10."
       )
-    ).toBeTruthy()
+    ).toHaveLength(2)
     expect(screen.queryByText(/^Pool peak 0 at/)).toBeNull()
     expect(
       screen.getByText('No request was served through the pool')

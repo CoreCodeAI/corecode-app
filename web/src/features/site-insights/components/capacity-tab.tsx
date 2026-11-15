@@ -42,6 +42,7 @@ import {
   PROVIDER_LABELS,
   previousBeforeLogs,
   rangeHours,
+  SECTIONS,
   SMALL_SAMPLE,
   tableState,
   useErrorCategoryLabel,
@@ -399,6 +400,7 @@ export function CapacityTab(props: {
           loading={loading}
           tone={verdict?.tone ?? 'default'}
           text={verdict?.text}
+          points={verdict?.points}
         />
       )}
       <MetricGrid
@@ -704,6 +706,7 @@ export function CapacityTab(props: {
         </Panel>
         {all && (
           <Panel
+            id={SECTIONS.limitRejections}
             title={t('Users turned away by their limit')}
             help={t(
               "Attempts the per-user concurrency limit answered with 429, a client's retries included. They never reach the request logs."

@@ -48,6 +48,14 @@ export const INSIGHTS_TAB_GROUPS: { key: string; tabs: InsightsTab[] }[] = [
   { key: 'risk', tabs: ['risk'] },
 ]
 
+/** Panels a finding can open its tab at, by the id the panel carries. */
+export const SECTIONS = {
+  sharedAddresses: 'shared-addresses',
+  debtors: 'debtors',
+  models: 'by-model',
+  limitRejections: 'limit-rejections',
+} as const
+
 /** The views the overview reads its signals from. */
 export const OVERVIEW_VIEWS = [
   'capacity',
@@ -354,6 +362,23 @@ export function joinSentences(...parts: (string | false | null | undefined)[]) {
     .filter(Boolean)
     .join(' ')
     .replaceAll(/([。！？；：）])\s+/g, '$1')
+}
+
+/** Names listed in a finding before the rest are only counted. */
+export const NAMED_LIMIT = 3
+
+/**
+ * A long list by its head: the first limit names, then how many more there
+ * are. The tab the finding opens lists them all.
+ */
+export function namedHead(
+  t: TFunction,
+  names: string[],
+  limit = NAMED_LIMIT
+): string {
+  const head = names.slice(0, limit).join(t(', '))
+  const rest = names.length - limit
+  return rest > 0 ? `${head} ${t('+{{count}} more', { count: rest })}` : head
 }
 
 export function failureTone(rate: number): Tone {

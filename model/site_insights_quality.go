@@ -86,13 +86,17 @@ type QualityInsights struct {
 	// included, and the ones that failed, over every model: the rollup keeps
 	// them for the whole site only, so the model filter cannot narrow them.
 	// Absent while the range has hours stored under an older version.
-	Attempts      *int64          `json:"attempts,omitempty"`
-	AttemptErrors *int64          `json:"attempt_errors,omitempty"`
-	ErrorRate     float64         `json:"error_rate"`
-	TTFTP50       int64           `json:"ttft_p50_ms"`
-	TTFTP95       int64           `json:"ttft_p95_ms"`
-	CacheShare    float64         `json:"cache_share"`
-	Models        []ModelQuality  `json:"models"`
+	Attempts      *int64         `json:"attempts,omitempty"`
+	AttemptErrors *int64         `json:"attempt_errors,omitempty"`
+	ErrorRate     float64        `json:"error_rate"`
+	TTFTP50       int64          `json:"ttft_p50_ms"`
+	TTFTP95       int64          `json:"ttft_p95_ms"`
+	CacheShare    float64        `json:"cache_share"`
+	Models        []ModelQuality `json:"models"`
+	// RetiredModels names the models of Models that no enabled channel serves
+	// now: taken off sale since they were last requested, so their failures
+	// are history and not something to act on.
+	RetiredModels []string        `json:"retired_models"`
 	Vendors       []VendorQuality `json:"vendors"`
 	// AllModels is every model's figures whatever the filter selects, for
 	// the quick-select card that clears it. Its Vendor and Models are empty.
@@ -520,7 +524,30 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	if result.Tasks, err = GetTaskOutcomes(r); err != nil {
 		return nil, err
 	}
+	if result.RetiredModels, err = retiredModels(result.Models); err != nil {
+		return nil, err
+	}
 	return result, nil
+}
+
+// retiredModels names, sorted, the listed models that no enabled ability
+// serves now.
+func retiredModels(models []ModelQuality) ([]string, error) {
+	retired := []string{}
+	if len(models) == 0 {
+		return retired, nil
+	}
+	var served []string
+	if err := DB.Model(&Ability{}).Where("enabled = ?", true).Distinct("model").Pluck("model", &served).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range models {
+		if !slices.Contains(served, row.Model) {
+			retired = append(retired, row.Model)
+		}
+	}
+	slices.Sort(retired)
+	return retired, nil
 }
 
 // qualityVendorTopN is how many reasons and status codes the quality view

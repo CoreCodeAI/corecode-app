@@ -41,7 +41,7 @@ import {
   type InsightsRangeInfo,
 } from '../lib'
 import type { RiskInsights } from '../types'
-import { join, type TabVerdict } from './shared'
+import { sentences, type TabVerdict } from './shared'
 
 /** One reason an address ranks where it does, as a badge reads it. */
 export type ClusterReason = { key: string; text: string; tone: Tone }
@@ -231,7 +231,7 @@ export function useRiskVerdict(
     )
   return {
     tone,
-    text: join(
+    ...sentences(
       t('{{count}} sign-ups.', { count: fmt.num(data.signups) }),
       surge && surgeText(surge, data.series_unit === 'day' ? 'day' : 'hour'),
       summary,

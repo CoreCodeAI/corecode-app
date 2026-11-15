@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -38,6 +39,7 @@ import {
   joinSentences,
   previousBeforeLogs,
   rangeHours,
+  SECTIONS,
   SMALL_SAMPLE,
   tableState,
   TONES,
@@ -66,6 +68,7 @@ import {
   modelChange,
   NEARLY_FAILED,
   nearlyFailingModels,
+  onSale,
   rankByExcess,
   serviceFailureRate,
   siteFailureRate,
@@ -378,6 +381,8 @@ export function QualityTab(props: {
   const attempts = data ? attemptsOf(data) : null
   const corrected = countsRequestsOnce(data)
   const ranked = rankByExcess(data?.models, siteRate)
+  // Models taken off sale stay in the table, marked, and rank as the rest do.
+  const retired = new Set(data?.retired_models ?? [])
   const media = data ? mediaModels(data) : new Set<string>()
   const mapped = (data?.models ?? []).filter((row) => row.ttft_p50_ms > 0)
   const unplaced = unplacedModels(data?.models, MAP_MIN_REQUESTS)
@@ -451,6 +456,7 @@ export function QualityTab(props: {
         loading={loading}
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text}
+        points={verdict?.points}
       />
       {data && range && (
         <StaleNote
@@ -719,6 +725,7 @@ export function QualityTab(props: {
         )}
       </Panel>
       <Panel
+        id={SECTIONS.models}
         title={t('By model')}
         description={
           worstModel && worstModel.error_rate > 0
@@ -745,6 +752,7 @@ export function QualityTab(props: {
           empty={t('No requests in this range')}
           faded={(row) =>
             row.requests < SMALL_SAMPLE ||
+            retired.has(row.model) ||
             (props.models.selected.length > 0 &&
               !props.models.selected.includes(row.model))
           }
@@ -753,7 +761,14 @@ export function QualityTab(props: {
               key: 'model',
               label: t('Model'),
               render: (row) => (
-                <span className='font-mono text-xs'>{row.model}</span>
+                <span className='inline-flex items-center gap-1.5'>
+                  <span className='font-mono text-xs'>{row.model}</span>
+                  {retired.has(row.model) && (
+                    <Badge variant='secondary' className='font-normal'>
+                      {t('Off sale')}
+                    </Badge>
+                  )}
+                </span>
               ),
             },
             {
@@ -1049,7 +1064,8 @@ function useQualityFindings(
   }
   // Models failing nearly every request over a fair sample are named once,
   // here, whether or not the task table lists them.
-  const nearly = nearlyFailingModels(data.models)
+  const selling = onSale(data.models, data)
+  const nearly = nearlyFailingModels(selling)
   if (nearly.length === 1) {
     const [row] = nearly
     findings.push({
@@ -1082,7 +1098,7 @@ function useQualityFindings(
     })
   }
   const nearlyNames = new Set(nearly.map((row) => row.model))
-  for (const row of rankByExcess(data.models, siteRate)
+  for (const row of rankByExcess(selling, siteRate)
     .filter((item) => !nearlyNames.has(item.model))
     .slice(0, 3)) {
     if (!failsAboveSite(row, siteRate)) continue

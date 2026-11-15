@@ -258,6 +258,7 @@ export function ChannelsTab(props: {
       <Verdict
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text}
+        points={verdict?.points}
         loading={!data && !failed}
       />
       <MetricGrid
@@ -345,7 +346,6 @@ export function ChannelsTab(props: {
           rangeHours={rangeHours(range)}
         />
       )}
-      <CommissionAccrualFindings rows={rows} />
       <ChannelContractPanel
         costs={data?.costs ?? []}
         current={rows}
@@ -746,6 +746,8 @@ export function ChannelsTab(props: {
           ]}
         />
       </Panel>
+      {/* A note the owner does not act on: last, below the tables. */}
+      <CommissionAccrualFindings rows={rows} />
       <ChannelCostsPanel
         costs={data ? (data.costs ?? []) : undefined}
         state={tableState(viewSource, data?.costs)}

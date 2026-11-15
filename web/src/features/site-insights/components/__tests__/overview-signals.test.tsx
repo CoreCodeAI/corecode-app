@@ -360,3 +360,84 @@ describe('overview quality rate', () => {
     expect(await screen.findByText(/of requests failed/)).toBeInTheDocument()
   })
 })
+
+describe('overview findings kept short', () => {
+  it('leaves models taken off sale out of the failing models and counts them', async () => {
+    const row = (model: string, errors: number) => ({
+      model,
+      vendor: 'other',
+      requests: 200,
+      errors,
+      error_rate: errors / 200,
+    })
+    renderOverview({
+      quality: {
+        ...quality,
+        stale_hours: 0,
+        models: [row('sold-a', 100), row('gone-b', 200), row('fine-c', 0)],
+        retired_models: ['gone-b'],
+      },
+      risk,
+      pool,
+    })
+    expect(
+      await screen.findByText('1 models fail more than 5% of requests')
+    ).toBeInTheDocument()
+    // The top-models table names the model too; the finding's line is the one
+    // that says what was left out.
+    const detail = screen.getByText(/taken off sale/)
+    expect(detail).toHaveTextContent(/^sold-a /)
+    expect(detail).toHaveTextContent(
+      '1 more were taken off sale and are left out.'
+    )
+    expect(detail).not.toHaveTextContent('gone-b')
+  })
+
+  it('names nothing when every failing model was taken off sale', async () => {
+    renderOverview({
+      quality: {
+        ...quality,
+        stale_hours: 0,
+        models: [
+          {
+            model: 'gone-b',
+            vendor: 'other',
+            requests: 200,
+            errors: 200,
+            error_rate: 1,
+          },
+        ],
+        retired_models: ['gone-b'],
+      },
+      risk,
+      pool,
+    })
+    await screen.findByText('Needs attention')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(document.body.textContent).not.toContain('fail more than 5%')
+  })
+
+  it('names the first addresses with several plan buyers and counts the rest', async () => {
+    const shared = [1, 2, 3, 4, 5].map((index) => ({
+      ip: `10.0.0.${index}`,
+      requests: 1,
+      subscription_buyers: 2,
+      users: [1, 2].map((member) => ({
+        user_id: index * 10 + member,
+        username: `u${index}${member}`,
+        requests: 1,
+        paid: true,
+        subscription: true,
+        created_at: 0,
+        balance_usd: 0,
+      })),
+    }))
+    renderOverview({ quality, risk: { ...risk, shared_ips: shared }, pool })
+    expect(
+      await screen.findByText('5 addresses have several plan buyers')
+    ).toBeInTheDocument()
+    const detail = screen.getByText(/10\.0\.0\.\d, /)
+    expect(detail.textContent?.match(/10\.0\.0\.\d/g)).toHaveLength(3)
+    expect(detail).toHaveTextContent('+2 more')
+  })
+})

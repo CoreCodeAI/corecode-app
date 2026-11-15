@@ -149,9 +149,9 @@ export function SinceFee(props: { row: ChannelRow }) {
 }
 
 /**
- * Fee channels still credited commission while their fee ran, one warning
+ * Fee channels still credited commission while their fee ran, one line
  * each, largest first. The net does not subtract it (the fee is the whole
- * deal), but the money is real: the affiliate account can withdraw it.
+ * deal). It is a note, not a warning: the owner does not act on it.
  */
 export function CommissionAccrualFindings(props: { rows: ChannelRow[] }) {
   const { t } = useTranslation()
@@ -160,7 +160,7 @@ export function CommissionAccrualFindings(props: { rows: ChannelRow[] }) {
     const amount = row.commission_accruing ?? 0
     return {
       key: channelKey(row),
-      tone: 'warning',
+      tone: 'default',
       title: t(
         '{{name}} was credited {{amount}} of commission while its fee ran',
         {

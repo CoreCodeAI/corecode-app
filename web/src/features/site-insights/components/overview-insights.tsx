@@ -20,11 +20,12 @@ import { useTranslation } from 'react-i18next'
 
 import { dominant, type Contribution } from '../analysis'
 import {
+  joinSentences,
+  paymentMethodLabel,
   useInsightsFormat,
   useVendorName,
   type InsightsRangeInfo,
   type InsightsTab,
-  paymentMethodLabel,
 } from '../lib'
 import type {
   CapacityInsights,
@@ -70,7 +71,7 @@ export function TabDigest(props: {
   risk: RiskInsights | undefined
   upstream: Pair<UpstreamInsights>
   range?: InsightsRangeInfo
-  onOpen?: (tab: InsightsTab) => void
+  onOpen?: (tab: InsightsTab, section?: string) => void
 }) {
   const { t } = useTranslation()
   const verdicts: [InsightsTab, TabVerdict | undefined][] = [
@@ -83,9 +84,20 @@ export function TabDigest(props: {
     ],
     ['risk', useRiskVerdict(props.risk)],
   ]
-  const items: Finding[] = verdicts.flatMap(([tab, verdict]) =>
-    verdict ? [{ key: tab, tone: verdict.tone, title: verdict.text, tab }] : []
-  )
+  // The headline is the line; the rest of the answer reads under it.
+  const items: Finding[] = verdicts.flatMap(([tab, verdict]) => {
+    if (!verdict) return []
+    const [title = verdict.text, ...rest] = verdict.points
+    return [
+      {
+        key: tab,
+        tone: verdict.tone,
+        title,
+        detail: rest.length > 0 ? joinSentences(...rest) : undefined,
+        tab,
+      },
+    ]
+  })
   if (items.length === 0) return null
   return (
     <Panel

@@ -33,7 +33,7 @@ import {
   type InsightsRangeInfo,
 } from '../lib'
 import type { CapacityInsights } from '../types'
-import { join, useChange, type TabVerdict } from './shared'
+import { sentences, useChange, type TabVerdict } from './shared'
 
 /**
  * The capacity tab's verdict over the slots in view: every pool slot, or one
@@ -129,7 +129,7 @@ export function useCapacityVerdict(
   const turnedAway = pool + engine.limit + engine.budget + limited
   return {
     tone,
-    text: join(
+    ...sentences(
       (() => {
         const moved = change(data.requests, previous?.requests)
         const requests = fmt.num(data.requests)

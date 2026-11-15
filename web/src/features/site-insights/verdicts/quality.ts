@@ -33,13 +33,14 @@ import {
   failureShift,
   hourFlags,
   mixShift,
+  onSale,
   rankByExcess,
   serviceRow,
   siteFailureRate,
   siteTtftP95,
 } from '../quality-analysis'
 import type { QualityInsights } from '../types'
-import { join, worse, type TabVerdict } from './shared'
+import { sentences, worse, type TabVerdict } from './shared'
 
 export function useQualityVerdict(
   data: QualityInsights | undefined,
@@ -69,7 +70,7 @@ export function useQualityVerdict(
       vendor.requests >= SMALL_SAMPLE &&
       vendor.ttft_p95_ms > 10000
   )
-  const failing = rankByExcess(data.models, siteRate).filter(
+  const failing = rankByExcess(onSale(data.models, data), siteRate).filter(
     (row) =>
       failsAboveSite(row, siteRate) && failureTone(row.error_rate) !== 'default'
   )
@@ -222,7 +223,7 @@ export function useQualityVerdict(
 
   return {
     tone,
-    text: join(
+    ...sentences(
       headline,
       driver,
       hours,

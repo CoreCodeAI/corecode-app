@@ -17,14 +17,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
+import { ChevronRight } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 
 import {
   DEBT_ALERT_USD,
   joinSentences,
+  SECTIONS,
   useInsightsFormat,
   useSignupMethodLabel,
   useTabLabel,
@@ -114,84 +119,161 @@ function ListState(props: { state?: TableState; empty: string }) {
   )
 }
 
-/** Shared addresses as a review queue: the riskiest first, each with its reasons. */
+/** Addresses whose accounts show when the list opens; the rest open on a click. */
+export const CLUSTERS_OPEN = 3
+
+/** Addresses listed before the reader asks for them all. */
+export const CLUSTERS_LISTED = 10
+
+/**
+ * Shared addresses as a review queue: the riskiest first, each with its
+ * reasons on one line. The riskiest few show their accounts; the others open
+ * on a click, so a long queue is read as a list before any one is opened.
+ * Past the first ten the list waits to be asked for: they are the least risky.
+ */
 export function ClusterList(props: { clusters: RankedCluster[] }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const reasonsOf = useClusterReasons()
+  // The addresses the reader opened or closed, by address.
+  const [toggled, setToggled] = useState<Record<string, boolean>>({})
+  const [listsAll, setListsAll] = useState(false)
+  const listed = listsAll
+    ? props.clusters
+    : props.clusters.slice(0, CLUSTERS_LISTED)
+  const isOpen = (ip: string, index: number) =>
+    toggled[ip] ?? index < CLUSTERS_OPEN
+  const allOpen = listed.every((cluster, index) => isOpen(cluster.ip, index))
   return (
-    <ul className='grid gap-3'>
-      {props.clusters.map((cluster) => (
-        <li key={cluster.ip} className='min-w-0 rounded-md border px-4 py-3'>
-          <div className='mb-2 flex flex-wrap items-center gap-2 text-sm'>
-            <span className='font-mono'>{cluster.ip}</span>
-            <Badge variant='outline'>
-              {t('{{count}} accounts', { count: cluster.users.length })}
-            </Badge>
-            {reasonsOf(cluster.risk).map((reason) => {
-              let variant: 'destructive' | 'warning' | 'secondary' = 'secondary'
-              if (reason.tone === 'danger') variant = 'destructive'
-              if (reason.tone === 'warning') variant = 'warning'
-              return (
-                <Badge key={reason.key} variant={variant}>
-                  {reason.text}
-                </Badge>
+    <div className='grid gap-2'>
+      {props.clusters.length > CLUSTERS_OPEN && (
+        <div className='flex justify-end'>
+          <Button
+            variant='ghost'
+            size='sm'
+            onClick={() =>
+              setToggled(
+                Object.fromEntries(
+                  listed.map((cluster) => [cluster.ip, !allOpen])
+                )
               )
-            })}
-            <span className='text-muted-foreground text-xs'>
-              {t('{{count}} requests', { count: cluster.requests })}
-            </span>
-          </div>
-          <SimpleTable
-            rows={cluster.users}
-            rowKey={(row) => row.user_id}
-            empty=''
-            columns={[
-              {
-                key: 'user',
-                label: t('User'),
-                render: (row) => <UserLabel {...row} />,
-              },
-              {
-                key: 'created',
-                label: t('Registered'),
-                render: (row) => fmt.time(row.created_at),
-              },
-              {
-                key: 'flags',
-                label: t('Has paid'),
-                render: (row) => {
-                  let plan: string | false = row.subscription && t('Plan')
-                  if (row.limited_plan) plan = t('One-per-user plan')
+            }
+          >
+            {allOpen ? t('Collapse all') : t('Expand All')}
+          </Button>
+        </div>
+      )}
+      <ul className='grid gap-2'>
+        {listed.map((cluster, index) => {
+          const open = isOpen(cluster.ip, index)
+          return (
+            <li key={cluster.ip} className='min-w-0 rounded-md border'>
+              <button
+                type='button'
+                aria-expanded={open}
+                className='hover:bg-muted/40 focus-visible:ring-ring/50 flex w-full flex-wrap items-center gap-2 rounded-md px-4 py-2.5 text-left text-sm outline-none focus-visible:ring-2'
+                onClick={() =>
+                  setToggled((prev) => ({ ...prev, [cluster.ip]: !open }))
+                }
+              >
+                <ChevronRight
+                  aria-hidden
+                  className={cn(
+                    'text-muted-foreground size-4 shrink-0 transition-transform',
+                    open && 'rotate-90'
+                  )}
+                />
+                <span className='font-mono'>{cluster.ip}</span>
+                <Badge variant='outline'>
+                  {t('{{count}} accounts', { count: cluster.users.length })}
+                </Badge>
+                {reasonsOf(cluster.risk).map((reason) => {
+                  let variant: 'destructive' | 'warning' | 'secondary' =
+                    'secondary'
+                  if (reason.tone === 'danger') variant = 'destructive'
+                  if (reason.tone === 'warning') variant = 'warning'
                   return (
-                    [row.paid && t('Topped up'), plan]
-                      .filter(Boolean)
-                      .join(' · ') || '-'
+                    <Badge key={reason.key} variant={variant}>
+                      {reason.text}
+                    </Badge>
                   )
-                },
-              },
-              {
-                key: 'req',
-                label: t('Requests'),
-                align: 'right',
-                render: (row) => fmt.num(row.requests),
-              },
-              {
-                key: 'bal',
-                label: t('Balance'),
-                align: 'right',
-                render: (row) => fmt.usd(row.balance_usd),
-              },
-              {
-                key: 'act',
-                label: t('Actions'),
-                render: (row) => <UserActions {...row} />,
-              },
-            ]}
-          />
-        </li>
-      ))}
-    </ul>
+                })}
+                <span className='text-muted-foreground text-xs'>
+                  {t('{{count}} requests', { count: cluster.requests })}
+                </span>
+              </button>
+              {open && (
+                <div className='border-t px-4 py-3'>
+                  <SimpleTable
+                    rows={cluster.users}
+                    rowKey={(row) => row.user_id}
+                    empty=''
+                    columns={[
+                      {
+                        key: 'user',
+                        label: t('User'),
+                        render: (row) => <UserLabel {...row} />,
+                      },
+                      {
+                        key: 'created',
+                        label: t('Registered'),
+                        render: (row) => fmt.time(row.created_at),
+                      },
+                      {
+                        key: 'flags',
+                        label: t('Has paid'),
+                        render: (row) => {
+                          let plan: string | false =
+                            row.subscription && t('Plan')
+                          if (row.limited_plan) plan = t('One-per-user plan')
+                          return (
+                            [row.paid && t('Topped up'), plan]
+                              .filter(Boolean)
+                              .join(' · ') || '-'
+                          )
+                        },
+                      },
+                      {
+                        key: 'req',
+                        label: t('Requests'),
+                        align: 'right',
+                        render: (row) => fmt.num(row.requests),
+                      },
+                      {
+                        key: 'bal',
+                        label: t('Balance'),
+                        align: 'right',
+                        render: (row) => fmt.usd(row.balance_usd),
+                      },
+                      {
+                        key: 'act',
+                        label: t('Actions'),
+                        render: (row) => <UserActions {...row} />,
+                      },
+                    ]}
+                  />
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {props.clusters.length > CLUSTERS_LISTED && (
+        <div>
+          <Button
+            variant='ghost'
+            size='sm'
+            onClick={() => setListsAll(!listsAll)}
+          >
+            {listsAll
+              ? t('Show the first {{count}} only', { count: CLUSTERS_LISTED })
+              : t('Show all {{count}} addresses', {
+                  count: props.clusters.length,
+                })}
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -298,6 +380,7 @@ export function SharedAddressPanel(props: {
   }
   return (
     <Panel
+      id={SECTIONS.sharedAddresses}
       title={t('Accounts sharing an address')}
       description={description}
       help={help}

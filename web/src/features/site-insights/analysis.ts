@@ -299,6 +299,8 @@ export type Finding = {
   detail?: string
   /** The tab that explains it. */
   tab?: InsightsTab
+  /** The panel of that tab to open at, one of SECTIONS; its top otherwise. */
+  section?: string
   /** A page outside the tabs, used when there is no tab. */
   href?: string
   /** Requests or money it touches; within a tone, the largest leads. */

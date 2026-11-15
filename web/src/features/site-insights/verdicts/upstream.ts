@@ -42,7 +42,7 @@ import {
   upstreamIncidents,
   upstreamTotals,
 } from '../upstream'
-import { join, worse, type TabVerdict } from './shared'
+import { sentences, worse, type TabVerdict } from './shared'
 
 /**
  * The upstream tab's answer. Among channels with SMALL_SAMPLE attempts, the
@@ -276,5 +276,5 @@ export function useUpstreamVerdict(
       )
     }
   }
-  return { tone, text: join(...parts) }
+  return { tone, ...sentences(...parts) }
 }

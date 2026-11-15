@@ -17,7 +17,7 @@ import (
 func useInsightsTestDB(t *testing.T, dialect string) {
 	t.Helper()
 	useAffiliateTestDB(t, dialect)
-	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &UpstreamCost{}, &UserConcurrencyRejection{}, &Task{}, &Checkin{}, &RiskGateEvent{}, &Option{}, &Channel{}}
+	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &UpstreamCost{}, &UserConcurrencyRejection{}, &Task{}, &Checkin{}, &RiskGateEvent{}, &Option{}, &Channel{}, &Ability{}}
 	require.NoError(t, DB.AutoMigrate(extra...))
 	resetInsightReadCaches()
 	t.Cleanup(func() {
@@ -938,6 +938,39 @@ func TestCapacityLeavesOutWhatStaleHoursLack(t *testing.T) {
 
 // Requests refused before any channel, the risk gate's blocks and the async
 // tasks' outcomes reach the quality view.
+// A model no enabled channel serves any more was taken off sale: the quality
+// view names it, so its failures read as history.
+func TestQualityNamesRetiredModels(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			const hour1 = int64(1759248000)
+			r := InsightsRange{Start: hour1, End: hour1 + 3*3600}
+			alice := registerAffiliateTestUser(t, "alice", "")
+			require.NoError(t, LOG_DB.Create(&[]Log{
+				{UserId: alice.Id, Username: "alice", Type: LogTypeConsume, CreatedAt: hour1 + 100, UseTime: 10, ChannelId: 3, ModelName: "served", Other: `{}`},
+				{UserId: alice.Id, Username: "alice", Type: LogTypeConsume, CreatedAt: hour1 + 200, UseTime: 10, ChannelId: 3, ModelName: "disabled", Other: `{}`},
+				{UserId: alice.Id, Username: "alice", Type: LogTypeConsume, CreatedAt: hour1 + 300, UseTime: 10, ChannelId: 3, ModelName: "removed", Other: `{}`},
+			}).Error)
+			require.NoError(t, DB.Create(&[]Ability{
+				{Group: "default", Model: "served", ChannelId: 3, Enabled: true},
+				{Group: "vip", Model: "served", ChannelId: 4, Enabled: false},
+				{Group: "default", Model: "disabled", ChannelId: 3, Enabled: false},
+			}).Error)
+
+			quality, err := GetQualityInsights(r, nil)
+			require.NoError(t, err)
+			assert.Len(t, quality.Models, 3)
+			assert.Equal(t, []string{"disabled", "removed"}, quality.RetiredModels,
+				"a model with one enabled ability is served; one with none, or only disabled ones, is retired")
+
+			empty, err := GetQualityInsights(InsightsRange{Start: hour1 - 7200, End: hour1 - 3600}, nil)
+			require.NoError(t, err)
+			assert.Equal(t, []string{}, empty.RetiredModels, "no model, nothing retired: an empty list, not null")
+		})
+	}
+}
+
 func TestQualityRefusalsAndTasks(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
