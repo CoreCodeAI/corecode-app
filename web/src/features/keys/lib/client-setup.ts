@@ -289,7 +289,9 @@ export const CC_SWITCH_USAGE_INTERVAL_MINUTES = 10
  *
  * `/api/usage/token/` answers to the sk- key itself. `user_quota` only appears
  * when the key allows querying user quota; a limited key can still show its
- * own remaining quota, an unlimited one has nothing to show without it.
+ * own remaining quota, an unlimited one has nothing to show without it. The
+ * account's balance is its wallet (`total_available`) plus what is left on its
+ * active subscriptions (`subscription_available`, absent from older servers).
  */
 export const CC_SWITCH_USAGE_SCRIPT = `({
   request: {
@@ -310,12 +312,13 @@ export const CC_SWITCH_USAGE_SCRIPT = `({
     var perUnit = 500000;
     var account = data.user_quota;
     if (account) {
+      var available = account.total_available + (account.subscription_available || 0);
       return {
         isValid: true,
         planName: "账户余额",
-        remaining: account.total_available / perUnit,
+        remaining: available / perUnit,
         used: account.total_used / perUnit,
-        total: (account.total_available + account.total_used) / perUnit,
+        total: (available + account.total_used) / perUnit,
         unit: "USD"
       };
     }
@@ -379,12 +382,14 @@ export function buildCCSwitchURL(args: {
 /**
  * Where Magpie reads the account balance: the key's usage query, the same one
  * the CC Switch script asks. Magpie's own guess for this query reads the key's
- * remaining quota, which is 0 on the default unlimited key, so the field names
- * `user_quota` (present when the key allows querying user quota) in USD.
- * Magpie only takes a balance URL on one of the provider's own hosts.
+ * remaining quota, which is 0 on the default unlimited key, so the field adds
+ * the wallet and the active subscriptions from `user_quota` (present when the
+ * key allows querying user quota), in USD. Magpie only takes a balance URL on
+ * one of the provider's own hosts.
  */
 const MAGPIE_BALANCE_PATH = '/api/usage/token/'
-const MAGPIE_BALANCE_FIELD = '$data.user_quota.total_available / 500000'
+const MAGPIE_BALANCE_FIELD =
+  '$(data.user_quota.total_available + data.user_quota.subscription_available) / 500000'
 
 /**
  * Web link for Magpie's one-click import. Everything rides in the fragment, so
