@@ -216,3 +216,106 @@ func TestSaveUpstreamFeesRejectsInvalidFees(t *testing.T) {
 		assert.Error(t, SaveUpstreamFees(fees))
 	}
 }
+
+// A Sub2API site's bill comes as day totals. Channel 8's day 0 is billed $8
+// and day 1 $5; the range starts 12 hours into day 0 and ends 12 hours into
+// day 1. Day 0 earned $1 before the range and $3 inside it, so the range takes
+// 3/4 of its bill; day 1 earned nothing, so it takes 12 of its 24 hours.
+// Channel 10 has a fee and a bill, which stops the fee. Channel 11 has
+// request-level rows, which keep it apart from its day bills.
+func TestUpstreamBillDaysDatabaseMatrix(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			previousMap := common.OptionMap
+			common.OptionMap = map[string]string{}
+			t.Cleanup(func() { common.OptionMap = previousMap })
+
+			const day = int64(1759248000) // 2025-10-01 00:00 UTC+8
+			dollar := int64(common.QuotaPerUnit)
+			site := "https://sub.example.cc"
+			require.NoError(t, DB.Create(&[]Channel{
+				{Id: 8, Name: "image", Type: 1, Key: "k8", Status: common.ChannelStatusEnabled, BaseURL: &site},
+				{Id: 10, Name: "fee", Type: 1, Key: "k10", Status: common.ChannelStatusEnabled, BaseURL: &site},
+				{Id: 11, Name: "request", Type: 1, Key: "k11", Status: common.ChannelStatusEnabled, BaseURL: &site},
+			}).Error)
+			require.NoError(t, SaveUpstreamFees(map[int]float64{10: 300}))
+			alice := registerAffiliateTestUser(t, "alice", "")
+			require.NoError(t, LOG_DB.Create(&[]Log{
+				{UserId: alice.Id, Username: "alice", Type: LogTypeConsume, CreatedAt: day + 2*3600, UseTime: 1, ChannelId: 8, ModelName: "image-a", Quota: int(dollar), Other: `{}`},
+				{UserId: alice.Id, Username: "alice", Type: LogTypeConsume, CreatedAt: day + 14*3600, UseTime: 1, ChannelId: 8, ModelName: "image-a", Quota: int(2 * dollar), Other: `{}`},
+				{UserId: alice.Id, Username: "alice", Type: LogTypeConsume, CreatedAt: day + 20*3600, UseTime: 1, ChannelId: 8, ModelName: "image-a", Quota: int(dollar), Other: `{}`},
+			}).Error)
+
+			bill := func(channel int, dayStart int64, name string, usd float64) UpstreamBillDay {
+				return UpstreamBillDay{ChannelId: channel, DayStart: dayStart, ModelName: name, Requests: 1, CostUSD: usd, StandardCostUSD: usd * 1.2, ReadAt: day + 3600}
+			}
+			bills := []UpstreamBillDay{
+				bill(8, day, "image-a", 8),
+				bill(8, day+86400, "image-a", 5),
+				bill(10, day, "unlisted", 7),
+				bill(11, day, "image-a", 100),
+			}
+			require.NoError(t, SaveUpstreamBillDays(8, day, bills[:2]))
+			require.NoError(t, SaveUpstreamBillDays(10, day, bills[2:3]))
+			require.NoError(t, SaveUpstreamBillDays(11, day, bills[3:]))
+			_, err := SaveUpstreamCosts([]UpstreamCost{{ChannelId: 11, RequestId: "r1", CreatedAt: day + 13*3600, ModelName: "image-a", Quota: dollar, QuotaPerUnit: float64(dollar)}})
+			require.NoError(t, err)
+
+			r := InsightsRange{Start: day + 12*3600, End: day + 36*3600, Offset: 8 * 3600}
+			insights, err := GetUpstreamInsights(r)
+			require.NoError(t, err)
+			byID := map[int]UpstreamChannel{}
+			for _, channel := range insights.Channels {
+				byID[channel.ID] = channel
+			}
+
+			image := byID[8]
+			assert.Equal(t, UpstreamCostSourceUpstream, image.CostSource)
+			assert.Equal(t, UpstreamCostGranularityDay, image.CostGranularity)
+			assert.InDelta(t, 8.5, image.CostUSD, 1e-9, "3/4 of day 0 and 12/24 of day 1")
+			assert.Equal(t, day+3600, image.LatestCostAt, "the newest read of the bill")
+			assert.InDelta(t, 3, image.RevenueUSD, 1e-9)
+			var hourCost, dayCost float64
+			for _, hour := range insights.Hourly {
+				if hour.ChannelID == 8 {
+					hourCost += hour.CostUSD
+				}
+			}
+			for _, row := range insights.Daily {
+				if row.ChannelID == 8 {
+					dayCost += row.CostUSD
+				}
+			}
+			assert.InDelta(t, 8.5, hourCost, 1e-9, "the hours carry the bill")
+			assert.InDelta(t, 8.5, dayCost, 1e-9, "and so do the days")
+
+			fee := byID[10]
+			assert.Equal(t, UpstreamCostSourceUpstream, fee.CostSource, "a stored bill stops the fee")
+			assert.NotEqual(t, UpstreamCostGranularityRequest, fee.CostGranularity)
+			assert.InDelta(t, 3.5, fee.CostUSD, 1e-9)
+			assert.InDelta(t, 3.5, fee.UnmatchedCostUSD, 1e-9, "a model no row takes")
+			assert.InDelta(t, 300, fee.MonthlyFeeUSD, 1e-9)
+
+			request := byID[11]
+			assert.Equal(t, UpstreamCostGranularityRequest, request.CostGranularity)
+			assert.InDelta(t, 1, request.CostUSD, 1e-9, "its request rows only; its day bill is not counted")
+
+			// A bill stored again is the same figures, and a day the upstream
+			// lowered is corrected.
+			require.NoError(t, SaveUpstreamBillDays(8, day, bills[:2]))
+			again, err := GetUpstreamInsights(r)
+			require.NoError(t, err)
+			assert.Equal(t, insights, again)
+			lowered := bill(8, day, "image-a", 4)
+			require.NoError(t, SaveUpstreamBillDays(8, day, []UpstreamBillDay{lowered, bills[1]}))
+			lower, err := GetUpstreamInsights(r)
+			require.NoError(t, err)
+			for _, channel := range lower.Channels {
+				if channel.ID == 8 {
+					assert.InDelta(t, 5.5, channel.CostUSD, 1e-9, "4 x 3/4 + 5 x 1/2")
+				}
+			}
+		})
+	}
+}
