@@ -40,9 +40,12 @@ import type {
   VendorQuality,
 } from '../types'
 import { SampleNote } from './insight-kit'
-import { Breakdown, Panel, SimpleTable } from './shared'
+import { Breakdown, Panel, SimpleTable, UserLabel } from './shared'
 
 const LINK = 'text-primary font-medium hover:underline'
+
+/** Users named under the no-channel split. */
+const ASKERS_SHOWN = 5
 
 /** Seconds from submission to finish, short: seconds under two minutes, then minutes. */
 function useFinishTime(): (seconds: number) => string {
@@ -274,6 +277,11 @@ export function RefusalsPanel(props: {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const refusals = props.refusals
+  // Which group lacks which model, and who asked: what to add to a group, or
+  // whom to tell, to make the refusals stop.
+  const split = refusals.no_channel_by ?? []
+  const askers = (refusals.no_channel_users ?? []).slice(0, ASKERS_SHOWN)
+  const splitCount = refusals.no_channel_split ?? 0
   return (
     <Panel
       title={t('Refused before a channel')}
@@ -324,6 +332,59 @@ export function RefusalsPanel(props: {
             </a>
           </p>
         </div>
+        {split.length > 0 && (
+          <div className='grid content-start gap-2 sm:col-span-2'>
+            <p className='text-muted-foreground text-xs'>
+              {t('Which group lacks which model')}
+            </p>
+            <SimpleTable
+              rows={split}
+              rowKey={(row) => `${row.group}\u0000${row.model}`}
+              empty=''
+              columns={[
+                {
+                  key: 'group',
+                  label: t('Group'),
+                  render: (row) => row.group || '-',
+                },
+                {
+                  key: 'model',
+                  label: t('Model'),
+                  render: (row) => (
+                    <span className='font-mono text-xs'>{row.model}</span>
+                  ),
+                },
+                {
+                  key: 'count',
+                  label: t('Requests'),
+                  align: 'right',
+                  render: (row) => fmt.num(row.count),
+                },
+              ]}
+            />
+            {askers.length > 0 && (
+              <p className='flex flex-wrap items-center gap-x-3 gap-y-1 text-xs'>
+                <span className='text-muted-foreground'>{t('Asked most')}</span>
+                {askers.map((user) => (
+                  <span key={user.user_id} className='tabular-nums'>
+                    <UserLabel {...user} /> · {fmt.num(user.count)}
+                  </span>
+                ))}
+              </p>
+            )}
+            {splitCount < refusals.no_channel && (
+              <SampleNote>
+                {t(
+                  '{{split}} of the {{total}} are split by group and model; hours stored earlier kept the count only.',
+                  {
+                    split: fmt.num(splitCount),
+                    total: fmt.num(refusals.no_channel),
+                  }
+                )}
+              </SampleNote>
+            )}
+          </div>
+        )}
       </div>
     </Panel>
   )

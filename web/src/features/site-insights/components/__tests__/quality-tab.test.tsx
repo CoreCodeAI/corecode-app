@@ -370,6 +370,51 @@ describe('QualityTab round 2', () => {
     ).toBeInTheDocument()
   })
 
+  it('says which group lacks which model and who asked, and how much is split', () => {
+    const split = {
+      ...media,
+      refusals: {
+        ...media.refusals,
+        no_channel: 12,
+        no_channel_split: 9,
+        no_channel_by: [
+          { group: 'auto', model: 'seedance-2.5-720p', count: 7 },
+          { group: 'claude-only', model: 'gpt-6', count: 2 },
+        ],
+        no_channel_users: [
+          { user_id: 5, username: 'alice', count: 6 },
+          { user_id: 6, username: 'bob', count: 3 },
+        ],
+      },
+    } as typeof media
+    render(
+      <QualityTab data={split} models={{ selected: [], onChange: vi.fn() }} />
+    )
+    expect(
+      screen.getByText('Which group lacks which model')
+    ).toBeInTheDocument()
+    const row = screen.getByText('claude-only').closest('tr')
+    expect(row).toHaveTextContent('gpt-6')
+    expect(row).toHaveTextContent('2')
+    expect(screen.getByText('Asked most').parentElement).toHaveTextContent(
+      /alice.*6.*bob.*3/
+    )
+    expect(
+      screen.getByText(
+        '9 of the 12 are split by group and model; hours stored earlier kept the count only.'
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('shows no split for a server that sends none', () => {
+    render(
+      <QualityTab data={media} models={{ selected: [], onChange: vi.fn() }} />
+    )
+    expect(
+      screen.queryByText('Which group lacks which model')
+    ).not.toBeInTheDocument()
+  })
+
   it('shares failure reasons over every failure, not the listed ones', () => {
     render(
       <QualityTab data={media} models={{ selected: [], onChange: vi.fn() }} />

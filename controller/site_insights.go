@@ -291,6 +291,12 @@ func GetRiskInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxRiskDays, settledRead("risk", model.GetRiskInsights))
 }
 
+// GetKeyInsights answers the keys view: each API key's requests, failures and
+// spend over the range, from the hourly rollups.
+func GetKeyInsights(c *gin.Context) {
+	serveInsights(c, model.InsightsMaxLogDays, settledRead("keys", model.GetKeyInsights))
+}
+
 func GetGrowthInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxDays, settledRead("growth", model.GetGrowthInsights))
 }

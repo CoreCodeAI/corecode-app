@@ -17,7 +17,7 @@ import (
 func useInsightsTestDB(t *testing.T, dialect string) {
 	t.Helper()
 	useAffiliateTestDB(t, dialect)
-	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &UpstreamCost{}, &UpstreamBillDay{}, &UserConcurrencyRejection{}, &Task{}, &Checkin{}, &RiskGateEvent{}, &Option{}, &Channel{}, &Ability{}}
+	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &InsightKeyHour{}, &Token{}, &UpstreamCost{}, &UpstreamBillDay{}, &UserConcurrencyRejection{}, &Task{}, &Checkin{}, &RiskGateEvent{}, &Option{}, &Channel{}, &Ability{}}
 	require.NoError(t, DB.AutoMigrate(extra...))
 	resetInsightReadCaches()
 	t.Cleanup(func() {
@@ -27,7 +27,7 @@ func useInsightsTestDB(t *testing.T, dialect string) {
 }
 
 // resetInsightReadCaches forgets what a previous test's database read left in
-// the process-wide caches: the earliest log and the day profile.
+// the process-wide caches: the earliest log, the day profile and the open hours.
 func resetInsightReadCaches() {
 	insightLogsSince.mu.Lock()
 	insightLogsSince.value = 0
@@ -35,6 +35,9 @@ func resetInsightReadCaches() {
 	dayProfileCache.mu.Lock()
 	dayProfileCache.profile = nil
 	dayProfileCache.mu.Unlock()
+	openInsightHours.mu.Lock()
+	openInsightHours.byStart = nil
+	openInsightHours.mu.Unlock()
 }
 
 func TestSiteInsightsDatabaseMatrix(t *testing.T) {
@@ -971,6 +974,56 @@ func TestQualityNamesRetiredModels(t *testing.T) {
 	}
 }
 
+// The requests no channel could take are split by the group and model asked
+// for and by who asked, so the page can say which group lacks which model.
+func TestQualitySplitsNoChannelRefusals(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			const hour1 = int64(1759248000)
+			r := InsightsRange{Start: hour1, End: hour1 + 3*3600}
+			alice := registerAffiliateTestUser(t, "alice", "")
+			bob := registerAffiliateTestUser(t, "bob", "")
+			refused := func(user *User, at int64, modelName, group string) Log {
+				return Log{UserId: user.Id, Username: user.Username, Type: LogTypeError, CreatedAt: at, ChannelId: 0, ModelName: modelName, Group: group,
+					Content: NoChannelErrorContent(503, group)}
+			}
+			require.NoError(t, LOG_DB.Create(&[]Log{
+				refused(alice, hour1+10, "seedance", "auto"),
+				refused(alice, hour1+20, "seedance", "auto"),
+				refused(bob, hour1+30, "seedance", "auto"),
+				refused(bob, hour1+3600+10, "gpt-6", "claude-only"),
+				// An upstream that says the same of its own channels is the
+				// channel's failure, not ours.
+				{UserId: bob.Id, Username: "bob", Type: LogTypeError, CreatedAt: hour1 + 40, ChannelId: 7, ModelName: "gpt-6", Group: "auto",
+					Content: "status_code=503, No available channel for model gpt-6 under group auto (retry) (request id: abc)"},
+			}).Error)
+
+			quality, err := GetQualityInsights(r, nil)
+			require.NoError(t, err)
+			require.NotNil(t, quality.Refusals)
+			assert.EqualValues(t, 4, quality.Refusals.NoChannel)
+			assert.EqualValues(t, 4, quality.Refusals.NoChannelSplit, "every hour of the range carries the split")
+			assert.Equal(t, []NoChannelCount{
+				{Group: "auto", Model: "seedance", Count: 3},
+				{Group: "claude-only", Model: "gpt-6", Count: 1},
+			}, quality.Refusals.NoChannelBy)
+			assert.Equal(t, []UserCount{
+				{UserRef: UserRef{UserID: alice.Id, Username: "alice"}, Count: 2},
+				{UserRef: UserRef{UserID: bob.Id, Username: "bob"}, Count: 2},
+			}, quality.Refusals.NoChannelUsers)
+
+			// The stored hours give what the open hours gave.
+			_, err = FillInsightHours(InsightsMaxLogDays, 10)
+			require.NoError(t, err)
+			stored, err := GetQualityInsights(r, nil)
+			require.NoError(t, err)
+			assert.Equal(t, quality.Refusals.NoChannelBy, stored.Refusals.NoChannelBy)
+			assert.Equal(t, quality.Refusals.NoChannelUsers, stored.Refusals.NoChannelUsers)
+		})
+	}
+}
+
 func TestQualityRefusalsAndTasks(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
@@ -999,9 +1052,12 @@ func TestQualityRefusalsAndTasks(t *testing.T) {
 
 			quality, err := GetQualityInsights(r, []string{"seedance"})
 			require.NoError(t, err)
-			assert.Equal(t, &QualityRefusals{NoChannel: 1, RiskGate: 3, RiskGateStages: []NamedCount{
-				{Name: RiskGateStageHardRegex, Count: 2}, {Name: RiskGateStageDecision, Count: 1},
-			}}, quality.Refusals, "observe-mode hits and events outside the range are left out; the model filter does not narrow it")
+			assert.Equal(t, &QualityRefusals{NoChannel: 1, NoChannelSplit: 1,
+				NoChannelBy:    []NoChannelCount{{Group: "vip", Model: "gpt-6", Count: 1}},
+				NoChannelUsers: []UserCount{{UserRef: UserRef{UserID: alice.Id, Username: "alice"}, Count: 1}},
+				RiskGate:       3, RiskGateStages: []NamedCount{
+					{Name: RiskGateStageHardRegex, Count: 2}, {Name: RiskGateStageDecision, Count: 1},
+				}}, quality.Refusals, "observe-mode hits and events outside the range are left out; the model filter does not narrow it")
 
 			all, err := GetQualityInsights(r, nil)
 			require.NoError(t, err)

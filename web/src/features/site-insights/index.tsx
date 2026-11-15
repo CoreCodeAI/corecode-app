@@ -316,6 +316,15 @@ export function SiteInsights() {
     ...previousQuery('business'),
     enabled: tab === 'growth' || tab === 'finance',
   })
+  // The activity tab's keys panel. A server without the view answers 404: the
+  // panel is left out, and nothing is toasted.
+  const keys = useQuery({
+    ...insightsQuery('keys'),
+    enabled: tab === 'activity',
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === 'keys' ? previous : undefined,
+    meta: { errorToast: false },
+  })
   // The overview's own queries, so Refresh shows them loading there too.
   const overviewFetching = useIsFetching({ queryKey: ['site-insights'] })
   // The overview has no query of its own to say where the logs begin: the
@@ -349,6 +358,12 @@ export function SiteInsights() {
     if (next === 'overview') return
     void queryClient.prefetchQuery(insightsQuery(next))
     if (next !== 'pool') void queryClient.prefetchQuery(previousQuery(next))
+    if (next === 'activity') {
+      void queryClient.prefetchQuery({
+        ...insightsQuery('keys'),
+        meta: { errorToast: false },
+      })
+    }
   }
 
   const tabLabels: Record<InsightsTab, string> = {
@@ -389,6 +404,7 @@ export function SiteInsights() {
     ...(readsBusinessPrevious && {
       businessPrevious: sourceState(businessPrevious),
     }),
+    ...(tab === 'activity' && { keys: sourceState(keys) }),
   }
 
   // On a narrow screen the tabs scroll sideways in one row; the open one is
@@ -563,6 +579,7 @@ export function SiteInsights() {
                       data: business.data,
                       previous: businessPrevious.data,
                     }}
+                    keys={keys.data}
                     models={{
                       selected: models,
                       onChange: (next) =>
@@ -620,13 +637,14 @@ export function SiteInsights() {
 }
 
 function InsightsView(props: {
-  view: Exclude<InsightsView, 'business'>
+  view: Exclude<InsightsView, 'business' | 'keys'>
   data: unknown
   previous: unknown
   sources: InsightsSources
   range: InsightsRangeInfo
   onOpen: (tab: InsightsTab, section?: string) => void
   business: { data: unknown; previous: unknown }
+  keys: unknown
   models: { selected: string[]; onChange: (models: string[]) => void }
   pool: {
     provider: PoolProvider
@@ -701,6 +719,7 @@ function InsightsView(props: {
         <ActivityTab
           data={props.data as never}
           previous={previous}
+          keys={props.keys as never}
           range={range}
           onOpen={onOpen}
           {...states}

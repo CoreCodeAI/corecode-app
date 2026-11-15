@@ -5,6 +5,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -55,9 +56,13 @@ import (
 // or staff figures. 6 leaves staff out of every customer figure (the model rows,
 // status codes, error reasons and failed tries), counts staff apart in the
 // summary's staff_models, and splits failed tries by vendor with their
-// reasons and status codes kept to the top ones.
+// reasons and status codes kept to the top ones. 7 adds the figures by API key
+// (InsightKeyHour). A version-6 hour has no key rows, so the keys view reads
+// only the hours stored at version 7 and counts the rest in stale_hours. 7
+// also splits the requests no channel could take by group, model and user
+// (insightSummary.NoChannel); a version-6 hour has the category's count only.
 const (
-	insightHourVersion   = 6
+	insightHourVersion   = 7
 	insightHourLookahead = 2 * 3600
 	insightHourMargin    = 5
 	insightHourSettle    = 10 * 60
@@ -160,7 +165,33 @@ type insightSummary struct {
 	// StaffModels is each model's staff requests and failed staff requests,
 	// which no customer figure includes.
 	StaffModels map[string]*insightStaffUse `json:"staff_models,omitempty"`
-	Truncated   bool                        `json:"truncated,omitempty"`
+	// NoChannel counts the customers' requests no channel could take
+	// (ErrorNoChannel) by the group and model they asked for, keyed
+	// noChannelKey, and NoChannelUsers by the user id that asked. Each keeps
+	// its insightHourTopN largest entries; NoChannelOther counts the groups
+	// and models past them, so NoChannel and it add up to the category.
+	// Absent from a row before version 7.
+	NoChannel      map[string]int64 `json:"no_channel,omitempty"`
+	NoChannelOther int64            `json:"no_channel_other,omitempty"`
+	NoChannelUsers map[string]int64 `json:"no_channel_users,omitempty"`
+	Truncated      bool             `json:"truncated,omitempty"`
+}
+
+// noChannelGroup is the group a refusal recorded before any channel names in
+// its content (NoChannelErrorContent), for a log that carries no group; empty
+// when the content is another no-channel message.
+func noChannelGroup(content string) string {
+	_, group, found := strings.Cut(content, ErrorNoChannel+": no available channel in group ")
+	if !found {
+		return ""
+	}
+	return strings.TrimSpace(group)
+}
+
+// noChannelKey names a group and model in insightSummary.NoChannel; a NUL
+// cannot appear in either.
+func noChannelKey(group, modelName string) string {
+	return group + "\x00" + modelName
 }
 
 // insightStaffUse is one model's staff requests and the ones that failed.
@@ -243,6 +274,9 @@ type insightHour struct {
 	users    map[int]*InsightUserHour
 	models   map[string]*insightModel
 	channels map[insightChannelKey]*insightChannel
+	// keys is the hour's figures by API key; nil for an hour read from the
+	// store, whose key rows the keys view reads by SQL.
+	keys map[insightKeyRowKey]*InsightKeyHour
 }
 
 type insightModel struct {
@@ -428,8 +462,14 @@ type insightRequest struct {
 	// pool is a request an engine channel served.
 	pool bool
 	// category is the last error's, the one a failed request is counted
-	// under.
-	category string
+	// under; clientFault is whether that error was the customer's own
+	// (customerFault).
+	category    string
+	clientFault bool
+	// tokenID and tokenName name the API key the request was sent with; 0
+	// for a request with none.
+	tokenID   int
+	tokenName string
 	// held is whether the request was in flight on a channel, from heldFrom
 	// to heldTo; one refused before any channel was not.
 	held             bool
@@ -475,6 +515,7 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 		users:    make(map[int]*InsightUserHour),
 		models:   make(map[string]*insightModel),
 		channels: make(map[insightChannelKey]*insightChannel),
+		keys:     make(map[insightKeyRowKey]*InsightKeyHour),
 	}
 	summary := &hour.summary
 	summary.Categories = make(map[string]int64)
@@ -503,7 +544,7 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 		finished := max(log.CreatedAt, began+1)
 		request := byID[log.RequestId]
 		if request == nil {
-			request = &insightRequest{userID: log.UserId, began: began}
+			request = &insightRequest{userID: log.UserId, began: began, tokenID: log.TokenId}
 			requests = append(requests, request)
 			if log.RequestId != "" {
 				byID[log.RequestId] = request
@@ -513,12 +554,19 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 		request.began = min(request.began, began)
 		request.modelName = log.ModelName
 		request.group = log.Group
+		if log.TokenName != "" {
+			request.tokenName = log.TokenName
+		}
 		request.attempts++
 		category := ""
 		if log.Type == LogTypeError {
 			category = classifyError(log.Content, other)
 			request.attemptErrors++
 			request.category = category
+			request.clientFault = customerFault(log.Content)
+			if category == ErrorNoChannel && request.group == "" {
+				request.group = noChannelGroup(log.Content)
+			}
 		} else {
 			request.served = true
 			request.pool = request.pool || scope.engines[log.ChannelId]
@@ -583,6 +631,8 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 	}
 	summary.ErrorReasons, summary.ErrorReasonsOther = trimTop(summary.ErrorReasons, insightHourTopN)
 	summary.Clients = keepTop(summary.Clients, insightHourTopN)
+	summary.NoChannel, summary.NoChannelOther = trimTop(summary.NoChannel, insightHourTopN)
+	summary.NoChannelUsers = keepTop(summary.NoChannelUsers, insightHourTopN)
 	for _, failures := range summary.VendorFailures {
 		failures.Reasons, failures.ReasonsOther = trimTop(failures.Reasons, insightHourTopN)
 		failures.StatusCodes, failures.StatusOther = trimTop(failures.StatusCodes, insightHourTopN)
@@ -620,6 +670,14 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 		if request.began < start || request.began >= end {
 			continue
 		}
+		key := hour.keyOf(request.tokenID, request.tokenName, request.userID, !customer, request.modelName)
+		key.Requests++
+		if !request.served {
+			key.Errors++
+			if request.clientFault {
+				key.ClientErrors++
+			}
+		}
 		if !customer {
 			staff := summary.staffOf(request.modelName)
 			staff.Requests++
@@ -652,6 +710,13 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 		}
 		summary.Errors++
 		summary.Categories[request.category]++
+		if request.category == ErrorNoChannel {
+			if summary.NoChannel == nil {
+				summary.NoChannel, summary.NoChannelUsers = map[string]int64{}, map[string]int64{}
+			}
+			summary.NoChannel[noChannelKey(request.group, request.modelName)]++
+			summary.NoChannelUsers[strconv.Itoa(request.userID)]++
+		}
 		vendor.Errors++
 		vendor.Categories[request.category]++
 		switch request.category {
@@ -737,6 +802,7 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 	if !opened {
 		open()
 	}
+	hour.keepTopKeys()
 	return hour, nil
 }
 
@@ -753,7 +819,7 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 func readInsightHourLogs(start, end int64) ([]insightLog, bool, error) {
 	query := func() *gorm.DB {
 		return LOG_DB.Model(&Log{}).
-			Select("id, user_id, username, created_at, type, content, model_name, quota, prompt_tokens, completion_tokens, use_time, is_stream, ip, other, channel_id, request_id, "+logGroupCol).
+			Select("id, user_id, username, created_at, type, content, model_name, quota, prompt_tokens, completion_tokens, use_time, is_stream, ip, other, channel_id, request_id, token_id, token_name, "+logGroupCol).
 			Where("created_at >= ? AND created_at < ? AND created_at - use_time < ? AND type IN ?",
 				start-insightHourMargin, end+insightHourLookahead, end+insightHourMargin, []int{LogTypeConsume, LogTypeError, LogTypeRefund})
 	}
@@ -844,7 +910,9 @@ func (h *insightHour) groupOf(name string) *insightGroupUse {
 // it is stored as it is, and the views stop a figure at zero only once it is
 // summed over what they show.
 func (h *insightHour) addQuota(log insightLog, other logOtherFields, quota int64, scope insightHourScope) {
-	if scope.staff[log.UserId] {
+	staff := scope.staff[log.UserId]
+	h.keyOf(log.TokenId, log.TokenName, log.UserId, staff, log.ModelName).Quota += quota
+	if staff {
 		h.summary.RootQuota += quota
 		return
 	}
@@ -909,8 +977,12 @@ func (h *insightHour) save() error {
 	for _, channel := range h.channels {
 		channels = append(channels, channel.encode())
 	}
+	keys := make([]InsightKeyHour, 0, len(h.keys))
+	for _, key := range h.keys {
+		keys = append(keys, *key)
+	}
 	return DB.Transaction(func(tx *gorm.DB) error {
-		for _, table := range []any{&InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}} {
+		for _, table := range []any{&InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &InsightKeyHour{}} {
 			if err := tx.Where("hour_start = ?", h.start).Delete(table).Error; err != nil {
 				return err
 			}
@@ -930,6 +1002,11 @@ func (h *insightHour) save() error {
 		}
 		if len(channels) > 0 {
 			if err := tx.CreateInBatches(channels, 500).Error; err != nil {
+				return err
+			}
+		}
+		if len(keys) > 0 {
+			if err := tx.CreateInBatches(keys, 500).Error; err != nil {
 				return err
 			}
 		}
