@@ -96,6 +96,8 @@ const defaultBillingSettings: BillingSettings = {
   DodoPaymentsProductId: '',
   DodoPaymentsTestMode: true,
   DodoPaymentsAdminOnly: true,
+  DodoPaymentsMethodTypes: '',
+  DodoPaymentsMaxMoney: 0,
   CreemApiKey: '',
   CreemWebhookSecret: '',
   CreemTestMode: false,

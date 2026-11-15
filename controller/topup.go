@@ -41,9 +41,20 @@ func GetTopUpInfo(c *gin.Context) {
 	// option is never changed.
 	stripeEnabled := isStripeTopUpEnabled()
 	hasStripe := false
+	dodoAllowed := canUseDodoPayments(c.GetInt("role"))
+	hasDodo := false
 	listed := payMethods
 	payMethods = make([]map[string]string, 0, len(listed)+1)
 	for _, method := range listed {
+		// CoreCode: a listed Dodo Payments entry names its button; it shows
+		// only to whom the method is open.
+		if method["type"] == model.PaymentMethodDodoPayments {
+			if !dodoAllowed {
+				continue
+			}
+			hasDodo = true
+			method = dodoPaymentsWalletMethod(method)
+		}
 		if isStripeWalletMethod(method["type"]) {
 			if !stripeEnabled {
 				continue
@@ -122,18 +133,14 @@ func GetTopUpInfo(c *gin.Context) {
 
 	// CoreCode addition: Dodo Payments Checkout, shown to administrators only
 	// while DodoPaymentsAdminOnly is on. Its order is priced like epay's, so
-	// the console quotes it through /api/user/amount.
-	if canUseDodoPayments(c.GetInt("role")) {
-		name := "Dodo Payments"
-		if setting.DodoPaymentsTestMode {
-			name = "Dodo Payments (Test)"
-		}
-		payMethods = append(payMethods, map[string]string{
-			"name":      name,
-			"type":      model.PaymentMethodDodoPayments,
-			"color":     "#0F172A",
-			"min_topup": strconv.Itoa(operation_setting.MinTopUp),
-		})
+	// the console quotes it through /api/user/amount. Without a listed entry,
+	// one is appended.
+	if dodoAllowed && !hasDodo {
+		payMethods = append(payMethods, dodoPaymentsWalletMethod(map[string]string{
+			"name":  "Dodo Payments",
+			"type":  model.PaymentMethodDodoPayments,
+			"color": "#0F172A",
+		}))
 	}
 
 	data := gin.H{
@@ -171,6 +178,19 @@ func GetTopUpInfo(c *gin.Context) {
 		"concurrency":    userConcurrencyInfo(c.GetInt("id"), c.GetString("group")),
 	}
 	common.ApiSuccess(c, data)
+}
+
+// dodoPaymentsWalletMethod copies a Dodo Payments wallet entry, marks it in
+// test mode, and gives it the epay minimum unless it names its own.
+func dodoPaymentsWalletMethod(method map[string]string) map[string]string {
+	method = maps.Clone(method)
+	if setting.DodoPaymentsTestMode {
+		method["name"] += " (Test)"
+	}
+	if method["min_topup"] == "" {
+		method["min_topup"] = strconv.Itoa(operation_setting.MinTopUp)
+	}
+	return method
 }
 
 // UserConcurrency tells a customer their concurrency limit, what they have

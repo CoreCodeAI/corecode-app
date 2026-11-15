@@ -90,6 +90,9 @@ func TestDodoPaymentsCheckoutAndWebhookCreditOnce(t *testing.T) {
 		dbType, logDBType              common.DatabaseType
 		master, memoryCache            bool
 		sqlitePath                     string
+		methodTypes                    string
+		maxMoney                       float64
+		payMethods                     []map[string]string
 	}{
 		setting.DodoPaymentsApiKey, setting.DodoPaymentsWebhookSecret, setting.DodoPaymentsProductId,
 		setting.DodoPaymentsTestMode, setting.DodoPaymentsAdminOnly, dodoPaymentsAPIBase,
@@ -97,6 +100,7 @@ func TestDodoPaymentsCheckoutAndWebhookCreditOnce(t *testing.T) {
 		operation_setting.GetPaymentSetting().ComplianceTermsVersion,
 		common.QuotaPerUnit, operation_setting.Price, operation_setting.MinTopUp, model.DB, model.LOG_DB,
 		common.MainDatabaseType(), common.LogDatabaseType(), common.IsMasterNode, common.MemoryCacheEnabled, common.SQLitePath,
+		setting.DodoPaymentsMethodTypes, setting.DodoPaymentsMaxMoney, operation_setting.PayMethods,
 	}
 	// InitDB sets the quoted column names GetUserGroup reads with.
 	t.Setenv("SQL_DSN", "")
@@ -138,6 +142,8 @@ func TestDodoPaymentsCheckoutAndWebhookCreditOnce(t *testing.T) {
 		stub.Close()
 		setting.DodoPaymentsApiKey, setting.DodoPaymentsWebhookSecret, setting.DodoPaymentsProductId = previous.apiKey, previous.webhookSecret, previous.product
 		setting.DodoPaymentsTestMode, setting.DodoPaymentsAdminOnly = previous.testMode, previous.adminOnly
+		setting.DodoPaymentsMethodTypes, setting.DodoPaymentsMaxMoney = previous.methodTypes, previous.maxMoney
+		operation_setting.PayMethods = previous.payMethods
 		dodoPaymentsAPIBase = previous.apiBase
 		common.RedisEnabled = previous.redis
 		common.QuotaPerUnit = previous.quotaPerUnit
@@ -245,4 +251,65 @@ func TestDodoPaymentsCheckoutAndWebhookCreditOnce(t *testing.T) {
 	assert.Equal(t, setting.DodoPaymentsLiveAPIBase, dodoPaymentsBaseURL())
 	setting.DodoPaymentsTestMode = true
 	assert.Equal(t, setting.DodoPaymentsTestAPIBase, dodoPaymentsBaseURL())
+
+	// A WeChat-only checkout lists only WeChat Pay and refuses an order above
+	// WeChat's 1000 CNY limit before opening a session.
+	dodoPaymentsAPIBase = stub.URL
+	setting.DodoPaymentsMethodTypes, setting.DodoPaymentsMaxMoney = " We_Chat_Pay ,", 1000
+	before := len(checkouts)
+	tooLarge := pay(admin, 1001)
+	assert.Equal(t, "error", tooLarge["message"])
+	assert.Contains(t, tooLarge["data"], "1000")
+	assert.Len(t, checkouts, before, "no checkout is opened above the cap")
+	require.Equal(t, "success", pay(admin, 1000)["message"])
+	require.Len(t, checkouts, before+1)
+	assert.Equal(t, []any{"we_chat_pay"}, checkouts[before]["allowed_payment_method_types"])
+	assert.Equal(t, []any{map[string]any{"product_id": "pdt_topup", "quantity": float64(1), "amount": float64(100000)}}, checkouts[before]["product_cart"])
+
+	// A listed entry names the button for an administrator, is marked in test
+	// mode, and stays hidden from a customer while the method is admin-only.
+	operation_setting.PayMethods = []map[string]string{
+		{"name": "支付宝", "type": "alipay"},
+		{"name": "微信支付 (Dodo)", "type": model.PaymentMethodDodoPayments, "icon": "SiWechat"},
+	}
+	topUpMethods := func(user *model.User) []map[string]any {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "/api/user/topup/info", nil)
+		ctx.Set("id", user.Id)
+		ctx.Set("role", user.Role)
+		GetTopUpInfo(ctx)
+		var response struct {
+			Data struct {
+				PayMethods []map[string]any `json:"pay_methods"`
+			} `json:"data"`
+		}
+		require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+		return response.Data.PayMethods
+	}
+	dodoEntries := func(methods []map[string]any) []map[string]any {
+		var found []map[string]any
+		for _, method := range methods {
+			if method["type"] == model.PaymentMethodDodoPayments {
+				found = append(found, method)
+			}
+		}
+		return found
+	}
+	adminDodo := dodoEntries(topUpMethods(admin))
+	require.Len(t, adminDodo, 1, "the listed entry replaces the default one")
+	assert.Equal(t, "微信支付 (Dodo) (Test)", adminDodo[0]["name"])
+	assert.Equal(t, "SiWechat", adminDodo[0]["icon"])
+	assert.Equal(t, "1", adminDodo[0]["min_topup"])
+	assert.Empty(t, dodoEntries(topUpMethods(customer)))
+	assert.Equal(t, "微信支付 (Dodo)", operation_setting.PayMethods[1]["name"], "the shared option is not changed")
+}
+
+func TestDodoPaymentsMethodTypes(t *testing.T) {
+	assert.Equal(t, []string{"we_chat_pay", "credit"}, setting.ParseDodoPaymentsMethodTypes(" WE_CHAT_PAY, credit,,we_chat_pay "))
+	assert.Empty(t, setting.ParseDodoPaymentsMethodTypes(" , "))
+	assert.True(t, setting.ValidDodoPaymentsMethodType("ali_pay_hk"))
+	assert.False(t, setting.ValidDodoPaymentsMethodType("we-chat"))
+	assert.False(t, setting.ValidDodoPaymentsMethodType("card1"))
+	assert.False(t, setting.ValidDodoPaymentsMethodType(""))
 }

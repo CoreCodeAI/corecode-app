@@ -9458,6 +9458,14 @@
     "The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.": "API key, webhook secret và sản phẩm thuộc cùng một chế độ. Hãy thay cả ba khi chuyển giữa chế độ thử nghiệm và chính thức.",
     "Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.": "Gửi yêu cầu đến môi trường thử nghiệm của Dodo Payments, không có tiền thật bị trừ. Đơn thử nghiệm đã thanh toán vẫn được cộng vào tài khoản.",
     "Administrators only": "Chỉ quản trị viên",
-    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Chỉ hiển thị phương thức Dodo Payments cho quản trị viên và từ chối đơn hàng của người dùng khác."
+    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Chỉ hiển thị phương thức Dodo Payments cho quản trị viên và từ chối đơn hàng của người dùng khác.",
+    "To name the wallet button, add a payment method with type dodopayments under General.": "Để đặt tên nút ví, hãy thêm phương thức thanh toán có type là dodopayments trong mục Chung.",
+    "Payment method types": "Loại phương thức thanh toán",
+    "Comma-separated Dodo method types, such as we_chat_pay. Leave empty to offer every method the order allows.": "Các loại phương thức Dodo, phân tách bằng dấu phẩy, ví dụ we_chat_pay. Để trống để cung cấp mọi phương thức đơn hàng cho phép.",
+    "Order cap (CNY)": "Giới hạn mỗi đơn (CNY)",
+    "The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.": "Số tiền tối đa một đơn hàng được thu; 0 là không giới hạn. WeChat Pay nhận tối đa 1000 mỗi lần thanh toán.",
+    "Enter Dodo Payments method types separated by commas, such as we_chat_pay.": "Nhập các loại phương thức Dodo Payments, phân tách bằng dấu phẩy, ví dụ we_chat_pay.",
+    "The Dodo Payments order cap must be a number of yuan, 0 or more.": "Giới hạn đơn Dodo Payments phải là số tiền nhân dân tệ từ 0 trở lên.",
+    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "Phương thức này nhận tối đa ¥{{max}} mỗi đơn. Hãy chọn số tiền nhỏ hơn hoặc phương thức khác."
   }
 }

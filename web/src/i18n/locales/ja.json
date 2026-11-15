@@ -9458,6 +9458,14 @@
     "The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.": "API キー、Webhook シークレット、商品は同じモードに属します。テストと本番を切り替えるときは 3 つすべてを置き換えてください。",
     "Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.": "リクエストを Dodo Payments のテスト環境に送ります。実際の請求は発生しません。支払い済みのテスト注文もアカウントに入金されます。",
     "Administrators only": "管理者のみ",
-    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Dodo Payments の支払い方法を管理者にのみ表示し、それ以外のユーザーの注文は拒否します。"
+    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Dodo Payments の支払い方法を管理者にのみ表示し、それ以外のユーザーの注文は拒否します。",
+    "To name the wallet button, add a payment method with type dodopayments under General.": "ウォレットのボタン名を設定するには、「一般」で type が dodopayments の支払い方法を追加してください。",
+    "Payment method types": "支払い方法の種類",
+    "Comma-separated Dodo method types, such as we_chat_pay. Leave empty to offer every method the order allows.": "カンマ区切りの Dodo 支払い方法の種類（例: we_chat_pay）。空欄にすると、注文で使えるすべての方法を表示します。",
+    "Order cap (CNY)": "1 注文の上限（人民元）",
+    "The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.": "1 回の注文で請求できる上限額。0 は上限なし。WeChat Pay は 1 回 1000 までです。",
+    "Enter Dodo Payments method types separated by commas, such as we_chat_pay.": "Dodo Payments の支払い方法の種類をカンマ区切りで入力してください（例: we_chat_pay）。",
+    "The Dodo Payments order cap must be a number of yuan, 0 or more.": "Dodo Payments の上限は 0 以上の人民元金額にしてください。",
+    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "この支払い方法は 1 注文あたり最大 ¥{{max}} です。金額を減らすか、別の方法を選んでください。"
   }
 }

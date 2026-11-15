@@ -9458,6 +9458,14 @@
     "The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.": "API 密钥、Webhook 密钥和产品属于同一模式。在测试与正式之间切换时，三者都要替换。",
     "Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.": "请求发往 Dodo Payments 测试环境，不产生真实扣款。已支付的测试订单仍会给账户入账。",
     "Administrators only": "仅管理员可见",
-    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Dodo Payments 支付方式仅对管理员显示，其他用户的下单请求会被拒绝。"
+    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Dodo Payments 支付方式仅对管理员显示，其他用户的下单请求会被拒绝。",
+    "To name the wallet button, add a payment method with type dodopayments under General.": "要自定义钱包按钮名称，请在“通用设置”中添加 type 为 dodopayments 的支付方式。",
+    "Payment method types": "支付方式类型",
+    "Comma-separated Dodo method types, such as we_chat_pay. Leave empty to offer every method the order allows.": "以逗号分隔的 Dodo 支付方式类型，例如 we_chat_pay。留空则提供订单可用的全部方式。",
+    "Order cap (CNY)": "单笔上限（人民币）",
+    "The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.": "单笔订单最多收取的金额；0 表示不设上限。微信支付单笔最多 1000。",
+    "Enter Dodo Payments method types separated by commas, such as we_chat_pay.": "请输入以逗号分隔的 Dodo Payments 支付方式类型，例如 we_chat_pay。",
+    "The Dodo Payments order cap must be a number of yuan, 0 or more.": "Dodo Payments 单笔上限必须是不小于 0 的人民币金额。",
+    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "该支付方式单笔最多 ¥{{max}}。请选择更小的金额或其他支付方式。"
   }
 }

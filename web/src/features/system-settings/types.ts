@@ -349,6 +349,8 @@ export type BillingSettings = {
   DodoPaymentsProductId?: string
   DodoPaymentsTestMode: boolean
   DodoPaymentsAdminOnly: boolean
+  DodoPaymentsMethodTypes?: string
+  DodoPaymentsMaxMoney?: number
   CreemApiKey: string
   CreemWebhookSecret: string
   CreemTestMode: boolean

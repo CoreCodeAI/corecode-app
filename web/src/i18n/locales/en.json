@@ -9458,6 +9458,14 @@
     "The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.": "The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.",
     "Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.": "Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.",
     "Administrators only": "Administrators only",
-    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Show the Dodo Payments method to administrators only, and refuse orders from anyone else."
+    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.",
+    "To name the wallet button, add a payment method with type dodopayments under General.": "To name the wallet button, add a payment method with type dodopayments under General.",
+    "Payment method types": "Payment method types",
+    "Comma-separated Dodo method types, such as we_chat_pay. Leave empty to offer every method the order allows.": "Comma-separated Dodo method types, such as we_chat_pay. Leave empty to offer every method the order allows.",
+    "Order cap (CNY)": "Order cap (CNY)",
+    "The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.": "The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.",
+    "Enter Dodo Payments method types separated by commas, such as we_chat_pay.": "Enter Dodo Payments method types separated by commas, such as we_chat_pay.",
+    "The Dodo Payments order cap must be a number of yuan, 0 or more.": "The Dodo Payments order cap must be a number of yuan, 0 or more.",
+    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method."
   }
 }

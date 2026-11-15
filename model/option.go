@@ -145,6 +145,8 @@ func InitOptionMap() {
 	common.OptionMap["DodoPaymentsProductId"] = setting.DodoPaymentsProductId
 	common.OptionMap["DodoPaymentsTestMode"] = strconv.FormatBool(setting.DodoPaymentsTestMode)
 	common.OptionMap["DodoPaymentsAdminOnly"] = strconv.FormatBool(setting.DodoPaymentsAdminOnly)
+	common.OptionMap["DodoPaymentsMethodTypes"] = setting.DodoPaymentsMethodTypes
+	common.OptionMap["DodoPaymentsMaxMoney"] = strconv.FormatFloat(setting.DodoPaymentsMaxMoney, 'f', -1, 64)
 	common.OptionMap["WaffoPancakeStoreID"] = setting.WaffoPancakeStoreID
 	common.OptionMap["WaffoPancakeProductID"] = setting.WaffoPancakeProductID
 	common.OptionMap["TopupGroupRatio"] = common.TopupGroupRatio2JSONString()
@@ -668,6 +670,10 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.DodoPaymentsTestMode = value == "true"
 	case "DodoPaymentsAdminOnly":
 		setting.DodoPaymentsAdminOnly = value == "true"
+	case "DodoPaymentsMethodTypes":
+		setting.DodoPaymentsMethodTypes = value
+	case "DodoPaymentsMaxMoney":
+		setting.DodoPaymentsMaxMoney, _ = strconv.ParseFloat(value, 64)
 	case "TopupGroupRatio":
 		err = common.UpdateTopupGroupRatioByJSONString(value)
 	case "GitHubClientId":

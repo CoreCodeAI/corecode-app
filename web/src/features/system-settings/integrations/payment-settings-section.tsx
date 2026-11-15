@@ -199,6 +199,18 @@ const paymentSchema = z.object({
   DodoPaymentsProductId: z.string(),
   DodoPaymentsTestMode: z.boolean(),
   DodoPaymentsAdminOnly: z.boolean(),
+  DodoPaymentsMethodTypes: z.string().refine(
+    (value) =>
+      value
+        .split(',')
+        .map((part) => part.trim())
+        .every((part) => part === '' || /^[a-zA-Z_]+$/.test(part)),
+    {
+      message:
+        'Enter Dodo Payments method types separated by commas, such as we_chat_pay.',
+    }
+  ),
+  DodoPaymentsMaxMoney: z.coerce.number().min(0),
   CreemApiKey: z.string(),
   CreemWebhookSecret: z.string(),
   CreemTestMode: z.boolean(),
@@ -544,6 +556,8 @@ export function PaymentSettingsSection({
       DodoPaymentsProductId: values.DodoPaymentsProductId.trim(),
       DodoPaymentsTestMode: values.DodoPaymentsTestMode,
       DodoPaymentsAdminOnly: values.DodoPaymentsAdminOnly,
+      DodoPaymentsMethodTypes: values.DodoPaymentsMethodTypes.trim(),
+      DodoPaymentsMaxMoney: values.DodoPaymentsMaxMoney,
       CreemApiKey: values.CreemApiKey.trim(),
       CreemWebhookSecret: values.CreemWebhookSecret.trim(),
       CreemTestMode: values.CreemTestMode,
@@ -609,6 +623,9 @@ export function PaymentSettingsSection({
       DodoPaymentsProductId: initialRef.current.DodoPaymentsProductId.trim(),
       DodoPaymentsTestMode: initialRef.current.DodoPaymentsTestMode,
       DodoPaymentsAdminOnly: initialRef.current.DodoPaymentsAdminOnly,
+      DodoPaymentsMethodTypes:
+        initialRef.current.DodoPaymentsMethodTypes.trim(),
+      DodoPaymentsMaxMoney: initialRef.current.DodoPaymentsMaxMoney,
       CreemApiKey: initialRef.current.CreemApiKey.trim(),
       CreemWebhookSecret: initialRef.current.CreemWebhookSecret.trim(),
       CreemTestMode: initialRef.current.CreemTestMode,
@@ -861,6 +878,20 @@ export function PaymentSettingsSection({
       updates.push({
         key: 'DodoPaymentsAdminOnly',
         value: sanitized.DodoPaymentsAdminOnly,
+      })
+    }
+
+    if (sanitized.DodoPaymentsMethodTypes !== initial.DodoPaymentsMethodTypes) {
+      updates.push({
+        key: 'DodoPaymentsMethodTypes',
+        value: sanitized.DodoPaymentsMethodTypes,
+      })
+    }
+
+    if (sanitized.DodoPaymentsMaxMoney !== initial.DodoPaymentsMaxMoney) {
+      updates.push({
+        key: 'DodoPaymentsMaxMoney',
+        value: sanitized.DodoPaymentsMaxMoney,
       })
     }
 
@@ -1911,6 +1942,11 @@ export function PaymentSettingsSection({
                         'The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.'
                       )}
                     </li>
+                    <li>
+                      {t(
+                        'To name the wallet button, add a payment method with type dodopayments under General.'
+                      )}
+                    </li>
                   </ul>
                 </div>
 
@@ -1976,6 +2012,51 @@ export function PaymentSettingsSection({
                     </FormItem>
                   )}
                 />
+
+                <div className='grid gap-6 md:grid-cols-2'>
+                  <FormField
+                    control={form.control}
+                    name='DodoPaymentsMethodTypes'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Payment method types')}</FormLabel>
+                        <FormControl>
+                          <Input placeholder='we_chat_pay' {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Comma-separated Dodo method types, such as we_chat_pay. Leave empty to offer every method the order allows.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='DodoPaymentsMaxMoney'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Order cap (CNY)')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='number'
+                            min={0}
+                            step='0.01'
+                            {...safeNumberFieldProps(field)}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
                 <FormField
                   control={form.control}
