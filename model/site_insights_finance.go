@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/shopspring/decimal"
@@ -519,7 +520,11 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 	if err != nil {
 		return nil, err
 	}
-	result.GroupAllocations = allocateGroupMargins(upstream, usage, userRevenue)
+	engines, err := EngineChannelIDs(operation_setting.EngineControlURL)
+	if err != nil {
+		return nil, err
+	}
+	result.GroupAllocations = allocateGroupMargins(upstream, usage, userRevenue, engines)
 	for _, day := range days {
 		day.Topup, day.Subscription, day.ConsumptionUSD = roundTo(day.Topup, 2), roundTo(day.Subscription, 2), roundTo(max(day.ConsumptionUSD, 0), 4)
 		day.RecognizedRevenue = roundTo(max(day.RecognizedRevenue, 0), 2)
@@ -792,7 +797,9 @@ func vendorUpstreamCosts(upstream *UpstreamInsights) (rows []VendorUpstreamCost,
 		shared := channel.CostUSD
 		if channel.CostSource == UpstreamCostSourceUpstream {
 			for vendor, usd := range billed[channel.ID] {
-				if usd > 0 {
+				// A bill under no vendor of ours, where that vendor earned
+				// nothing, stays in the remainder the earning vendors share.
+				if usd > 0 && !unnamedBill(vendor, revenue[channel.ID]) {
 					rowOf(vendor).BillUSD += usd
 					shared -= usd
 				}

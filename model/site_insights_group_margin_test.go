@@ -65,7 +65,8 @@ func TestGroupAllocationsReconcileWithVendorTotals(t *testing.T) {
 	// User 6 has revenue and no use at all.
 	revenue := map[int]float64{1: 30, 2: 20, 5: 10, 6: 3}
 
-	rows := allocateGroupMargins(upstream, usage, revenue)
+	// Channel 4 is the pool's own; the others are upstream sites.
+	rows := allocateGroupMargins(upstream, usage, revenue, map[int]bool{4: true})
 	vendors, unattributedBill, unattributedFee := vendorUpstreamCosts(upstream)
 	var vendorBill, vendorFee float64
 	for _, vendor := range vendors {
@@ -109,12 +110,16 @@ func TestGroupAllocationsReconcileWithVendorTotals(t *testing.T) {
 	assert.InDelta(t, 3, allocationRowOf(t, rows, unattributed).RecognizedRevenue, 0.001)
 	assert.InDelta(t, 5, allocationRowOf(t, rows, unattributed).FeeUSD, 0.001)
 
-	// Claude's pool use is A 80 (60 and 20), B 20, staff 10 and C 5. Codex's is
-	// B 4 and D 16.
-	assert.InDelta(t, 80.0/115, allocationRowOf(t, rows, a).PoolShare[VendorClaude], 1e-9)
-	assert.InDelta(t, 4.0/20, allocationRowOf(t, rows, b).PoolShare[VendorCodex], 1e-9)
-	assert.InDelta(t, 16.0/20, allocationRowOf(t, rows, d).PoolShare[VendorCodex], 1e-9)
-	assert.InDelta(t, 1, allocationRowOf(t, rows, unattributed).PoolShare[VendorGrok], 1e-9, "a vendor with no use is unattributed")
+	// A pool's cost follows use on the pool's own channel only. Claude's there
+	// is A 20 and C 5; codex's is D 10. A's 60, B's 20 and staff's 10 of claude
+	// went through channel 2, an upstream site, and carry its bill instead.
+	assert.InDelta(t, 20.0/25, allocationRowOf(t, rows, a).PoolShare[VendorClaude], 1e-9)
+	assert.InDelta(t, 5.0/25, allocationRowOf(t, rows, c).PoolShare[VendorClaude], 1e-9)
+	assert.Zero(t, allocationRowOf(t, rows, b).PoolShare[VendorClaude], "B never reached the pool")
+	assert.Zero(t, allocationRowOf(t, rows, staffKey).PoolShare[VendorClaude])
+	assert.InDelta(t, 1, allocationRowOf(t, rows, d).PoolShare[VendorCodex], 1e-9)
+	assert.Zero(t, allocationRowOf(t, rows, b).PoolShare[VendorCodex], "B's gpt-5 ran on an upstream site")
+	assert.InDelta(t, 1, allocationRowOf(t, rows, unattributed).PoolShare[VendorGrok], 1e-9, "a pool that served nothing is unattributed")
 
 	// Rows come groups first by revenue, then staff, then unattributed.
 	require.Len(t, rows, 6)
@@ -138,6 +143,9 @@ func TestGroupAllocationsSplitAUserAcrossGroupsByDatabase(t *testing.T) {
 			require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"A":1,"B":2}`))
 			t.Cleanup(func() { require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousRatios)) })
 
+			// Channel 4 is the pool's: its host is not public.
+			engine := "http://gpt-load:3001"
+			require.NoError(t, DB.Create(&Channel{Id: 4, Name: "pool", Type: 1, Key: "k4", Status: common.ChannelStatusEnabled, BaseURL: &engine}).Error)
 			alice := registerAffiliateTestUser(t, "alice", "")
 			root := &User{Username: "root", DisplayName: "root", Role: common.RoleRootUser, Status: common.UserStatusEnabled}
 			require.NoError(t, root.Insert(0))
@@ -147,9 +155,9 @@ func TestGroupAllocationsSplitAUserAcrossGroupsByDatabase(t *testing.T) {
 			require.NoError(t, LOG_DB.Create(&Log{UserId: alice.Id, Username: "alice", Type: LogTypeConsume, CreatedAt: day1 + 1000,
 				ModelName: "claude-opus", Quota: int(4 * dollar), Other: `{"billing_source":"wallet"}`}).Error)
 			require.NoError(t, DB.Create(&[]QuotaData{
-				{UserID: alice.Id, Username: "alice", ModelName: "claude-opus", UseGroup: "A", CreatedAt: day1, Count: 3, Quota: int(3 * dollar)},
-				{UserID: alice.Id, Username: "alice", ModelName: "claude-opus", UseGroup: "B", CreatedAt: day1, Count: 1, Quota: int(dollar)},
-				{UserID: root.Id, Username: "root", ModelName: "claude-opus", UseGroup: "A", CreatedAt: day1, Count: 2, Quota: int(2 * dollar)},
+				{UserID: alice.Id, Username: "alice", ModelName: "claude-opus", UseGroup: "A", ChannelID: 4, CreatedAt: day1, Count: 3, Quota: int(3 * dollar)},
+				{UserID: alice.Id, Username: "alice", ModelName: "claude-opus", UseGroup: "B", ChannelID: 4, CreatedAt: day1, Count: 1, Quota: int(dollar)},
+				{UserID: root.Id, Username: "root", ModelName: "claude-opus", UseGroup: "A", ChannelID: 4, CreatedAt: day1, Count: 2, Quota: int(2 * dollar)},
 			}).Error)
 
 			finance, err := financeInsightsAt(r, r.End)
@@ -171,5 +179,49 @@ func TestGroupAllocationsSplitAUserAcrossGroupsByDatabase(t *testing.T) {
 			assert.InDelta(t, 0.5/total, allocationRowOf(t, rows, allocationKey{AllocationGroup, "B"}).PoolShare[VendorClaude], 1e-9)
 			assert.InDelta(t, 2/total, allocationRowOf(t, rows, staffKey).PoolShare[VendorClaude], 1e-9, "staff's use is its own row")
 		})
+	}
+}
+
+// A pool no request reached is an idle cost, and a bill the upstream names its
+// own way belongs to the vendor that earned on the channel.
+func TestGroupAllocationsKeepAnIdlePoolAndAnUnnamedBillOffTheWrongRows(t *testing.T) {
+	upstream := &UpstreamInsights{
+		Channels: []UpstreamChannel{
+			// GPT on an upstream site, billed 12 by request.
+			{ID: 13, CostSource: UpstreamCostSourceUpstream, CostUSD: 12},
+			// Video on a site that bills by day under its own model names.
+			{ID: 9, CostSource: UpstreamCostSourceUpstream, CostUSD: 33},
+		},
+		Models: []UpstreamModel{
+			{Model: "gpt-6.1-sol", ChannelID: 13, RevenueUSD: 110, CostUSD: 12},
+			{Model: "seedance-2.5-720p", ChannelID: 9, RevenueUSD: 34, CostUSD: 19},
+			{Model: "sd-pro-video-v2", ChannelID: 9, RevenueUSD: 0, CostUSD: 14},
+		},
+	}
+	require.Equal(t, VendorOther, ModelVendor("sd-pro-video-v2"), "the upstream's name maps to no vendor of ours")
+	media := ModelVendor("seedance-2.5-720p")
+	welfare := allocationKey{AllocationGroup, "welfare"}
+	video := allocationKey{AllocationGroup, "video"}
+	usage := []allocationUsage{
+		{key: welfare, userID: 1, channel: 13, model: "gpt-6.1-sol", charged: 110, weight: 220},
+		{key: video, userID: 2, channel: 9, model: "seedance-2.5-720p", charged: 34, weight: 34},
+	}
+	// The codex pool's channel is 2, and nothing used it.
+	rows := allocateGroupMargins(upstream, usage, map[int]float64{1: 13, 2: 9}, map[int]bool{2: true})
+
+	assert.InDelta(t, 12, allocationRowOf(t, rows, welfare).BillUSD, 1e-9, "the group carries its channel's bill")
+	assert.Empty(t, allocationRowOf(t, rows, welfare).PoolShare, "and no part of a pool it never reached")
+	assert.InDelta(t, 1, allocationRowOf(t, rows, allocationKey{kind: AllocationUnattributed}).PoolShare[VendorCodex], 1e-9, "the idle pool is unattributed")
+	assert.InDelta(t, 33, allocationRowOf(t, rows, video).BillUSD, 1e-9, "the video group carries the whole bill, its own-named part included")
+
+	vendors, unattributedBill, _ := vendorUpstreamCosts(upstream)
+	assert.Zero(t, unattributedBill)
+	for _, vendor := range vendors {
+		switch vendor.Vendor {
+		case media:
+			assert.InDelta(t, 33, vendor.BillUSD, 1e-9, "the bill is the media vendor's whole")
+		case VendorOther:
+			assert.Zero(t, vendor.BillUSD, "no bill under a vendor that earned nothing")
+		}
 	}
 }

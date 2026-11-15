@@ -18,13 +18,16 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { cn } from '@/lib/utils'
+
 import type { Finding } from '../analysis'
 import {
   financeDrivers,
   financeRange,
   giftShareHigh,
   giftWatch,
-  groupMarginExtremes,
+  costShare,
+  groupCostExtremes,
   groupMargins,
   groupRows,
   marginTone,
@@ -536,8 +539,14 @@ export function PlanBookPanel(props: {
   )
 }
 
-/** A margin row with the group's usage, when it is a customer group. */
-type GroupMarginTableRow = GroupMarginRow & { use?: GroupRow }
+/**
+ * A margin row with the group's usage, when it is a customer group, and its
+ * cost over what it was charged.
+ */
+type GroupMarginTableRow = GroupMarginRow & {
+  use?: GroupRow
+  costShare: number | null
+}
 
 /**
  * Customers' use by the group each request was billed in, with each
@@ -564,11 +573,21 @@ export function GroupConsumptionPanel(props: {
   const usageOf = new Map((usage ?? []).map((row) => [row.group, row]))
   // One row per allocation when margins are sent; the usage columns fill in
   // for a customer group and show a dash for staff and unattributed rows.
-  const rows = margins?.map((row) => ({
-    ...row,
-    use: row.kind === 'group' ? usageOf.get(row.group) : undefined,
-  }))
-  const extremes = margins ? groupMarginExtremes(margins) : null
+  const rows = margins?.map((row) => {
+    const use = row.kind === 'group' ? usageOf.get(row.group) : undefined
+    return {
+      ...row,
+      use,
+      // The price against the cost, whatever paid the charge: a group whose
+      // use was paid with given credit earns little and is still priced
+      // above its cost.
+      costShare: costShare(row.cost, use?.consumption_usd),
+    }
+  })
+  const extremes = rows ? groupCostExtremes(rows) : null
+  const underCost = rows?.find(
+    (row) => row.kind === 'group' && row.costShare != null && row.costShare > 1
+  )
   const top = usage?.[0]
   const name = (group: string) => group || t('Not recorded')
   const label = (row: { group: string; kind: GroupMarginRow['kind'] }) => {
@@ -586,17 +605,26 @@ export function GroupConsumptionPanel(props: {
         share: fmt.pct(top.share),
       })
     : undefined
-  const description = extremes
-    ? t(
-        '{{best}} has the best gross margin, {{bestRate}}; {{worst}} the worst, {{worstRate}}.',
-        {
-          best: name(extremes.best.group),
-          bestRate: fmt.pct(extremes.best.marginRate ?? 0),
-          worst: name(extremes.worst.group),
-          worstRate: fmt.pct(extremes.worst.marginRate ?? 0),
-        }
-      )
-    : share
+  let description = share
+  if (underCost) {
+    description = t(
+      '{{group}} sells under its cost: the cost is {{share}} of what it was charged.',
+      {
+        group: name(underCost.group),
+        share: fmt.pct(underCost.costShare ?? 0),
+      }
+    )
+  } else if (extremes) {
+    description = t(
+      'Cost takes {{mostShare}} of what {{most}} was charged, the most, and {{leastShare}} of {{least}}, the least.',
+      {
+        most: name(extremes.most.group),
+        mostShare: fmt.pct(extremes.most.costShare ?? 0),
+        least: name(extremes.least.group),
+        leastShare: fmt.pct(extremes.least.costShare ?? 0),
+      }
+    )
+  }
   const usageHelp = t(
     'Each group the requests were billed in, customers only. Consumption is after the group’s ratio; at list price divides it by today’s ratio, so a group sold cheaper shows how much use it carried. Change is in percentage points of share against the previous period. Requests logged before groups were recorded show as not recorded.'
   )
@@ -604,7 +632,7 @@ export function GroupConsumptionPanel(props: {
     ? joinSentences(
         usageHelp,
         t(
-          'Margin by group is an allocation, not a measurement: revenue follows each user’s charge across groups, and each pool account, upstream bill and fee is shared by the groups’ use at list price, quota with the group’s ratio divided out.'
+          'Margin by group is an allocation, not a measurement: revenue follows each user’s charge across groups; an upstream bill or fee is shared by the groups that used its channel, and a pool’s accounts by the groups its own channels served, by use at list price, quota with the group’s ratio divided out. A pool nothing used is in the unattributed row.'
         ),
         t(
           'Staff’s own use is its own row, and an upstream bill counts one supplier dollar for one quota dollar, as the upstream tab does; a fee is converted at the site’s exchange rate.'
@@ -744,17 +772,41 @@ export function GroupConsumptionPanel(props: {
       key: 'cost',
       label: t('Cost'),
       hint: t(
-        'The group’s share of pool accounts, upstream bills and fees, by use at list price. An allocation, not a measurement.'
+        'The group’s share of pool accounts, upstream bills and fees, by use at list price, and under it the cost over what the group was charged: under 100% the price covers the cost. An allocation, not a measurement.'
       ),
       align: 'right',
-      render: (row) => fmt.cny(row.cost),
+      render: (row) => (
+        <>
+          <span>{fmt.cny(row.cost)}</span>
+          {row.costShare != null && (
+            <span
+              className={cn(
+                'block text-xs',
+                row.costShare > 1 ? TONES.danger : 'text-muted-foreground'
+              )}
+            >
+              {t('{{share}} of charge', { share: fmt.pct(row.costShare) })}
+            </span>
+          )}
+        </>
+      ),
     },
     {
       key: 'margin',
       label: t('Gross margin'),
+      hint: t(
+        'Recognized revenue less the cost. It can be negative while the price covers the cost: the group’s use was then paid with given credit, which earns nothing.'
+      ),
       align: 'right',
       render: (row) => (
-        <span className={TONES[marginTone(row.margin, row.revenue)]}>
+        <span
+          className={
+            // Red only when the price itself is under the cost.
+            row.margin < 0 && row.costShare != null && row.costShare <= 1
+              ? undefined
+              : TONES[marginTone(row.margin, row.revenue)]
+          }
+        >
           {fmt.cny(row.margin)}
         </span>
       ),

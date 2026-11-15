@@ -598,24 +598,38 @@ export function groupMargins(
 }
 
 /**
- * The customer groups with revenue, best and worst by margin rate; null with
- * fewer than two to compare.
+ * A group's cost over what it was charged, both in yuan: under 1 the price
+ * covers the cost, whatever paid the charge; above 1 the group sells under
+ * its cost. Null without a charge.
  */
-export function groupMarginExtremes(
-  rows: GroupMarginRow[]
-): { best: GroupMarginRow; worst: GroupMarginRow } | null {
+export function costShare(
+  cost: number,
+  charged: number | null | undefined
+): number | null {
+  return charged != null && charged > 0 ? cost / charged : null
+}
+
+/**
+ * The customer groups whose cost takes the most and the least of their
+ * charge; null with fewer than two to compare.
+ */
+export function groupCostExtremes<
+  T extends {
+    group: string
+    kind: GroupAllocation['kind']
+    costShare: number | null
+  },
+>(rows: T[]): { most: T; least: T } | null {
   const ranked = rows.filter(
-    (row) => row.kind === 'group' && row.marginRate != null
+    (row) => row.kind === 'group' && row.costShare != null
   )
   if (ranked.length < 2) return null
   const sorted = [...ranked].sort(
     (a, b) =>
-      (b.marginRate ?? 0) - (a.marginRate ?? 0) ||
-      a.group.localeCompare(b.group)
+      (b.costShare ?? 0) - (a.costShare ?? 0) || a.group.localeCompare(b.group)
   )
-  const best = sorted[0]
-  const worst = sorted.at(-1)
-  return worst ? { best, worst } : null
+  const least = sorted.at(-1)
+  return least ? { most: sorted[0], least } : null
 }
 
 export type OrderFunnelRow = OrderMethodFunnel & {
