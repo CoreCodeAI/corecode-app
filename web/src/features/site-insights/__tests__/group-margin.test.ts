@@ -20,7 +20,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   financeMargins,
-  groupMarginExtremes,
+  costShare,
+  groupCostExtremes,
   groupMargins,
   marginTone,
 } from '../finance-analysis'
@@ -165,16 +166,25 @@ describe('groupMargins', () => {
     expect(rows.filter((row) => row.kind === 'unattributed')).toHaveLength(1)
   })
 
-  it('names the best and worst customer groups by margin rate', () => {
-    const rows = groupMargins(data(ALLOCATIONS), 7) ?? []
-    const extremes = groupMarginExtremes(rows)
-    expect(extremes?.best.group).toBe('Claude 满血')
-    expect(extremes?.worst.group).toBe('GPT 福利')
+  it('reads a cost against the charge, whatever paid it', () => {
+    // GPT 福利 on production, 2026-11-15: charged 111.64, upstream bill 11.93.
+    expect(costShare(11.93, 111.64)).toBeCloseTo(0.1069, 4)
+    expect(costShare(30, 20)).toBe(1.5)
+    expect(costShare(5, 0)).toBeNull()
+    expect(costShare(5, undefined)).toBeNull()
   })
 
-  it('names none with one group or fewer', () => {
-    const rows = groupMargins(data(ALLOCATIONS.slice(0, 1)), 7) ?? []
-    expect(groupMarginExtremes(rows)).toBeNull()
+  it('names the groups whose cost takes the most and the least of their charge', () => {
+    const rows = [
+      { group: 'A', kind: 'group' as const, costShare: 0.06 },
+      { group: 'B', kind: 'group' as const, costShare: 0.19 },
+      { group: 'C', kind: 'group' as const, costShare: null },
+      { group: '', kind: 'staff' as const, costShare: 0.9 },
+    ]
+    const extremes = groupCostExtremes(rows)
+    expect(extremes?.most.group).toBe('B')
+    expect(extremes?.least.group).toBe('A')
+    expect(groupCostExtremes(rows.slice(0, 1))).toBeNull()
   })
 
   it('colours a margin as the vendor table does', () => {

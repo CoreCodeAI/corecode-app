@@ -140,9 +140,10 @@ describe('GroupConsumptionPanel margins', () => {
     render(
       <GroupConsumptionPanel data={data({ group_allocations: allocations })} />
     )
+    // Judged by cost against the charge, not by what the charge earned.
     expect(
       screen.getByText(
-        'Claude 满血 has the best gross margin, 47.5%; GPT 福利 the worst, -17.5%.'
+        'Cost takes 94% of what GPT 福利 was charged, the most, and 70% of Claude 满血, the least.'
       )
     ).toBeInTheDocument()
     expect(
@@ -159,6 +160,40 @@ describe('GroupConsumptionPanel margins', () => {
     const gpt = screen.getByText('GPT 福利').closest('tr') as HTMLElement
     expect(within(gpt).getByText('¥94')).toBeInTheDocument()
     expect(within(gpt).getByText('-17.5%')).toBeInTheDocument()
+  })
+
+  it('does not paint a group red for use that given credit paid for', () => {
+    render(
+      <GroupConsumptionPanel data={data({ group_allocations: allocations })} />
+    )
+    // GPT 福利 earned 80 against a cost of 94, but was charged 100: the price
+    // covers the cost.
+    const gpt = screen.getByText('GPT 福利').closest('tr') as HTMLElement
+    expect(within(gpt).getByText('94% of charge')).toHaveClass(
+      'text-muted-foreground'
+    )
+    expect(within(gpt).getByText('-¥14')).not.toHaveClass('text-destructive')
+  })
+
+  it('says so, in red, when a group’s cost is over what it was charged', () => {
+    const cheap = groups.map((row) =>
+      row.group === 'GPT 福利' ? { ...row, consumption_usd: 50 } : row
+    )
+    render(
+      <GroupConsumptionPanel
+        data={data({ groups: cheap, group_allocations: allocations })}
+      />
+    )
+    expect(
+      screen.getByText(
+        'GPT 福利 sells under its cost: the cost is 188% of what it was charged.'
+      )
+    ).toBeInTheDocument()
+    const gpt = screen.getByText('GPT 福利').closest('tr') as HTMLElement
+    expect(within(gpt).getByText('188% of charge')).toHaveClass(
+      'text-destructive'
+    )
+    expect(within(gpt).getByText('-¥14')).toHaveClass('text-destructive')
   })
 
   it('sorts by revenue and mutes the staff and unattributed rows at the end', () => {

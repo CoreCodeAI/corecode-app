@@ -36,6 +36,14 @@ shows the margin in the group panel on `/site-insights?tab=finance`, sorted by
 revenue, with staff and unattributed rows muted at the end. A server without the
 field shows the panel as before.
 
+### Corrected on 2026-11-16: a pool's cost follows the pool's own channels
+
+The first release shared each vendor's pool cost over every channel's use of that vendor. On production it read 「GPT 福利」 as losing 106.6%: revenue ¥13.50 against a cost of ¥27.89. The group is sold at 0.5× over an upstream billed at 0.04×, and its own bill was US$11.93 on ¥111.64 charged. The rest of its cost was 5% of the Codex pool's account, a pool no request reached (its channel is disabled), and its revenue was small because given credit paid for most of its use.
+
+- **A pool's account cost is shared by use on the pool's own channels** (`EngineChannelIDs`). A group served by an upstream site carries that site's bill and no part of the pool. A pool that served nothing in the range is in the unattributed row, an idle cost.
+- **A bill under a model name that maps to no vendor of ours, on a channel where that vendor earned nothing, is shared by the vendors that did earn there** (`unnamedBill`), in the vendor totals and in the rows. A supplier that bills by day names models its own way; on production ¥14.40 of the media bill read as a loss under "other models".
+- **The panel judges a group by its cost over what it was charged** (`costShare`), shown under the cost. Under 100% the price covers the cost, whatever paid the charge. The description names the groups where cost takes the most and the least of the charge, or the group that sells under its cost. A negative margin is red only when the cost is over the charge; otherwise the column's hint says the use was paid with given credit.
+
 ## Alternatives considered
 
 - **Split the pool by the groups' charge.** The price of an account does not
@@ -59,11 +67,8 @@ What can make a group's figure wrong:
 - A group renamed mid-range shows as two rows, one under each name.
 - `quota_data` does not subtract task refunds. Media tasks refunded after a charge
   still weigh their group, which distorts media's split.
-- Idle pool cost goes to the groups by use, so an idle pool's cost falls on the
-  groups that used it.
-- Pool cost is shared over every channel's use of a vendor, not only the pool's
-  channel. Claude traffic that an upstream bill already covers also carries a
-  share of the pool's accounts.
+- A used pool's spare capacity is carried by the groups that used it; only a pool
+  nothing reached is unattributed.
 - A bill is taken one supplier dollar for one quota dollar, as the upstream tab
   does. That is only right when the supplier's dollar is the quota dollar.
 - A group with little revenue can show an extreme margin rate, since the rate

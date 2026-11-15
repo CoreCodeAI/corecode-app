@@ -107,6 +107,13 @@ func readAllocationUsage(r InsightsRange, staff []int) ([]allocationUsage, error
 	return usage, nil
 }
 
+// unnamedBill reports a bill under a vendor no model of ours maps to, on a
+// channel where that vendor earned nothing: the upstream's own name for a
+// model sold here under another vendor.
+func unnamedBill(vendor string, channelRevenue map[string]float64) bool {
+	return vendor == VendorOther && channelRevenue[VendorOther] <= 0
+}
+
 type costUnit struct {
 	channel int
 	model   string
@@ -159,22 +166,31 @@ func spreadCost(into map[allocationKey]map[string]float64, uses map[allocationKe
 //     model, for a vendor whose bill on the channel is positive;
 //   - a fee, and a bill's remainder, goes by the vendor's share of the channel's
 //     revenue, then by the rows' use of the channel and vendor;
-//   - a pool's account cost goes by each vendor's use across channels.
+//   - a pool's account cost goes by each vendor's use on the pool's own
+//     channels (engines): a group served by an upstream channel carries that
+//     channel's bill, not an account it never reached, and a pool that served
+//     nothing is unattributed, an idle cost.
+//
+// A bill for a model whose vendor is not known and that earned nothing on the
+// channel is the upstream naming a model its own way (unnamedBill): it is
+// shared as the channel's remainder is, by the vendors that did earn there.
 //
 // A cost with no use to split by, or no revenue to split by, goes to the
 // unattributed row under its vendor, or under "" for the upstream's unattributed
 // amounts. Revenue goes to each user's rows by the user's charge across groups.
-func allocateGroupMargins(upstream *UpstreamInsights, usage []allocationUsage, userRevenue map[int]float64) []GroupAllocation {
+func allocateGroupMargins(upstream *UpstreamInsights, usage []allocationUsage, userRevenue map[int]float64, engines map[int]bool) []GroupAllocation {
 	modelUse := map[costUnit]map[allocationKey]float64{}
 	channelUse := map[channelVendor]map[allocationKey]float64{}
-	vendorUse := map[string]map[allocationKey]float64{}
+	poolUse := map[string]map[allocationKey]float64{}
 	mix := map[int]map[allocationKey]float64{}
 	mixTotal := map[int]float64{}
 	for _, row := range usage {
 		vendor := ModelVendor(row.model)
 		addUse(modelUse, costUnit{row.channel, row.model}, row.key, row.weight)
 		addUse(channelUse, channelVendor{row.channel, vendor}, row.key, row.weight)
-		addUse(vendorUse, vendor, row.key, row.weight)
+		if engines[row.channel] {
+			addUse(poolUse, vendor, row.key, row.weight)
+		}
 		addUse(mix, row.userID, row.key, row.charged)
 		mixTotal[row.userID] += row.charged
 	}
@@ -198,7 +214,8 @@ func allocateGroupMargins(upstream *UpstreamInsights, usage []allocationUsage, u
 	fees := map[allocationKey]map[string]float64{}
 	for _, model := range upstream.Models {
 		vendor := ModelVendor(model.Model)
-		if sourceOf[model.ChannelID] != UpstreamCostSourceUpstream || billed[channelVendor{model.ChannelID, vendor}] <= 0 {
+		if sourceOf[model.ChannelID] != UpstreamCostSourceUpstream || billed[channelVendor{model.ChannelID, vendor}] <= 0 ||
+			unnamedBill(vendor, revenue[model.ChannelID]) {
 			continue
 		}
 		spreadCost(bills, modelUse[costUnit{model.ChannelID, model.Model}], vendor, model.CostUSD)
@@ -212,7 +229,7 @@ func allocateGroupMargins(upstream *UpstreamInsights, usage []allocationUsage, u
 		if channel.CostSource == UpstreamCostSourceUpstream {
 			into = bills
 			for vendor := range revenue[channel.ID] {
-				if usd := billed[channelVendor{channel.ID, vendor}]; usd > 0 {
+				if usd := billed[channelVendor{channel.ID, vendor}]; usd > 0 && !unnamedBill(vendor, revenue[channel.ID]) {
 					shared -= usd
 				}
 			}
@@ -236,7 +253,7 @@ func allocateGroupMargins(upstream *UpstreamInsights, usage []allocationUsage, u
 
 	pool := map[allocationKey]map[string]float64{}
 	for _, vendor := range allocationVendors {
-		for key, share := range allocationShares(vendorUse[vendor]) {
+		for key, share := range allocationShares(poolUse[vendor]) {
 			if pool[key] == nil {
 				pool[key] = map[string]float64{}
 			}
