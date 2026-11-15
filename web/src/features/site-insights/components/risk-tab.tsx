@@ -351,6 +351,7 @@ export function RiskTab(props: {
         loading={!props.data && !failed}
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text}
+        points={verdict?.points}
       />
       <RiskControlLinks />
       <MetricGrid loading={!data && !failed} items={items} />

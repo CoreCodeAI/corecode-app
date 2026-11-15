@@ -448,11 +448,19 @@ describe('risk tab', () => {
         range={{ start: 1000, end: 1000 + 86400, days: 1, hourly: true }}
       />
     )
+    // The verdict reads as its headline and a list; as one text it is whole.
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '3 sign-ups. To check: 2 addresses shared by several accounts, 1 accounts in debt. Review 10.0.0.1 first: 3 registered within 10 minutes, 3 created in this range, 3 unpaid with nothing left. Act on accounts from Users, usage logs and Risk Control.'
+    )
     expect(
-      screen.getByText(
-        '3 sign-ups. To check: 2 addresses shared by several accounts, 1 accounts in debt. Review 10.0.0.1 first: 3 registered within 10 minutes, 3 created in this range, 3 unpaid with nothing left. Act on accounts from Users, usage logs and Risk Control.'
-      )
-    ).toBeInTheDocument()
+      within(screen.getByRole('status'))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent?.trim())
+    ).toEqual([
+      'To check: 2 addresses shared by several accounts, 1 accounts in debt.',
+      'Review 10.0.0.1 first: 3 registered within 10 minutes, 3 created in this range, 3 unpaid with nothing left.',
+      'Act on accounts from Users, usage logs and Risk Control.',
+    ])
     const addresses = screen
       .getAllByText(/^10\.0\.0\.\d$/)
       .map((node) => node.textContent)

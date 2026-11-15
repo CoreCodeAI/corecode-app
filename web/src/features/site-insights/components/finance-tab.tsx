@@ -30,6 +30,7 @@ import {
   paymentSlices,
   previousBeforeLogs,
   rangeHours,
+  SECTIONS,
   tableState,
   useHourAxis,
   useInsightsDefinitions,
@@ -181,6 +182,7 @@ export function FinanceTab(props: {
         loading={!props.data && !failed}
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text ?? failedText}
+        points={verdict?.points}
       />
       <StaleNote
         staleHours={data?.stale_hours}
@@ -437,7 +439,7 @@ export function FinanceTab(props: {
             ]}
           />
         </Panel>
-        <Panel title={t('Negative balances')}>
+        <Panel id={SECTIONS.debtors} title={t('Negative balances')}>
           <SimpleTable
             rows={data?.debtors}
             rowKey={(row) => row.user_id}

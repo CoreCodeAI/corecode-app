@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import { RefreshCw } from 'lucide-react'
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
@@ -44,16 +45,9 @@ import {
   VIEW_MAX_DAYS,
   type InsightsView,
 } from './api'
-import { CapacityTab, type CapacityVendor } from './components/capacity-tab'
-import { ChannelsTab } from './components/channels-tab'
-import { FinanceTab } from './components/finance-tab'
-import { ActivityTab, GrowthTab } from './components/growth-tab'
+import type { CapacityVendor } from './components/capacity-tab'
 import { LogsNote } from './components/insight-kit'
-import { OverviewTab } from './components/overview-tab'
-import { PoolTab } from './components/pool-tab'
-import { QualityTab } from './components/quality-tab'
-import { RiskTab } from './components/risk-tab'
-import { UpstreamTab } from './components/upstream-tab'
+import { SectionMenu } from './components/section-menu'
 import {
   HOURLY_MAX_DAYS,
   INSIGHTS_PRESETS,
@@ -75,6 +69,65 @@ import { InsightsSpanContext } from './partial-days'
 import type { EngineOutlook, LogsSince, PoolProvider, PoolUsage } from './types'
 
 const route = getRouteApi('/_authenticated/site-insights/')
+
+// Each tab's code loads when the tab is first opened or pointed at: the page
+// opens on one tab, and the other nine wait until they are wanted.
+const TAB_MODULES = {
+  overview: () => import('./components/overview-tab'),
+  capacity: () => import('./components/capacity-tab'),
+  pool: () => import('./components/pool-tab'),
+  quality: () => import('./components/quality-tab'),
+  upstream: () => import('./components/upstream-tab'),
+  finance: () => import('./components/finance-tab'),
+  growth: () => import('./components/growth-tab'),
+  activity: () => import('./components/growth-tab'),
+  channels: () => import('./components/channels-tab'),
+  risk: () => import('./components/risk-tab'),
+} satisfies Record<InsightsTab, () => Promise<unknown>>
+
+const OverviewTab = lazy(() =>
+  TAB_MODULES.overview().then((module) => ({ default: module.OverviewTab }))
+)
+const CapacityTab = lazy(() =>
+  TAB_MODULES.capacity().then((module) => ({ default: module.CapacityTab }))
+)
+const PoolTab = lazy(() =>
+  TAB_MODULES.pool().then((module) => ({ default: module.PoolTab }))
+)
+const QualityTab = lazy(() =>
+  TAB_MODULES.quality().then((module) => ({ default: module.QualityTab }))
+)
+const UpstreamTab = lazy(() =>
+  TAB_MODULES.upstream().then((module) => ({ default: module.UpstreamTab }))
+)
+const FinanceTab = lazy(() =>
+  TAB_MODULES.finance().then((module) => ({ default: module.FinanceTab }))
+)
+const GrowthTab = lazy(() =>
+  TAB_MODULES.growth().then((module) => ({ default: module.GrowthTab }))
+)
+const ActivityTab = lazy(() =>
+  TAB_MODULES.activity().then((module) => ({ default: module.ActivityTab }))
+)
+const ChannelsTab = lazy(() =>
+  TAB_MODULES.channels().then((module) => ({ default: module.ChannelsTab }))
+)
+const RiskTab = lazy(() =>
+  TAB_MODULES.risk().then((module) => ({ default: module.RiskTab }))
+)
+
+/** How long a tab opened at a panel waits for that panel to be drawn. */
+const SECTION_WAIT_MS = 6000
+
+/** What a tab shows while its code loads: the verdict's place and a panel's. */
+function TabFallback() {
+  return (
+    <div className='grid gap-4'>
+      <Skeleton className='h-11 w-full rounded-xl' />
+      <Skeleton className='h-40 w-full rounded-xl' />
+    </div>
+  )
+}
 
 // The capacity view carries live in-flight counts; the pool is all live.
 // The pool tab itself refreshes at the interval chosen on it.
@@ -133,8 +186,26 @@ export function SiteInsights() {
     days,
     hourly: days <= HOURLY_MAX_DAYS,
   }
-  const openTab = (next: InsightsTab) =>
-    navigate({ search: (prev) => ({ ...prev, tab: next }) })
+  // A finding may open a tab at one of its panels. The panel is drawn only
+  // once the tab's code and data arrive, so the jump waits for it.
+  const [jump, setJump] = useState<{ tab: InsightsTab; section: string }>()
+  const openTab = (next: InsightsTab, section?: string) => {
+    setJump(section ? { tab: next, section } : undefined)
+    void navigate({ search: (prev) => ({ ...prev, tab: next }) })
+  }
+  useEffect(() => {
+    if (!jump || jump.tab !== tab) return
+    const started = Date.now()
+    const timer = setInterval(() => {
+      const panel = document.querySelector(`#${jump.section}`)
+      if (panel) panel.scrollIntoView({ block: 'start' })
+      if (panel || Date.now() - started > SECTION_WAIT_MS) {
+        clearInterval(timer)
+        setJump(undefined)
+      }
+    }, 150)
+    return () => clearInterval(timer)
+  }, [jump, tab])
 
   const queryClient = useQueryClient()
   const viewDays = (view: InsightsView) =>
@@ -272,7 +343,10 @@ export function SiteInsights() {
     enabled: view !== undefined && view !== 'pool',
   })
   const prefetch = (next: InsightsTab) => {
-    if (next === tab || next === 'overview') return
+    if (next === tab) return
+    // The tab's code, so it is there by the click.
+    void TAB_MODULES[next]()
+    if (next === 'overview') return
     void queryClient.prefetchQuery(insightsQuery(next))
     if (next !== 'pool') void queryClient.prefetchQuery(previousQuery(next))
   }
@@ -320,6 +394,8 @@ export function SiteInsights() {
   // On a narrow screen the tabs scroll sideways in one row; the open one is
   // kept in view, including when the page opens on a later tab.
   const tabsRef = useRef<HTMLDivElement>(null)
+  // The open tab's content, which the section menu lists the panels of.
+  const contentRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const list = tabsRef.current
     const active = list?.querySelector('[data-active]')
@@ -445,6 +521,7 @@ export function SiteInsights() {
                   {t('As of {{time}}', { time: fmt.clock(asOf) })}
                 </span>
               )}
+              <SectionMenu container={contentRef} />
               <Button
                 variant='outline'
                 size='icon-sm'
@@ -472,65 +549,69 @@ export function SiteInsights() {
           <InsightsSpanContext.Provider
             value={{ now, days: viewDays, hours: dayProfile.data?.hours ?? [] }}
           >
-            {view ? (
-              <InsightsView
-                view={view}
-                data={query.data}
-                previous={previous.data}
-                sources={sources}
-                range={range}
-                onOpen={openTab}
-                business={{
-                  data: business.data,
-                  previous: businessPrevious.data,
-                }}
-                models={{
-                  selected: models,
-                  onChange: (next) =>
-                    navigate({
-                      search: (prev) => ({
-                        ...prev,
-                        models: next.length > 0 ? next : undefined,
-                      }),
-                    }),
-                }}
-                pool={{
-                  provider,
-                  onProvider: (next) =>
-                    navigate({
-                      search: (prev) => ({ ...prev, provider: next }),
-                    }),
-                  usage: usage.data,
-                  usageError:
-                    usage.error instanceof Error
-                      ? usage.error.message
-                      : undefined,
-                  outlook: outlook.data,
-                  outlookError:
-                    outlook.error instanceof Error
-                      ? outlook.error.message
-                      : undefined,
-                }}
-                capacity={{
-                  vendor: search.vendor ?? 'all',
-                  onVendor: (next) =>
-                    navigate({
-                      search: (prev) => ({
-                        ...prev,
-                        vendor: next === 'all' ? undefined : next,
-                      }),
-                    }),
-                }}
-              />
-            ) : (
-              <OverviewTab
-                current={(next) => insightsQuery(next, false)}
-                previous={(next) => previousQuery(next, false)}
-                refreshMs={REFRESH_MS}
-                onOpen={openTab}
-                range={range}
-              />
-            )}
+            <div ref={contentRef} className='grid grid-cols-[minmax(0,1fr)]'>
+              <Suspense fallback={<TabFallback />}>
+                {view ? (
+                  <InsightsView
+                    view={view}
+                    data={query.data}
+                    previous={previous.data}
+                    sources={sources}
+                    range={range}
+                    onOpen={openTab}
+                    business={{
+                      data: business.data,
+                      previous: businessPrevious.data,
+                    }}
+                    models={{
+                      selected: models,
+                      onChange: (next) =>
+                        navigate({
+                          search: (prev) => ({
+                            ...prev,
+                            models: next.length > 0 ? next : undefined,
+                          }),
+                        }),
+                    }}
+                    pool={{
+                      provider,
+                      onProvider: (next) =>
+                        navigate({
+                          search: (prev) => ({ ...prev, provider: next }),
+                        }),
+                      usage: usage.data,
+                      usageError:
+                        usage.error instanceof Error
+                          ? usage.error.message
+                          : undefined,
+                      outlook: outlook.data,
+                      outlookError:
+                        outlook.error instanceof Error
+                          ? outlook.error.message
+                          : undefined,
+                    }}
+                    capacity={{
+                      vendor: search.vendor ?? 'all',
+                      onVendor: (next) =>
+                        navigate({
+                          search: (prev) => ({
+                            ...prev,
+                            vendor: next === 'all' ? undefined : next,
+                          }),
+                        }),
+                    }}
+                  />
+                ) : (
+                  <OverviewTab
+                    current={(next) => insightsQuery(next, false)}
+                    previous={(next) => previousQuery(next, false)}
+                    refreshMs={REFRESH_MS}
+                    onOpen={openTab}
+                    range={range}
+                  />
+                )}
+              </Suspense>
+            </div>
           </InsightsSpanContext.Provider>
         </div>
       </SectionPageLayout.Content>
@@ -544,7 +625,7 @@ function InsightsView(props: {
   previous: unknown
   sources: InsightsSources
   range: InsightsRangeInfo
-  onOpen: (tab: InsightsTab) => void
+  onOpen: (tab: InsightsTab, section?: string) => void
   business: { data: unknown; previous: unknown }
   models: { selected: string[]; onChange: (models: string[]) => void }
   pool: {

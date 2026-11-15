@@ -57,7 +57,7 @@ const FINDING_ICONS = {
 export function Findings(props: {
   items: Finding[]
   empty?: string
-  onOpen?: (tab: InsightsTab) => void
+  onOpen?: (tab: InsightsTab, section?: string) => void
   tabLabel?: (tab: InsightsTab) => string
 }) {
   const { t } = useTranslation()
@@ -86,7 +86,9 @@ export function Findings(props: {
               variant='ghost'
               size='sm'
               className='shrink-0'
-              onClick={() => open(tab)}
+              onClick={() =>
+                finding.section ? open(tab, finding.section) : open(tab)
+              }
             >
               {label(tab)} →
             </Button>

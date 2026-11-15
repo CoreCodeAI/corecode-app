@@ -234,6 +234,7 @@ export function GrowthTab(props: {
         loading={state === 'loading'}
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text}
+        points={verdict?.points}
       />
       <MetricGrid
         loading={state === 'loading'}
@@ -604,6 +605,7 @@ export function ActivityTab(props: {
         loading={state === 'loading'}
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text}
+        points={verdict?.points}
       />
       <MetricGrid
         loading={state === 'loading'}

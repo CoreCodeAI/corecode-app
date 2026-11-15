@@ -37,7 +37,7 @@ import {
   type InsightsRangeInfo,
 } from '../lib'
 import type { ActivityInsights, GrowthInsights } from '../types'
-import { join, useChange, type TabVerdict } from './shared'
+import { sentences, useChange, type TabVerdict } from './shared'
 
 /** Activation under this share of a judgeable cohort needs a look. */
 export const ACTIVATION_WARN = 0.3
@@ -174,7 +174,7 @@ export function useGrowthVerdict(
   }
   return {
     tone,
-    text: join(
+    ...sentences(
       (() => {
         const moved = change(registered, previous?.funnel.registered)
         const count = fmt.num(registered)
@@ -253,7 +253,7 @@ export function useActivityVerdict(
   }
   return {
     tone: data.top1_share > CONCENTRATION_SHARE ? 'warning' : 'good',
-    text: join(
+    ...sentences(
       (() => {
         const moved = change(data.active_users, previous?.active_users)
         const count = fmt.num(data.active_users)

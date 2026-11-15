@@ -55,7 +55,7 @@ describe('tab verdicts', () => {
     const previous = { requests: 1000 } as CapacityInsights
     const { result } = renderHook(() => useCapacityVerdict(data, previous))
     // A few stray refusals warn; they do not call for accounts.
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'warning',
       text: '1,200 requests (up 20%). Peak concurrency 30 of 60 slots (50%). 4 turned away with the pool full.',
     })
@@ -75,7 +75,7 @@ describe('tab verdicts', () => {
       pool: { configured: true, effective_slots: 60 },
     } as unknown as CapacityInsights
     const { result } = renderHook(() => useCapacityVerdict(data, undefined))
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'danger',
       text: "1,200 requests. Pool peak 60 of 60 slots (100%). 20 turned away with the pool full. 3 refused at the engine's own caps: raise the group's limit or the key's cap. 2 refused by accounts' request rate or quota budget: wait for the window or add accounts. 9 attempts refused by per-user limits, retries included.",
     })
@@ -88,7 +88,7 @@ describe('tab verdicts', () => {
     // The site's 70 on every channel is past the slots; the pool's 30 is not.
     expect(
       renderHook(() => useCapacityVerdict(calm, undefined)).result.current
-    ).toEqual({
+    ).toMatchObject({
       tone: 'warning',
       text: "1,200 requests. Pool peak 30 of 60 slots (50%). 3 refused at the engine's own caps: raise the group's limit or the key's cap.",
     })
@@ -259,7 +259,7 @@ describe('tab verdicts', () => {
       funnel: { registered: 50, activated: 10, paid: 5, repeat: 1 },
     } as unknown as GrowthInsights
     const { result } = renderHook(() => useGrowthVerdict(data, undefined))
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'warning',
       text: '50 sign-ups. 20% activated and 10% paid.',
     })
@@ -285,7 +285,7 @@ describe('tab verdicts', () => {
     } as unknown as GrowthInsights
     const range = { start: 0, end: 86400, days: 1, hourly: true }
     const { result } = renderHook(() => useGrowthVerdict(data, previous, range))
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'default',
       text: '40 sign-ups (to 2×). Driven by LinuxDO (+25). 10% have activated and 0% paid so far; accounts hours old are too young to judge.',
     })
@@ -296,7 +296,7 @@ describe('tab verdicts', () => {
       funnel: { registered: 10, activated: 1, paid: 0, repeat: 0 },
     } as unknown as GrowthInsights
     const { result } = renderHook(() => useGrowthVerdict(data, undefined))
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'default',
       text: '10 sign-ups. 10% activated and 0% paid; too few sign-ups to judge.',
     })
@@ -343,7 +343,7 @@ describe('tab verdicts', () => {
     const { result } = renderHook(() =>
       useGrowthVerdict(data, undefined, range)
     )
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'default',
       text: '30 sign-ups. Too few sign-ups at least 6 hours old to judge activation or payment.',
     })
@@ -392,7 +392,7 @@ describe('tab verdicts', () => {
       top_users: [top(1, 'alice', 30), top(2, 'bob', 30)],
     } as unknown as ActivityInsights
     const { result } = renderHook(() => useActivityVerdict(data, previous))
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'warning',
       text: '2 active users (flat). Consumption up 66.7%, mostly alice (+$5.00). The largest customer, alice, used 70%; the top 10, 100%.',
     })
@@ -408,7 +408,7 @@ describe('tab verdicts', () => {
     } as unknown as CapacityInsights
     const previous = { requests: 31740 } as CapacityInsights
     const { result } = renderHook(() => useCapacityVerdict(data, previous))
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'good',
       text: '115,919 requests (to 3.7×). Nothing turned away.',
     })
@@ -422,7 +422,7 @@ describe('tab verdicts', () => {
       models: [],
     } as unknown as QualityInsights
     const { result } = renderHook(() => useQualityVerdict(data, undefined))
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'good',
       text: 'Failure rate 1.6%.',
     })
@@ -449,7 +449,7 @@ describe('tab verdicts', () => {
       refusals: { no_channel: 12, risk_gate: 0 },
     } as unknown as QualityInsights
     const { result } = renderHook(() => useQualityVerdict(data, undefined))
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'warning',
       text: 'Failure rate 1.6%. seedance-2.5-720p tasks fail 30% after submission. 12 requests found no channel.',
     })
@@ -542,7 +542,9 @@ describe('tab verdicts', () => {
       off_whitelist: 0,
       debtors: [],
     } as unknown as RiskInsights
-    expect(renderHook(() => useRiskVerdict(quiet)).result.current).toEqual({
+    expect(
+      renderHook(() => useRiskVerdict(quiet)).result.current
+    ).toMatchObject({
       tone: 'good',
       text: '8 sign-ups. Nothing to check.',
     })
@@ -555,10 +557,12 @@ describe('tab verdicts', () => {
         { user_id: 2, username: 'b', balance_usd: -0.4 },
       ],
     } as RiskInsights
-    expect(renderHook(() => useRiskVerdict(busy)).result.current).toEqual({
-      tone: 'warning',
-      text: '8 sign-ups. To check: 2 alias emails, 1 accounts in debt. Act on accounts from Users, usage logs and Risk Control.',
-    })
+    expect(renderHook(() => useRiskVerdict(busy)).result.current).toMatchObject(
+      {
+        tone: 'warning',
+        text: '8 sign-ups. To check: 2 alias emails, 1 accounts in debt. Act on accounts from Users, usage logs and Risk Control.',
+      }
+    )
   })
 
   it('reads several plan buyers on one address as danger, names it first, and says when sign-ups surged', () => {
@@ -680,10 +684,12 @@ describe('tab verdicts', () => {
         { user_id: 9, username: 'boss', accounts: 4, consumption_usd: 12 },
       ],
     } as unknown as RiskInsights
-    expect(renderHook(() => useRiskVerdict(data)).result.current).toEqual({
-      tone: 'warning',
-      text: '5 sign-ups. To check: 1 inviters with 3 or more unpaid spenders. Act on accounts from Users, usage logs and Risk Control.',
-    })
+    expect(renderHook(() => useRiskVerdict(data)).result.current).toMatchObject(
+      {
+        tone: 'warning',
+        text: '5 sign-ups. To check: 1 inviters with 3 or more unpaid spenders. Act on accounts from Users, usage logs and Risk Control.',
+      }
+    )
   })
 })
 
@@ -735,7 +741,7 @@ describe('channels verdict', () => {
     const { result } = renderHook(() =>
       useChannelsVerdict(insights([magpie]), previous, range(30))
     )
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'danger',
       text: 'Paid channels brought ¥500 (up 25%), net -¥200 after their cost. magpie loses the most (-¥200), mostly to its fee (¥700): renegotiate or drop it.',
     })
@@ -752,7 +758,7 @@ describe('channels verdict', () => {
     const { result } = renderHook(() =>
       useChannelsVerdict(data, undefined, range(7))
     )
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'warning',
       text: 'Paid channels brought ¥2,100, net ¥1,030 after their cost. gifty loses the most (-¥270), mostly to given credit its accounts spent (¥300): tighten its gifts.',
     })
@@ -762,7 +768,7 @@ describe('channels verdict', () => {
     const { result } = renderHook(() =>
       useChannelsVerdict(insights([magpie]), undefined, range(1))
     )
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'default',
       text: 'Paid channels brought ¥500, net -¥200 after their cost. A range under 7 days cannot judge a channel: read 30 days or the contract to date.',
     })
@@ -777,7 +783,7 @@ describe('channels verdict', () => {
     const { result } = renderHook(() =>
       useChannelsVerdict(insights([lossOnOnePayer]), undefined, range(30))
     )
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'default',
       text: 'Paid channels brought ¥150, net -¥60 after their cost. Fewer than 3 new payers in this range: too few to judge a channel’s cost.',
     })
@@ -787,13 +793,13 @@ describe('channels verdict', () => {
     const { result } = renderHook(() =>
       useChannelsVerdict(insights([channel(1, 'free', {})]), undefined)
     )
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'default',
       text: 'No channel has a fee recorded.',
     })
   })
 
-  it('warns when a fee channel is still credited commission, without changing net', () => {
+  it('leaves commission still credited to a fee channel out of the answer and its colour', () => {
     const earning = channel(306, 'magpie', {
       fee_usd: 100,
       revenue: 1000,
@@ -804,9 +810,14 @@ describe('channels verdict', () => {
     const { result } = renderHook(() =>
       useChannelsVerdict(insights([earning]), undefined, range(30))
     )
+    // The owner does not act on it: the channels tab notes it in its own panel.
     expect(result.current).toEqual({
-      tone: 'warning',
-      text: 'Paid channels brought ¥1,000, net ¥300 after their cost. Every paid channel covers its cost. magpie was still credited ¥60 of commission while its fee ran.',
+      tone: 'good',
+      text: 'Paid channels brought ¥1,000, net ¥300 after their cost. Every paid channel covers its cost.',
+      points: [
+        'Paid channels brought ¥1,000, net ¥300 after their cost.',
+        'Every paid channel covers its cost.',
+      ],
     })
   })
 })
@@ -986,7 +997,7 @@ describe('upstream verdict', () => {
       }),
     ])
     const { result } = renderHook(() => useUpstreamVerdict(data, previous))
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'good',
       text: 'Failure rate 1.5% (−0.5 points). All clear: every channel with at least 100 attempts fails under 2%.',
     })
@@ -1070,7 +1081,7 @@ describe('upstream verdict', () => {
     ])
     expect(
       renderHook(() => useUpstreamVerdict(data, undefined)).result.current
-    ).toEqual({
+    ).toMatchObject({
       tone: 'default',
       text: 'No channel served enough requests to compare.',
     })
@@ -1110,7 +1121,7 @@ describe('upstream verdict', () => {
       }),
     ])
     const { result } = renderHook(() => useUpstreamVerdict(data, undefined))
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'danger',
       text: 'Failure rate 1%. All clear: every channel with at least 100 attempts fails under 2%. a failed 25% of its 40 finished tasks. media was disabled automatically and served nothing in this range. Gross margin on channels with a known cost: 60%, overstated: the bill of a is read from some keys only.',
     })

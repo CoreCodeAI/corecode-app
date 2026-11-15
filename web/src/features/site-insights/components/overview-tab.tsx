@@ -27,9 +27,11 @@ import {
   DEBT_ALERT_USD,
   failureTone,
   joinSentences,
+  namedHead,
   OVERVIEW_VIEWS,
   previousBeforeLogs,
   rangeHours,
+  SECTIONS,
   SMALL_SAMPLE,
   sourceState,
   useChargeFormat,
@@ -44,6 +46,7 @@ import {
   attentionLabel,
 } from '../lib'
 import { usePartialDays } from '../partial-days'
+import { onSale } from '../quality-analysis'
 import type {
   ActivityInsights,
   CapacityInsights,
@@ -73,6 +76,7 @@ import {
   peakTone,
   poolPeakAgainstSlots,
 } from './overview-signals'
+import { rankClusters, riskRangeStart } from './risk-analysis'
 import { MetricGrid, Panel, type MetricItem, type TrendPoint } from './shared'
 
 type InsightsQuery = {
@@ -111,7 +115,7 @@ export function OverviewTab(props: {
   current: (view: InsightsView) => InsightsQuery
   previous: (view: InsightsView) => InsightsQuery
   refreshMs: Partial<Record<InsightsView, number>>
-  onOpen?: (tab: InsightsTab) => void
+  onOpen?: (tab: InsightsTab, section?: string) => void
   range?: InsightsRangeInfo
 }) {
   const { t } = useTranslation()
@@ -309,6 +313,7 @@ export function OverviewTab(props: {
             })
           : undefined,
         tab: 'capacity',
+        section: SECTIONS.limitRejections,
         impact: capacity.limit_rejection_total,
       })
     }
@@ -349,13 +354,13 @@ export function OverviewTab(props: {
         impact: vendor.errors,
       })
     }
-    const failing = (quality.models ?? [])
-      .filter(
-        (row) =>
-          row.requests >= SMALL_SAMPLE &&
-          failureTone(row.error_rate) === 'danger'
-      )
+    const fails = (row: { requests: number; error_rate: number }) =>
+      row.requests >= SMALL_SAMPLE && failureTone(row.error_rate) === 'danger'
+    // A model taken off sale cannot be fixed: it is counted, not named.
+    const failing = onSale(quality.models, quality)
+      .filter(fails)
       .sort((a, b) => b.errors - a.errors)
+    const retired = (quality.models ?? []).filter(fails).length - failing.length
     if (failing.length > 0) {
       signals.push({
         key: 'quality-models',
@@ -363,10 +368,18 @@ export function OverviewTab(props: {
         title: t('{{count}} models fail more than 5% of requests', {
           count: failing.length,
         }),
-        detail: failing
-          .map((row) => `${row.model} ${fmt.pct(row.error_rate)}`)
-          .join(', '),
+        detail: joinSentences(
+          namedHead(
+            t,
+            failing.map((row) => `${row.model} ${fmt.pct(row.error_rate)}`)
+          ),
+          retired > 0 &&
+            t('{{count}} more were taken off sale and are left out.', {
+              count: retired,
+            })
+        ),
         tab: 'quality',
+        section: SECTIONS.models,
         impact: failing.reduce((sum, row) => sum + row.errors, 0),
       })
     }
@@ -381,13 +394,18 @@ export function OverviewTab(props: {
         amount: fmt.cny(-finance.debt_usd),
       }),
       tab: 'finance',
+      section: SECTIONS.debtors,
       impact: -finance.debt_usd,
     })
   }
 
   if (risk) {
-    const buyers = clusters.filter(
-      (cluster) => cluster.subscription_buyers > 1 && !cluster.shared_exit
+    // Named in the risk tab's order, so the first is the one it reviews first.
+    const buyers = rankClusters(
+      clusters.filter(
+        (cluster) => cluster.subscription_buyers > 1 && !cluster.shared_exit
+      ),
+      riskRangeStart(risk, range)
     )
     if (buyers.length > 0) {
       signals.push({
@@ -396,8 +414,12 @@ export function OverviewTab(props: {
         title: t('{{count}} addresses have several plan buyers', {
           count: buyers.length,
         }),
-        detail: buyers.map((cluster) => cluster.ip).join(', '),
+        detail: namedHead(
+          t,
+          buyers.map((cluster) => cluster.ip)
+        ),
         tab: 'risk',
+        section: SECTIONS.sharedAddresses,
       })
     }
     const flagged = risk.alias_emails + risk.off_whitelist
@@ -711,7 +733,7 @@ export function OverviewTab(props: {
       />
       {pool?.configured && !pool.error && (
         <MetricGrid
-          className='grid-cols-2 sm:grid-cols-3'
+          className='grid-cols-2 sm:grid-cols-3 lg:grid-cols-3'
           items={[
             {
               label: t('Schedulable accounts'),

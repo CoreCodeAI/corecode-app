@@ -21,8 +21,22 @@ import { useTranslation } from 'react-i18next'
 import type { Tone } from '../components/shared'
 import { joinSentences, useInsightsFormat } from '../lib'
 
-/** A tab's answer: one sentence and how it reads. */
-export type TabVerdict = { tone: Tone; text: string }
+/**
+ * A tab's answer and how it reads: text is the whole answer, points its
+ * sentences in order, the headline first.
+ */
+export type TabVerdict = { tone: Tone; text: string; points: string[] }
+
+/**
+ * A verdict's wording from its sentences: the parts that are present, as one
+ * text and one by one.
+ */
+export function sentences(
+  ...parts: (string | false | null | undefined)[]
+): Pick<TabVerdict, 'text' | 'points'> {
+  const points = parts.filter((part): part is string => !!part)
+  return { text: joinSentences(...points), points }
+}
 
 /** The worse of two tones. */
 export function worse(a: Tone, b: Tone): Tone {

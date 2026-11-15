@@ -50,6 +50,7 @@ import { cn } from '@/lib/utils'
 import { TONES, useInsightsFormat } from '../lib'
 import type { PartialMark } from '../partial-days'
 import type { NamedCount } from '../types'
+import { metricLayout } from './metric-layout'
 
 export function Panel(props: {
   title: ReactNode
@@ -61,12 +62,16 @@ export function Panel(props: {
   error?: string
   actions?: ReactNode
   className?: string
+  /** A name a link can jump to, as the overview's findings do. */
+  id?: string
   children: ReactNode
 }) {
   return (
     <Card
+      id={props.id}
       data-card-hover='false'
-      className={cn('min-w-0 gap-0 py-0', props.className)}
+      // The margin keeps a panel jumped to clear of the pinned tab row.
+      className={cn('min-w-0 scroll-mt-14 gap-0 py-0', props.className)}
     >
       <div className='flex items-start justify-between gap-2 border-b px-4 py-3'>
         <div className='min-w-0'>
@@ -170,23 +175,27 @@ const VERDICT_TONES: Record<Tone, { bar: string; dot: string }> = {
 }
 
 /**
- * A tab's answer in one sentence, colored by how it reads: the first thing
- * on the tab, so the figures below it confirm rather than have to be read
- * to find out.
+ * A tab's answer, colored by how it reads: the first thing on the tab, so the
+ * figures below it confirm rather than have to be read to find out. With its
+ * sentences given one by one, the first is the headline and the rest a list
+ * under it, so a long answer is scanned rather than read through.
  */
 export function Verdict(props: {
   tone: Tone
   text: string | undefined
+  /** The answer's sentences in order; text alone is one headline. */
+  points?: string[]
   loading?: boolean
 }) {
   const tone = VERDICT_TONES[props.tone]
   if (props.loading) return <Skeleton className='h-11 w-full rounded-xl' />
   if (!props.text) return null
+  const [headline, ...rest] = props.points?.length ? props.points : [props.text]
   return (
     <div
       role='status'
       className={cn(
-        'bg-card flex items-start gap-2.5 rounded-xl border border-l-4 px-4 py-3 text-sm font-medium',
+        'bg-card flex items-start gap-2.5 rounded-xl border border-l-4 px-4 py-3 text-sm',
         tone.bar
       )}
     >
@@ -194,7 +203,17 @@ export function Verdict(props: {
         aria-hidden
         className={cn('mt-1.5 size-2 shrink-0 rounded-full', tone.dot)}
       />
-      <p className='min-w-0 leading-relaxed'>{props.text}</p>
+      <div className='min-w-0 leading-relaxed'>
+        {/* The trailing spaces keep the sentences apart when read as one text. */}
+        <p className='font-medium'>{headline} </p>
+        {rest.length > 0 && (
+          <ul className='text-foreground/80 mt-1 grid list-disc gap-0.5 pl-4 text-[13px]'>
+            {rest.map((point) => (
+              <li key={point}>{point} </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   )
 }
@@ -720,6 +739,18 @@ function valueTitle(value: ReactNode): string | undefined {
   return undefined
 }
 
+const WIDE_COLUMNS: Record<number, string> = {
+  4: 'lg:grid-cols-4',
+  5: 'lg:grid-cols-5',
+  6: 'lg:grid-cols-6',
+}
+
+const WIDE_SPANS: Record<number, string> = {
+  2: 'lg:col-span-2',
+  3: 'lg:col-span-3',
+  4: 'lg:col-span-4',
+}
+
 export function MetricGrid(props: {
   items: MetricItem[]
   loading?: boolean
@@ -727,15 +758,20 @@ export function MetricGrid(props: {
   className?: string
 }) {
   const fmt = useInsightsFormat()
+  // A caller's own columns stand; otherwise the rows are filled evenly.
+  const layout = props.className
+    ? undefined
+    : metricLayout(props.items.map((item) => (item.featured ? 2 : 1)))
   return (
     <TooltipProvider delay={HELP_DELAY}>
       <dl
         className={cn(
           'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6',
+          layout && WIDE_COLUMNS[layout.columns],
           props.className
         )}
       >
-        {props.items.map((item) => {
+        {props.items.map((item, index) => {
           // A missing figure draws nothing that reads as a value.
           const shown = !props.loading && !item.missing
           return (
@@ -744,7 +780,8 @@ export function MetricGrid(props: {
               data-card-hover='false'
               className={cn(
                 'bg-muted/20 gap-1 px-3 py-2.5',
-                item.featured && 'col-span-2 sm:col-span-3 lg:col-span-2'
+                item.featured && 'col-span-2 sm:col-span-3 lg:col-span-2',
+                layout && WIDE_SPANS[layout.spans[index]]
               )}
             >
               <dt className='text-muted-foreground truncate text-xs'>

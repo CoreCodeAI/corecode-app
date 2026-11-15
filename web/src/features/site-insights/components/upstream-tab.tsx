@@ -995,14 +995,23 @@ export function UpstreamTab(props: {
   } else if (stale.length > 0 || short.length > 0) {
     marginTone = 'warning'
   }
-  let marginHint = fmt.pct(totals.marginRate)
+  // The margin covers only the channels with a known cost, so beside a
+  // revenue card that counts every channel it names the revenue it is of.
+  const marginRate =
+    totals.uncostedRevenue > 0
+      ? t('{{rate}} of {{revenue}} with a known cost', {
+          rate: fmt.pct(totals.marginRate),
+          revenue: fmt.usd(totals.costedRevenue),
+        })
+      : fmt.pct(totals.marginRate)
+  let marginHint = marginRate
   if (stale.length > 0) {
     marginHint = t('{{rate}}, overstated: recent revenue has no cost yet', {
-      rate: fmt.pct(totals.marginRate),
+      rate: marginRate,
     })
   } else if (short.length > 0) {
     marginHint = t('{{rate}}, overstated: part of a bill is not read', {
-      rate: fmt.pct(totals.marginRate),
+      rate: marginRate,
     })
   }
   return (
@@ -1014,6 +1023,7 @@ export function UpstreamTab(props: {
           loading={!props.data}
           tone={verdict?.tone ?? 'default'}
           text={verdict?.text}
+          points={verdict?.points}
         />
       )}
       <TruncatedNotice show={props.data?.truncated ?? false} />

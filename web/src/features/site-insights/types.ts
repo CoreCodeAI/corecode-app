@@ -1168,6 +1168,11 @@ export type QualityInsights = StaleHours & {
   /** Customers only; the staff's requests and failed requests on the selected models are staff_requests and staff_errors. Absent before the server's release. */
   staff_requests?: number
   staff_errors?: number
+  /**
+   * The models of `models` no enabled channel serves now: taken off sale, so
+   * their failures are history. Absent before the server's release.
+   */
+  retired_models?: string[] | null
   /** Every model in the range, whatever the filter selects. */
   models:
     | {

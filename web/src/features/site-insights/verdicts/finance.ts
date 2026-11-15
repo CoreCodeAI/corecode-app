@@ -35,7 +35,7 @@ import {
   paymentMethodLabel,
 } from '../lib'
 import type { FinanceInsights } from '../types'
-import { join, useChange, worse, type TabVerdict } from './shared'
+import { sentences, useChange, worse, type TabVerdict } from './shared'
 
 export function useFinanceVerdict(
   data: FinanceInsights | undefined,
@@ -156,7 +156,7 @@ export function useFinanceVerdict(
 
   return {
     tone,
-    text: join(
+    ...sentences(
       paid,
       consumed,
       marginText,

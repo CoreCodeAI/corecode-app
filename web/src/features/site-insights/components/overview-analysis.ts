@@ -35,6 +35,7 @@ import {
   CONCENTRATION_SHARE,
   DROP_SHARE,
   MIN_ORDERS,
+  namedHead,
   previousBeforeLogs,
   rangeSpan,
   SMALL_SAMPLE,
@@ -418,9 +419,10 @@ export function overviewExtraSignals(
       title: t('{{count}} upstream channels fail more than 5% of attempts', {
         count: failing.length,
       }),
-      detail: failing
-        .map((row) => `${row.name} ${fmt.pct(row.failure_rate)}`)
-        .join(', '),
+      detail: namedHead(
+        t,
+        failing.map((row) => `${row.name} ${fmt.pct(row.failure_rate)}`)
+      ),
       tab: 'upstream',
       impact: failing.reduce((sum, row) => sum + row.errors, 0),
     })

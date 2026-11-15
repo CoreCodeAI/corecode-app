@@ -518,6 +518,18 @@ export function failuresListed(
 }
 
 /**
+ * The models still on sale: those the server does not name as retired. A
+ * retired model's failures are history, so nothing asks to act on them.
+ */
+export function onSale<T extends { model: string }>(
+  models: T[] | null | undefined,
+  data: Pick<QualityInsights, 'retired_models'> | undefined
+): T[] {
+  const retired = new Set(data?.retired_models ?? [])
+  return (models ?? []).filter((row) => !retired.has(row.model))
+}
+
+/**
  * Models the model map cannot place: enough requests, but no first-token
  * time (every request failed, none streamed, or image and video tasks).
  * Most requests first.
