@@ -52,7 +52,7 @@ The option row is visible in the options list. It holds only a date.
 
 ### Settings
 
-`site_insights_digest_setting` holds `enabled` (default false), `hour` (0 to 23, default 9), `feishu_webhook` (validated by `ValidateFeishuBotWebhook`) and `feishu_secret`. The digest is ready only when it is enabled and has a webhook. The settings section sits in the operations settings, beside the worker proxy, and includes a "send test digest now" button for the previous day (`POST /api/option/site-insights-digest/feishu-test`). It does not claim the day.
+`site_insights_digest_setting` holds `enabled` (default false), `hour` (0 to 23, default 9), `feishu_webhook` (validated by `ValidateFeishuBotWebhook`) and `feishu_secret`. The digest is ready only when it is enabled and has a webhook. The settings open from a button on the overview's "Needs attention" panel (`web/src/features/site-insights/components/digest-settings.tsx`), read from `GET /api/option/` when it opens, and each changed setting is one `PUT /api/option/`. The signing secret is never sent back, so a blank field keeps the saved one. "Send test message" posts yesterday's digest to the saved webhook without using up the day's send. The settings are not under system settings: strings and option defaults there load with `/dashboard/overview` and `/keys`, and a section there put `/keys` 177 bytes over its first-load budget in CI; on the dashboard they load with the overview tab only.
 
 ## Alternatives considered
 
