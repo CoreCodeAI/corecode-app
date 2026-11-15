@@ -36,9 +36,11 @@ const (
 	// its MaxRecentItems logs.
 	upstreamCostMaxBody = 16 << 20
 	// A Sub2API bill is read this often per channel, under the console's
-	// stale threshold; each read asks for upstreamBillRefreshDays days, or
-	// upstreamBillBackfillDays the first time.
-	upstreamBillInterval     = 10 * time.Minute
+	// stale threshold; each read asks for upstreamBillRefreshDays days. The
+	// first read goes back to the day the channel was created, at most
+	// upstreamBillBackfillDays: a request a day, so a new channel is not
+	// asked for ninety days it never served.
+	upstreamBillInterval     = 15 * time.Minute
 	upstreamBillRefreshDays  = 3
 	upstreamBillBackfillDays = 90
 )
@@ -349,8 +351,8 @@ func readSub2APIKey(ctx context.Context, client *http.Client, base, key string, 
 }
 
 // syncSub2APIBills reads a channel's bill from a Sub2API site, key by key:
-// the last upstreamBillRefreshDays days on each read, and
-// upstreamBillBackfillDays on the first. Days are the site's UTC+8 days, the
+// the last upstreamBillRefreshDays days on each read, and on the first back
+// to the channel's creation, at most upstreamBillBackfillDays. Days are the site's UTC+8 days, the
 // zone its usage endpoint counts a date in. A day with no billed model is
 // stored as one row with no model, so the read is known to have happened.
 // Nothing is stored unless every key read, so a failure leaves the channel's
@@ -362,13 +364,17 @@ func syncSub2APIBills(ctx context.Context, client *http.Client, channel *model.C
 	base := strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(channel.GetBaseURL()), "/"), "/v1")
 	local := now.Unix() + model.UpstreamBillDayOffset
 	today := local - local%86400 - model.UpstreamBillDayOffset
-	covered, err := model.UpstreamBillCovers(channel.Id, today-int64(upstreamBillBackfillDays-1)*86400)
+	backfill := upstreamBillBackfillDays
+	if age := int((today-channel.CreatedTime)/86400) + 2; channel.CreatedTime > 0 && age < backfill {
+		backfill = max(age, upstreamBillRefreshDays)
+	}
+	covered, err := model.UpstreamBillCovers(channel.Id, today-int64(backfill-1)*86400)
 	if err != nil {
 		return err
 	}
 	count := upstreamBillRefreshDays
 	if !covered {
-		count = upstreamBillBackfillDays
+		count = backfill
 	}
 	days := make([]int64, count)
 	for i := range days {

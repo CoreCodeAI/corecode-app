@@ -103,6 +103,27 @@ func dayRows(t *testing.T, channelID int, dayStart int64) []model.UpstreamBillDa
 	return rows
 }
 
+// A channel created five days ago is asked for its own days, not for ninety.
+func TestSub2APIBillBackfillStopsAtTheChannelsCreation(t *testing.T) {
+	setupUpstreamBillTestDB(t)
+	stub := &upstreamStub{key: "sk-new", total: "10", stats: map[string]string{
+		billToday: `[{"model":"image-a","requests":3,"cost":2.4,"actual_cost":2}]`,
+	}}
+	server := httptest.NewServer(stub)
+	defer server.Close()
+	channel := billChannel(8, server.URL, "sk-new", "image-a")
+	channel.CreatedTime = billNow.Add(-5 * 24 * time.Hour).Unix()
+	owners := newBillOwners([]*model.Channel{channel})
+
+	require.NoError(t, syncSub2APIBills(context.Background(), server.Client(), channel, owners, billNow))
+	first := stub.hits()
+	assert.GreaterOrEqual(t, first, 6, "every day since the channel was created")
+	assert.LessOrEqual(t, first, 8, "and no more than a day or two before it")
+
+	require.NoError(t, syncSub2APIBills(context.Background(), server.Client(), channel, owners, billNow.Add(16*time.Minute)))
+	assert.Equal(t, first+3, stub.hits(), "the bill reaches back to the creation, so later reads refresh three days")
+}
+
 func TestSub2APIBillBackfillsThenRefreshesDays(t *testing.T) {
 	setupUpstreamBillTestDB(t)
 	stub := &upstreamStub{key: "sk-shared", total: "10", stats: map[string]string{
@@ -127,20 +148,20 @@ func TestSub2APIBillBackfillsThenRefreshesDays(t *testing.T) {
 	assert.InDelta(t, 2.4, today.StandardCostUSD, 1e-9, "cost is kept beside it")
 
 	// A later read asks for the last three days only, and writes the same rows.
-	later := billNow.Add(11 * time.Minute)
+	later := billNow.Add(16 * time.Minute)
 	require.NoError(t, syncSub2APIBills(context.Background(), server.Client(), channel, owners, later))
 	assert.Equal(t, 93, stub.hits())
 	assert.Len(t, billRows(t, 8), 91, "a read again stores no row twice")
 
 	// The upstream lowers today's image-a: the stored figure follows.
 	stub.stats[billToday] = `[{"model":"image-a","requests":3,"cost":1.2,"actual_cost":1.5},{"model":"image-b","requests":1,"cost":0.6,"actual_cost":0.5}]`
-	require.NoError(t, syncSub2APIBills(context.Background(), server.Client(), channel, owners, later.Add(11*time.Minute)))
+	require.NoError(t, syncSub2APIBills(context.Background(), server.Client(), channel, owners, later.Add(16*time.Minute)))
 	assert.InDelta(t, 1.5, dayRows(t, 8, billNowDay(0))[0].CostUSD, 1e-9, "a lowered day is corrected")
 	assert.InDelta(t, 1, dayRows(t, 8, billNowDay(1))[0].CostUSD, 1e-9, "a day not read again keeps its figure")
 
 	// A day the upstream no longer reports keeps its read, with no model.
 	delete(stub.stats, billYesterday)
-	require.NoError(t, syncSub2APIBills(context.Background(), server.Client(), channel, owners, later.Add(22*time.Minute)))
+	require.NoError(t, syncSub2APIBills(context.Background(), server.Client(), channel, owners, later.Add(32*time.Minute)))
 	yesterday := dayRows(t, 8, billNowDay(1))
 	require.Len(t, yesterday, 1)
 	assert.Empty(t, yesterday[0].ModelName, "the day stays read, with no model")
@@ -148,7 +169,7 @@ func TestSub2APIBillBackfillsThenRefreshesDays(t *testing.T) {
 
 	// Inside the spacing a channel is not read again.
 	hits := stub.hits()
-	require.NoError(t, syncSub2APIBills(context.Background(), server.Client(), channel, owners, later.Add(23*time.Minute)))
+	require.NoError(t, syncSub2APIBills(context.Background(), server.Client(), channel, owners, later.Add(33*time.Minute)))
 	assert.Equal(t, hits, stub.hits())
 }
 
