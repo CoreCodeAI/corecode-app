@@ -47,6 +47,7 @@ import {
 import { shouldShowBillingSource } from '../lib/billing-source'
 import { useColumnsByCategory } from '../lib/columns'
 import { parseLogOther } from '../lib/format'
+import { selectedLogTypes } from '../lib/log-type-columns'
 import { fetchLogsByCategory } from '../lib/utils'
 import type { LogCategory } from '../types'
 import { CommonLogsFilterBar } from './common-logs-filter-bar'
@@ -220,7 +221,8 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     logCategory,
     isAdmin,
     isRoot,
-    showBillingSource
+    showBillingSource,
+    logCategory === 'common' ? selectedLogTypes(columnFilters) : null
   )
   const isLoadingData = isLoading || (isFetching && !data)
 

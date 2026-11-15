@@ -23,6 +23,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 import { BillingHistoryDialog } from '@/features/wallet/components/dialogs/billing-history-dialog'
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth-store'
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),
@@ -55,6 +56,7 @@ function page(tradeNos: string[], total = tradeNos.length) {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  useAuthStore.getState().auth.reset()
 })
 
 it('does not load billing history while the dialog is closed', () => {
@@ -223,4 +225,45 @@ it('points a customer with Stripe receipts to the invoice center', async () => {
 
   view.rerender(<BillingHistoryDialog open onOpenChange={vi.fn()} />)
   expect(screen.queryByRole('link')).not.toBeInTheDocument()
+})
+
+it("opens an admin's own orders and lists every user's on request", async () => {
+  const user = userEvent.setup()
+  useAuthStore
+    .getState()
+    .auth.setUser({ id: 10, username: 'admin', role: 10 } as never)
+  const get = vi.spyOn(api, 'get').mockImplementation((url: string) => {
+    const all = !url.startsWith('/api/user/topup/self')
+    const result = page([all ? 'order-of-user-835' : 'order-of-admin'])
+    result.data.data.items[0] = {
+      ...result.data.data.items[0],
+      user_id: all ? 835 : 10,
+    } as never
+    return Promise.resolve(result)
+  })
+  render(<BillingHistoryDialog open onOpenChange={vi.fn()} />)
+
+  expect(await screen.findByText('order-of-admin')).toBeVisible()
+  expect(get).toHaveBeenCalledTimes(1)
+  expect(get.mock.calls[0][0]).toMatch(/^\/api\/user\/topup\/self\?/)
+  expect(screen.getByRole('tab', { name: 'Only Mine' })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  )
+  // Every order in this view is the admin's; the user ID says nothing.
+  expect(screen.queryByText(/User ID/)).not.toBeInTheDocument()
+
+  await user.click(screen.getByRole('tab', { name: 'All' }))
+
+  expect(await screen.findByText('order-of-user-835')).toBeVisible()
+  expect(get.mock.calls.at(-1)?.[0]).toMatch(/^\/api\/user\/topup\?/)
+  expect(screen.getByText('User ID: 835')).toBeVisible()
+})
+
+it('shows a customer no order scope', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue(page(['order-of-customer']))
+  render(<BillingHistoryDialog open onOpenChange={vi.fn()} />)
+
+  await screen.findByText('order-of-customer')
+  expect(screen.queryByRole('tab')).not.toBeInTheDocument()
 })

@@ -54,6 +54,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { formatCurrencyFromUSD } from '@/lib/currency'
 import { formatQuota } from '@/lib/format'
@@ -61,6 +62,7 @@ import { formatQuota } from '@/lib/format'
 import {
   hasStripeReceipt,
   useBillingHistory,
+  type BillingHistoryScope,
 } from '../../hooks/use-billing-history'
 import {
   getStatusConfig,
@@ -92,9 +94,12 @@ export function BillingHistoryDialog({
     completing,
     openingReceipt,
     isAdmin,
+    scope,
+    readsAllOrders,
     handlePageChange,
     handlePageSizeChange,
     handleSearch,
+    handleScopeChange,
     handleCompleteOrder,
     handleOpenReceipt,
   } = useBillingHistory({ enabled: open })
@@ -108,7 +113,7 @@ export function BillingHistoryDialog({
   // A receipt proves the payment; a customer who needs a tax invoice is
   // pointed to the invoice center, where one is requested.
   const showInvoiceNote =
-    !isAdmin && invoiceEnabled && records.some(hasStripeReceipt)
+    !readsAllOrders && invoiceEnabled && records.some(hasStripeReceipt)
 
   const handleConfirmComplete = async () => {
     if (confirmTradeNo) {
@@ -133,6 +138,19 @@ export function BillingHistoryDialog({
         bodyClassName='space-y-3'
       >
         <div className='min-h-0 space-y-3'>
+          {isAdmin && (
+            <Tabs
+              value={scope}
+              onValueChange={(value) =>
+                handleScopeChange(value as BillingHistoryScope)
+              }
+            >
+              <TabsList>
+                <TabsTrigger value='all'>{t('All')}</TabsTrigger>
+                <TabsTrigger value='self'>{t('Only Mine')}</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
           {/* Search and Filter Bar */}
           <div className='flex items-center gap-2'>
             <div className='relative flex-1'>
@@ -248,7 +266,7 @@ export function BillingHistoryDialog({
                                 <Copy className='h-3 w-3' />
                               )}
                             </Button>
-                            {isAdmin && record.user_id != null && (
+                            {readsAllOrders && record.user_id != null && (
                               <StatusBadge
                                 label={`${t('User ID')}: ${record.user_id}`}
                                 variant='neutral'

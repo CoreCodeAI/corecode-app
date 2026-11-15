@@ -81,6 +81,10 @@ import {
   renderLogContent,
 } from '../../lib/format'
 import {
+  columnsForLogTypes,
+  logTypesCarryOnlyText,
+} from '../../lib/log-type-columns'
+import {
   isDisplayableLogType,
   isTimingLogType,
   getLogTypeConfig,
@@ -378,12 +382,18 @@ function buildTypeDetailSegments(
 export function useCommonLogsColumns(
   isAdmin: boolean,
   isRoot: boolean,
-  showBillingSource = false
+  showBillingSource = false,
+  logTypes: number[] | null = null
 ): ColumnDef<UsageLog>[] {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const currency = useSystemConfigStore((state) => state.config.currency)
+  // A key, not the array: the filter hands over a new array on every render.
+  const logTypesKey = logTypes?.join(',') ?? ''
   return useMemo(() => {
+    const types = logTypesKey ? logTypesKey.split(',').map(Number) : null
+    // Logs that carry only text leave the details column most of the row.
+    const detailsFill = logTypesCarryOnlyText(types)
     const columns: ColumnDef<UsageLog>[] = [
       {
         accessorKey: 'created_at',
@@ -956,7 +966,12 @@ export function useCommonLogsColumns(
             <>
               <button
                 type='button'
-                className='group flex max-w-[200px] items-center gap-1 text-left text-xs'
+                className={cn(
+                  'group flex items-center gap-1 text-left text-xs',
+                  // `w-0 min-w-full` fills the column without widening it to
+                  // the text's length; the text is cut short at its edge.
+                  detailsFill ? 'w-0 min-w-full' : 'max-w-[200px]'
+                )}
                 onClick={() => {
                   setDialogMounted(true)
                   setDialogOpen(true)
@@ -977,13 +992,16 @@ export function useCommonLogsColumns(
             </>
           )
         },
-        size: 180,
-        maxSize: 200,
+        // The size sets the column's share of the row: a filling details
+        // column takes most of it and still fits beside time and user in a
+        // 1,024 px window.
+        size: detailsFill ? 400 : 180,
+        maxSize: detailsFill ? undefined : 200,
       }
     )
 
-    return columns
+    return columnsForLogTypes(columns, types)
     // Log formatters read currency settings from the store.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, locale, isAdmin, isRoot, showBillingSource, currency])
+  }, [t, locale, isAdmin, isRoot, showBillingSource, currency, logTypesKey])
 }

@@ -45,6 +45,12 @@ export function hasStripeReceipt(record: TopupRecord): boolean {
   )
 }
 
+/**
+ * Whose orders the list shows. An admin's list reads every user's orders when
+ * set to `all`; everyone else, and an admin on `self`, sees their own.
+ */
+export type BillingHistoryScope = 'self' | 'all'
+
 // ============================================================================
 // Billing History Hook
 // ============================================================================
@@ -70,6 +76,10 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
   const [page, setPage] = useState(initialPage)
   const [pageSize, setPageSize] = useState(initialPageSize)
   const [keyword, setKeyword] = useState('')
+  // An admin opens the wallet for their own orders; every user's orders
+  // buried them a hundred pages deep.
+  const [scope, setScope] = useState<BillingHistoryScope>('self')
+  const readsAllOrders = isAdmin && scope === 'all'
   const debouncedKeyword = useDebounce(keyword)
   const requestIdRef = useRef(0)
   const [loading, setLoading] = useState(false)
@@ -95,7 +105,7 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
     const requestId = ++requestIdRef.current
     setLoading(true)
     try {
-      const response = isAdmin
+      const response = readsAllOrders
         ? await getAllBillingHistory(page, pageSize, debouncedKeyword)
         : await getUserBillingHistory(page, pageSize, debouncedKeyword)
 
@@ -119,7 +129,7 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
         setLoading(false)
       }
     }
-  }, [debouncedKeyword, isAdmin, page, pageSize])
+  }, [debouncedKeyword, readsAllOrders, page, pageSize])
 
   /**
    * Complete a pending order (admin only)
@@ -192,6 +202,15 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
   }, [])
 
   /**
+   * Switch between the admin's own orders and every user's
+   */
+  const handleScopeChange = useCallback((newScope: BillingHistoryScope) => {
+    requestIdRef.current += 1
+    setScope(newScope)
+    setPage(1)
+  }, [])
+
+  /**
    * Search by keyword
    */
   const handleSearch = useCallback((newKeyword: string) => {
@@ -217,9 +236,12 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
     completing,
     openingReceipt,
     isAdmin,
+    scope,
+    readsAllOrders,
     handlePageChange,
     handlePageSizeChange,
     handleSearch,
+    handleScopeChange,
     handleCompleteOrder,
     handleOpenReceipt,
     refresh: fetchBillingHistory,
