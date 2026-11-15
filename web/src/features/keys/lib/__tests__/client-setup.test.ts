@@ -92,7 +92,8 @@ describe('buildClientSetupSnippet', () => {
   test('the Magpie snippets add one provider for every agent and switch theirs to it', () => {
     const add = [
       'magpie provider add CoreCode anthropic=https://corecode.live \\',
-      '  url=https://corecode.live/v1 responses=https://corecode.live/v1 key=sk-full-secret-key',
+      '  url=https://corecode.live/v1 responses=https://corecode.live/v1 key=sk-full-secret-key \\',
+      "  balance=https://corecode.live/api/usage/token/ 'balance.path=$data.user_quota.total_available / 500000'",
       'magpie provider test corecode',
     ]
     expect(buildClientSetupSnippet('magpie', args).split('\n')).toEqual([
@@ -308,6 +309,17 @@ describe('buildMagpieImportURL', () => {
     expect(params.get('website')).toBe('https://corecode.live')
     expect(params.get('keys')).toBe('https://corecode.live/keys')
     expect(params.get('icon')).toBe('https://corecode.live/brand/logo.svg')
+  })
+
+  test('reads the account balance from the key usage query on the same host', () => {
+    const balance = params.get('balance') ?? ''
+    expect(balance).toBe('https://corecode.live/api/usage/token/')
+    expect(new URL(balance).host).toBe(
+      new URL(params.get('anthropic') ?? '').host
+    )
+    expect(params.get('balance_path')).toBe(
+      '$data.user_quota.total_available / 500000'
+    )
   })
 
   test('encodes special characters', () => {
