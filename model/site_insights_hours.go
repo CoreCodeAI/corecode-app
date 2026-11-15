@@ -5,6 +5,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -57,7 +58,9 @@ import (
 // summary's staff_models, and splits failed tries by vendor with their
 // reasons and status codes kept to the top ones. 7 adds the figures by API key
 // (InsightKeyHour). A version-6 hour has no key rows, so the keys view reads
-// only the hours stored at version 7 and counts the rest in stale_hours.
+// only the hours stored at version 7 and counts the rest in stale_hours. 7
+// also splits the requests no channel could take by group, model and user
+// (insightSummary.NoChannel); a version-6 hour has the category's count only.
 const (
 	insightHourVersion   = 7
 	insightHourLookahead = 2 * 3600
@@ -162,7 +165,33 @@ type insightSummary struct {
 	// StaffModels is each model's staff requests and failed staff requests,
 	// which no customer figure includes.
 	StaffModels map[string]*insightStaffUse `json:"staff_models,omitempty"`
-	Truncated   bool                        `json:"truncated,omitempty"`
+	// NoChannel counts the customers' requests no channel could take
+	// (ErrorNoChannel) by the group and model they asked for, keyed
+	// noChannelKey, and NoChannelUsers by the user id that asked. Each keeps
+	// its insightHourTopN largest entries; NoChannelOther counts the groups
+	// and models past them, so NoChannel and it add up to the category.
+	// Absent from a row before version 7.
+	NoChannel      map[string]int64 `json:"no_channel,omitempty"`
+	NoChannelOther int64            `json:"no_channel_other,omitempty"`
+	NoChannelUsers map[string]int64 `json:"no_channel_users,omitempty"`
+	Truncated      bool             `json:"truncated,omitempty"`
+}
+
+// noChannelGroup is the group a refusal recorded before any channel names in
+// its content (NoChannelErrorContent), for a log that carries no group; empty
+// when the content is another no-channel message.
+func noChannelGroup(content string) string {
+	_, group, found := strings.Cut(content, ErrorNoChannel+": no available channel in group ")
+	if !found {
+		return ""
+	}
+	return strings.TrimSpace(group)
+}
+
+// noChannelKey names a group and model in insightSummary.NoChannel; a NUL
+// cannot appear in either.
+func noChannelKey(group, modelName string) string {
+	return group + "\x00" + modelName
 }
 
 // insightStaffUse is one model's staff requests and the ones that failed.
@@ -535,6 +564,9 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 			request.attemptErrors++
 			request.category = category
 			request.clientFault = customerFault(log.Content)
+			if category == ErrorNoChannel && request.group == "" {
+				request.group = noChannelGroup(log.Content)
+			}
 		} else {
 			request.served = true
 			request.pool = request.pool || scope.engines[log.ChannelId]
@@ -599,6 +631,8 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 	}
 	summary.ErrorReasons, summary.ErrorReasonsOther = trimTop(summary.ErrorReasons, insightHourTopN)
 	summary.Clients = keepTop(summary.Clients, insightHourTopN)
+	summary.NoChannel, summary.NoChannelOther = trimTop(summary.NoChannel, insightHourTopN)
+	summary.NoChannelUsers = keepTop(summary.NoChannelUsers, insightHourTopN)
 	for _, failures := range summary.VendorFailures {
 		failures.Reasons, failures.ReasonsOther = trimTop(failures.Reasons, insightHourTopN)
 		failures.StatusCodes, failures.StatusOther = trimTop(failures.StatusCodes, insightHourTopN)
@@ -676,6 +710,13 @@ func computeInsightHour(start int64, scope insightHourScope) (*insightHour, erro
 		}
 		summary.Errors++
 		summary.Categories[request.category]++
+		if request.category == ErrorNoChannel {
+			if summary.NoChannel == nil {
+				summary.NoChannel, summary.NoChannelUsers = map[string]int64{}, map[string]int64{}
+			}
+			summary.NoChannel[noChannelKey(request.group, request.modelName)]++
+			summary.NoChannelUsers[strconv.Itoa(request.userID)]++
+		}
 		vendor.Errors++
 		vendor.Categories[request.category]++
 		switch request.category {

@@ -150,9 +150,58 @@ type VendorFailureBreakdown struct {
 // read from its own events (observe-mode hits left out), by stage in
 // RiskGateStages; they are not in Requests.
 type QualityRefusals struct {
-	NoChannel      int64        `json:"no_channel"`
-	RiskGate       int64        `json:"risk_gate"`
-	RiskGateStages []NamedCount `json:"risk_gate_stages"`
+	NoChannel int64 `json:"no_channel"`
+	// NoChannelBy splits NoChannel by the group and model asked for, most
+	// first, and NoChannelUsers names the users who asked most. Only hours
+	// stored since the split was kept carry it (rollup version 7):
+	// NoChannelSplit is how many of NoChannel those hours account for, so a
+	// range with older hours reads as split in part.
+	NoChannelBy    []NoChannelCount `json:"no_channel_by"`
+	NoChannelUsers []UserCount      `json:"no_channel_users"`
+	NoChannelSplit int64            `json:"no_channel_split"`
+	RiskGate       int64            `json:"risk_gate"`
+	RiskGateStages []NamedCount     `json:"risk_gate_stages"`
+}
+
+// NoChannelCount is the requests no channel could take for one group and
+// model.
+type NoChannelCount struct {
+	Group string `json:"group"`
+	Model string `json:"model"`
+	Count int64  `json:"count"`
+}
+
+// qualityNoChannelTopN is how many groups and models, and how many users, the
+// quality view names for the requests no channel could take.
+const qualityNoChannelTopN = 20
+
+// noChannelSplit lists the merged group-and-model counts and user counts of
+// the requests no channel could take, most first, with the users' names.
+func noChannelSplit(by, users map[string]int64) ([]NoChannelCount, []UserCount, error) {
+	split := make([]NoChannelCount, 0, len(by))
+	for _, item := range sortedCounts(by) {
+		group, modelName, _ := strings.Cut(item.Name, "\x00")
+		split = append(split, NoChannelCount{Group: group, Model: modelName, Count: item.Count})
+	}
+	split = split[:min(len(split), qualityNoChannelTopN)]
+	top := make([]UserCount, 0, len(users))
+	ids := make([]int, 0, len(users))
+	for _, item := range sortedCounts(users) {
+		id, err := strconv.Atoi(item.Name)
+		if err != nil || len(top) == qualityNoChannelTopN {
+			continue
+		}
+		top = append(top, UserCount{UserRef: UserRef{UserID: id}, Count: item.Count})
+		ids = append(ids, id)
+	}
+	names, err := usernamesByID(ids)
+	if err != nil {
+		return nil, nil, err
+	}
+	for i := range top {
+		top[i].Username = names[top[i].UserID]
+	}
+	return split, top, nil
 }
 
 // readRiskGateBlocks counts the requests the risk gate blocked in the range,
@@ -361,6 +410,7 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	}
 	vendor := filterVendor(only)
 	refusals := &QualityRefusals{}
+	noChannelBy, noChannelUsers := map[string]int64{}, map[string]int64{}
 	streamEnds := make(map[string]int64)
 	statusCodes := make(map[string]int64)
 	reasons := make(map[string]int64)
@@ -396,6 +446,12 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 			failedTries += found.Tries
 		}
 		refusals.NoChannel += hour.summary.Categories[ErrorNoChannel]
+		mergeCounts(noChannelBy, hour.summary.NoChannel)
+		mergeCounts(noChannelUsers, hour.summary.NoChannelUsers)
+		refusals.NoChannelSplit += hour.summary.NoChannelOther
+		for _, count := range hour.summary.NoChannel {
+			refusals.NoChannelSplit += count
+		}
 		// An hour without customers' requests holds no vendor split and no
 		// categories either.
 		if vendor != "" && hour.summary.Vendors != nil {
@@ -518,6 +574,9 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	}
 	result.ErrorReasonsOther = reasonsOther
 	if refusals.RiskGateStages, refusals.RiskGate, err = readRiskGateBlocks(r); err != nil {
+		return nil, err
+	}
+	if refusals.NoChannelBy, refusals.NoChannelUsers, err = noChannelSplit(noChannelBy, noChannelUsers); err != nil {
 		return nil, err
 	}
 	result.Refusals = refusals

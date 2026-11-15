@@ -14,6 +14,15 @@ The root dashboard reads customers by user, model and channel, not by API key. T
 - The activity tab shows a panel, "By API key", below the top customers. The panel is left out while the server does not send the view.
 - The key figures use the same unit as the activity view's `quota_usd`: quota dollars, which are yuan.
 
+### The requests no channel could take, by group, model and user
+
+The same version also splits the customers' requests no channel could take. On production on 2026-11-15 they were 2,648 of 4,354 failed requests over seven days, the largest cause, and the page gave the count alone: 1,681 of the 2,521 failed media tries were `no_channel: no available channel in group auto`, so a media model read as failing 98% when its channels were never asked.
+
+- Each hour's summary keeps `no_channel` (by group and model, the 30 largest, with the rest counted in `no_channel_other`) and `no_channel_users` (by user id, the 30 largest). They ride the version-7 rebuild, so the hours are rebuilt once.
+- The group is the log's; a log without one takes it from the refusal's own text (`NoChannelErrorContent`).
+- The quality view sends `refusals.no_channel_by`, `no_channel_users` and `no_channel_split`, how many of `no_channel` the split hours account for. The quality tab lists them under "Refused before a channel" and says when part of the range is not split.
+- Only our own refusal counts. An upstream new-api site that answers "No available channel for model … (retry) (request id: …)" has failed as a channel, and stays an upstream error: `isNoChannelMessage` matches our texts whole, and `TestQualitySplitsNoChannelRefusals` pins it.
+
 ## Alternatives considered
 
 - Reading `quota_data`: rejected, because it has no failures and no refunds.

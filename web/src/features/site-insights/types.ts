@@ -99,6 +99,15 @@ export type UpstreamTaskCounts = {
  */
 export type QualityRefusals = {
   no_channel: number
+  /**
+   * no_channel by the group and model asked for, most first, and the users
+   * who asked most. Only hours stored since the split was kept carry it:
+   * no_channel_split is how many of no_channel they account for. Absent
+   * before the server's release.
+   */
+  no_channel_by?: { group: string; model: string; count: number }[] | null
+  no_channel_users?: (UserRef & { count: number })[] | null
+  no_channel_split?: number
   risk_gate: number
   risk_gate_stages: NamedCount[] | null
 }
