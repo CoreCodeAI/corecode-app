@@ -708,7 +708,9 @@ export type CheckoutValue = {
   settled: number
   /** Settled checkouts not paid: failed, expired, and pending past the hour. A refund was a payment, so it is not here. */
   unpaid: number
-  /** Paid over settled, as overview-signals' checkoutCompletion reads it; null with none settled. */
+  /** Checkouts paid and refunded since. They completed, so they count with the paid ones in settledRate. */
+  refunded: number
+  /** Checkouts that were paid, refunded since or not, over settled; null with none settled. */
   settledRate: number | null
   /** Paid money over paid checkouts, in the payment currency; null with none paid. */
   averagePaid: number | null
@@ -720,11 +722,15 @@ export type CheckoutValue = {
 export function checkoutValue(row: OrderMethodFunnel): CheckoutValue {
   const settled = row.created - Math.max(row.pending - row.pending_stale, 0)
   const unpaid = row.failed + row.expired + row.pending_stale
+  const refunded = row.refunded ?? 0
   const averagePaid = row.paid > 0 ? row.paid_money / row.paid : null
   return {
     settled,
     unpaid,
-    settledRate: settled > 0 ? row.paid / settled : null,
+    refunded,
+    // A refunded checkout went through: a method whose payments are refunded
+    // is not one whose checkouts fail.
+    settledRate: settled > 0 ? (row.paid + refunded) / settled : null,
     averagePaid,
     estimate: averagePaid == null ? null : unpaid * averagePaid,
   }
