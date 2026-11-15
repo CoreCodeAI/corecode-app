@@ -19,7 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 import type { TFunction } from 'i18next'
 import { describe, expect, it } from 'vitest'
 
-import { checkoutLossFindings } from '../components/checkout-loss'
+import {
+  checkoutLossFindings,
+  refundedCheckoutFindings,
+} from '../components/checkout-loss'
 import type { InsightsFormat } from '../components/overview-analysis'
 import type { OrderMethodFunnel } from '../types'
 
@@ -102,5 +105,52 @@ describe('checkoutLossFindings', () => {
       checkoutLossFindings(t, fmt, [method('stripe_alipay', 128, 190, 19451)])
     ).toEqual([])
     expect(checkoutLossFindings(t, fmt, undefined)).toEqual([])
+  })
+})
+
+describe('a method whose payments were refunded', () => {
+  // Stripe cards on production, 2026-11-16.
+  const cards: OrderMethodFunnel = {
+    payment_method: 'stripe_card',
+    created: 58,
+    paid: 6,
+    refunded: 35,
+    failed: 15,
+    expired: 0,
+    pending: 2,
+    pending_stale: 2,
+    plan_orders: 0,
+    paid_money: 340,
+    completion_rate: 6 / 58,
+  }
+
+  it('is not a checkout loss: 41 of its 58 checkouts went through', () => {
+    expect(checkoutLossFindings(t, fmt, [cards])).toEqual([])
+  })
+
+  it('is named for the refunds instead', () => {
+    const findings = refundedCheckoutFindings(t, fmt, [cards])
+    expect(findings).toHaveLength(1)
+    expect(findings[0]).toMatchObject({
+      key: 'finance-checkout-refunds-stripe_card',
+      tone: 'warning',
+      tab: 'finance',
+      section: 'checkouts',
+      impact: 35,
+    })
+  })
+
+  it('is not named under ten refunds, or when most payments stood', () => {
+    expect(
+      refundedCheckoutFindings(t, fmt, [{ ...cards, refunded: 9, paid: 1 }])
+    ).toEqual([])
+    expect(
+      refundedCheckoutFindings(t, fmt, [{ ...cards, refunded: 12, paid: 30 }])
+    ).toEqual([])
+    expect(refundedCheckoutFindings(t, fmt, undefined)).toEqual([])
+    // A server that sends no refunds names none.
+    expect(
+      refundedCheckoutFindings(t, fmt, [method('alipay', 5, 10, 500)])
+    ).toEqual([])
   })
 })

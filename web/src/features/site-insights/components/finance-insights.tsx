@@ -58,7 +58,7 @@ import {
   paymentMethodLabel,
 } from '../lib'
 import type { FinanceInsights, PlanBookRow } from '../types'
-import { checkoutLossFindings } from './checkout-loss'
+import { checkoutLossFindings, refundedCheckoutFindings } from './checkout-loss'
 import { Drivers, Findings, type DriverRow } from './insight-kit'
 import { type Column, MetricGrid, Panel, SimpleTable } from './shared'
 
@@ -371,7 +371,12 @@ export function OrdersPanel(props: {
             label: t('Paid'),
             align: 'right',
             render: (row) =>
-              `${fmt.num(row.paid)} · ${fmt.cny(row.paid_money)}`,
+              row.refunded > 0
+                ? `${fmt.num(row.paid)} · ${fmt.cny(row.paid_money)} · ${t(
+                    '{{count}} refunded',
+                    { count: row.refunded }
+                  )}`
+                : `${fmt.num(row.paid)} · ${fmt.cny(row.paid_money)}`,
           },
           {
             key: 'failed',
@@ -422,7 +427,12 @@ export function OrdersPanel(props: {
           },
         ]}
       />
-      <Findings items={checkoutLossFindings(t, fmt, data?.order_methods)} />
+      <Findings
+        items={[
+          ...checkoutLossFindings(t, fmt, data?.order_methods),
+          ...refundedCheckoutFindings(t, fmt, data?.order_methods),
+        ]}
+      />
       {rows &&
         rows.length > 0 &&
         rows.every((row) => row.created < MIN_CHECKOUTS) && (

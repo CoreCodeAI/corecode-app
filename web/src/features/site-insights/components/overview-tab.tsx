@@ -58,7 +58,7 @@ import type {
   RiskInsights,
   UpstreamInsights,
 } from '../types'
-import { checkoutLossFindings } from './checkout-loss'
+import { checkoutLossFindings, refundedCheckoutFindings } from './checkout-loss'
 import { DigestSettings } from './digest-settings'
 import { Findings, StaleNote, type Finding } from './insight-kit'
 import {
@@ -408,7 +408,10 @@ export function OverviewTab(props: {
 
   // Checkouts that mostly fail, each method named with what its unpaid ones
   // could be worth at most; the finance tab's orders panel lists the same.
-  signals.push(...checkoutLossFindings(t, fmt, finance?.order_methods))
+  signals.push(
+    ...checkoutLossFindings(t, fmt, finance?.order_methods),
+    ...refundedCheckoutFindings(t, fmt, finance?.order_methods)
+  )
 
   if (risk) {
     // Named in the risk tab's order, so the first is the one it reviews first.

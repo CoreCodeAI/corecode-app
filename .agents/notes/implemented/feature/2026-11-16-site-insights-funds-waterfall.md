@@ -36,6 +36,14 @@ The estimate is an upper bound. Some customers retry with another method, so the
 
 The Feishu digest does not mirror this rule. It mirrors `completionDrop`, which this change leaves as it was.
 
+### Corrected the same day: a refunded checkout completed
+
+On production the new finding read "Stripe · 银行卡 completed 10.3% of settled checkouts": 6 paid of 58. The other statuses were 15 failed or expired, 2 pending past the hour and 35 refunded, which the rate counted as settled and not paid. Forty-one of the 58 went through; the method's trouble is that its payments are refunded, not that its checkouts fail.
+
+- `settledRate` counts a refunded checkout with the paid ones: it went through. The console now reads the funnel's `refunded`, which the server already sent.
+- `refundedCheckoutFindings` names a method with at least ten refunds that are at least half of its payments, on the funds tab and the overview, apart from the checkout-loss finding. Its text says the checkouts went through and the money was returned.
+- The table's paid cell notes the refunds. The method's `completion_rate`, paid over opened, is unchanged: the previous-period comparison rests on it.
+
 ## Alternatives considered
 
 - **Put the channel fee into the console from `channels` data.** The funds view does not read the channels view's rows, so the console could not compute the same figure without a second read. A server field computed by the channels view's own function keeps the two equal by construction.

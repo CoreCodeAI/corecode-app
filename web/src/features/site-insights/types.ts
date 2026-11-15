@@ -681,6 +681,8 @@ export type OrderMethodFunnel = {
   paid: number
   failed: number
   expired: number
+  /** Paid, then refunded: a checkout that completed. Not in paid or paid_money. Absent before the server sent it. */
+  refunded?: number
   pending: number
   pending_stale: number
   plan_orders: number

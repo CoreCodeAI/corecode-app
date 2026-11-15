@@ -158,6 +158,7 @@ describe('checkoutValue', () => {
         created: 16,
         paid: 2,
         failed: 3,
+        refunded: 5,
         pending: 6,
         pending_stale: 2,
         paid_money: 200,
@@ -165,7 +166,34 @@ describe('checkoutValue', () => {
     )
     expect(value.settled).toBe(12)
     expect(value.unpaid).toBe(3 + 2)
+    expect(value.refunded).toBe(5)
     expect(value.estimate).toBe(500)
+    // The refunded five went through: 7 of the 12 settled completed.
+    expect(value.settledRate).toBeCloseTo(7 / 12)
+  })
+
+  it('reads a method whose payments were refunded as one that completes', () => {
+    // Stripe cards on production, 2026-11-16: 58 opened, 6 paid, 35 paid and
+    // refunded, 15 failed or expired, 2 pending past the hour.
+    const value = checkoutValue(
+      funnel({
+        created: 58,
+        paid: 6,
+        refunded: 35,
+        failed: 15,
+        pending: 2,
+        pending_stale: 2,
+        paid_money: 340,
+      })
+    )
+    expect(value.settledRate).toBeCloseTo(41 / 58)
+    expect(value.unpaid).toBe(17)
+  })
+
+  it('takes a server that sends no refunds as having none', () => {
+    const value = checkoutValue(funnel({ created: 10, paid: 4, failed: 6 }))
+    expect(value.refunded).toBe(0)
+    expect(value.settledRate).toBe(0.4)
   })
 
   it('has no average and no estimate when nothing paid', () => {

@@ -50,13 +50,49 @@ export function checkoutLossFindings(
     .sort((a, b) => (b.impact ?? 0) - (a.impact ?? 0))
 }
 
+/**
+ * One finding for each payment method whose payments were mostly refunded:
+ * at least MIN_CHECKOUTS refunded, and at least half of the checkouts that
+ * paid. Its checkouts complete, so it is not a checkout loss; what was paid
+ * came back, as a card tested or charged back does. Most refunds first.
+ */
+export function refundedCheckoutFindings(
+  t: TFunction,
+  fmt: InsightsFormat,
+  methods: OrderMethodFunnel[] | null | undefined
+): Finding[] {
+  return orderFunnels(methods, null)
+    .filter(
+      (row) =>
+        row.refunded >= MIN_CHECKOUTS &&
+        row.refunded >= (row.paid + row.refunded) * CHECKOUT_LOSS_SHARE
+    )
+    .sort((a, b) => b.refunded - a.refunded)
+    .map((row) => ({
+      key: `finance-checkout-refunds-${row.payment_method}`,
+      tone: 'warning' as const,
+      title: t('{{method}}: {{refunded}} of {{paid}} payments were refunded', {
+        method: paymentMethodLabel(row.payment_method, t),
+        refunded: fmt.num(row.refunded),
+        paid: fmt.num(row.paid + row.refunded),
+      }),
+      detail: t(
+        'These checkouts went through and the money was returned, so they are not failed checkouts. Refunds this frequent are usually cards being tested or charged back.'
+      ),
+      tab: 'finance' as const,
+      section: SECTIONS.checkouts,
+      impact: row.refunded,
+    }))
+}
+
 function lossFinding(
   t: TFunction,
   fmt: InsightsFormat,
   row: OrderFunnelRow
 ): Finding {
   const counts = {
-    paid: fmt.num(row.paid),
+    // Paid, refunded since or not: what settledRate counts.
+    paid: fmt.num(row.paid + row.refunded),
     settled: fmt.num(row.settled),
     unpaid: fmt.num(row.unpaid),
   }
