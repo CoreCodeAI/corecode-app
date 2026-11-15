@@ -23,7 +23,13 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
-import { claudeEarned, poolUse } from '../finance-analysis'
+import {
+  claudeEarned,
+  PLAN_MIN_REQUESTS,
+  planServed,
+  poolUse,
+  type ServedRow,
+} from '../finance-analysis'
 import {
   accountPrice,
   PRICE_MONTH_DAYS,
@@ -39,6 +45,23 @@ import { BarSeries, HelpLabel, Panel, SimpleTable } from './shared'
 const CHARGE = 'bg-primary'
 const OFFICIAL = 'bg-sky-500'
 const COST = 'bg-amber-500'
+
+/**
+ * One row of the account-cost table: a plan of the pool, or usage that no
+ * plan row holds (removed accounts, unattributed use, other vendors' plans).
+ * Muted rows carry no cost.
+ */
+type PlanRow = {
+  key: string
+  plan: string
+  tier: string
+  label: string
+  accounts?: number
+  eligible?: number
+  price?: ReturnType<typeof accountPrice>
+  served?: ServedRow
+  muted: boolean
+}
 
 /**
  * Claude's economics over the range: what new-api charged, what gpt-load
@@ -92,6 +115,48 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
     ? Math.max(0, (end - (data?.matched_since ?? end)) / 86400)
     : 0
   const rangeCost = perDayUSD * rangeDays
+  // What each plan served against its cost over the same range as its "This
+  // range" cell; absent on a server without plan_usage.
+  const served = data?.plan_usage
+    ? planServed({
+        usage: data.plan_usage,
+        costed: accounts.map((row) => ({
+          plan: row.plan,
+          tier: row.tier,
+          costUSD: row.price
+            ? (row.price.monthlyUSD * row.accounts * rangeDays) /
+              PRICE_MONTH_DAYS
+            : null,
+        })),
+      })
+    : null
+  const planRows: PlanRow[] = [
+    ...accounts.map((row, index) => ({
+      key: `${row.plan}/${row.tier}`,
+      plan: row.plan,
+      tier: row.tier,
+      label: row.price?.label ?? row.plan,
+      accounts: row.accounts,
+      eligible: row.eligible,
+      price: row.price,
+      served: served?.rows[index],
+      muted: false,
+    })),
+    ...(served?.muted ?? []).map((row): PlanRow => {
+      let label = row.plan
+      if (row.key === 'removed') label = t('Accounts removed')
+      if (row.key === 'unattributed') label = t('Not attributed')
+      return {
+        key: row.key,
+        plan: row.plan,
+        tier: row.tier,
+        label,
+        accounts: row.key === 'removed' ? row.accounts : undefined,
+        served: row,
+        muted: true,
+      }
+    }),
+  ]
   // The ratios set the cost over the same days as the amounts beside it.
   const coveredCost = perDayUSD * coveredDays
   const officialPerCost = coveredCost > 0 ? official / coveredCost : 0
@@ -427,21 +492,21 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
           {data?.plans_error && (
             <p className='text-destructive mb-2 text-sm'>{data.plans_error}</p>
           )}
+          {data?.plan_usage_error && (
+            <p className='text-destructive mb-2 text-sm'>
+              {data.plan_usage_error}
+            </p>
+          )}
           <SimpleTable
-            rows={accounts}
-            rowKey={(row) => `${row.plan}/${row.tier}`}
+            rows={planRows}
+            rowKey={(row) => row.key}
             empty={t('No accounts in the pool')}
-            faded={(row) => !row.price}
+            faded={(row) => row.muted || !row.price}
             columns={[
               {
                 key: 'plan',
                 label: t('Plan'),
-                render: (row) => (
-                  <PlanName
-                    name={row.price?.label ?? row.plan}
-                    tier={row.tier}
-                  />
-                ),
+                render: (row) => <PlanName name={row.label} tier={row.tier} />,
               },
               {
                 key: 'accounts',
@@ -450,24 +515,24 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
                   'Every account of this plan in the pool, whatever its status.'
                 ),
                 align: 'right',
-                render: (row) => row.accounts,
+                render: (row) => row.accounts ?? '-',
               },
               {
                 key: 'eligible',
                 label: t('Usable now'),
                 hint: t('Accounts the scheduler may send requests to now.'),
                 align: 'right',
-                render: (row) => row.eligible,
+                render: (row) => row.eligible ?? '-',
               },
               {
                 key: 'price',
                 label: t('Price per month'),
                 hint: t('What one account of this plan costs a month.'),
                 align: 'right',
-                render: (row) =>
-                  row.price
-                    ? fmt.usdWhole(row.price.monthlyUSD)
-                    : t('No price'),
+                render: (row) => {
+                  if (row.price) return fmt.usdWhole(row.price.monthlyUSD)
+                  return row.muted ? '-' : t('No price')
+                },
               },
               {
                 key: 'month',
@@ -476,7 +541,7 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
                 align: 'right',
                 render: (row) =>
                   row.price
-                    ? fmt.usd(row.price.monthlyUSD * row.accounts)
+                    ? fmt.usd(row.price.monthlyUSD * (row.accounts ?? 0))
                     : '-',
               },
               {
@@ -489,13 +554,96 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
                 render: (row) =>
                   row.price
                     ? fmt.usd(
-                        (row.price.monthlyUSD * row.accounts * rangeDays) /
+                        (row.price.monthlyUSD *
+                          (row.accounts ?? 0) *
+                          rangeDays) /
                           PRICE_MONTH_DAYS
                       )
                     : '-',
               },
+              ...(served
+                ? [
+                    {
+                      key: 'served',
+                      label: t('Served'),
+                      hint: t(
+                        'What the plan’s accounts served in the range, at official prices. Removed accounts and unattributed use are listed below the plans.'
+                      ),
+                      align: 'right' as const,
+                      render: (row: PlanRow) => {
+                        if (!row.served) return '-'
+                        return (
+                          <span>
+                            {fmt.usd(row.served.servedUSD)}
+                            <span className='text-muted-foreground block text-[11px]'>
+                              {t('{{requests}} requests', {
+                                requests: fmt.num(row.served.requests),
+                              })}
+                            </span>
+                          </span>
+                        )
+                      },
+                    },
+                    {
+                      key: 'ratio',
+                      label: t('Served ÷ cost'),
+                      hint: t(
+                        'Served at official prices over the plan’s cost for the same range. Under 1× it is red: the accounts served less than they cost. Colored from {{min}} requests.',
+                        { min: PLAN_MIN_REQUESTS }
+                      ),
+                      align: 'right' as const,
+                      render: (row: PlanRow) => {
+                        const perCost = row.served?.perCost
+                        if (perCost == null) return '-'
+                        const low = row.served?.judged && perCost < 1
+                        return (
+                          <span className={low ? TONES.danger : undefined}>
+                            {fmt.multiple(perCost)}
+                          </span>
+                        )
+                      },
+                    },
+                    {
+                      key: 'share',
+                      label: t('Share'),
+                      hint: t(
+                        'This plan’s part of all value served in the range, removed and unattributed use included; the shares add up to 100%.'
+                      ),
+                      align: 'right' as const,
+                      render: (row: PlanRow) =>
+                        row.served?.share == null
+                          ? '-'
+                          : fmt.pct(row.served.share),
+                    },
+                  ]
+                : []),
             ]}
           />
+          {served?.most && served.least && (
+            <p className='mt-2 text-sm'>
+              {t(
+                'Most served per dollar: {{most}} at {{mostRatio}}; least: {{least}} at {{leastRatio}}.',
+                {
+                  most:
+                    accountPrice(served.most.plan, served.most.tier)?.label ??
+                    served.most.plan,
+                  mostRatio: fmt.multiple(served.most.perCost ?? 0),
+                  least:
+                    accountPrice(served.least.plan, served.least.tier)?.label ??
+                    served.least.plan,
+                  leastRatio: fmt.multiple(served.least.perCost ?? 0),
+                }
+              )}
+            </p>
+          )}
+          {served && served.addedInRange > 0 && (
+            <p className='text-muted-foreground mt-1 text-xs'>
+              {t(
+                '{{count}} accounts that served were added inside this range; their cost counts the whole range, so their served ÷ cost reads low.',
+                { count: served.addedInRange }
+              )}
+            </p>
+          )}
           {accounts.length > 0 && (
             <dl className='mt-3 grid max-w-xl grid-cols-3 gap-2 border-t pt-3 text-sm'>
               {[

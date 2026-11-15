@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -169,4 +171,89 @@ func cachedEngineDailyCost(key string, read func() EngineDailyCost) EngineDailyC
 func nanoToUSD(nano *big.Int) float64 {
 	usd, _ := new(big.Rat).SetFrac(nano, big.NewInt(1_000_000_000)).Float64()
 	return usd
+}
+
+// EngineCredentialRow is the usage one credential accrued in one group over a
+// window at official prices. CredentialID 0 holds usage the engine did not
+// attribute to an account. Both timestamps are nil for a credential the engine
+// no longer has.
+type EngineCredentialRow struct {
+	CredentialID            int64
+	GroupID                 int64
+	CreatedAtMS             *int64
+	SubscriptionCreatedAtMS *int64
+	Requests                int64
+	Failures                int64
+	CostUSD                 float64
+}
+
+// EngineCredentialUsage is the per-credential usage of the engine's
+// /usage/credentials for [start, end) in milliseconds. Configured is false
+// without EngineControlURL and EngineControlKey. Unsupported is set when the
+// engine predates the endpoint (HTTP 404): that is not an error, and the view
+// simply has no per-plan usage. Error holds any other failed read.
+type EngineCredentialUsage struct {
+	Configured  bool
+	Unsupported bool
+	Error       string
+	Credentials []EngineCredentialRow
+}
+
+type engineUsageCredentials struct {
+	Credentials []struct {
+		CredentialID            int64  `json:"credential_id"`
+		GroupID                 int64  `json:"group_id"`
+		CreatedAtMS             *int64 `json:"created_at_ms"`
+		SubscriptionCreatedAtMS *int64 `json:"subscription_created_at_ms"`
+		RequestCount            int64  `json:"request_count"`
+		FailureCount            int64  `json:"failure_count"`
+		EstimatedCostNanoUSD    string `json:"estimated_cost_nano_usd"`
+	} `json:"credentials"`
+}
+
+// FetchEngineCredentialUsage reads the engine's per-credential usage for
+// [startMS, endMS). The dashboard's range is at most 366 days and the engine
+// accepts 367, so one read covers it.
+func FetchEngineCredentialUsage(startMS, endMS int64) EngineCredentialUsage {
+	base := strings.TrimRight(strings.TrimSpace(operation_setting.EngineControlURL), "/")
+	key := strings.TrimSpace(operation_setting.EngineControlKey)
+	if base == "" || key == "" {
+		return EngineCredentialUsage{}
+	}
+	query := url.Values{
+		"from_ms": {strconv.FormatInt(startMS, 10)},
+		"to_ms":   {strconv.FormatInt(endMS, 10)},
+	}
+	return readEngineCredentialUsage(base, key, "/usage/credentials?"+query.Encode())
+}
+
+// readEngineCredentialUsage is one uncached read of the engine's usage per
+// credential at path.
+func readEngineCredentialUsage(base, key, path string) EngineCredentialUsage {
+	result := EngineCredentialUsage{Configured: true, Credentials: []EngineCredentialRow{}}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	usage, err := engineGet[engineUsageCredentials](ctx, base, key, path)
+	var httpErr *EngineHTTPError
+	if errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound {
+		result.Unsupported = true
+		return result
+	}
+	if err != nil {
+		result.Error = err.Error()
+		return result
+	}
+	for _, row := range usage.Credentials {
+		nano, ok := new(big.Int).SetString(row.EstimatedCostNanoUSD, 10)
+		if !ok || nano.Sign() < 0 {
+			result.Error = fmt.Sprintf("engine usage credentials: invalid cost %q", row.EstimatedCostNanoUSD)
+			return result
+		}
+		result.Credentials = append(result.Credentials, EngineCredentialRow{
+			CredentialID: row.CredentialID, GroupID: row.GroupID,
+			CreatedAtMS: row.CreatedAtMS, SubscriptionCreatedAtMS: row.SubscriptionCreatedAtMS,
+			Requests: row.RequestCount, Failures: row.FailureCount, CostUSD: nanoToUSD(nano),
+		})
+	}
+	return result
 }

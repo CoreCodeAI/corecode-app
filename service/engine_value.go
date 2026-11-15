@@ -127,3 +127,91 @@ func MatchClaudeCost(daily []model.FinanceDay, cost EngineDailyCost) (official f
 	}
 	return official, charged
 }
+
+// EngineUsageTotal is official-price usage summed over some accounts. Accounts
+// counts the distinct credentials; it is zero for the unattributed row.
+type EngineUsageTotal struct {
+	Accounts  int     `json:"accounts"`
+	Requests  int64   `json:"requests"`
+	Failures  int64   `json:"failures"`
+	ServedUSD float64 `json:"served_usd"`
+}
+
+// EnginePlanUsageRow is one plan and tier of the pool with what its accounts
+// served over the range. Accounts with no usage in the range are listed with
+// zeros. AddedInRange counts the served accounts whose credential was created
+// after the range began.
+type EnginePlanUsageRow struct {
+	Plan string `json:"plan"`
+	Tier string `json:"tier"`
+	EngineUsageTotal
+	AddedInRange int `json:"added_in_range"`
+}
+
+// EnginePlanUsage splits what the engine served over a range by plan and tier.
+// Removed is the usage of credentials no longer in the pool; Unattributed is
+// the usage the engine did not tie to an account. The rows and both extra
+// totals add up to the engine's total for the same window.
+type EnginePlanUsage struct {
+	Plans        []EnginePlanUsageRow `json:"plans"`
+	Removed      EngineUsageTotal     `json:"removed"`
+	Unattributed EngineUsageTotal     `json:"unattributed"`
+}
+
+// EnginePlanUsageByCredential joins per-credential usage to the plan and tier of
+// the pool's accounts by credential id; a credential in several groups counts
+// once. startMS is the range's start, for AddedInRange.
+func EnginePlanUsageByCredential(accounts []EngineAccount, usage EngineCredentialUsage, startMS int64) EnginePlanUsage {
+	type key struct{ plan, tier string }
+	planOf := make(map[int64]key, len(accounts))
+	rows := map[key]*EnginePlanUsageRow{}
+	for _, account := range accounts {
+		group := key{account.Plan, account.Tier}
+		planOf[int64(account.CredentialID)] = group
+		if rows[group] == nil {
+			rows[group] = &EnginePlanUsageRow{Plan: group.plan, Tier: group.tier}
+		}
+	}
+	result := EnginePlanUsage{Plans: []EnginePlanUsageRow{}}
+	removed := map[int64]struct{}{}
+	served := map[key]map[int64]struct{}{}
+	added := map[key]map[int64]struct{}{}
+	for _, row := range usage.Credentials {
+		cost := row.CostUSD
+		if row.CredentialID == 0 {
+			result.Unattributed.Requests += row.Requests
+			result.Unattributed.Failures += row.Failures
+			result.Unattributed.ServedUSD += cost
+			continue
+		}
+		group, inPool := planOf[row.CredentialID]
+		if !inPool {
+			removed[row.CredentialID] = struct{}{}
+			result.Removed.Requests += row.Requests
+			result.Removed.Failures += row.Failures
+			result.Removed.ServedUSD += cost
+			continue
+		}
+		target := rows[group]
+		target.Requests += row.Requests
+		target.Failures += row.Failures
+		target.ServedUSD += cost
+		if served[group] == nil {
+			served[group], added[group] = map[int64]struct{}{}, map[int64]struct{}{}
+		}
+		served[group][row.CredentialID] = struct{}{}
+		if row.CreatedAtMS != nil && *row.CreatedAtMS > startMS {
+			added[group][row.CredentialID] = struct{}{}
+		}
+	}
+	result.Removed.Accounts = len(removed)
+	for group, target := range rows {
+		target.Accounts = len(served[group])
+		target.AddedInRange = len(added[group])
+		result.Plans = append(result.Plans, *target)
+	}
+	slices.SortFunc(result.Plans, func(a, b EnginePlanUsageRow) int {
+		return cmp.Or(cmp.Compare(a.Plan, b.Plan), cmp.Compare(a.Tier, b.Tier))
+	})
+	return result
+}
