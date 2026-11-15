@@ -65,6 +65,10 @@ const defaultOperationsSettings: OperationsSettings = {
   'perf_metrics_setting.flush_interval': 5,
   'perf_metrics_setting.bucket_time': 'hour',
   'perf_metrics_setting.retention_days': 0,
+  'site_insights_digest_setting.enabled': false,
+  'site_insights_digest_setting.hour': '9',
+  'site_insights_digest_setting.feishu_webhook': '',
+  'site_insights_digest_setting.feishu_secret': '',
 }
 
 export function OperationsSettings() {

@@ -19,14 +19,15 @@ const (
 	SystemTaskStatusSucceeded SystemTaskStatus = "succeeded"
 	SystemTaskStatusFailed    SystemTaskStatus = "failed"
 
-	SystemTaskTypeLogCleanup     = "log_cleanup"
-	SystemTaskTypeChannelTest    = "channel_test"
-	SystemTaskTypeModelUpdate    = "model_update"
-	SystemTaskTypeMidjourneyPoll = "midjourney_poll"
-	SystemTaskTypeAsyncTaskPoll  = "async_task_poll"
-	SystemTaskTypeChannelBalance = "channel_balance"
-	SystemTaskTypeCleanup        = "system_task_cleanup"
-	SystemTaskTypeTopupWatch     = "topup_watch"
+	SystemTaskTypeLogCleanup         = "log_cleanup"
+	SystemTaskTypeChannelTest        = "channel_test"
+	SystemTaskTypeModelUpdate        = "model_update"
+	SystemTaskTypeMidjourneyPoll     = "midjourney_poll"
+	SystemTaskTypeAsyncTaskPoll      = "async_task_poll"
+	SystemTaskTypeChannelBalance     = "channel_balance"
+	SystemTaskTypeCleanup            = "system_task_cleanup"
+	SystemTaskTypeTopupWatch         = "topup_watch"
+	SystemTaskTypeSiteInsightsDigest = "site_insights_digest"
 
 	systemTaskCleanupBatchSize = 500
 )
