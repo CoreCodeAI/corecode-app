@@ -329,6 +329,15 @@ func (h histogram) percentile(p float64) int64 {
 	return values[len(values)-1]
 }
 
+// count is how many values the histogram holds.
+func (h histogram) count() int64 {
+	var total int64
+	for _, count := range h {
+		total += count
+	}
+	return total
+}
+
 func (h histogram) encode() string {
 	encoded := make(map[string]int64, len(h))
 	for value, count := range h {

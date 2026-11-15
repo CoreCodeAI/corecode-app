@@ -118,6 +118,20 @@ export type QualityRefusals = {
  * oldest first, except UpstreamHour (one row per hour and channel with
  * traffic or cost).
  */
+/** One day or hour of a vendor's first-response time; requests are the streamed requests it holds. */
+export type TTFTPoint = {
+  start: number
+  requests: number
+  ttft_p50_ms: number
+  ttft_p95_ms: number
+}
+
+export type TTFTSeries = {
+  vendor: string
+  daily: TTFTPoint[] | null
+  hourly?: TTFTPoint[] | null
+}
+
 export type QualityHour = {
   hour: number
   requests: number
@@ -1191,7 +1205,16 @@ export type ActivityInsights = {
     /** The day's Claude charge, quota dollars; absent before the server's release. */
     claude_quota_usd?: number
   }[]
-  retention: { day: number; size: number; days: number[] | null }[]
+  /** Each sign-up day, newest first. The counts and the activated and paid parts are absent before the server's release. */
+  retention: {
+    day: number
+    size: number
+    days: number[] | null
+    /** Users of the cohort active on each day the cohort reports: the counts behind days. */
+    active?: number[] | null
+    activated?: RetentionSegment | null
+    paid?: RetentionSegment | null
+  }[]
   top_users: (UserRef & {
     quota_usd: number
     requests: number
@@ -1217,6 +1240,22 @@ export type KeyModelUsage = {
  * requests are those not served; client_failures is the part the customer
  * caused, and service_failure_rate is the rest over requests.
  */
+/** The sign-ups of a cohort who made a request (activated) or paid, and how many were active on each day. */
+export type RetentionSegment = {
+  size: number
+  active: number[] | null
+}
+
+/** A customer's service failures over the range; the rate is the failures over the requests. */
+export type FailingUser = UserRef & {
+  requests: number
+  service_failures: number
+  service_failure_rate: number
+  /** The model that failed most for the customer; empty when none did. */
+  top_model: string
+  top_model_failures: number
+}
+
 export type APIKeyUsage = {
   token_id: number
   token_name: string
@@ -1246,6 +1285,8 @@ export type KeyInsights = {
   staff_requests: number
   staff_quota_usd: number
   staff_keys: APIKeyUsage[]
+  /** Customers with the most service failures, most first, at most 20; absent before the server's release. */
+  failing_users?: FailingUser[] | null
   /** Hours still stored under an older version; their keys are not in the figures. */
   stale_hours: number
 }
@@ -1319,6 +1360,8 @@ export type QualityInsights = StaleHours & {
   truncated: boolean
   /** Ranges of 3 days or less, following the model filter as daily does; absent before the server's release. */
   hourly?: QualityHour[] | null
+  /** Each vendor's first-response time by day and, for a range with hourly rows, by hour; absent before the server's release. */
+  ttft_vendors?: TTFTSeries[] | null
   /** Customers only, as the capacity view's categories (ErrorCategory names, no_channel included); absent before the server's release. */
   error_categories?: NamedCount[] | null
   /** On every successful response from the server's release; absent before it. */

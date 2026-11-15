@@ -100,10 +100,14 @@ type QualityInsights struct {
 	Vendors       []VendorQuality `json:"vendors"`
 	// AllModels is every model's figures whatever the filter selects, for
 	// the quick-select card that clears it. Its Vendor and Models are empty.
-	AllModels  VendorQuality `json:"all_models"`
-	Daily      []CacheDay    `json:"daily"`
-	Hourly     []QualityHour `json:"hourly,omitempty"`
-	StreamEnds []NamedCount  `json:"stream_ends"`
+	AllModels VendorQuality `json:"all_models"`
+	Daily     []CacheDay    `json:"daily"`
+	Hourly    []QualityHour `json:"hourly,omitempty"`
+	// TTFTVendors is each vendor's first-response time by day, and by hour
+	// when the range has hourly rows, over the selected models. A point with
+	// no streamed request is left out.
+	TTFTVendors []TTFTSeries `json:"ttft_vendors"`
+	StreamEnds  []NamedCount `json:"stream_ends"`
 	// StatusCodes and ErrorReasons count the customers' failed tries, every
 	// try of a request included, so their sums are FailedTries.
 	StatusCodes  []NamedCount `json:"status_codes"`
@@ -129,6 +133,25 @@ type QualityInsights struct {
 	// StaleHours counts the range's hours stored under an older rollup
 	// version, which count attempts rather than requests.
 	StaleHours int `json:"stale_hours"`
+}
+
+// TTFTSeries is one vendor's first-response time over the range's days, and
+// over its hours when the range has hourly rows. Only streamed customers'
+// requests with a first-response time count: the points of the TTFT histograms.
+type TTFTSeries struct {
+	Vendor string      `json:"vendor"`
+	Daily  []TTFTPoint `json:"daily"`
+	Hourly []TTFTPoint `json:"hourly,omitempty"`
+}
+
+// TTFTPoint is one day or hour of a TTFTSeries: Start is its start in unix
+// seconds, Requests the streamed requests it holds, and the percentiles are
+// read from their merged histogram.
+type TTFTPoint struct {
+	Start    int64 `json:"start"`
+	Requests int64 `json:"requests"`
+	TTFTP50  int64 `json:"ttft_p50_ms"`
+	TTFTP95  int64 `json:"ttft_p95_ms"`
 }
 
 // VendorFailureBreakdown is one vendor's failed tries by reason and by status
@@ -399,6 +422,8 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	for _, day := range r.days() {
 		days[day] = &dayBucket{day: CacheDay{Day: day}, ttft: histogram{}}
 	}
+	dailyTTFT := make(map[string]map[int64]histogram)
+	hourlyTTFT := make(map[string]map[int64]histogram)
 	type hourBucket struct {
 		hour QualityHour
 		ttft histogram
@@ -490,11 +515,13 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 				day.day.Write += row.CacheWrite
 				day.day.Uncached += row.Uncached
 				day.ttft.merge(model.ttft)
+				mergeTTFT(dailyTTFT, ModelVendor(name), day.day.Day, model.ttft)
 			}
 			if slot != nil {
 				slot.hour.Requests += row.Requests
 				slot.hour.Errors += row.Errors
 				slot.ttft.merge(model.ttft)
+				mergeTTFT(hourlyTTFT, ModelVendor(name), slot.hour.Hour, model.ttft)
 			}
 		}
 	}
@@ -505,6 +532,7 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 		result.Hourly = append(result.Hourly, slot.hour)
 	}
 	result.ErrorCategories = sortedCounts(categories)
+	result.TTFTVendors = ttftSeriesOf(dailyTTFT, hourlyTTFT)
 	result.TTFTP50, result.TTFTP95 = allTTFT.percentile(0.5), allTTFT.percentile(0.95)
 	type vendorBucket struct {
 		quality VendorQuality
@@ -587,6 +615,53 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 		return nil, err
 	}
 	return result, nil
+}
+
+// mergeTTFT adds a model's first-response histogram to the vendor's histogram
+// at start. An empty histogram adds no point.
+func mergeTTFT(byVendor map[string]map[int64]histogram, vendor string, start int64, ttft histogram) {
+	if len(ttft) == 0 {
+		return
+	}
+	if byVendor[vendor] == nil {
+		byVendor[vendor] = make(map[int64]histogram)
+	}
+	if byVendor[vendor][start] == nil {
+		byVendor[vendor][start] = histogram{}
+	}
+	byVendor[vendor][start].merge(ttft)
+}
+
+// ttftSeriesOf lists each vendor that streamed a request in the range, by
+// name, with its daily and hourly points.
+func ttftSeriesOf(daily, hourly map[string]map[int64]histogram) []TTFTSeries {
+	names := make([]string, 0, len(daily))
+	for name := range daily {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	series := make([]TTFTSeries, 0, len(names))
+	for _, name := range names {
+		series = append(series, TTFTSeries{Vendor: name, Daily: ttftPoints(daily[name]), Hourly: ttftPoints(hourly[name])})
+	}
+	return series
+}
+
+// ttftPoints lists the points that hold a streamed request, in start order.
+func ttftPoints(byStart map[int64]histogram) []TTFTPoint {
+	starts := make([]int64, 0, len(byStart))
+	for start := range byStart {
+		starts = append(starts, start)
+	}
+	slices.Sort(starts)
+	var points []TTFTPoint
+	for _, start := range starts {
+		ttft := byStart[start]
+		if n := ttft.count(); n > 0 {
+			points = append(points, TTFTPoint{Start: start, Requests: n, TTFTP50: ttft.percentile(0.5), TTFTP95: ttft.percentile(0.95)})
+		}
+	}
+	return points
 }
 
 // retiredModels names, sorted, the listed models that no enabled ability

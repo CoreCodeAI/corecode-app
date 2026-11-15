@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -205,7 +206,9 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 			assert.Equal(t, ActivityDay{Day: day1 + 86400, DAU: 1, WAU: 2, Requests: 1, QuotaUSD: 1}, activity.Daily[1])
 			assert.Equal(t, 0.75, activity.Top1Share)
 			require.Len(t, activity.Retention, 2)
-			assert.Equal(t, RetentionCohort{Day: day1, Size: 2, Days: []float64{1, 0.5}}, activity.Retention[1])
+			assert.Equal(t, RetentionCohort{Day: day1, Size: 2, Days: []float64{1, 0.5}, Active: []int64{2, 1},
+				Activated: RetentionSegment{Size: 2, Active: []int64{2, 1}}, Paid: RetentionSegment{Size: 2, Active: []int64{2, 1}}}, activity.Retention[1],
+				"both sign-ups requested and paid, so each part is the whole cohort")
 
 			quality, err := GetQualityInsights(r, nil)
 			require.NoError(t, err)
@@ -1866,4 +1869,60 @@ func TestInsightsRangeSettledWaitsForTheLastHour(t *testing.T) {
 	settledAt = base + 3*3600 + finalAfterHour
 	assert.False(t, InsightsRangeSettled(inTheHour, settledAt-1))
 	assert.True(t, InsightsRangeSettled(inTheHour, settledAt))
+}
+
+// The first-response series is merged from the hourly histograms: a day's p50
+// and p95 are the percentiles of its merged values, not an average of hours.
+// A vendor with no streamed request on a day has no point that day; a failed
+// request, a request that was not streamed and the staff's requests are not in it.
+func TestQualityTTFTSeriesMergesHoursByVendorAndDay(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			const day1 = int64(1759190400)
+			r := InsightsRange{Start: day1, End: day1 + 2*86400}
+			alice := registerAffiliateTestUser(t, "alice", "")
+			streamed := func(at int64, modelName string, frt int) Log {
+				return Log{UserId: alice.Id, Username: "alice", Type: LogTypeConsume, CreatedAt: at, UseTime: 5, ChannelId: 3,
+					ModelName: modelName, IsStream: true, Other: fmt.Sprintf(`{"frt":%d}`, frt)}
+			}
+			var logs []Log
+			for frt := 1; frt <= 50; frt++ {
+				logs = append(logs, streamed(day1+100, "gpt-6", frt))
+			}
+			for frt := 51; frt <= 99; frt++ {
+				logs = append(logs, streamed(day1+5*3600+100, "gpt-6", frt))
+			}
+			logs = append(logs,
+				streamed(day1+200, "claude-x", 200), streamed(day1+300, "claude-x", 200), streamed(day1+400, "claude-x", 200),
+				streamed(day1+86400+100, "gpt-6", 10),
+				// Not streamed, and failed: neither is in the histograms.
+				Log{UserId: alice.Id, Username: "alice", Type: LogTypeConsume, CreatedAt: day1 + 500, UseTime: 5, ChannelId: 3, ModelName: "gpt-6", Other: `{"frt":7}`},
+				Log{UserId: alice.Id, Username: "alice", Type: LogTypeError, CreatedAt: day1 + 600, UseTime: 5, ChannelId: 3, ModelName: "gpt-6", IsStream: true, Content: "status_code=502, upstream failed", Other: `{}`},
+			)
+			require.NoError(t, LOG_DB.Create(&logs).Error)
+
+			quality, err := GetQualityInsights(r, nil)
+			require.NoError(t, err)
+			gpt, claude := ModelVendor("gpt-6"), ModelVendor("claude-x")
+			byVendor := make(map[string]TTFTSeries)
+			for _, series := range quality.TTFTVendors {
+				byVendor[series.Vendor] = series
+			}
+			require.Len(t, byVendor, 2)
+			assert.Equal(t, []TTFTPoint{
+				{Start: day1, Requests: 99, TTFTP50: 50, TTFTP95: 95},
+				{Start: day1 + 86400, Requests: 1, TTFTP50: 10, TTFTP95: 10},
+			}, byVendor[gpt].Daily, "p50 and p95 of the merged 99 values; the second day has one streamed request")
+			assert.Equal(t, []TTFTPoint{{Start: day1, Requests: 3, TTFTP50: 200, TTFTP95: 200}}, byVendor[claude].Daily,
+				"claude streamed nothing on the second day, so it has no point there")
+			require.Len(t, byVendor[gpt].Hourly, 3, "hours 0, 5 and the first hour of the second day")
+			assert.Equal(t, TTFTPoint{Start: day1 + 5*3600, Requests: 49, TTFTP50: 75, TTFTP95: 97}, byVendor[gpt].Hourly[1])
+
+			filtered, err := GetQualityInsights(r, []string{"gpt-6"})
+			require.NoError(t, err)
+			require.Len(t, filtered.TTFTVendors, 1, "the model filter narrows the series as it narrows the daily figures")
+			assert.Equal(t, gpt, filtered.TTFTVendors[0].Vendor)
+		})
+	}
 }

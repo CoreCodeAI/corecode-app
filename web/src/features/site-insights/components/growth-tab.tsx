@@ -19,16 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { TapTooltip, TapTooltipTrigger } from '@/components/tap-tooltip'
-import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
 
 import { alignPrevious, beforeLogs } from '../analysis'
 import {
   claudeCoverage,
-  dayInProgress,
   judgedCohort,
   lastFullDay,
   perActiveUser,
@@ -36,7 +31,6 @@ import {
   signupBurst,
   stickiness,
   viewState,
-  type ViewState,
 } from '../growth-analysis'
 import {
   joinSentences,
@@ -66,17 +60,18 @@ import { ACTIVATION_WARN, cohortJudgeable } from '../verdicts/growth'
 import {
   HourlyActivePanel,
   HourlyConsumptionPanel,
-  RetentionNeedsRange,
   TopCustomersPanel,
 } from './activity-insights'
 import { FunnelChart } from './advanced-charts'
 import { GroupsPanel, ReferralPanel } from './business-panels'
+import { FailingCustomersPanel } from './failing-customers-panel'
 import {
   PayerActivityPanel,
   PaymentTimingPanel,
   SignupDriversPanel,
 } from './growth-insights'
 import { ApiKeysPanel } from './key-insights'
+import { RetentionPanel } from './retention-panel'
 import {
   BarSeries,
   type BarPoint,
@@ -960,23 +955,14 @@ export function ActivityTab(props: {
           />
         )}
       </Panel>
-      <Panel
-        title={t('Retention by sign-up day')}
-        help={t(
-          'Share of each day’s sign-ups active N days later: a request of theirs came back with usage (tokens or a charge). Day 0 is the sign-up day. A faded cell is a day still in progress.'
-        )}
+      <RetentionPanel
+        cohorts={data?.retention}
+        state={state}
         error={viewError}
-      >
-        {range?.hourly && <RetentionNeedsRange />}
-        {!range?.hourly && !failed && (
-          <RetentionGrid
-            data={data}
-            state={state}
-            end={range?.end}
-            logsSince={logsSince}
-          />
-        )}
-      </Panel>
+        range={range}
+        end={range?.end}
+        logsSince={logsSince}
+      />
       <TopCustomersPanel
         data={data}
         previous={previous}
@@ -989,123 +975,12 @@ export function ActivityTab(props: {
         charge={charge}
         range={range}
       />
+      <FailingCustomersPanel
+        users={props.keys?.failing_users}
+        staleHours={props.keys?.stale_hours}
+        source={props.sources?.keys}
+        range={range}
+      />
     </div>
-  )
-}
-
-function RetentionGrid(props: {
-  data: ActivityInsights | undefined
-  state: ViewState
-  /** The range's end, unix seconds: a day that had not ended by it is in progress. */
-  end?: number
-  /** Where the logs begin: a day before them has no activity to read. */
-  logsSince?: number | null
-}) {
-  const { t } = useTranslation()
-  const fmt = useInsightsFormat()
-  const cohorts = props.data?.retention ?? []
-  const end = props.end
-  const logsSince = props.logsSince
-  if (props.state === 'loading') {
-    return (
-      <div role='status' aria-label={t('Loading...')} className='grid gap-2'>
-        <Skeleton className='h-4 w-full' />
-        <Skeleton className='h-4 w-full' />
-      </div>
-    )
-  }
-  if (cohorts.length === 0) {
-    return (
-      <p className='text-muted-foreground text-xs'>
-        {t('No sign-ups in this range')}
-      </p>
-    )
-  }
-  const width = Math.max(...cohorts.map((cohort) => cohort.days?.length ?? 0))
-  return (
-    <TooltipProvider delay={0}>
-      <div className='-mx-4 overflow-x-auto px-4'>
-        <table className='text-xs tabular-nums'>
-          <thead>
-            <tr className='text-muted-foreground'>
-              <th className='pr-3 text-left font-normal'>{t('Sign-up day')}</th>
-              <th className='pr-3 text-right font-normal'>{t('Users')}</th>
-              {Array.from({ length: width }, (_, day) => (
-                <th key={day} className='w-11 text-center font-normal'>
-                  D{day}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {cohorts.map((cohort) => (
-              <tr key={cohort.day}>
-                <td className='pr-3 whitespace-nowrap'>
-                  {fmt.day(cohort.day)}
-                </td>
-                <td className='pr-3 text-right'>{cohort.size}</td>
-                {Array.from({ length: width }, (_, day) => {
-                  const value = cohort.days?.[day]
-                  const partial =
-                    end != null && dayInProgress(cohort.day + day * 86400, end)
-                  if (beforeLogs(cohort.day + day * 86400, 86400, logsSince)) {
-                    return (
-                      <td
-                        key={day}
-                        className='text-muted-foreground p-0.5 text-center'
-                      >
-                        -
-                      </td>
-                    )
-                  }
-                  const reading = {
-                    share: fmt.pct(value ?? 0),
-                    size: fmt.num(cohort.size),
-                    day: fmt.day(cohort.day),
-                    n: day,
-                  }
-                  return (
-                    <td key={day} className='p-0.5'>
-                      {value == null ? null : (
-                        <TapTooltip>
-                          <TapTooltipTrigger
-                            render={
-                              <span
-                                tabIndex={0}
-                                className={cn(
-                                  'hover:ring-foreground/30 focus-visible:ring-ring/50 block cursor-default rounded px-1 py-0.5 text-center outline-none hover:ring-1 focus-visible:ring-2',
-                                  value > 0.5 && 'text-primary-foreground',
-                                  partial && 'opacity-50'
-                                )}
-                                style={{
-                                  backgroundColor: `color-mix(in oklab, var(--primary) ${Math.round(value * 100)}%, transparent)`,
-                                }}
-                              />
-                            }
-                          >
-                            {Math.round(value * 100)}
-                          </TapTooltipTrigger>
-                          <TooltipContent>
-                            {partial
-                              ? t(
-                                  '{{share}} of the {{size}} users who signed up {{day}} were active on D{{n}} so far; the day is still in progress.',
-                                  reading
-                                )
-                              : t(
-                                  '{{share}} of the {{size}} users who signed up {{day}} were active on D{{n}}',
-                                  reading
-                                )}
-                          </TooltipContent>
-                        </TapTooltip>
-                      )}
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </TooltipProvider>
   )
 }
