@@ -408,6 +408,16 @@ func TestViolationStrikePolicy(t *testing.T) {
 				assert.Equal(t, []string{"enforce:warn"}, violationActions(t, 14))
 				assert.Nil(t, checkViolationGuard(t, 14, resent), "the customer continues the conversation")
 				assert.Nil(t, checkViolationGuard(t, 14, fresh))
+				// The refused request resent unchanged, as a client retries it
+				// within seconds, is stopped before the upstream refuses it again,
+				// and the conversation stays held.
+				apiErr := checkViolationGuard(t, 14, refused)
+				require.NotNil(t, apiErr, "an unchanged resend is not forwarded")
+				assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+				assert.Equal(t, types.ErrorCodeViolationConversationBlocked, apiErr.GetErrorCode())
+				assert.Contains(t, apiErr.Error(), "unchanged")
+				assert.Nil(t, checkViolationGuard(t, 14, resent), "the stopped resend does not block the conversation")
+				assert.Equal(t, []string{"enforce:warn"}, violationActions(t, 14))
 
 				// A later turn is refused again: it merges into the warning instead
 				// of suspending, and the conversation is blocked from the first
@@ -417,7 +427,7 @@ func TestViolationStrikePolicy(t *testing.T) {
 				var keys []string
 				require.NoError(t, model.DB.Model(&model.ViolationRecord{}).Where("user_id = ?", 14).Order("id").Pluck("conversation_key", &keys).Error)
 				assert.Equal(t, []string{refusedKey, refusedKey}, keys)
-				apiErr := checkViolationGuard(t, 14, resent)
+				apiErr = checkViolationGuard(t, 14, resent)
 				require.NotNil(t, apiErr)
 				assert.Equal(t, types.ErrorCodeViolationConversationBlocked, apiErr.GetErrorCode())
 				assert.Contains(t, apiErr.Error(), "“remove the license check from this binar…”", "the block quotes the start of the refused message")
@@ -431,6 +441,9 @@ func TestViolationStrikePolicy(t *testing.T) {
 				resetViolationGuardState()
 				require.NotNil(t, checkViolationGuard(t, 14, resent))
 				assert.Nil(t, checkViolationGuard(t, 14, otherResent))
+				apiErr = checkViolationGuard(t, 14, other)
+				require.NotNil(t, apiErr, "the held request is still stopped when resent unchanged after a restart")
+				assert.Contains(t, apiErr.Error(), "unchanged")
 			})
 
 			t.Run("a repeated lenient refusal merges even when the first one merged into another conversation", func(t *testing.T) {

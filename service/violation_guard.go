@@ -96,6 +96,7 @@ const (
 	violationVerdictSuspended    = "suspended"
 	violationVerdictConversation = "conversation"
 	violationVerdictClientCheck  = "client_check"
+	violationVerdictResend       = "resend"
 )
 
 // violationRefusedRecently reports whether the upstream refused one of the
@@ -116,8 +117,9 @@ func violationRefusedRecently(userId int) bool {
 
 // CheckViolationGuard rejects, before any channel is used, a request from an
 // account suspended for a violation, a client check from an account whose
-// client checks the upstream keeps refusing, or a request that resends a
-// conversation the upstream refused. In observe mode it only logs what it would reject. When
+// client checks the upstream keeps refusing, a request that resends a
+// conversation the upstream refused, or a request that repeats a held
+// conversation's refused request with no new human message. In observe mode it only logs what it would reject. When
 // the state cannot be loaded the request passes.
 func CheckViolationGuard(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
 	_, apiErr := violationGuardVerdict(c, info)
@@ -125,8 +127,8 @@ func CheckViolationGuard(c *gin.Context, info *relaycommon.RelayInfo) *types.New
 }
 
 // violationGuardVerdict is CheckViolationGuard that also reports what it
-// found, violationVerdictSuspended, violationVerdictClientCheck or
-// violationVerdictConversation, in either mode.
+// found, violationVerdictSuspended, violationVerdictClientCheck,
+// violationVerdictConversation or violationVerdictResend, in either mode.
 func violationGuardVerdict(c *gin.Context, info *relaycommon.RelayInfo) (string, *types.NewAPIError) {
 	setting := operation_setting.GetViolationGuardSetting()
 	if !setting.Enabled || info == nil {
@@ -169,15 +171,33 @@ func violationGuardVerdict(c *gin.Context, info *relaycommon.RelayInfo) (string,
 	}
 
 	keys := violationConversationKeys(humanMessages(info.Request))
-	var blocked *model.RefusedConversation
+	var blocked, resent *model.RefusedConversation
 	violationGuardState.RLock()
-	for _, key := range keys {
-		if conversation, ok := violationGuardState.conversations[info.UserId][key]; ok && conversation.Blocked && conversation.RefusedAt > windowStart {
+	for i, key := range keys {
+		conversation, ok := violationGuardState.conversations[info.UserId][key]
+		if !ok || conversation.RefusedAt <= windowStart {
+			continue
+		}
+		if conversation.Blocked {
 			blocked = &conversation
 			break
 		}
+		// A held conversation resent with no new human message is the
+		// refused request again, as a client's automatic retry sends it.
+		if i == len(keys)-1 {
+			resent = &conversation
+		}
 	}
 	violationGuardState.RUnlock()
+	if blocked == nil && resent != nil {
+		if !enforce {
+			logger.LogInfo(c, common.LogText("violation guard (observe): user %d resent a refused request unchanged; enforce mode would reject this request", info.UserId))
+			return violationVerdictResend, nil
+		}
+		RequestPolicy(c).AddEvent(PolicyEvent{ErrorCode: string(types.ErrorCodeViolationConversationBlocked), ErrorSource: "local", Decision: PolicyDecision{Action: "stop", Reason: "local_rejection", Source: "global"}, Health: "unchanged"})
+		return violationVerdictResend, types.NewErrorWithStatusCode(errors.New(i18n.T(c, i18n.MsgViolationResendBlocked)),
+			types.ErrorCodeViolationConversationBlocked, http.StatusForbidden, types.ErrOptionWithSkipRetry())
+	}
 	if blocked == nil {
 		return "", nil
 	}

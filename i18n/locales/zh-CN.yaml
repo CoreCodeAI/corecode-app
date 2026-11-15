@@ -28,6 +28,7 @@ violation.risk_gate_held: "该对话中有一条消息被内容安全策略拦�
 violation.conversation_blocked: "该对话已被上游模型以违反使用政策为由拒绝，不再转发。请开启新对话，或回退到被拒的那条消息之前继续：Claude Code 中输入 /rewind（或在输入框为空时连按两次 Esc），选择 Restore conversation；其他客户端请编辑那条消息"
 violation.conversation_blocked_quoted: "该对话已被上游模型以违反使用政策为由拒绝，不再转发。被拒的消息开头是「{{.Message}}」。请开启新对话，或回退到那条消息之前继续：Claude Code 中输入 /rewind（或在输入框为空时连按两次 Esc），选择 Restore conversation；其他客户端请编辑那条消息"
 violation.client_check_blocked: "近 24 小时内该账号已有 {{.Count}} 次客户端检查请求（如 Claude Code auto 模式在调用工具前发出的检查）被上游拒绝，此类请求暂不转发，不计违规。删除 CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS 和 CLAUDE_CODE_AUTO_MODE_SERVER=0 后开启新会话，auto 模式即改由服务端审查"
+violation.resend_blocked: "上游模型刚以违反使用政策为由拒绝了这个请求，原样重发会再次被拒，因此未转发。请修改最后一条消息，或发一条新消息继续对话"
 rate_limit.user_concurrency_reached: "你的账号同时进行的请求过多：所有 API 密钥合计最多同时 {{.Max}} 个，请等已有请求完成后再试"
 rate_limit.user_concurrency_next_tier: "你的账号同时进行的请求过多：所有 API 密钥合计最多同时 {{.Max}} 个，请等已有请求完成后再试。累计充值再满 {{.Remaining}} 元，并发上限可提升到 {{.Next}}"
 rate_limit.token_concurrency_reached: "这个 API 密钥同时进行的请求过多：最多同时 {{.Max}} 个，请等已有请求完成后再试"

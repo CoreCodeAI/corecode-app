@@ -37,6 +37,7 @@ const (
 	MsgViolationConversationBlocked       = "violation.conversation_blocked"
 	MsgViolationConversationBlockedQuoted = "violation.conversation_blocked_quoted"
 	MsgViolationClientCheckBlocked        = "violation.client_check_blocked"
+	MsgViolationResendBlocked             = "violation.resend_blocked"
 	MsgRiskGateBlocked                    = "violation.risk_gate_blocked"
 	MsgRiskGateKeyword                    = "violation.risk_gate_keyword"
 	MsgRiskGateHeld                       = "violation.risk_gate_held"
