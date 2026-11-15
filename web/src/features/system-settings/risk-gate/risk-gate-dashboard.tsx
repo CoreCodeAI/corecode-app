@@ -20,7 +20,9 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CopyButton } from '@/components/copy-button'
 import { DataTablePage, useDataTable } from '@/components/data-table'
+import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -31,7 +33,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toIntlLocale } from '@/i18n/languages'
-import { formatNumber, formatPercent } from '@/lib/format'
+import {
+  formatNumber,
+  formatPercent,
+  formatTimestampToDate,
+} from '@/lib/format'
 
 import {
   RISK_GATE_STAGES,
@@ -105,6 +111,7 @@ export function RiskGateDashboard() {
   const stageLabels = useRiskGateStageLabels()
   const [stage, setStage] = useState<string>(ALL_STAGES)
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
+  const [excerptTarget, setExcerptTarget] = useState<RiskGateEvent | null>(null)
 
   const summary = useQuery({
     queryKey: ['risk-gate-summary'],
@@ -132,7 +139,7 @@ export function RiskGateDashboard() {
   const share = (count: number) =>
     inbound > 0 ? formatPercent((count / inbound) * 100) : '-'
 
-  const columns = useRiskGateColumns()
+  const columns = useRiskGateColumns(setExcerptTarget)
   const { table } = useDataTable({
     columns,
     data: events.data?.items ?? EMPTY_EVENTS,
@@ -303,6 +310,46 @@ export function RiskGateDashboard() {
           />
         </div>
       </div>
+      <Dialog
+        open={excerptTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setExcerptTarget(null)
+        }}
+        title={t('Message')}
+        description={t(
+          'The last message the customer wrote in the request, up to 4 KB.'
+        )}
+        footer={
+          <CopyButton
+            value={excerptTarget?.excerpt ?? ''}
+            variant='outline'
+            size='sm'
+          >
+            {t('Copy')}
+          </CopyButton>
+        }
+      >
+        {excerptTarget && (
+          <div className='flex flex-col gap-3'>
+            <p className='text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs'>
+              <span>
+                {excerptTarget.username} #{excerptTarget.user_id}
+              </span>
+              <span className='font-mono tabular-nums'>
+                {formatTimestampToDate(excerptTarget.created_at)}
+              </span>
+              <span>
+                {stageLabels[excerptTarget.stage]} · {excerptTarget.rule}
+              </span>
+              <span>{excerptTarget.model_name}</span>
+              <span className='font-mono'>{excerptTarget.request_id}</span>
+            </p>
+            <pre className='bg-muted max-h-[60vh] overflow-auto rounded-md p-3 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap'>
+              {excerptTarget.excerpt}
+            </pre>
+          </div>
+        )}
+      </Dialog>
     </div>
   )
 }

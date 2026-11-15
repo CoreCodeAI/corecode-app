@@ -7597,6 +7597,8 @@
     "Warning (not counted)": "警告（カウントなし）",
     "Client check (not counted)": "クライアント自身のリクエスト（カウントなし）",
     "View refused message": "拒否されたメッセージを表示",
+    "View message": "メッセージを表示",
+    "The last message the customer wrote in the request, up to 4 KB.": "このリクエストで顧客が書いた最後のメッセージ（最大 4 KB）。",
     "The last message the customer wrote in the refused request, up to 4 KB. The upstream judged the whole conversation, not only this message.": "拒否されたリクエストで顧客が最後に書いたメッセージ（最大 4 KB）。上流はこのメッセージだけでなく会話全体を判断しています。",
     "Warn-first categories": "まず警告するカテゴリ",
     "Refusal categories, separated by commas, whose refusals are first only warnings: the customer is not suspended and a warning does not count toward disabling. The customer can continue the refused conversation; it is blocked only when the upstream refuses it again.": "カンマ区切りの拒否カテゴリ。これらのカテゴリの拒否は、まず警告のみになります。顧客は停止されず、警告は無効化の回数に数えられません。顧客は拒否された会話を続けられ、上流が再びその会話を拒否したときにだけブロックされます。",
