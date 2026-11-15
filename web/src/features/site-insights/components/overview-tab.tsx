@@ -51,6 +51,7 @@ import type {
   ActivityInsights,
   CapacityInsights,
   EngineHorizon,
+  EngineOutlook,
   EnginePool,
   FinanceInsights,
   QualityInsights,
@@ -74,6 +75,7 @@ import {
 } from './overview-charts'
 import { TabDigest, WhatChanged } from './overview-insights'
 import {
+  overviewQuotaSignals,
   overviewServiceSignals,
   peakTone,
   poolPeakAgainstSlots,
@@ -119,6 +121,8 @@ export function OverviewTab(props: {
   refreshMs: Partial<Record<InsightsView, number>>
   onOpen?: (tab: InsightsTab, section?: string) => void
   range?: InsightsRangeInfo
+  /** The Claude pool's quota outlook, read by the overview's quota signal and capacity line. */
+  outlook?: EngineOutlook
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -190,6 +194,7 @@ export function OverviewTab(props: {
       finance,
       previousFinance,
     }),
+    ...overviewQuotaSignals(t, fmt, props.outlook),
   ]
 
   OVERVIEW_VIEWS.forEach((view, index) => {
@@ -701,6 +706,7 @@ export function OverviewTab(props: {
         risk={risk}
         upstream={[upstream, previousUpstream]}
         range={range}
+        outlook={props.outlook}
         onOpen={props.onOpen}
       />
 

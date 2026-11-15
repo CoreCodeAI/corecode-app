@@ -29,6 +29,7 @@ import {
 } from '../lib'
 import type {
   CapacityInsights,
+  EngineOutlook,
   FinanceInsights,
   QualityInsights,
   RiskInsights,
@@ -71,11 +72,21 @@ export function TabDigest(props: {
   risk: RiskInsights | undefined
   upstream: Pair<UpstreamInsights>
   range?: InsightsRangeInfo
+  outlook?: EngineOutlook
   onOpen?: (tab: InsightsTab, section?: string) => void
 }) {
   const { t } = useTranslation()
   const verdicts: [InsightsTab, TabVerdict | undefined][] = [
-    ['capacity', useCapacityVerdict(props.capacity[0], props.capacity[1])],
+    [
+      'capacity',
+      useCapacityVerdict(
+        props.capacity[0],
+        props.capacity[1],
+        undefined,
+        undefined,
+        props.outlook
+      ),
+    ],
     ['quality', useQualityVerdict(props.quality[0], props.quality[1])],
     ['finance', useFinanceVerdict(props.finance[0], props.finance[1])],
     [

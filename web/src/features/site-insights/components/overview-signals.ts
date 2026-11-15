@@ -36,12 +36,14 @@ import {
 import { categoryOwner, serviceFailureRate } from '../quality-analysis'
 import type {
   CapacityInsights,
+  EngineOutlook,
   FinanceInsights,
   NamedCount,
   OrderMethodFunnel,
   QualityInsights,
   TaskOutcome,
 } from '../types'
+import { quotaBinding, quotaSentences } from './outlook'
 import { FAILING_RATE, type InsightsFormat } from './overview-analysis'
 
 /** A completion rate under this share of the previous period's has fallen. */
@@ -409,4 +411,29 @@ export function attemptsSentence(
     failed: fmt.num(capacity.attempt_errors),
     attempts: fmt.num(capacity.attempts),
   })
+}
+
+/**
+ * The overview's quota signal: the Claude pool's quota is tight or short
+ * under the forecast the account pool tab opens under. Its detail is the
+ * accounts to add. Nothing when it has room, or without an outlook.
+ */
+export function overviewQuotaSignals(
+  t: TFunction,
+  fmt: InsightsFormat,
+  outlook: EngineOutlook | undefined
+): Finding[] {
+  const binding = quotaBinding(outlook)
+  if (!binding || binding.coverage === 'enough') return []
+  const lines = quotaSentences(t, fmt, binding)
+  return [
+    {
+      key: 'pool-quota',
+      tone: lines.tone,
+      title: lines.lead,
+      detail: lines.add,
+      tab: 'pool',
+      impact: binding.demand_usd,
+    },
+  ]
 }

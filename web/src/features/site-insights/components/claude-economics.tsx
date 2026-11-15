@@ -190,6 +190,9 @@ export function ClaudeEconomics(props: { data: FinanceInsights | undefined }) {
       })
     : null
   let advice: string | undefined
+  // This share is the funds tab's own use over measured capacity, not the
+  // outlook's demand over supply, and the two are not unified. The capacity
+  // verdict (verdicts/capacity.ts, quotaBinding) states which limit binds.
   if (poolFit) {
     const vars = {
       share: fmt.pct(poolFit.utilisation),

@@ -216,6 +216,9 @@ export const SHORT_ROI_DAYS = 7
 /** An hour whose peak passed this share of the pool's slots was near full. */
 export const HEADROOM_SHARE = 0.8
 
+/** A failure rate above this share is a warning, and a flagged hour's rate must pass it. */
+export const FAILURE_WARNING_RATE = 0.02
+
 /** Debt within a dollar is rounding and test traffic; past it, someone owes. */
 export const DEBT_ALERT_USD = -1
 
@@ -388,7 +391,7 @@ export function namedHead(
 
 export function failureTone(rate: number): Tone {
   if (rate > 0.05) return 'danger'
-  if (rate > 0.02) return 'warning'
+  if (rate > FAILURE_WARNING_RATE) return 'warning'
   return 'default'
 }
 

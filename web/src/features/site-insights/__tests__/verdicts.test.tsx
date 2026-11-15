@@ -19,12 +19,18 @@ For commercial licensing, please contact support@quantumnous.com
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import {
+  outlook,
+  outlookModel,
+  outlookWindow,
+} from '../components/__tests__/outlook-fixture'
 import { attentionLabel, joinSentences, paymentMethodLabel } from '../lib'
 import type {
   ActivityInsights,
   CapacityInsights,
   ChannelInsights,
   ChannelRow,
+  EngineOutlook,
   FinanceInsights,
   GrowthInsights,
   QualityInsights,
@@ -1125,5 +1131,159 @@ describe('upstream verdict', () => {
       tone: 'danger',
       text: 'Failure rate 1%. All clear: every channel with at least 100 attempts fails under 2%. a failed 25% of its 40 finished tasks. media was disabled automatically and served nothing in this range. Gross margin on channels with a known cost: 60%, overstated: the bill of a is read from some keys only.',
     })
+  })
+})
+
+// The Claude pool's supply and demand over the three windows. Each state
+// sets the weekly row; the 5-hour and 24-hour rows have room in all of them.
+function quotaOutlook(week: {
+  demand: number
+  supply?: number
+  short?: number
+}): EngineOutlook {
+  const base = outlook()
+  return outlook({
+    remaining: base.remaining.map((row) =>
+      row.hours === 168
+        ? { ...row, with_resets_usd: week.supply ?? 32936 }
+        : row
+    ),
+    models: [
+      outlookModel('smart', {
+        windows: [
+          outlookWindow(5, { demand_usd: 500 }),
+          outlookWindow(24, { demand_usd: 1000 }),
+          outlookWindow(168, {
+            demand_usd: week.demand,
+            short_usd: week.short ?? 0,
+            short_hours: week.short ? 40 : 0,
+            first_short_hours: week.short ? 30 : null,
+          }),
+        ],
+        additions: [
+          {
+            plan: 'Team',
+            tier: 'team_tier_1',
+            week_usd: 1400,
+            five_hour_usd: 150,
+            measured: 4,
+            keep_up: 4,
+            cover_week: 3,
+          },
+        ],
+      }),
+    ],
+  })
+}
+
+const pooled = (peak: number, slots = 100) =>
+  ({
+    requests: 1200,
+    peak_concurrency: peak,
+    pool_peak: peak,
+    error_categories: [],
+    limit_rejection_total: 0,
+    pool: { configured: true, effective_slots: slots },
+  }) as unknown as CapacityInsights
+
+describe('capacity verdict with the pool quota', () => {
+  it('leads with a tight quota, at least a warning, and points to the account pool', () => {
+    // 28,360 of 32,936 is 86%: past the 80% tight line, short of running dry.
+    const { result } = renderHook(() =>
+      useCapacityVerdict(
+        pooled(27),
+        undefined,
+        undefined,
+        undefined,
+        quotaOutlook({ demand: 28360 })
+      )
+    )
+    expect(result.current).toMatchObject({
+      tone: 'warning',
+      text: 'Quota is the bottleneck: Next 7 days demand is 86.1% of supply. Add 4 × Team Tier 1, see the account pool tab. 1,200 requests. Pool peak 27 of 100 slots (27%). Nothing turned away.',
+    })
+    // The lead, the accounts to add, then the slots' own sentences.
+    expect(result.current?.points.slice(0, 2)).toEqual([
+      'Quota is the bottleneck: Next 7 days demand is 86.1% of supply.',
+      'Add 4 × Team Tier 1, see the account pool tab.',
+    ])
+  })
+
+  it('leads with a short quota as danger, and names the unserved demand', () => {
+    const { result } = renderHook(() =>
+      useCapacityVerdict(
+        pooled(27),
+        undefined,
+        undefined,
+        undefined,
+        quotaOutlook({ demand: 28360, supply: 32936, short: 1500 })
+      )
+    )
+    expect(result.current?.tone).toBe('danger')
+    expect(result.current?.points[0]).toBe(
+      'Quota is short: Next 7 days leaves $1,500 of demand unserved.'
+    )
+  })
+
+  it('names the slots as the bottleneck when the peak is near them and quota has room', () => {
+    const { result } = renderHook(() =>
+      useCapacityVerdict(
+        pooled(85),
+        undefined,
+        undefined,
+        undefined,
+        quotaOutlook({ demand: 8000, supply: 32936 })
+      )
+    )
+    expect(result.current?.points[0]).toBe(
+      'Slots are the bottleneck; quota has room: Next 7 days demand is 24.3% of supply.'
+    )
+    // The slots' own sentence is still there, and the verdict stays calm.
+    expect(result.current?.text).toContain('Pool peak 85 of 100 slots (85%).')
+    expect(result.current?.tone).toBe('good')
+  })
+
+  it('says neither limit binds in one sentence when both have room', () => {
+    const { result } = renderHook(() =>
+      useCapacityVerdict(
+        pooled(27),
+        undefined,
+        undefined,
+        undefined,
+        quotaOutlook({ demand: 8000, supply: 32936 })
+      )
+    )
+    expect(result.current?.points[0]).toBe(
+      'Neither limit binds: Next 7 days demand is 24.3% of supply.'
+    )
+    expect(result.current?.tone).toBe('good')
+  })
+
+  it('keeps today’s wording without an outlook, or with one that failed', () => {
+    const plain = renderHook(() => useCapacityVerdict(pooled(27), undefined))
+      .result.current
+    const failed = renderHook(() =>
+      useCapacityVerdict(
+        pooled(27),
+        undefined,
+        undefined,
+        undefined,
+        outlook({ error: 'gpt-load unreachable' })
+      )
+    ).result.current
+    const unconfigured = renderHook(() =>
+      useCapacityVerdict(
+        pooled(27),
+        undefined,
+        undefined,
+        undefined,
+        outlook({ configured: false })
+      )
+    ).result.current
+    expect(plain?.text).toBe(
+      '1,200 requests. Pool peak 27 of 100 slots (27%). Nothing turned away.'
+    )
+    expect(failed).toEqual(plain)
+    expect(unconfigured).toEqual(plain)
   })
 })

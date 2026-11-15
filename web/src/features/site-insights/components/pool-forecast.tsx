@@ -173,6 +173,10 @@ export function ForecastPanel(props: { outlook: EngineOutlook }) {
   const addition = model.additions[0]
   const toAdd = addition ? accountsToAdd(addition) : null
 
+  // The capacity verdict names the limit nearest to binding across the three
+  // windows (verdicts/capacity.ts, quotaBinding over this same outlook). This
+  // sentence states the 7-day window under the forecast picked here, and its
+  // load measure is not the capacity verdict's share of supply.
   let verdict: string
   if (model.average_usd_per_hour <= 0) {
     verdict = t('No Claude spend logged in the last 24 hours.')

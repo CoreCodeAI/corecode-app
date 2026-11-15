@@ -207,26 +207,39 @@ describe('capacity analysis', () => {
     ).toBeUndefined()
   })
 
-  it('flags an hour failing far above the previous period’s same hour', () => {
+  it('flags no blip on a near-zero usual rate, and flags one real bad hour', () => {
+    const day = 86400
+    // Thirty hours at 0.1% and ten blips at 2%: the blips are the usual
+    // rate's noise, not a bad hour, so none is flagged.
+    const rows = Array.from({ length: 40 }, (_, index) =>
+      hour(day + index * HOUR, {
+        requests: 1000,
+        errors: index % 4 === 0 ? 20 : 1,
+      })
+    )
+    const steady = failureHours(rows, [], day, day + 40 * HOUR)
+    expect(steady.filter((row) => row.spike)).toEqual([])
+    expect(steady[0]).toMatchObject({ rate: 0.02, usual: 0.001, spike: false })
+    // One hour at 10% of 1,000 requests is far past 2% and past 3× usual.
+    rows[7] = hour(day + 7 * HOUR, { requests: 1000, errors: 100 })
+    const bad = failureHours(rows, [], day, day + 40 * HOUR)
+    expect(bad.filter((row) => row.spike).map((row) => row.hour)).toEqual([
+      day + 7 * HOUR,
+    ])
+  })
+
+  it('does not flag a low-volume hour with a high rate', () => {
     const day = 86400
     const rows = [
-      hour(day, { errors: 30 }),
-      hour(day + HOUR, { requests: 10, errors: 9 }),
-      hour(day + 2 * HOUR, { errors: 2 }),
-      hour(day + 3 * HOUR, { errors: 90 }),
+      hour(day, { requests: 1000, errors: 1 }),
+      // Half of 30 requests failed: a high rate on too few requests to judge.
+      hour(day + HOUR, { requests: 30, errors: 15 }),
+      // Every one of 20 requests failed: 20 failures, but under 100 requests.
+      hour(day + 2 * HOUR, { requests: 20, errors: 20 }),
     ]
-    const previous = [hour(0, { errors: 2 }), hour(2 * HOUR, { errors: 1 })]
-    const hours = failureHours(rows, previous, day, day + 3 * HOUR + 60)
-    expect(
-      hours.map((row) => [row.rate, row.previousRate, row.baseline, row.spike])
-    ).toEqual([
-      [0.3, 0.02, 0.02, true],
-      // Too few requests for a rate.
-      [null, null, 0.16, false],
-      [0.02, 0.01, 0.01, false],
-      // The open hour is never flagged.
-      [0.9, null, 0.16, false],
-    ])
+    const hours = failureHours(rows, [], day, day + 3 * HOUR + 60)
+    expect(hours.map((row) => row.spike)).toEqual([false, false, false])
+    expect(hours.map((row) => row.rate)).toEqual([0.001, 0.5, 1])
   })
 
   it('takes the peak of whole days only', () => {

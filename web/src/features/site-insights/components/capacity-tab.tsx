@@ -56,6 +56,7 @@ import {
 import {
   POOL_PROVIDERS,
   type CapacityInsights,
+  type EngineOutlook,
   type PoolProvider,
 } from '../types'
 import { useCapacityVerdict } from '../verdicts'
@@ -99,6 +100,8 @@ export function CapacityTab(props: {
   range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
   sources?: InsightsSources
+  /** The Claude pool's quota outlook; a view of one other provider leaves it out. */
+  outlook?: EngineOutlook
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -138,11 +141,14 @@ export function CapacityTab(props: {
   }
   // The engine's count over the groups the slots cover, on every server.
   const inFlight = enabledInFlight(groups)
+  // The outlook covers the Claude pool only, so a view of another provider
+  // reads its own slots alone.
   const verdict = useCapacityVerdict(
     props.data,
     props.previous,
     { slots, userLimits: all },
-    props.range
+    props.range,
+    all || vendor === 'claude' ? props.outlook : undefined
   )
   const axis = useHourAxis()
   const engine = engineRefusals(data?.error_categories)
