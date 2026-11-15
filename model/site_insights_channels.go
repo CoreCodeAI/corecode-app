@@ -45,6 +45,20 @@ func (c ChannelCost) feeIn(start, end int64) float64 {
 	return c.MonthlyUSD * float64(to-from) / channelCostMonth
 }
 
+// channelFeesIn is each channel's fee over [start, end) in USD, rounded to
+// cents. The channels view and the funds view both sum it, so their fee
+// totals cannot disagree.
+func channelFeesIn(costs []ChannelCost, start, end int64) map[int]float64 {
+	fees := make(map[int]float64)
+	for _, cost := range costs {
+		fees[cost.UserID] += cost.feeIn(start, end)
+	}
+	for userID, fee := range fees {
+		fees[userID] = roundTo(fee, 2)
+	}
+	return fees
+}
+
 // active reports whether the fee runs at at.
 func (c ChannelCost) active(at int64) bool {
 	return at >= c.Start && (c.End == 0 || at < c.End)
@@ -309,10 +323,11 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 	feeActive := func(userID int, at int64) bool {
 		return slices.ContainsFunc(costs, func(cost ChannelCost) bool { return cost.UserID == userID && cost.active(at) })
 	}
+	fees := channelFeesIn(costs, r.Start, r.End)
 	for _, cost := range costs {
 		channel(cost.UserID)
 		row := rows[cost.UserID]
-		row.FeeUSD += cost.feeIn(r.Start, r.End)
+		row.FeeUSD = fees[cost.UserID]
 		if row.FeeStart == 0 || cost.Start < row.FeeStart {
 			row.FeeStart = cost.Start
 		}
@@ -567,7 +582,6 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 			&row.CommissionAccruingUSD} {
 			*quota = roundTo(max(*quota, 0)/common.QuotaPerUnit, 4)
 		}
-		row.FeeUSD = roundTo(row.FeeUSD, 2)
 	}
 	return result, nil
 }

@@ -861,6 +861,8 @@ export type FinanceInsights = StaleHours & {
   /** Cost on billed channels with no customer revenue in the range: bills in upstream quota dollars, fees in real US dollars. Absent before the server's release. */
   upstream_unattributed_bill_usd?: number
   upstream_unattributed_fee_usd?: number
+  /** The promotion channels' fees over the range, in real US dollars: the channels tab's figure before the site's rate. Absent before the server's release. */
+  channel_fee_usd?: number
   groups?: GroupConsumption[] | null
   /** Each group's revenue and cost share, with the staff and unattributed rows. Absent before the server's release. */
   group_allocations?: GroupAllocation[] | null

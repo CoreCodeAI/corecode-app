@@ -255,6 +255,11 @@ type FinanceInsights struct {
 	RangeDays            float64 `json:"range_days"`
 	PaidUsePerDayUSD     float64 `json:"paid_use_per_day_usd"`
 	PaidPlanQuotaLeftUSD float64 `json:"paid_plan_quota_left_usd"`
+
+	// ChannelFeeUSD is the promotion channels' fees over the range in real US
+	// dollars, the sum of the channels view's FeeUSD (channelFeesIn). The
+	// console converts it at the site's rate, as the channels tab does.
+	ChannelFeeUSD float64 `json:"channel_fee_usd"`
 }
 
 // OrderMethodFunnel is the checkouts opened with one payment method in the
@@ -559,6 +564,15 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 		return nil, err
 	}
 	result.CommissionUSD = quotaUSD(commission.Total)
+	stored, err := ReadChannelCosts()
+	if err != nil {
+		return nil, err
+	}
+	costs, _ := effectiveChannelCosts(stored)
+	for _, fee := range channelFeesIn(costs, r.Start, r.End) {
+		result.ChannelFeeUSD += fee
+	}
+	result.ChannelFeeUSD = roundTo(result.ChannelFeeUSD, 2)
 	result.RedemptionUSD = quotaUSD(redemption.Total)
 	if err := fillGivenCredit(r, result); err != nil {
 		return nil, err

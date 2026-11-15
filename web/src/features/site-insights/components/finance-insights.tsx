@@ -45,6 +45,7 @@ import {
   joinSentences,
   MIN_CHECKOUTS,
   previousBeforeLogs,
+  SECTIONS,
   tableState,
   TONES,
   useChargeFormat,
@@ -57,6 +58,7 @@ import {
   paymentMethodLabel,
 } from '../lib'
 import type { FinanceInsights, PlanBookRow } from '../types'
+import { checkoutLossFindings } from './checkout-loss'
 import { Drivers, Findings, type DriverRow } from './insight-kit'
 import { type Column, MetricGrid, Panel, SimpleTable } from './shared'
 
@@ -333,11 +335,17 @@ export function OrdersPanel(props: {
   )
   return (
     <Panel
+      id={SECTIONS.checkouts}
       title={t('Checkouts by payment method')}
       error={failedText(props.sources?.view, data, t('Could not be read'))}
       description={description || undefined}
-      help={t(
-        'Checkouts opened in the range, top-ups and plan orders, by payment method; wallet-paid plans are left out. Completed is paid over opened. Most unpaid checkouts are abandoned, so a rate is judged only against the same method in the previous period: amber when it fell to half or less, over at least 5 checkouts in both. Under 10 checkouts a rate is not colored. Some gateways never close an unpaid checkout, so pending past an hour is their only failure signal.'
+      help={joinSentences(
+        t(
+          'Checkouts opened in the range, top-ups and plan orders, by payment method; wallet-paid plans are left out. Completed is paid over opened. Most unpaid checkouts are abandoned, so a rate is judged only against the same method in the previous period: amber when it fell to half or less, over at least 5 checkouts in both. Under 10 checkouts a rate is not colored. Some gateways never close an unpaid checkout, so pending past an hour is their only failure signal.'
+        ),
+        t(
+          'Settled checkouts are the ones finished or open over an hour. A method that paid under half of its settled checkouts, over at least 10, is named below, whether or not its rate changed. Its unpaid value is its unpaid settled checkouts times its average paid amount: an upper estimate, since some customers retry with another method.'
+        )
       )}
     >
       <SimpleTable
@@ -402,8 +410,19 @@ export function OrdersPanel(props: {
               </span>
             ),
           },
+          {
+            key: 'unpaid',
+            label: t('Unpaid, up to'),
+            hint: t(
+              'Settled checkouts not paid, times the method’s average paid amount. An upper estimate: some customers retry with another method.'
+            ),
+            align: 'right',
+            render: (row: OrderFunnelRow) =>
+              row.estimate == null ? '-' : fmt.cny(row.estimate),
+          },
         ]}
       />
+      <Findings items={checkoutLossFindings(t, fmt, data?.order_methods)} />
       {rows &&
         rows.length > 0 &&
         rows.every((row) => row.created < MIN_CHECKOUTS) && (

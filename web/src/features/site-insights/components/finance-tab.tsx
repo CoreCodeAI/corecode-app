@@ -53,6 +53,7 @@ import {
 } from './finance-insights'
 import { FinanceSummary } from './finance-summary'
 import { StaleNote } from './insight-kit'
+import { ProfitWaterfallPanel } from './profit-waterfall'
 import { ShareDonut } from './share-donut'
 import {
   BarSeries,
@@ -209,6 +210,7 @@ export function FinanceTab(props: {
       />
 
       <VendorMarginPanel data={data} range={range} source={view} />
+      <ProfitWaterfallPanel data={data} source={view} />
 
       <VendorTabs data={data} />
 
