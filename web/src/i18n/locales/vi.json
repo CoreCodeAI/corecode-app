@@ -7597,6 +7597,8 @@
     "Warning (not counted)": "Cảnh báo (không tính)",
     "Client check (not counted)": "Yêu cầu của chính ứng dụng (không tính)",
     "View refused message": "Xem tin nhắn bị từ chối",
+    "View message": "Xem tin nhắn",
+    "The last message the customer wrote in the request, up to 4 KB.": "Tin nhắn cuối cùng khách hàng viết trong yêu cầu, tối đa 4 KB.",
     "The last message the customer wrote in the refused request, up to 4 KB. The upstream judged the whole conversation, not only this message.": "Tin nhắn cuối cùng khách hàng viết trong yêu cầu bị từ chối, tối đa 4 KB. Phía upstream đánh giá cả cuộc hội thoại, không chỉ tin nhắn này.",
     "Warn-first categories": "Danh mục cảnh báo trước",
     "Refusal categories, separated by commas, whose refusals are first only warnings: the customer is not suspended and a warning does not count toward disabling. The customer can continue the refused conversation; it is blocked only when the upstream refuses it again.": "Các danh mục từ chối, phân cách bằng dấu phẩy, mà các lần từ chối trước hết chỉ là cảnh báo: khách hàng không bị tạm ngừng và cảnh báo không được tính vào việc vô hiệu hóa. Khách hàng có thể tiếp tục cuộc hội thoại bị từ chối; nó chỉ bị chặn khi phía thượng nguồn từ chối lại.",

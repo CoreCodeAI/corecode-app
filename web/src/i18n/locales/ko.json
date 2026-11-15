@@ -7597,6 +7597,8 @@
     "Warning (not counted)": "경고(집계되지 않음)",
     "Client check (not counted)": "클라이언트 확인(집계되지 않음)",
     "View refused message": "거부된 메시지 보기",
+    "View message": "메시지 보기",
+    "The last message the customer wrote in the request, up to 4 KB.": "이 요청에서 고객이 작성한 마지막 메시지(최대 4KB).",
     "The last message the customer wrote in the refused request, up to 4 KB. The upstream judged the whole conversation, not only this message.": "거부된 요청에서 고객이 마지막으로 작성한 메시지이며 최대 4KB입니다. 업스트림은 이 메시지만이 아니라 전체 대화를 판단했습니다.",
     "Warn-first categories": "먼저 경고할 범주",
     "Refusal categories, separated by commas, whose refusals are first only warnings: the customer is not suspended and a warning does not count toward disabling. The customer can continue the refused conversation; it is blocked only when the upstream refuses it again.": "쉼표로 구분한 거부 범주이며, 이 범주의 거부는 먼저 경고로만 처리됩니다. 고객은 정지되지 않으며 경고는 비활성화 횟수에 포함되지 않습니다. 고객은 거부된 대화를 계속할 수 있으며, 업스트림이 그 대화를 다시 거부할 때만 차단됩니다.",

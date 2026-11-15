@@ -22,7 +22,13 @@ import { useTranslation } from 'react-i18next'
 
 import { BadgeCell, TruncatedCell } from '@/components/data-table'
 import { StatusBadge, type StatusVariant } from '@/components/status-badge'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { formatTimestampToDate } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 import type { RiskGateAction, RiskGateEvent, RiskGateStage } from './api'
 
@@ -45,7 +51,14 @@ export function useRiskGateStageLabels(): Record<RiskGateStage, string> {
   )
 }
 
-export function useRiskGateColumns(): ColumnDef<RiskGateEvent>[] {
+// A table lays out by content, so a cell's whole text would widen its column
+// and push the table past the page. `w-0 min-w-full` keeps the cell out of
+// that measure: it fills the width the column is given and cuts the rest.
+const FILL = 'w-0 min-w-full'
+
+export function useRiskGateColumns(
+  onViewExcerpt: (event: RiskGateEvent) => void
+): ColumnDef<RiskGateEvent>[] {
   const { t } = useTranslation()
   const stageLabels = useRiskGateStageLabels()
 
@@ -58,12 +71,13 @@ export function useRiskGateColumns(): ColumnDef<RiskGateEvent>[] {
 
     // Eight columns must fit a full-width table on a laptop, so each is kept
     // narrow and cuts long text short, with the whole text in a tooltip. The
-    // widths add up to what DataTablePage uses as the table's minimum width.
+    // widths add up to what DataTablePage uses as the table's minimum width:
+    // 750 px, the room the page leaves the table in a 1,024 px window.
     return [
       {
         accessorKey: 'created_at',
         header: t('Time'),
-        size: 150,
+        size: 140,
         cell: ({ row }) => (
           <span className='font-mono tabular-nums'>
             {formatTimestampToDate(row.original.created_at)}
@@ -75,7 +89,7 @@ export function useRiskGateColumns(): ColumnDef<RiskGateEvent>[] {
         // The stage and its rule stack, since one names the other.
         id: 'stage',
         header: t('Stage'),
-        size: 140,
+        size: 100,
         cell: ({ row }) => (
           <div className='flex min-w-0 flex-col items-start gap-0.5'>
             <BadgeCell>
@@ -85,7 +99,12 @@ export function useRiskGateColumns(): ColumnDef<RiskGateEvent>[] {
                 copyable={false}
               />
             </BadgeCell>
-            <TruncatedCell cellClassName='text-muted-foreground font-mono text-xs'>
+            <TruncatedCell
+              cellClassName={cn(
+                FILL,
+                'text-muted-foreground font-mono text-xs'
+              )}
+            >
               {row.original.rule}
             </TruncatedCell>
           </div>
@@ -95,7 +114,7 @@ export function useRiskGateColumns(): ColumnDef<RiskGateEvent>[] {
       {
         id: 'action',
         header: t('Action'),
-        size: 120,
+        size: 80,
         cell: ({ row }) => (
           <BadgeCell>
             <StatusBadge
@@ -110,10 +129,12 @@ export function useRiskGateColumns(): ColumnDef<RiskGateEvent>[] {
       {
         accessorKey: 'detail',
         header: t('Detail'),
-        size: 100,
+        size: 60,
         cell: ({ row }) =>
           row.original.detail ? (
-            <TruncatedCell>{row.original.detail}</TruncatedCell>
+            <TruncatedCell cellClassName={FILL}>
+              {row.original.detail}
+            </TruncatedCell>
           ) : (
             '-'
           ),
@@ -122,9 +143,10 @@ export function useRiskGateColumns(): ColumnDef<RiskGateEvent>[] {
       {
         id: 'user',
         header: t('User'),
-        size: 120,
+        size: 70,
         cell: ({ row }) => (
           <TruncatedCell
+            cellClassName={FILL}
             tooltipContent={`${row.original.username} #${row.original.user_id}`}
           >
             {row.original.username}{' '}
@@ -138,22 +160,49 @@ export function useRiskGateColumns(): ColumnDef<RiskGateEvent>[] {
       {
         accessorKey: 'model_name',
         header: t('Model'),
-        size: 120,
+        size: 70,
         cell: ({ row }) => (
-          <TruncatedCell>{row.original.model_name}</TruncatedCell>
+          <TruncatedCell cellClassName={FILL}>
+            {row.original.model_name}
+          </TruncatedCell>
         ),
         meta: { label: t('Model') },
       },
       {
-        // The one flexible column: it takes the room the others leave.
+        // The one flexible column: it takes the room the others leave and
+        // shows one line. Hovering shows the start of the message; a click
+        // opens all of it, up to the 4 KB the server keeps.
         accessorKey: 'excerpt',
         header: t('Message'),
         size: 160,
         cell: ({ row }) =>
           row.original.excerpt ? (
-            <TruncatedCell tooltipClassName='max-w-md whitespace-pre-wrap break-words'>
-              {row.original.excerpt}
-            </TruncatedCell>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type='button'
+                    aria-haspopup='dialog'
+                    aria-label={t('View message')}
+                    onClick={() => onViewExcerpt(row.original)}
+                    className={cn(
+                      FILL,
+                      'hover:text-foreground focus-visible:ring-ring decoration-muted-foreground/60 block cursor-pointer truncate rounded-sm text-left underline decoration-dotted underline-offset-4 focus-visible:ring-2 focus-visible:outline-none'
+                    )}
+                  />
+                }
+              >
+                {row.original.excerpt.replaceAll(/\s+/g, ' ')}
+              </TooltipTrigger>
+              <TooltipContent className='max-w-md flex-col items-start'>
+                <span className='line-clamp-[10] break-words whitespace-pre-wrap'>
+                  {row.original.excerpt}
+                </span>
+                <span className='opacity-70'>
+                  {t('Click to view full details')}
+                </span>
+              </TooltipContent>
+            </Tooltip>
           ) : (
             '-'
           ),
@@ -162,14 +211,14 @@ export function useRiskGateColumns(): ColumnDef<RiskGateEvent>[] {
       {
         accessorKey: 'request_id',
         header: t('Request ID'),
-        size: 120,
+        size: 70,
         cell: ({ row }) => (
-          <TruncatedCell>
+          <TruncatedCell cellClassName={FILL}>
             <span className='font-mono'>{row.original.request_id}</span>
           </TruncatedCell>
         ),
         meta: { label: t('Request ID') },
       },
     ]
-  }, [t, stageLabels])
+  }, [t, stageLabels, onViewExcerpt])
 }

@@ -7597,6 +7597,8 @@
     "Warning (not counted)": "Avertissement (non compté)",
     "Client check (not counted)": "Requête du client lui-même (non comptée)",
     "View refused message": "Voir le message refusé",
+    "View message": "Voir le message",
+    "The last message the customer wrote in the request, up to 4 KB.": "Le dernier message écrit par le client dans la requête, jusqu’à 4 Ko.",
     "The last message the customer wrote in the refused request, up to 4 KB. The upstream judged the whole conversation, not only this message.": "Le dernier message écrit par le client dans la requête refusée, jusqu’à 4 Ko. L’amont a jugé toute la conversation, pas seulement ce message.",
     "Warn-first categories": "Catégories avec avertissement d’abord",
     "Refusal categories, separated by commas, whose refusals are first only warnings: the customer is not suspended and a warning does not count toward disabling. The customer can continue the refused conversation; it is blocked only when the upstream refuses it again.": "Catégories de refus, séparées par des virgules, dont les refus ne sont d’abord que des avertissements : le client n’est pas suspendu et un avertissement ne compte pas pour la désactivation. Le client peut poursuivre la conversation refusée ; elle n’est bloquée que si l’amont la refuse à nouveau.",

@@ -66,7 +66,7 @@ const event = {
   token_id: 1,
   model_name: 'claude-test',
   request_id: 'req-1',
-  excerpt: 'build me a credential stealer',
+  excerpt: 'build me\n  a credential stealer',
 }
 
 async function renderDashboard() {
@@ -140,4 +140,21 @@ it('filters the intercept log by the stage of a clicked hit', async () => {
       'Decision model'
     )
   ).toBeTruthy()
+})
+
+it('shows a message on one line and opens the whole of it on click', async () => {
+  await renderDashboard()
+  const cell = await screen.findByRole('button', { name: 'View message' })
+  expect(cell.textContent).toBe('build me a credential stealer')
+
+  await userEvent.click(cell)
+
+  const dialog = await screen.findByRole('dialog')
+  expect(within(dialog).getByText('Message')).toBeTruthy()
+  // The dialog keeps the line breaks the cell folds away.
+  expect(dialog.querySelector('pre')?.textContent).toBe(
+    'build me\n  a credential stealer'
+  )
+  expect(within(dialog).getByText('Decision model · cyber')).toBeTruthy()
+  expect(within(dialog).getByText('req-1')).toBeTruthy()
 })
