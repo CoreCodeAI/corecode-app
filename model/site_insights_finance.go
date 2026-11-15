@@ -894,18 +894,38 @@ func fillBalances(result *FinanceInsights, prices map[int]walletPrice) error {
 		}
 		return balances
 	}
-	var top, debtors []balanceRow
+	var top []balanceRow
 	if err := customers().Select("id, username, quota").Where("quota > 0").
 		Order("quota desc, id").Limit(insightsTopN).Find(&top).Error; err != nil {
 		return err
 	}
-	if err := customers().Select("id, username, quota").Where("quota < 0").
-		Order("quota, id").Find(&debtors).Error; err != nil {
+	debtors, err := readDebtors()
+	if err != nil {
 		return err
 	}
 	result.TopBalances = toBalances(top)
-	result.Debtors = toBalances(debtors)
+	result.Debtors = debtors
 	return nil
+}
+
+// readDebtors lists the customers in debt, the most indebted first. The
+// balances view shows them, and so does the risk view, which reads nothing
+// else of the balances.
+func readDebtors() ([]BalanceUser, error) {
+	var rows []struct {
+		Id       int
+		Username string
+		Quota    int64
+	}
+	if err := DB.Model(&User{}).Where("role < ?", customerRoleBound).Select("id, username, quota").
+		Where("quota < 0").Order("quota, id").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	debtors := make([]BalanceUser, 0, len(rows))
+	for _, row := range rows {
+		debtors = append(debtors, BalanceUser{UserRef: UserRef{UserID: row.Id, Username: row.Username}, BalanceUSD: quotaUSD(row.Quota)})
+	}
+	return debtors, nil
 }
 
 // walletPrice is what a customer paid for the credit in their wallet:

@@ -410,11 +410,11 @@ func GetRiskInsights(r InsightsRange) (*RiskInsights, error) {
 	if err := fillSharedIPs(r, staff, result); err != nil {
 		return nil, err
 	}
-	balances := &FinanceInsights{}
-	if err := fillBalances(balances, nil); err != nil {
+	debtors, err := readDebtors()
+	if err != nil {
 		return nil, err
 	}
-	result.Debtors = balances.Debtors
+	result.Debtors = debtors
 	return result, nil
 }
 
