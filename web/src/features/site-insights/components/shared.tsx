@@ -484,6 +484,14 @@ export type TrendPoint = {
   /** Set on a day the range covers only in part. */
   partial?: PartialMark
   /**
+   * The previous period's value at the same position in the range (day 1
+   * with day 1). Drawn as a quiet reference line, and read out after the
+   * value. Absent when that period is not loaded or lies before the logs.
+   */
+  previous?: number
+  /** Set on a previous day at either end of its period, which is part of a day too. */
+  previousPartial?: boolean
+  /**
    * Before the logs begin: drawn as a gap, read out as no data. The value is
    * ignored.
    */
@@ -517,9 +525,15 @@ export function Sparkline(props: {
   const projectedOf = (point: TrendPoint) => point.partial?.projected?.[0]
   // Where the line runs: a projected day at its projection.
   const shown = points.map((point) => projectedOf(point) ?? point.value)
+  // The previous period's value at each position, where it has one.
+  const reference = points.map((point) =>
+    point.missing ? undefined : point.previous
+  )
+  const compared = reference.filter((value) => value !== undefined)
   const reach = live.map((point) => projectedOf(point) ?? point.value)
-  const max = live.length > 0 ? Math.max(...values, ...reach) : 1
-  const min = live.length > 0 ? Math.min(0, ...values, ...reach) : 0
+  const max = live.length > 0 ? Math.max(...values, ...reach, ...compared) : 1
+  const min =
+    live.length > 0 ? Math.min(0, ...values, ...reach, ...compared) : 0
   const span = max - min || 1
   const last = points.length - 1
   // A line puts its points on the edges; bars put each in its own column,
@@ -540,6 +554,21 @@ export function Sparkline(props: {
     const segment = `M${at(index - 1)} L${at(index)} `
     if (points[index - 1].partial || points[index].partial) dashed += segment
     else solid += segment
+  }
+  // The previous period's line: dashed through a segment that reaches a part
+  // of a day, as its own line does.
+  let referenceSolid = ''
+  let referenceDashed = ''
+  for (let index = 1; index <= last; index++) {
+    const from = reference[index - 1]
+    const to = reference[index]
+    if (from === undefined || to === undefined) continue
+    const segment = `M${xOf(index - 1).toFixed(2)},${yOf(from).toFixed(2)} L${xOf(index).toFixed(2)},${yOf(to).toFixed(2)} `
+    if (points[index - 1].previousPartial || points[index].previousPartial) {
+      referenceDashed += segment
+    } else {
+      referenceSolid += segment
+    }
   }
   const whole = points
     .map((point, index) => (point.partial || point.missing ? -1 : index))
@@ -669,6 +698,31 @@ export function Sparkline(props: {
             )}
           </>
         )}
+        {(referenceSolid || referenceDashed) && (
+          // A thin, muted line: the previous period is a reference, not a series.
+          <g className='text-muted-foreground' data-reference=''>
+            {referenceSolid && (
+              <path
+                d={referenceSolid}
+                fill='none'
+                stroke='currentColor'
+                strokeWidth={1}
+                vectorEffect='non-scaling-stroke'
+              />
+            )}
+            {referenceDashed && (
+              <path
+                data-partial=''
+                d={referenceDashed}
+                fill='none'
+                stroke='currentColor'
+                strokeWidth={1}
+                strokeDasharray='2 2'
+                vectorEffect='non-scaling-stroke'
+              />
+            )}
+          </g>
+        )}
       </svg>
       {!props.bars &&
         points.map((each, index) =>
@@ -718,6 +772,12 @@ export function Sparkline(props: {
             <span className='font-medium tabular-nums'>
               {point.missing ? t('No data') : props.format(point.value)}
             </span>
+            {point.previous !== undefined && !point.missing && (
+              <span className='text-muted-foreground tabular-nums'>
+                {' · '}
+                {t('Previous period')} {props.format(point.previous)}
+              </span>
+            )}
             {point.partial && (
               <span className='text-muted-foreground block'>
                 {point.partial.note}
@@ -725,6 +785,13 @@ export function Sparkline(props: {
                   ` · ${t('Expected for the whole day')} ${props.format(pointProjected)}`}
               </span>
             )}
+            {point.previous !== undefined &&
+              !point.missing &&
+              point.previousPartial && (
+                <span className='text-muted-foreground block'>
+                  {t('Previous period, part of a day')}
+                </span>
+              )}
           </span>
         </>
       )}
@@ -869,6 +936,13 @@ export type BarPoint = {
   /** Set on a day the range covers only in part. */
   partial?: PartialMark
   /**
+   * The previous period's total at the same position, drawn as a thin muted
+   * line through the bars and read out after the total.
+   */
+  previous?: number
+  /** Set on a previous day at either end of its period, which is part of a day too. */
+  previousPartial?: boolean
+  /**
    * Before the logs begin: no bar, read out as no data. The values are
    * ignored, so a missing hour is never zero.
    */
@@ -882,6 +956,12 @@ export type BarSeriesItem = {
   compact?: (value: number) => string
   /** A background series, such as the remainder of a whole, drawn grey. */
   muted?: boolean
+  /**
+   * A series drawn above the axis when it is small beside the others: it
+   * does not set the axis, its bars run to the top, and its readout still
+   * gives the value. Grouped bars only.
+   */
+  offScale?: boolean
 }
 
 const SEGMENT_COLORS = [
@@ -910,6 +990,8 @@ const MUTED_DOT = 'bg-muted-foreground/40'
 // Gridlines on the value axis, and the most labels the time axis carries.
 const VALUE_TICKS = 4
 const AXIS_LABELS = 7
+// From this figure an axis and a bar total read in short form (10.3B).
+const SHORT_FROM = 1_000_000
 // A series this short labels each bar with its total.
 const LABELLED_BARS = 14
 // A series up to this long keeps a gap between its bars.
@@ -949,10 +1031,11 @@ export function BarSeries(props: {
   const fmt = useInsightsFormat()
   const formatOf = (index: number) =>
     props.series[index]?.format ?? props.series[0]?.format ?? fmt.num
-  const axisFormat =
-    props.series[0]?.compact ?? props.series[0]?.format ?? fmt.num
   const sum = (values: number[]) => values.reduce((a, b) => a + b, 0)
   const reference = props.reference
+  // The values that set the axis: an off-scale series does not.
+  const scaled = (values: number[]) =>
+    values.filter((_, index) => !props.series[index]?.offScale)
   // A partial day's projection is the height its outline reaches. A missing
   // point has no height.
   const reachOf = (point: BarPoint) =>
@@ -962,9 +1045,10 @@ export function BarSeries(props: {
     reference?.value ?? 0,
     ...props.points.map((point) => {
       const values = point.missing ? [] : point.values
-      return props.grouped
-        ? Math.max(0, ...values, ...reachOf(point))
+      const total = props.grouped
+        ? Math.max(0, ...scaled(values), ...scaled(reachOf(point)))
         : Math.max(sum(values), sum(reachOf(point)))
+      return Math.max(total, point.missing ? 0 : (point.previous ?? 0))
     })
   )
   const step = niceStep(max / VALUE_TICKS)
@@ -973,6 +1057,13 @@ export function BarSeries(props: {
     { length: Math.round(top / step) + 1 },
     (_, index) => index * step
   )
+  // Past a million the axis and the bar totals read in short form; the
+  // readout keeps the full figure.
+  const axisFormat =
+    props.series[0]?.compact ??
+    props.series[0]?.format ??
+    (top >= SHORT_FROM ? fmt.numCompact : fmt.num)
+  const heightOf = (value: number) => `${Math.min(value / top, 1) * 100}%`
   const stacked = props.series.length > 1 && !props.grouped
   const count = props.points.length
   const segmented = props.points.some((point) => point.axis)
@@ -1006,6 +1097,28 @@ export function BarSeries(props: {
     props.series[index]?.muted
       ? MUTED_DOT
       : DOT_COLORS[index % DOT_COLORS.length]
+  // The previous period's totals as a line through the bar centres, dashed
+  // through a segment that reaches a part of a day.
+  const centreOf = (index: number) => ((index + 0.5) / count) * 100
+  const heightAt = (value: number) => 100 - (value / top) * 100
+  const before = (point: BarPoint) =>
+    point.missing ? undefined : point.previous
+  let referenceSolid = ''
+  let referenceDashed = ''
+  for (let index = 1; index < count; index++) {
+    const from = before(props.points[index - 1])
+    const to = before(props.points[index])
+    if (from === undefined || to === undefined) continue
+    const segment = `M${centreOf(index - 1).toFixed(2)},${heightAt(from).toFixed(2)} L${centreOf(index).toFixed(2)},${heightAt(to).toFixed(2)} `
+    if (
+      props.points[index - 1].previousPartial ||
+      props.points[index].previousPartial
+    ) {
+      referenceDashed += segment
+    } else {
+      referenceSolid += segment
+    }
+  }
   return (
     <div className={cn('grid gap-2', props.className)}>
       <div className='grid grid-cols-[auto_minmax(0,1fr)] gap-x-2'>
@@ -1090,6 +1203,16 @@ export function BarSeries(props: {
                     id: 'reference',
                     label: reference.label,
                     value: formatOf(0)(reference.value),
+                    dot: '',
+                  })
+                }
+                if (!missing && point.previous !== undefined) {
+                  rows.push({
+                    id: 'previous',
+                    label: point.previousPartial
+                      ? t('Previous period, part of a day')
+                      : t('Previous period'),
+                    value: formatOf(0)(point.previous),
                     dot: '',
                   })
                 }
@@ -1186,7 +1309,7 @@ export function BarSeries(props: {
                                   segmentClass(index),
                                   point.partial && 'opacity-50'
                                 )}
-                                style={{ height: `${(value / top) * 100}%` }}
+                                style={{ height: heightOf(value) }}
                               />
                             </span>
                           ))}
@@ -1202,7 +1325,7 @@ export function BarSeries(props: {
                               segmentClass(index),
                               point.partial && 'opacity-50'
                             )}
-                            style={{ height: `${(value / top) * 100}%` }}
+                            style={{ height: heightOf(value) }}
                           />
                         ))}
                       {total > 0 &&
@@ -1314,6 +1437,37 @@ export function BarSeries(props: {
               })}
             </ol>
           </TooltipProvider>
+          {(referenceSolid || referenceDashed) && (
+            <svg
+              aria-hidden
+              viewBox='0 0 100 100'
+              preserveAspectRatio='none'
+              className='text-muted-foreground pointer-events-none absolute inset-0 size-full overflow-visible'
+            >
+              {referenceSolid && (
+                <path
+                  data-reference=''
+                  d={referenceSolid}
+                  fill='none'
+                  stroke='currentColor'
+                  strokeWidth={1}
+                  vectorEffect='non-scaling-stroke'
+                />
+              )}
+              {referenceDashed && (
+                <path
+                  data-reference=''
+                  data-partial=''
+                  d={referenceDashed}
+                  fill='none'
+                  stroke='currentColor'
+                  strokeWidth={1}
+                  strokeDasharray='2 2'
+                  vectorEffect='non-scaling-stroke'
+                />
+              )}
+            </svg>
+          )}
         </div>
         <span aria-hidden />
         <div

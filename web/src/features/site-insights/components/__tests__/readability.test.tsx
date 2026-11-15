@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import type { InsightsView } from '../../api'
@@ -530,5 +530,236 @@ describe('bar hover areas', () => {
       />
     )
     expect(screen.getByLabelText(/^h0,/)).not.toHaveClass('px-px')
+  })
+})
+
+describe('previous period as a reference line', () => {
+  const trend = [
+    { title: '11/10', value: 300, previous: 200 },
+    { title: '11/11', value: 100, previous: 400 },
+    { title: '11/12', value: 500, previous: 250 },
+  ]
+
+  it('draws the previous period as a line and reads it out beside the value', () => {
+    const { container } = render(
+      <Sparkline points={trend} format={(v) => `¥${v}`} label='Revenue' />
+    )
+    expect(container.querySelector('g[data-reference]')).not.toBeNull()
+    const line = screen.getByRole('img', { name: /^Revenue/ })
+    fireEvent.focus(line)
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '11/12 ¥500 · Previous period ¥250'
+    )
+    fireEvent.keyDown(line, { key: 'ArrowLeft' })
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '11/11 ¥100 · Previous period ¥400'
+    )
+  })
+
+  it('is absent without a previous period', () => {
+    const { container } = render(
+      <Sparkline
+        points={[
+          { title: 'a', value: 1 },
+          { title: 'b', value: 2 },
+        ]}
+        format={(v) => `${v}`}
+        label='Revenue'
+      />
+    )
+    expect(container.querySelector('[data-reference]')).toBeNull()
+    fireEvent.focus(screen.getByRole('img', { name: /^Revenue/ }))
+    expect(screen.getByRole('status')).not.toHaveTextContent('Previous period')
+  })
+
+  it('draws no segment across a point with no data', () => {
+    const { container } = render(
+      <Sparkline
+        points={[
+          { title: 'a', value: 1, previous: 3 },
+          { title: 'b', value: 2, previous: 4, missing: true },
+          { title: 'c', value: 5, previous: 6 },
+        ]}
+        format={(v) => `${v}`}
+        label='Revenue'
+      />
+    )
+    expect(container.querySelector('[data-reference]')).toBeNull()
+  })
+
+  it('dashes the reference through a part of a day and says so when read', () => {
+    const { container } = render(
+      <Sparkline
+        points={[
+          { title: 'a', value: 1, previous: 2, previousPartial: true },
+          { title: 'b', value: 3, previous: 4 },
+        ]}
+        format={(v) => `${v}`}
+        label='Revenue'
+      />
+    )
+    expect(
+      container.querySelector('g[data-reference] [data-partial]')
+    ).not.toBeNull()
+    const line = screen.getByRole('img', { name: /^Revenue/ })
+    fireEvent.focus(line)
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'b 3 · Previous period 4'
+    )
+    expect(screen.getByRole('status')).not.toHaveTextContent('Part of a day')
+    fireEvent.keyDown(line, { key: 'ArrowLeft' })
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'a 1 · Previous period 2'
+    )
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Previous period, part of a day'
+    )
+  })
+
+  it('draws the previous total through the bars and lists it in the readout', async () => {
+    const { container } = render(
+      <BarSeries
+        ariaLabel='revenue'
+        series={[{ label: 'Top-ups' }, { label: 'Subscriptions' }]}
+        points={[
+          { key: 1, title: '11/11', values: [60, 40], previous: 250 },
+          { key: 2, title: '11/12', values: [300, 200], previous: 400 },
+        ]}
+      />
+    )
+    expect(container.querySelector('svg [data-reference]')).not.toBeNull()
+    fireEvent.focus(screen.getByLabelText(/^11\/12,/))
+    const popup = await screen.findByText('11/12', {
+      selector: '[data-slot=tooltip-content] p',
+    })
+    expect(popup.closest('[data-slot=tooltip-content]')).toHaveTextContent(
+      'Previous period400'
+    )
+  })
+})
+
+describe('compact figures past a million', () => {
+  it('prints an axis and its bar labels in short form, the readout whole', async () => {
+    render(
+      <BarSeries
+        ariaLabel='cache'
+        series={[{ label: 'Cache read' }]}
+        points={[
+          { key: 1, title: '11/11', values: [10_254_384_179] },
+          { key: 2, title: '11/12', values: [6_500_000_000] },
+        ]}
+      />
+    )
+    for (const tick of ['5B', '10B', '15B']) {
+      expect(screen.getAllByText(tick).length).toBeGreaterThan(0)
+    }
+    expect(screen.getByText('10.3B')).toBeInTheDocument()
+    expect(screen.getByText('6.5B')).toBeInTheDocument()
+    fireEvent.focus(screen.getByLabelText(/^11\/11,/))
+    expect(
+      await screen.findByText('10,254,384,179', {
+        selector: '[data-slot=tooltip-content] dd',
+      })
+    ).toBeInTheDocument()
+  })
+
+  it('keeps full figures on an axis below a million', () => {
+    render(
+      <BarSeries
+        ariaLabel='attempts'
+        series={[{ label: 'Attempts' }]}
+        points={[{ key: 1, title: '11/11', values: [400_000] }]}
+      />
+    )
+    expect(screen.getAllByText('400,000').length).toBeGreaterThan(0)
+  })
+
+  it('switches to short form once the axis reaches a million', () => {
+    render(
+      <BarSeries
+        ariaLabel='attempts'
+        series={[{ label: 'Attempts' }]}
+        points={[{ key: 1, title: '11/11', values: [1_000_000] }]}
+      />
+    )
+    expect(screen.getAllByText('1M').length).toBeGreaterThan(0)
+    expect(screen.queryByText('1,000,000')).not.toBeInTheDocument()
+  })
+})
+
+describe('a failure chart with one small failing channel', () => {
+  const pct = (value: number) => `${(value * 100).toFixed(1)}%`
+
+  it('keeps the busy channel on the axis and names the small one above it', async () => {
+    render(
+      <BarSeries
+        grouped
+        ariaLabel='failure'
+        series={[
+          { label: 'Main', format: pct },
+          { label: 'Tiny, off scale', format: pct, offScale: true },
+        ]}
+        points={[{ key: 1, title: '11/12', values: [0.001, 0.687] }]}
+      />
+    )
+    // The axis tops out at the busy channel's 0.1%, not the 68.7% of the tiny one.
+    expect(screen.queryByText('70%')).not.toBeInTheDocument()
+    expect(screen.getAllByText('0.1%').length).toBeGreaterThan(0)
+    // The small channel is still named, and its bar runs to the top.
+    expect(screen.getByText('Tiny, off scale')).toBeInTheDocument()
+    const bar = screen.getByLabelText(/^11\/12,/)
+    expect(bar.querySelector('span[style*="height: 100%"]')).not.toBeNull()
+    fireEvent.focus(bar)
+    expect(
+      await screen.findByText('68.7%', {
+        selector: '[data-slot=tooltip-content] dd',
+      })
+    ).toBeInTheDocument()
+  })
+})
+
+describe('overview reference lines', () => {
+  const current = [
+    { day: 1_731_283_200, topup: 60, subscription: 40 },
+    { day: 1_731_369_600, topup: 300, subscription: 200 },
+  ] as unknown as FinanceInsights['daily']
+  const earlier = [
+    { day: 1_731_196_800, topup: 100, subscription: 0 },
+    { day: 1_731_283_200, topup: 150, subscription: 50 },
+  ] as unknown as FinanceInsights['daily']
+
+  it('reads the previous period beside the revenue trend', async () => {
+    renderOverviewWith(views({ finance: { daily: current } }), {
+      finance: { revenue: 200, daily: earlier } as unknown as FinanceInsights,
+    })
+    const revenue = await screen.findByRole('img', { name: /^Revenue from/ })
+    fireEvent.focus(revenue)
+    expect(within(revenue).getByRole('status')).toHaveTextContent(
+      'Previous period'
+    )
+  })
+
+  it('leaves the previous period out where it lies before the logs', async () => {
+    const range: InsightsRangeInfo = {
+      start: 1_731_283_200,
+      end: 1_731_628_800,
+      days: 4,
+      hourly: false,
+    }
+    renderOverviewWith(
+      {
+        ...views({ finance: { daily: current } }),
+        capacity: { ...capacity, logs_since: range.start },
+      },
+      {
+        finance: { revenue: 200, daily: earlier } as unknown as FinanceInsights,
+      },
+      range
+    )
+    const revenue = await screen.findByRole('img', { name: /^Revenue from/ })
+    fireEvent.focus(revenue)
+    expect(within(revenue).getByRole('status')).not.toHaveTextContent(
+      'Previous period'
+    )
   })
 })

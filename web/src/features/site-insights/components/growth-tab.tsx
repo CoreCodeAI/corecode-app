@@ -53,7 +53,7 @@ import {
   type InsightsSources,
   type InsightsTab,
 } from '../lib'
-import { usePartialDays } from '../partial-days'
+import { previousDayPartial, usePartialDays } from '../partial-days'
 import type {
   ActivityInsights,
   BusinessInsights,
@@ -255,14 +255,20 @@ export function GrowthTab(props: {
               better: 'up',
             },
             trend: hourly
-              ? hourly.map((hour) => ({
+              ? hourly.map((hour, index) => ({
                   title: fmt.time(hour.hour),
                   value: hour.registered,
+                  previous: previousHours[index]?.registered,
                 }))
-              : (data?.daily ?? []).map((day) => ({
+              : (data?.daily ?? []).map((day, index) => ({
                   title: fmt.day(day.day),
                   value: day.registered,
                   partial: partialDay(day.day, [day.registered]),
+                  previous: previous?.daily.at(index)?.registered,
+                  previousPartial: previousDayPartial(
+                    index,
+                    previous?.daily.length ?? 0
+                  ),
                 })),
             trendBars: !!hourly,
           },

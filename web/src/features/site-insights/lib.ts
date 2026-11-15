@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { formatPaymentMoney } from '@/features/wallet/lib'
 import { getPaymentMethodName } from '@/features/wallet/lib/billing'
 import { toIntlLocale } from '@/i18n/languages'
+import { formatCompactNumber } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth-store'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
@@ -565,6 +566,8 @@ export function useInsightsFormat() {
     /** Short forms for chart axes and bar labels. */
     usdCompact: (value: number) => usdCompactFormat.format(value),
     cnyCompact: (value: number) => `¥${compactFormat.format(value)}`,
+    /** A count in short form (10.3B; 102.5亿 in Chinese), as the other compact figures read. */
+    numCompact: (value: number) => formatCompactNumber(value, locale),
     pct: (value: number) => percent.format(value),
     /** A price multiple, such as 1.95×. */
     multiple: (value: number) => `${multipleFormat.format(value)}×`,

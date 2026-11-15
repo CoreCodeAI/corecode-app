@@ -32,13 +32,14 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
-import { beforeLogs, isOpenHour } from '../analysis'
+import { alignPrevious, beforeLogs, isOpenHour } from '../analysis'
 import {
   countsRequestsOnce,
   failureTone,
   joinSentences,
   previousBeforeLogs,
   rangeHours,
+  rangeSpan,
   SECTIONS,
   SMALL_SAMPLE,
   tableState,
@@ -51,7 +52,7 @@ import {
   type InsightsSources,
   type InsightsTab,
 } from '../lib'
-import { usePartialDays } from '../partial-days'
+import { previousDayPartial, usePartialDays } from '../partial-days'
 import {
   abnormalStreams,
   attemptsOf,
@@ -410,20 +411,30 @@ export function QualityTab(props: {
         errors: fmt.num(data.errors),
       })
     : undefined
+  // The previous period at the same place in its range: an hour one range
+  // earlier, a day by its place.
+  const earlierHours =
+    hourly && props.range
+      ? alignPrevious(hourly, previous?.hourly, rangeSpan(props.range))
+      : []
+  const earlierDays = previous?.daily ?? []
   const requestTrend = hourly
-    ? hourly.map((row) => ({
+    ? hourly.map((row, index) => ({
         title:
           range?.end != null && isOpenHour(row.hour, range.end)
             ? t('{{time}} (in progress)', { time: fmt.time(row.hour) })
             : fmt.time(row.hour),
         value: row.requests,
         missing: beforeLogs(row.hour, 3600, data?.logs_since),
+        previous: earlierHours[index]?.requests,
       }))
-    : daily.map((day) => ({
+    : daily.map((day, index) => ({
         title: fmt.day(day.day),
         value: day.requests,
         partial: partialDay(day.day, [day.requests]),
         missing: beforeLogs(day.day, 86400, data?.logs_since),
+        previous: earlierDays.at(index)?.requests,
+        previousPartial: previousDayPartial(index, earlierDays.length),
       }))
   const worstModel = ranked.find((row) => failsAboveSite(row, siteRate))
   const noPrevious = previousFailed
@@ -872,9 +883,9 @@ export function QualityTab(props: {
           <BarSeries
             ariaLabel={t('Input tokens by cache use')}
             series={[
-              { label: t('Cache read') },
-              { label: t('Cache write') },
-              { label: t('Uncached'), muted: true },
+              { label: t('Cache read'), compact: fmt.numCompact },
+              { label: t('Cache write'), compact: fmt.numCompact },
+              { label: t('Uncached'), muted: true, compact: fmt.numCompact },
             ]}
             points={daily.map((day) => ({
               key: day.day,

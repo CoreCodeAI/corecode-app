@@ -57,6 +57,8 @@ import {
   unmatchedCosts,
   unrescuedOf,
   upstreamDailySeries,
+  offAxisSeries,
+  AXIS_SHARE,
   upstreamMargin,
   upstreamModelComparison,
   upstreamTotals,
@@ -528,6 +530,13 @@ function DailyCharts(props: { data: UpstreamInsights | undefined }) {
     ...(series.hasOther ? [t('Other channels')] : []),
   ]
   const muted = (at: number) => series.hasOther && at === series.named.length
+  // Channels with a small share of the attempts sit above the failure chart's
+  // axis, so the busy ones keep the scale.
+  const offAxis = offAxisSeries(
+    labels.map((_, at) =>
+      series.days.reduce((sum, day) => sum + day.attempts[at], 0)
+    )
+  )
   const help = useUpstreamHelp()
   const splits = splitsClientErrors(props.data)
   const revenue = useRevenueBars(series.days)
@@ -556,7 +565,7 @@ function DailyCharts(props: { data: UpstreamInsights | undefined }) {
           }))}
           series={labels.map((label, at) => ({
             label,
-            compact: fmt.num,
+            compact: fmt.numCompact,
             muted: muted(at),
           }))}
         />
@@ -566,6 +575,10 @@ function DailyCharts(props: { data: UpstreamInsights | undefined }) {
         help={joinSentences(
           t(
             'Each day’s failed attempts over attempts, per channel, side by side.'
+          ),
+          t(
+            'A channel with under {{share}} of the attempts is drawn above the axis, which the busier channels set: its bars run to the top, and its name and readout carry its own rate.',
+            { share: fmt.pct(AXIS_SHARE) }
           ),
           splits && help.clientLeftOut
         )}
@@ -580,9 +593,12 @@ function DailyCharts(props: { data: UpstreamInsights | undefined }) {
             partial: partialDay(day.day),
           }))}
           series={labels.map((label, at) => ({
-            label,
+            label: offAxis[at]
+              ? t('{{name}}, off scale', { name: label })
+              : label,
             format: fmt.pct,
             muted: muted(at),
+            offScale: offAxis[at],
           }))}
         />
       </Panel>
