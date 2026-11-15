@@ -46,6 +46,7 @@ import type {
   EnginePlanValue,
   FinanceHour,
   FinanceInsights,
+  GroupAllocation,
   GroupConsumption,
   EnginePlanUsage,
   EngineUsageTotal,
@@ -530,6 +531,91 @@ export function marginTone(
   if (margin < 0) return 'danger'
   if (revenue > 0 && margin / revenue < 0.2) return 'warning'
   return 'good'
+}
+
+/** One row of the group margin table, in yuan. */
+export type GroupMarginRow = {
+  group: string
+  kind: GroupAllocation['kind']
+  revenue: number
+  /** Pool accounts, upstream bills and fees at the rate, the row's share. */
+  cost: number
+  margin: number
+  /** margin over revenue; null without revenue. */
+  marginRate: number | null
+}
+
+const ALLOCATION_KIND_ORDER: Record<GroupAllocation['kind'], number> = {
+  group: 0,
+  staff: 1,
+  unattributed: 2,
+}
+
+/**
+ * Each group's recognized revenue against its share of the cost: its pool
+ * fraction of each vendor's account cost, its bills one for one, and its fees
+ * at the rate. Customer groups come by revenue, then staff, then unattributed;
+ * an unattributed row with neither revenue nor cost is left out. Null on a
+ * server that sends no allocation.
+ */
+export function groupMargins(
+  data: FinanceInsights,
+  rate: number
+): GroupMarginRow[] | null {
+  if (data.group_allocations == null) return null
+  const accounts = new Map(
+    financeMargins(data, rate).rows.map((row) => [row.vendor, row.accountCost])
+  )
+  return data.group_allocations
+    .map((item) => {
+      let cost = item.bill_usd + item.fee_usd * rate
+      for (const [vendor, share] of Object.entries(item.pool_share ?? {})) {
+        cost += share * (accounts.get(vendor) ?? 0)
+      }
+      const revenue = item.recognized_revenue
+      const margin = revenue - cost
+      return {
+        group: item.group,
+        kind: item.kind,
+        revenue,
+        cost,
+        margin,
+        marginRate: revenue > 0 ? margin / revenue : null,
+      }
+    })
+    .filter(
+      (row) =>
+        row.kind !== 'unattributed' ||
+        Math.abs(row.revenue) >= 0.005 ||
+        Math.abs(row.cost) >= 0.005
+    )
+    .sort(
+      (a, b) =>
+        ALLOCATION_KIND_ORDER[a.kind] - ALLOCATION_KIND_ORDER[b.kind] ||
+        b.revenue - a.revenue ||
+        a.group.localeCompare(b.group)
+    )
+}
+
+/**
+ * The customer groups with revenue, best and worst by margin rate; null with
+ * fewer than two to compare.
+ */
+export function groupMarginExtremes(
+  rows: GroupMarginRow[]
+): { best: GroupMarginRow; worst: GroupMarginRow } | null {
+  const ranked = rows.filter(
+    (row) => row.kind === 'group' && row.marginRate != null
+  )
+  if (ranked.length < 2) return null
+  const sorted = [...ranked].sort(
+    (a, b) =>
+      (b.marginRate ?? 0) - (a.marginRate ?? 0) ||
+      a.group.localeCompare(b.group)
+  )
+  const best = sorted[0]
+  const worst = sorted.at(-1)
+  return worst ? { best, worst } : null
 }
 
 export type OrderFunnelRow = OrderMethodFunnel & {

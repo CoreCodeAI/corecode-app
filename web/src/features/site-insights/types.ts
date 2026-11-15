@@ -707,6 +707,22 @@ export type VendorUpstreamCost = {
  * none). share: 0..1 of consumption. revenue_estimate: recognized revenue
  * times share, in the payment currency (yuan).
  */
+/**
+ * One row of the group margin view: a customer group, the staff row, or the
+ * unattributed row. An allocation, not a measurement. recognized_revenue is in
+ * yuan; bill_usd is in quota dollars, one for one; fee_usd is in real US
+ * dollars; pool_share maps a vendor to the fraction of its pool account cost
+ * the row carries, and each vendor's fractions sum to 1 over the rows.
+ */
+export type GroupAllocation = {
+  group: string
+  kind: 'group' | 'staff' | 'unattributed'
+  recognized_revenue: number
+  bill_usd: number
+  fee_usd: number
+  pool_share: Record<string, number> | null
+}
+
 export type GroupConsumption = {
   group: string
   requests: number
@@ -837,6 +853,8 @@ export type FinanceInsights = StaleHours & {
   upstream_unattributed_bill_usd?: number
   upstream_unattributed_fee_usd?: number
   groups?: GroupConsumption[] | null
+  /** Each group's revenue and cost share, with the staff and unattributed rows. Absent before the server's release. */
+  group_allocations?: GroupAllocation[] | null
 }
 
 /** A sign-up of the range that consumed and never paid (no successful top-up with money > 0 off the wallet, ever). Quota dollars. */

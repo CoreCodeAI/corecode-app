@@ -236,6 +236,10 @@ type FinanceInsights struct {
 	UpstreamUnattributedFeeUSD  float64              `json:"upstream_unattributed_fee_usd"`
 	// Groups is customers' use by the group each request was billed in.
 	Groups []GroupConsumption `json:"groups"`
+	// GroupAllocations is each group's recognized revenue and its share of
+	// the upstream bills, fees and pool accounts, with a staff row and an
+	// unattributed row (see GroupAllocation). Absent before the server's release.
+	GroupAllocations []GroupAllocation `json:"group_allocations"`
 	// StaleHours counts the range's hours still stored under an older rollup
 	// version, until they are rebuilt; omitted when none.
 	StaleHours int `json:"stale_hours"`
@@ -394,6 +398,7 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 	result.StaleHours = stale
 	var consumed, root int64
 	var gift, wallet float64
+	walletBy := make(map[int]float64)
 	for _, hour := range hours {
 		result.Truncated = result.Truncated || hour.summary.Truncated
 		root += hour.summary.RootQuota
@@ -410,6 +415,7 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 			earned := float64(user.WalletQuota) * price.perQuota
 			consumed += user.Quota
 			wallet += earned
+			walletBy[user.UserId] += earned
 			gift += float64(user.GiftQuota) + float64(user.WalletQuota)*(1-price.paidShare)
 			if day != nil {
 				day.ConsumptionUSD += float64(user.Quota) / common.QuotaPerUnit
@@ -463,7 +469,7 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 	slices.SortFunc(result.VendorModels, func(a, b VendorModel) int {
 		return cmp.Or(cmp.Compare(b.USD, a.USD), cmp.Compare(a.Model, b.Model))
 	})
-	subscriptions, err := recognizeSubscriptions(r, prices, days)
+	subscriptions, subscriptionBy, err := recognizeSubscriptions(r, prices, days)
 	if err != nil {
 		return nil, err
 	}
@@ -502,6 +508,18 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 		return nil, err
 	}
 	result.VendorUpstream, result.UpstreamUnattributedBillUSD, result.UpstreamUnattributedFeeUSD = vendorUpstreamCosts(upstream)
+	userRevenue := make(map[int]float64, len(walletBy)+len(subscriptionBy))
+	for user, amount := range walletBy {
+		userRevenue[user] += amount
+	}
+	for user, amount := range subscriptionBy {
+		userRevenue[user] += amount
+	}
+	usage, err := readAllocationUsage(r, staff)
+	if err != nil {
+		return nil, err
+	}
+	result.GroupAllocations = allocateGroupMargins(upstream, usage, userRevenue)
 	for _, day := range days {
 		day.Topup, day.Subscription, day.ConsumptionUSD = roundTo(day.Topup, 2), roundTo(day.Subscription, 2), roundTo(max(day.ConsumptionUSD, 0), 4)
 		day.RecognizedRevenue = roundTo(max(day.RecognizedRevenue, 0), 2)
@@ -1012,22 +1030,23 @@ func readWalletPrices(end int64) (map[int]walletPrice, error) {
 
 // recognizeSubscriptions spreads each bought plan's price evenly over the
 // time it runs, adds the part falling in each day of the range to that day's
-// RecognizedRevenue, and returns the part falling in the range. A plan bought
-// with wallet balance is worth the balance it took at the wallet's price
-// (planPrices).
-func recognizeSubscriptions(r InsightsRange, prices map[int]walletPrice, days map[int64]*FinanceDay) (float64, error) {
+// RecognizedRevenue, and returns the part falling in the range, with each
+// user's part of it. A plan bought with wallet balance is worth the balance it
+// took at the wallet's price (planPrices).
+func recognizeSubscriptions(r InsightsRange, prices map[int]walletPrice, days map[int64]*FinanceDay) (float64, map[int]float64, error) {
+	byUser := make(map[int]float64)
 	var running []int
 	if err := DB.Model(&UserSubscription{}).Distinct("user_id").
 		Where("source IN ? AND start_time < ? AND end_time > ?", paidPlanSources, r.End, r.Start).
 		Pluck("user_id", &running).Error; err != nil {
-		return 0, err
+		return 0, byUser, err
 	}
 	if len(running) == 0 {
-		return 0, nil
+		return 0, byUser, nil
 	}
 	subscriptions, values, err := planPrices(running, prices)
 	if err != nil {
-		return 0, err
+		return 0, byUser, err
 	}
 	var total float64
 	for _, subscription := range subscriptions {
@@ -1041,6 +1060,7 @@ func recognizeSubscriptions(r InsightsRange, prices map[int]walletPrice, days ma
 			continue
 		}
 		total += perSecond * float64(to-from)
+		byUser[subscription.UserId] += perSecond * float64(to-from)
 		for at := from; at < to; {
 			dayStart := r.DayStart(at)
 			next := min(dayStart+86400, to)
@@ -1050,7 +1070,7 @@ func recognizeSubscriptions(r InsightsRange, prices map[int]walletPrice, days ma
 			at = next
 		}
 	}
-	return total, nil
+	return total, byUser, nil
 }
 
 func auditInt(fields AuditFields, key string) (int64, bool) {
