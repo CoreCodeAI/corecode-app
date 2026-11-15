@@ -55,7 +55,7 @@ const createDigestSchema = (t: (key: string) => string) =>
     Hour: z.string().refine((value) => {
       const hour = Number(value)
       return /^\d+$/.test(value.trim()) && hour >= 0 && hour <= 23
-    }, t('Send hour must be a whole number from 0 to 23.')),
+    }, t('Enter a whole number')),
     FeishuWebhook: z.string().refine((value) => {
       const trimmed = value.trim()
       return (
@@ -140,7 +140,6 @@ export function SiteInsightsDigestSection({
           <SettingsPageFormActions
             onSave={form.handleSubmit(onSubmit)}
             isSaving={updateOption.isPending}
-            saveLabel='Save digest settings'
           />
           <FormField
             control={form.control}
@@ -148,10 +147,10 @@ export function SiteInsightsDigestSection({
             render={({ field }) => (
               <SettingsSwitchItem>
                 <SettingsSwitchContent>
-                  <FormLabel>{t('Send the daily digest')}</FormLabel>
+                  <FormLabel>{t('Enabled')}</FormLabel>
                   <FormDescription>
                     {t(
-                      'The digest covers the previous day and is sent once a day from the send hour until midnight, Beijing time.'
+                      'Yesterday against the day before, sent once a day after the send hour.'
                     )}
                   </FormDescription>
                 </SettingsSwitchContent>
@@ -170,7 +169,7 @@ export function SiteInsightsDigestSection({
             name='Hour'
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('Digest send hour (Beijing time)')}</FormLabel>
+                <FormLabel>{t('Send hour, 0 to 23, Beijing time')}</FormLabel>
                 <FormControl>
                   <Input
                     type='number'
@@ -211,7 +210,7 @@ export function SiteInsightsDigestSection({
             name='FeishuSecret'
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('Feishu bot signing secret')}</FormLabel>
+                <FormLabel>{t('Feishu signing secret')}</FormLabel>
                 <FormControl>
                   <Input
                     type='password'
@@ -220,9 +219,6 @@ export function SiteInsightsDigestSection({
                     onChange={(event) => field.onChange(event.target.value)}
                   />
                 </FormControl>
-                <FormDescription>
-                  {t('Leave blank if the bot does not sign messages.')}
-                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -239,7 +235,7 @@ export function SiteInsightsDigestSection({
               }
               onClick={() => testMutation.mutate()}
             >
-              {t('Send test digest now')}
+              {t('Send test message')}
             </Button>
           </div>
         </SettingsForm>
