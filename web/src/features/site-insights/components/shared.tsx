@@ -1063,6 +1063,14 @@ export function BarSeries(props: {
     props.series[0]?.compact ??
     props.series[0]?.format ??
     (top >= SHORT_FROM ? fmt.numCompact : fmt.num)
+  // An axis finer than its format prints one label on several ticks (0.1%
+  // three times under a top of 0.1%): then only the ends are labelled, which
+  // are where their labels say.
+  const tickLabels = ticks.map((tick) => axisFormat(tick))
+  const tickLabelled = (index: number) =>
+    new Set(tickLabels).size === tickLabels.length ||
+    index === 0 ||
+    index === ticks.length - 1
   const heightOf = (value: number) => `${Math.min(value / top, 1) * 100}%`
   const stacked = props.series.length > 1 && !props.grouped
   const count = props.points.length
@@ -1129,7 +1137,7 @@ export function BarSeries(props: {
             barLabels && 'mt-4'
           )}
         >
-          {ticks.map((tick) => (
+          {ticks.map((tick, index) => (
             <span
               key={tick}
               className='block translate-y-1/2 leading-none whitespace-nowrap'
@@ -1139,7 +1147,7 @@ export function BarSeries(props: {
                 bottom: `${(tick / top) * 100}%`,
               }}
             >
-              {axisFormat(tick)}
+              {tickLabelled(index) ? tickLabels[index] : ''}
             </span>
           ))}
           {/* Holds the column's width when every label is absolute. */}

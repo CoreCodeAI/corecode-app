@@ -190,6 +190,28 @@ describe('hour bars', () => {
     expect(closed.querySelector('.opacity-50')).toBeNull()
   })
 
+  it('labels only the ends of an axis whose ticks would print alike', () => {
+    // Rates up to 0.1%: the ticks 0.025% to 0.1% all round to 0% or 0.1%.
+    const pct = (value: number) => `${(value * 100).toFixed(1)}%`
+    const { container } = render(
+      <BarSeries
+        ariaLabel='rates'
+        series={[{ label: 'Rate', format: pct }]}
+        points={[
+          { key: 1, title: 'a', values: [0.001] },
+          { key: 2, title: 'b', values: [0.0008] },
+        ]}
+      />
+    )
+    const axis = [...container.querySelectorAll('[aria-hidden] > span.block')]
+      .map((tick) => tick.textContent)
+      .filter((text) => text !== '')
+    // One 0% at the bottom and one 0.1% at the top (and the width holder).
+    expect(axis.filter((text) => text === '0.0%')).toHaveLength(1)
+    expect(axis.filter((text) => text === '0.1%').length).toBeLessThanOrEqual(2)
+    expect(new Set(axis)).toEqual(new Set(['0.0%', '0.1%']))
+  })
+
   it('recolors a flagged bar by its tone', () => {
     render(
       <BarSeries
