@@ -74,6 +74,8 @@ func setupUpstreamBillTestDB(t *testing.T) {
 	sqlDB.SetMaxOpenConns(1)
 	require.NoError(t, db.AutoMigrate(&model.UpstreamBillDay{}, &model.UpstreamCost{}))
 	model.DB = db
+	// A read in an earlier test must not hold this one's off.
+	upstreamBillNext = map[int]time.Time{}
 	t.Cleanup(func() { model.DB = previousDB })
 }
 
