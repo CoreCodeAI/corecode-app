@@ -9449,6 +9449,12 @@
     "Failed to load the receipt": "Failed to load the receipt",
     "This order has no Stripe receipt": "This order has no Stripe receipt",
     "A Stripe receipt proves payment; it is not a VAT invoice.": "A Stripe receipt proves payment; it is not a VAT invoice.",
-    "Request an invoice in the invoice center": "Request an invoice in the invoice center"
+    "Request an invoice in the invoice center": "Request an invoice in the invoice center",
+    "Customers pay the top-up price in CNY on Dodo Payments Checkout. Bonus tiers and discounts apply as for Epay.": "Customers pay the top-up price in CNY on Dodo Payments Checkout. Bonus tiers and discounts apply as for Epay.",
+    "The product must be a one-time, pay-what-you-want product priced in CNY with tax included; each order sets its price.": "The product must be a one-time, pay-what-you-want product priced in CNY with tax included; each order sets its price.",
+    "The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.": "The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.",
+    "Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.": "Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.",
+    "Administrators only": "Administrators only",
+    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Show the Dodo Payments method to administrators only, and refuse orders from anyone else."
   }
 }

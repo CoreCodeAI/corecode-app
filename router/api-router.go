@@ -116,6 +116,7 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.POST("/creem/webhook", anonymousRequestBodyLimit, controller.CreemWebhook)
 		apiRouter.POST("/waffo/webhook", anonymousRequestBodyLimit, controller.WaffoWebhook)
 		apiRouter.POST("/nowpayments/webhook", anonymousRequestBodyLimit, controller.NowPaymentsWebhook)
+		apiRouter.POST("/dodopayments/webhook", anonymousRequestBodyLimit, controller.DodoPaymentsWebhook)
 		// :env separates test vs prod URLs so the operator can register each
 		// in Pancake's matching webhook slot; handler enforces env match.
 		apiRouter.POST("/waffo-pancake/webhook/:env", anonymousRequestBodyLimit, controller.WaffoPancakeWebhook)
@@ -187,6 +188,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/waffo-pancake/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPancakePay)
 				selfRoute.POST("/nowpayments/amount", controller.RequestNowPaymentsAmount)
 				selfRoute.POST("/nowpayments/pay", middleware.CriticalRateLimit(), controller.RequestNowPaymentsPay)
+				selfRoute.POST("/dodopayments/pay", middleware.CriticalRateLimit(), controller.RequestDodoPaymentsPay)
 				selfRoute.POST("/aff_transfer", middleware.UserCriticalRateLimit("aff-transfer"), controller.TransferAffQuota)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
 				selfRoute.POST("/terms/consent", controller.AcceptTermsConsent)

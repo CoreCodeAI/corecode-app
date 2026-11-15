@@ -127,6 +127,18 @@ export async function calculateNowPaymentsAmount(
 }
 
 /**
+ * Open a Dodo Payments checkout; answers the hosted payment page as pay_link
+ */
+export async function requestDodoPayment(
+  request: AmountRequest
+): Promise<StripePaymentResponse> {
+  const res = await api.post('/api/user/dodopayments/pay', request, {
+    skipBusinessError: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+/**
  * Open a NOWPayments invoice; answers the hosted payment page as pay_link
  */
 export async function requestNowPaymentsPayment(

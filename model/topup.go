@@ -39,6 +39,7 @@ const (
 	PaymentMethodWaffo           = "waffo"
 	PaymentMethodWaffoPancake    = "waffo_pancake"
 	PaymentMethodNowPayments     = "nowpayments"
+	PaymentMethodDodoPayments    = "dodopayments"
 	PaymentMethodBalance         = "balance"
 )
 
@@ -49,6 +50,7 @@ const (
 	PaymentProviderWaffo        = "waffo"
 	PaymentProviderWaffoPancake = "waffo_pancake"
 	PaymentProviderNowPayments  = "nowpayments"
+	PaymentProviderDodoPayments = "dodopayments"
 	PaymentProviderBalance      = "balance"
 )
 
@@ -205,6 +207,13 @@ func RechargeEpay(tradeNo string, actualPaymentMethod string, callerIp string) (
 // it completes through the same locked transaction and credits once.
 func RechargeNowPayments(tradeNo string, callerIp string) (alreadyDone bool, err error) {
 	return completeOnlineTopUp(tradeNo, PaymentProviderNowPayments, "", callerIp, nil)
+}
+
+// RechargeDodoPayments completes a Dodo Payments Checkout top-up. Its order is
+// priced like an epay order, so it completes through the same locked
+// transaction and credits once.
+func RechargeDodoPayments(tradeNo string, callerIp string) (alreadyDone bool, err error) {
+	return completeOnlineTopUp(tradeNo, PaymentProviderDodoPayments, "", callerIp, nil)
 }
 
 // RechargeStripe completes a Stripe Checkout top-up. CoreCode prices it like an

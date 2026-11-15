@@ -103,6 +103,7 @@ export function Wallet(props: WalletProps) {
     resetCalculation,
     processPayment,
     processNowPaymentsPayment,
+    processDodoPayment,
   } = usePayment()
   const { redeeming, redeemCode } = useRedemption()
   const { processing: creemProcessing, processCreemPayment } = useCreemPayment()
@@ -218,6 +219,7 @@ export function Wallet(props: WalletProps) {
         waffo: processWaffoPayment,
         waffoPancake: processWaffoPancakePayment,
         nowPayments: processNowPaymentsPayment,
+        dodoPayments: processDodoPayment,
       },
       nowPaymentsCurrency
     )

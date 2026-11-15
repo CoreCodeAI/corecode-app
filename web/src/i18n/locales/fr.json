@@ -9449,6 +9449,12 @@
     "Failed to load the receipt": "Impossible de charger le reçu",
     "This order has no Stripe receipt": "Cette commande n’a pas de reçu Stripe",
     "A Stripe receipt proves payment; it is not a VAT invoice.": "Un reçu Stripe atteste le paiement ; ce n’est pas une facture avec TVA.",
-    "Request an invoice in the invoice center": "Demander une facture dans le centre de facturation"
+    "Request an invoice in the invoice center": "Demander une facture dans le centre de facturation",
+    "Customers pay the top-up price in CNY on Dodo Payments Checkout. Bonus tiers and discounts apply as for Epay.": "Les clients paient le montant de la recharge en CNY sur Dodo Payments Checkout. Les paliers de bonus et les remises s'appliquent comme pour Epay.",
+    "The product must be a one-time, pay-what-you-want product priced in CNY with tax included; each order sets its price.": "Le produit doit être un produit à paiement unique, « Pay What You Want », facturé en CNY taxes comprises ; chaque commande fixe son prix.",
+    "The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.": "La clé API, le secret du webhook et le produit appartiennent à un même mode. Remplacez les trois en passant du mode test au mode live.",
+    "Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.": "Envoie les requêtes à l'environnement de test de Dodo Payments, où aucun argent n'est débité. Les commandes de test payées créditent tout de même le compte.",
+    "Administrators only": "Administrateurs uniquement",
+    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Affiche le moyen de paiement Dodo Payments aux administrateurs uniquement et refuse les commandes des autres utilisateurs."
   }
 }

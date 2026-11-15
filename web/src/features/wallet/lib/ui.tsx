@@ -175,6 +175,13 @@ export function getPaymentIcon(
           style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.WAFFO] }}
         />
       )
+    case PAYMENT_TYPES.DODOPAYMENTS:
+      return (
+        <CreditCard
+          className={className}
+          style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.DODOPAYMENTS] }}
+        />
+      )
     case PAYMENT_TYPES.NOWPAYMENTS:
       return (
         <CircleDollarSign
