@@ -130,7 +130,10 @@ func GetCapacityInsights(c *gin.Context) {
 		// first read after a start still waits; it runs while the database works.
 		poolDone := make(chan service.EnginePool, 1)
 		go func() { poolDone <- service.RecentEnginePool(2 * time.Minute) }()
-		insights, err := model.GetCapacityInsights(r, capacityVendor(c))
+		vendor := capacityVendor(c)
+		insights, err := cachedRead("capacity", r, func(r model.InsightsRange) (*model.CapacityInsights, error) {
+			return model.GetCapacityInsights(r, vendor)
+		}, vendor)
 		if err != nil {
 			return nil, err
 		}
@@ -240,7 +243,7 @@ func GetFinanceInsights(c *gin.Context) {
 		// serves, as on the capacity view.
 		poolDone := make(chan service.EnginePool, 1)
 		go func() { poolDone <- service.RecentEnginePool(2 * time.Minute) }()
-		insights, err := model.GetFinanceInsights(r)
+		insights, err := cachedRead("finance", r, model.GetFinanceInsights)
 		if err != nil {
 			return nil, err
 		}
@@ -263,11 +266,11 @@ func GetFinanceInsights(c *gin.Context) {
 }
 
 func GetRiskInsights(c *gin.Context) {
-	serveInsights(c, model.InsightsMaxRiskDays, model.GetRiskInsights)
+	serveInsights(c, model.InsightsMaxRiskDays, settledRead("risk", model.GetRiskInsights))
 }
 
 func GetGrowthInsights(c *gin.Context) {
-	serveInsights(c, model.InsightsMaxDays, model.GetGrowthInsights)
+	serveInsights(c, model.InsightsMaxDays, settledRead("growth", model.GetGrowthInsights))
 }
 
 // ActivityResponse adds what the engine recorded at official prices beside
@@ -287,7 +290,7 @@ func GetActivityInsights(c *gin.Context) {
 		go func() { engineDone <- service.FetchEngineDailyCost(r.Start, r.End, r.Offset) }()
 		totalDone := make(chan service.EngineDailyCost, 1)
 		go func() { totalDone <- service.FetchEngineDailyTotal(r.Start, r.End, r.Offset) }()
-		insights, err := model.GetActivityInsights(r)
+		insights, err := cachedRead("activity", r, model.GetActivityInsights)
 		if err != nil {
 			return nil, err
 		}
@@ -332,9 +335,9 @@ func GetQualityInsights(c *gin.Context) {
 	if !ok {
 		return
 	}
-	serveInsights(c, model.InsightsMaxLogDays, func(r model.InsightsRange) (*model.QualityInsights, error) {
+	serveInsights(c, model.InsightsMaxLogDays, settledRead("quality", func(r model.InsightsRange) (*model.QualityInsights, error) {
 		return model.GetQualityInsights(r, models)
-	})
+	}, models...))
 }
 
 // ChannelResponse adds the site's exchange rate to the channel view: revenue
@@ -346,7 +349,7 @@ type ChannelResponse struct {
 
 func GetChannelInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxDays, func(r model.InsightsRange) (*ChannelResponse, error) {
-		insights, err := model.GetChannelInsights(r)
+		insights, err := cachedRead("channels", r, model.GetChannelInsights)
 		if err != nil {
 			return nil, err
 		}
@@ -367,12 +370,13 @@ func SetChannelCosts(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	forgetSettledInsights()
 	common.ApiSuccess(c, nil)
 }
 
 // GetUpstreamInsights compares the channels requests went to.
 func GetUpstreamInsights(c *gin.Context) {
-	serveInsights(c, model.InsightsMaxLogDays, model.GetUpstreamInsights)
+	serveInsights(c, model.InsightsMaxLogDays, settledRead("upstream", model.GetUpstreamInsights))
 }
 
 // SetUpstreamFees replaces the monthly fees of channels whose upstream bill
@@ -389,11 +393,12 @@ func SetUpstreamFees(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	forgetSettledInsights()
 	common.ApiSuccess(c, nil)
 }
 
 func GetBusinessInsights(c *gin.Context) {
-	serveInsights(c, model.InsightsMaxLogDays, model.GetBusinessInsights)
+	serveInsights(c, model.InsightsMaxLogDays, settledRead("business", model.GetBusinessInsights))
 }
 
 // GetEnginePool returns corecode-engine's groups and accounts, live. It takes

@@ -942,6 +942,17 @@ func insightHourFinal(start, now int64) bool {
 	return start+3600+insightHourLookahead+insightHourSettle <= now
 }
 
+// InsightsRangeSettled reports whether the request logs can no longer change
+// what a view reads for r at now. The views read every hour that starts in
+// [r.Start, r.End), so the range is settled when its last hour is final, which
+// makes each hour before it final too. The raw-table reads bounded by r.End
+// are settled as well: the last hour ends more than insightHourLookahead
+// before now, and a log is inserted within insightLogInsertSlack of its time.
+// Only the views' other tables (balances, orders, plans) can still change.
+func InsightsRangeSettled(r InsightsRange, now int64) bool {
+	return insightHourFinal(insightHourKey(r.End-1), now)
+}
+
 // firstLogAt is the earliest log's time, or 0 without logs. Hours before it
 // are empty and never computed.
 func firstLogAt() (int64, error) {
