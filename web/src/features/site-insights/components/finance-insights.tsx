@@ -24,12 +24,16 @@ import {
   financeRange,
   giftShareHigh,
   giftWatch,
+  groupMarginExtremes,
+  groupMargins,
   groupRows,
+  marginTone,
   orderFunnels,
   ordersComparable,
   planBookTotals,
   signed,
   UNPAID_CREDIT_WARN,
+  type GroupMarginRow,
   type GroupRow,
   type OrderFunnelRow,
 } from '../finance-analysis'
@@ -40,6 +44,7 @@ import {
   previousBeforeLogs,
   tableState,
   TONES,
+  useChargeFormat,
   useInsightsDefinitions,
   useInsightsFormat,
   type InsightsRangeInfo,
@@ -50,7 +55,7 @@ import {
 } from '../lib'
 import type { FinanceInsights, PlanBookRow } from '../types'
 import { Drivers, Findings, type DriverRow } from './insight-kit'
-import { MetricGrid, Panel, SimpleTable } from './shared'
+import { type Column, MetricGrid, Panel, SimpleTable } from './shared'
 
 const DRIVER_ROWS = 5
 
@@ -531,10 +536,15 @@ export function PlanBookPanel(props: {
   )
 }
 
+/** A margin row with the group's usage, when it is a customer group. */
+type GroupMarginTableRow = GroupMarginRow & { use?: GroupRow }
+
 /**
  * Customers' use by the group each request was billed in, with each
- * group's share and its change against the previous period. Hidden on a
- * server that does not send it.
+ * group's share and its change against the previous period. On a server that
+ * sends the group allocations, each group also shows its recognized revenue,
+ * cost and gross margin, with the staff and unattributed rows muted at the end.
+ * Hidden on a server that does not send the groups.
  */
 export function GroupConsumptionPanel(props: {
   data: FinanceInsights | undefined
@@ -544,105 +554,244 @@ export function GroupConsumptionPanel(props: {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const defs = useInsightsDefinitions()
+  const charge = useChargeFormat(props.data)
   const data = props.data
   if (data && data.groups == null) return null
-  const rows: GroupRow[] | undefined = data
+  const usage: GroupRow[] | undefined = data
     ? groupRows(data.groups, props.previous?.groups)
     : undefined
-  const top = rows?.[0]
+  const margins = data ? groupMargins(data, charge.rate) : undefined
+  const usageOf = new Map((usage ?? []).map((row) => [row.group, row]))
+  // One row per allocation when margins are sent; the usage columns fill in
+  // for a customer group and show a dash for staff and unattributed rows.
+  const rows = margins?.map((row) => ({
+    ...row,
+    use: row.kind === 'group' ? usageOf.get(row.group) : undefined,
+  }))
+  const extremes = margins ? groupMarginExtremes(margins) : null
+  const top = usage?.[0]
   const name = (group: string) => group || t('Not recorded')
+  const label = (row: { group: string; kind: GroupMarginRow['kind'] }) => {
+    if (row.kind === 'staff') return t('Staff’s own use')
+    if (row.kind === 'unattributed') return t('Unattributed')
+    return name(row.group)
+  }
   const points = (value: number) =>
     t('{{change}} pt', {
       change: `${value > 0 ? '+' : ''}${fmt.num(Math.round(value * 1000) / 10)}`,
     })
-  return (
-    <Panel
-      title={t('Use by group')}
-      error={failedText(props.sources?.view, data, t('Could not be read'))}
-      description={
-        top
-          ? t('{{group}} takes {{share}} of customers’ consumption.', {
-              group: name(top.group),
-              share: fmt.pct(top.share),
-            })
-          : undefined
-      }
-      help={joinSentences(
+  const share = top
+    ? t('{{group}} takes {{share}} of customers’ consumption.', {
+        group: name(top.group),
+        share: fmt.pct(top.share),
+      })
+    : undefined
+  const description = extremes
+    ? t(
+        '{{best}} has the best gross margin, {{bestRate}}; {{worst}} the worst, {{worstRate}}.',
+        {
+          best: name(extremes.best.group),
+          bestRate: fmt.pct(extremes.best.marginRate ?? 0),
+          worst: name(extremes.worst.group),
+          worstRate: fmt.pct(extremes.worst.marginRate ?? 0),
+        }
+      )
+    : share
+  const usageHelp = t(
+    'Each group the requests were billed in, customers only. Consumption is after the group’s ratio; at list price divides it by today’s ratio, so a group sold cheaper shows how much use it carried. Change is in percentage points of share against the previous period. Requests logged before groups were recorded show as not recorded.'
+  )
+  const help = margins
+    ? joinSentences(
+        usageHelp,
         t(
-          'Each group the requests were billed in, customers only. Consumption is after the group’s ratio; at list price divides it by today’s ratio, so a group sold cheaper shows how much use it carried. Change is in percentage points of share against the previous period. Requests logged before groups were recorded show as not recorded.'
+          'Margin by group is an allocation, not a measurement: revenue follows each user’s charge across groups, and each pool account, upstream bill and fee is shared by the groups’ use at list price, quota with the group’s ratio divided out.'
         ),
+        t(
+          'Staff’s own use is its own row, and an upstream bill counts one supplier dollar for one quota dollar, as the upstream tab does; a fee is converted at the site’s exchange rate.'
+        ),
+        defs.listCharge
+      )
+    : joinSentences(
+        usageHelp,
         defs.listCharge,
         t(
           'Revenue (est.) is consumption’s pro-rata share of the range’s revenue earned: an estimate, not a margin, since the data has no cost by group.'
         )
-      )}
+      )
+  const usageColumns: Column<GroupRow>[] = [
+    {
+      key: 'group',
+      label: t('Group'),
+      render: (row) => (
+        <span className='flex flex-col leading-tight'>
+          <span>{name(row.group)}</span>
+          {row.ratio > 0 && (
+            <span className='text-muted-foreground text-xs'>
+              {fmt.multiple(row.ratio)}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'usd',
+      label: t('Consumption'),
+      align: 'right',
+      render: (row) =>
+        `${fmt.cny(row.consumption_usd)} · ${fmt.pct(row.share)}`,
+    },
+    {
+      key: 'change',
+      label: t('Change'),
+      hint: t(
+        'Share of consumption against the previous period, in percentage points.'
+      ),
+      align: 'right',
+      render: (row) =>
+        row.shareChange == null ? '-' : points(row.shareChange),
+    },
+    {
+      key: 'list',
+      label: t('At list price'),
+      align: 'right',
+      render: (row) => (row.list_usd > 0 ? fmt.cny(row.list_usd) : '-'),
+    },
+    {
+      key: 'requests',
+      label: t('Requests'),
+      align: 'right',
+      render: (row) => fmt.num(row.requests),
+    },
+    {
+      key: 'users',
+      label: t('Users'),
+      align: 'right',
+      render: (row) => fmt.num(row.users),
+    },
+    {
+      key: 'rev',
+      label: t('Revenue (est.)'),
+      hint: t(
+        'Consumption’s pro-rata share of revenue earned, an estimate, not a margin.'
+      ),
+      align: 'right',
+      render: (row) => fmt.cny(row.revenue_estimate),
+    },
+  ]
+  const marginColumns: Column<GroupMarginTableRow>[] = [
+    {
+      key: 'group',
+      label: t('Group'),
+      render: (row) => (
+        <span className='flex flex-col leading-tight'>
+          <span>{label(row)}</span>
+          {row.use && row.use.ratio > 0 && (
+            <span className='text-muted-foreground text-xs'>
+              {fmt.multiple(row.use.ratio)}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'usd',
+      label: t('Consumption'),
+      align: 'right',
+      render: (row) =>
+        row.use
+          ? `${fmt.cny(row.use.consumption_usd)} · ${fmt.pct(row.use.share)}`
+          : '-',
+    },
+    {
+      key: 'change',
+      label: t('Change'),
+      hint: t(
+        'Share of consumption against the previous period, in percentage points.'
+      ),
+      align: 'right',
+      render: (row) =>
+        row.use?.shareChange == null ? '-' : points(row.use.shareChange),
+    },
+    {
+      key: 'list',
+      label: t('At list price'),
+      align: 'right',
+      render: (row) =>
+        row.use && row.use.list_usd > 0 ? fmt.cny(row.use.list_usd) : '-',
+    },
+    {
+      key: 'requests',
+      label: t('Requests'),
+      align: 'right',
+      render: (row) => (row.use ? fmt.num(row.use.requests) : '-'),
+    },
+    {
+      key: 'users',
+      label: t('Users'),
+      align: 'right',
+      render: (row) => (row.use ? fmt.num(row.use.users) : '-'),
+    },
+    {
+      key: 'rev',
+      label: t('Revenue'),
+      hint: t(
+        'Recognized revenue of the group’s users, each user’s split by charge across groups. An allocation.'
+      ),
+      align: 'right',
+      render: (row) => fmt.cny(row.revenue),
+    },
+    {
+      key: 'cost',
+      label: t('Cost'),
+      hint: t(
+        'The group’s share of pool accounts, upstream bills and fees, by use at list price. An allocation, not a measurement.'
+      ),
+      align: 'right',
+      render: (row) => fmt.cny(row.cost),
+    },
+    {
+      key: 'margin',
+      label: t('Gross margin'),
+      align: 'right',
+      render: (row) => (
+        <span className={TONES[marginTone(row.margin, row.revenue)]}>
+          {fmt.cny(row.margin)}
+        </span>
+      ),
+    },
+    {
+      key: 'rate',
+      label: t('Margin rate'),
+      hint: t('Gross margin over revenue; a dash without revenue.'),
+      align: 'right',
+      render: (row) => (row.marginRate == null ? '-' : fmt.pct(row.marginRate)),
+    },
+  ]
+  return (
+    <Panel
+      title={t('Use by group')}
+      error={failedText(props.sources?.view, data, t('Could not be read'))}
+      description={description}
+      help={help}
     >
-      <SimpleTable
-        rows={rows}
-        rowKey={(row) => row.group}
-        empty={t('No consumption in this range')}
-        state={tableState(props.sources?.view, rows)}
-        columns={[
-          {
-            key: 'group',
-            label: t('Group'),
-            render: (row) => (
-              <span className='flex flex-col leading-tight'>
-                <span>{name(row.group)}</span>
-                {row.ratio > 0 && (
-                  <span className='text-muted-foreground text-xs'>
-                    {fmt.multiple(row.ratio)}
-                  </span>
-                )}
-              </span>
-            ),
-          },
-          {
-            key: 'usd',
-            label: t('Consumption'),
-            align: 'right',
-            render: (row) =>
-              `${fmt.cny(row.consumption_usd)} · ${fmt.pct(row.share)}`,
-          },
-          {
-            key: 'change',
-            label: t('Change'),
-            hint: t(
-              'Share of consumption against the previous period, in percentage points.'
-            ),
-            align: 'right',
-            render: (row) =>
-              row.shareChange == null ? '-' : points(row.shareChange),
-          },
-          {
-            key: 'list',
-            label: t('At list price'),
-            align: 'right',
-            render: (row) => (row.list_usd > 0 ? fmt.cny(row.list_usd) : '-'),
-          },
-          {
-            key: 'requests',
-            label: t('Requests'),
-            align: 'right',
-            render: (row) => fmt.num(row.requests),
-          },
-          {
-            key: 'users',
-            label: t('Users'),
-            align: 'right',
-            render: (row) => fmt.num(row.users),
-          },
-          {
-            key: 'rev',
-            label: t('Revenue (est.)'),
-            hint: t(
-              'Consumption’s pro-rata share of revenue earned, an estimate, not a margin.'
-            ),
-            align: 'right',
-            render: (row) => fmt.cny(row.revenue_estimate),
-          },
-        ]}
-      />
+      {margins && rows ? (
+        <SimpleTable
+          rows={rows}
+          rowKey={(row) => `${row.kind}:${row.group}`}
+          empty={t('No consumption in this range')}
+          state={tableState(props.sources?.view, rows)}
+          faded={(row) => row.kind !== 'group'}
+          columns={marginColumns}
+        />
+      ) : (
+        <SimpleTable
+          rows={usage}
+          rowKey={(row) => row.group}
+          empty={t('No consumption in this range')}
+          state={tableState(props.sources?.view, usage)}
+          columns={usageColumns}
+        />
+      )}
     </Panel>
   )
 }
