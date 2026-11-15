@@ -206,7 +206,7 @@ func TestViolationStrikePolicy(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
 			useViolationTestDB(t, dialect)
-			for id, role := range map[int]int{1: common.RoleCommonUser, 2: common.RoleCommonUser, 3: common.RoleAdminUser, 4: common.RoleCommonUser, 5: common.RoleCommonUser, 6: common.RoleCommonUser, 7: common.RoleCommonUser, 8: common.RoleCommonUser, 9: common.RoleCommonUser, 10: common.RoleCommonUser, 11: common.RoleCommonUser, 12: common.RoleCommonUser, 13: common.RoleCommonUser, 14: common.RoleCommonUser, 15: common.RoleCommonUser, 16: common.RoleCommonUser} {
+			for id, role := range map[int]int{1: common.RoleCommonUser, 2: common.RoleCommonUser, 3: common.RoleAdminUser, 4: common.RoleCommonUser, 5: common.RoleCommonUser, 6: common.RoleCommonUser, 7: common.RoleCommonUser, 8: common.RoleCommonUser, 9: common.RoleCommonUser, 10: common.RoleCommonUser, 11: common.RoleCommonUser, 12: common.RoleCommonUser, 13: common.RoleCommonUser, 14: common.RoleCommonUser, 15: common.RoleCommonUser, 16: common.RoleCommonUser, 17: common.RoleCommonUser} {
 				require.NoError(t, model.DB.Create(&model.User{Id: id, Username: fmt.Sprintf("violation-user-%d", id), AffCode: fmt.Sprintf("vg%d", id), Password: "unused", Role: role, Status: common.UserStatusEnabled, Group: "default"}).Error)
 			}
 
@@ -259,15 +259,30 @@ func TestViolationStrikePolicy(t *testing.T) {
 				require.NotNil(t, apiErr)
 				assert.Equal(t, types.ErrorCodeViolationConversationBlocked, apiErr.GetErrorCode())
 
-				// Within ten minutes a refusal belongs to the warned incident; after
+				// Within two minutes a refusal belongs to the warned incident; after
 				// that, the next lenient refusal is the first strike, not a ban.
-				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 8, Category: "reasoning_extraction", ConversationKey: "second"}, now+300))
+				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 8, Category: "reasoning_extraction", ConversationKey: "second"}, now+90))
 				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 8, Category: "reasoning_extraction", ConversationKey: "third"}, now+3600))
 				// A day later the warnings start over, but the strike still counts
 				// toward disabling the account.
 				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 8, Category: "reasoning_extraction", ConversationKey: "fourth"}, now+day+7200))
 				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 8, Category: "reasoning_extraction", ConversationKey: "fifth"}, now+day+8400))
 				assert.Equal(t, []string{"enforce:merged", "enforce:suspend", "enforce:warn", "enforce:ban"}, violationActions(t, 8)[8:])
+			})
+
+			t.Run("new conversations refused minutes after a warning are new incidents", func(t *testing.T) {
+				resetViolationGuardState()
+				twice := lenient
+				twice.SuspendHours = 3
+				twice.LenientWarnings = 2
+				*operation_setting.GetViolationGuardSetting() = twice
+				now := common.GetTimestamp()
+				// User 2919 on 2026-11-11: after one warning, twenty refusals in
+				// twelve new conversations within ten minutes all merged into it.
+				for i, at := range []int64{0, 90, 200, 330} {
+					require.NoError(t, applyViolationStrike(twice, model.ViolationRecord{UserId: 17, Category: "reasoning_extraction", ConversationKey: fmt.Sprintf("conversation-%d", i)}, now+at))
+				}
+				assert.Equal(t, []string{"enforce:warn", "enforce:merged", "enforce:warn", "enforce:suspend"}, violationActions(t, 17))
 			})
 
 			t.Run("each lenient category has its own warnings, and the incident after them strikes", func(t *testing.T) {
