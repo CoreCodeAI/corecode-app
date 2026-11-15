@@ -28,6 +28,7 @@ violation.risk_gate_held: "此對話中有一則訊息被內容安全策略攔�
 violation.conversation_blocked: "此對話已被上游模型以違反使用政策為由拒絕，不再轉發。請開啟新對話，或回退到被拒的那則訊息之前繼續：Claude Code 中輸入 /rewind（或在輸入框為空時連按兩次 Esc），選擇 Restore conversation；其他客戶端請編輯那則訊息"
 violation.conversation_blocked_quoted: "此對話已被上游模型以違反使用政策為由拒絕，不再轉發。被拒的訊息開頭是「{{.Message}}」。請開啟新對話，或回退到那則訊息之前繼續：Claude Code 中輸入 /rewind（或在輸入框為空時連按兩次 Esc），選擇 Restore conversation；其他客戶端請編輯那則訊息"
 violation.client_check_blocked: "近 24 小時內此帳號已有 {{.Count}} 次客戶端檢查請求（如 Claude Code auto 模式在呼叫工具前發出的檢查）被上游拒絕，此類請求暫不轉發，不計違規。刪除 CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS 和 CLAUDE_CODE_AUTO_MODE_SERVER=0 後開啟新工作階段，auto 模式即改由伺服器端審查"
+violation.resend_blocked: "上游模型剛以違反使用政策為由拒絕了這個請求，原樣重送會再次被拒，因此未轉發。請修改最後一則訊息，或傳一則新訊息繼續對話"
 rate_limit.user_concurrency_reached: "你的帳號同時進行的請求過多：所有 API 金鑰合計最多同時 {{.Max}} 個，請等現有請求完成後再試"
 rate_limit.user_concurrency_next_tier: "你的帳號同時進行的請求過多：所有 API 金鑰合計最多同時 {{.Max}} 個，請等現有請求完成後再試。累計儲值再滿 {{.Remaining}} 元，並發上限可提升到 {{.Next}}"
 rate_limit.token_concurrency_reached: "這個 API 金鑰同時進行的請求過多：最多同時 {{.Max}} 個，請等現有請求完成後再試"
