@@ -25,6 +25,7 @@ import type { InsightsView } from '../../api'
 import type {
   CapacityInsights,
   EnginePool,
+  EngineOutlook,
   FinanceInsights,
   OrderMethodFunnel,
   QualityInsights,
@@ -38,10 +39,12 @@ import {
   checkoutCompletion,
   completionDrop,
   failingTasks,
+  overviewQuotaSignals,
   peakTone,
   poolPeakAgainstSlots,
 } from '../overview-signals'
 import { OverviewTab } from '../overview-tab'
+import { outlook, outlookModel, outlookWindow } from './outlook-fixture'
 
 const t = ((key: string, vars?: Record<string, unknown>) =>
   key.replaceAll(/\{\{(\w+)\}\}/g, (_, name) =>
@@ -439,5 +442,76 @@ describe('overview findings kept short', () => {
     const detail = screen.getByText(/10\.0\.0\.\d, /)
     expect(detail.textContent?.match(/10\.0\.0\.\d/g)).toHaveLength(3)
     expect(detail).toHaveTextContent('+2 more')
+  })
+})
+
+describe('overview quota signal', () => {
+  const pctFmt = {
+    num: String,
+    pct: (value: number) => `${Math.round(value * 100)}%`,
+    usdWhole: (value: number) => `$${Math.round(value)}`,
+  } as unknown as InsightsFormat
+  // Demand over the weekly supply of 32,936: 86% is tight, a 1,500 shortfall short.
+  const week = (demand: number, short = 0): EngineOutlook => {
+    const base = outlook()
+    return outlook({
+      remaining: base.remaining.map((row) =>
+        row.hours === 168 ? { ...row, with_resets_usd: 32936 } : row
+      ),
+      models: [
+        outlookModel('smart', {
+          windows: [
+            outlookWindow(5, { demand_usd: 500 }),
+            outlookWindow(24, { demand_usd: 1000 }),
+            outlookWindow(168, {
+              demand_usd: demand,
+              short_usd: short,
+              short_hours: short ? 40 : 0,
+              first_short_hours: short ? 30 : null,
+            }),
+          ],
+          additions: [
+            {
+              plan: 'Team',
+              tier: 'team_tier_1',
+              week_usd: 1400,
+              five_hour_usd: 150,
+              measured: 4,
+              keep_up: 4,
+              cover_week: 3,
+            },
+          ],
+        }),
+      ],
+    })
+  }
+
+  it('flags a tight quota as a warning on the account pool, impact in dollars', () => {
+    const [finding, ...rest] = overviewQuotaSignals(t, pctFmt, week(28360))
+    expect(rest).toEqual([])
+    expect(finding).toEqual({
+      key: 'pool-quota',
+      tone: 'warning',
+      title: 'Quota is the bottleneck: Next 7 days demand is 86% of supply.',
+      detail: 'Add 4 × Team Tier 1, see the account pool tab.',
+      tab: 'pool',
+      impact: 28360,
+    })
+  })
+
+  it('flags a short quota as danger', () => {
+    const [finding] = overviewQuotaSignals(t, pctFmt, week(28360, 1500))
+    expect(finding.tone).toBe('danger')
+    expect(finding.title).toBe(
+      'Quota is short: Next 7 days leaves $1500 of demand unserved.'
+    )
+  })
+
+  it('stays silent when the quota has room, or the outlook is missing or failed', () => {
+    expect(overviewQuotaSignals(t, pctFmt, week(8000))).toEqual([])
+    expect(overviewQuotaSignals(t, pctFmt, undefined)).toEqual([])
+    expect(
+      overviewQuotaSignals(t, pctFmt, outlook({ error: 'unreachable' }))
+    ).toEqual([])
   })
 })

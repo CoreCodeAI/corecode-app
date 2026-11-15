@@ -16,20 +16,27 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
-import type {
-  EngineOutlook,
-  EngineOutlookAddition,
-  EngineOutlookModel,
-  EngineOutlookRemaining,
-  EngineOutlookWindow,
-  OutlookModelId,
+import { accountPrice } from '../lib'
+import {
+  OUTLOOK_WINDOWS,
+  type EngineOutlook,
+  type EngineOutlookAddition,
+  type EngineOutlookModel,
+  type EngineOutlookRemaining,
+  type EngineOutlookWindow,
+  type OutlookModelId,
 } from '../types'
+import type { InsightsFormat } from './overview-analysis'
 import type { Tone } from './shared'
 
 /** How a window's supply stands against its demand. */
 export type Coverage = 'enough' | 'tight' | 'short'
+
+/** The forecast the account pool tab opens under, and the capacity verdict reads. */
+const DEFAULT_FORECAST: OutlookModelId = 'smart'
 
 // Demand above this share of the supply reads as tight.
 const TIGHT_SHARE = 0.8
@@ -107,12 +114,113 @@ export function nearestSample(sampleHours: number[], hours: number): number {
   return hours - sampleHours[low] <= sampleHours[high] - hours ? low : high
 }
 
+/** A window's name: "Next 7 days", or "Next 24 hours" under a week. */
+export function windowName(t: TFunction, hours: number): string {
+  if (hours === 168) return t('Next 7 days')
+  return t('Next {{count}} hours', { count: hours })
+}
+
 /** The windows' names, shared by the remaining and forecast panels. */
 export function useWindowLabel() {
   const { t } = useTranslation()
-  return (hours: number) => {
-    if (hours === 168) return t('Next 7 days')
-    return t('Next {{count}} hours', { count: hours })
+  return (hours: number) => windowName(t, hours)
+}
+
+const COVERAGE_RANK: Record<Coverage, number> = {
+  enough: 0,
+  tight: 1,
+  short: 2,
+}
+
+/**
+ * The quota window nearest to binding: the one that is short, else tight,
+ * else the one with the largest share of its supply taken. Its addition is
+ * the first the forecast offers, as the account pool tab reads it.
+ */
+export type QuotaBinding = {
+  coverage: Coverage
+  hours: number
+  demand_usd: number
+  short_usd: number
+  /** Demand over the supply the window has, resets included. */
+  share: number
+  addition?: EngineOutlookAddition
+}
+
+/**
+ * The quota binding under the forecast the account pool tab opens under.
+ * This is the one definition the capacity verdict, the overview and the
+ * account pool tab share. Undefined without a readable outlook.
+ */
+export function quotaBinding(
+  outlook: EngineOutlook | undefined
+): QuotaBinding | undefined {
+  if (!outlook?.configured || outlook.error) return undefined
+  const model = pickModel(outlook, DEFAULT_FORECAST)
+  if (!model) return undefined
+  let best: QuotaBinding | undefined
+  for (const hours of OUTLOOK_WINDOWS) {
+    const cell = windowOf(model.windows, hours)
+    const supply = windowOf(outlook.remaining, hours)
+    if (!cell || !supply) continue
+    const row: QuotaBinding = {
+      coverage: coverage(cell, supply),
+      hours,
+      demand_usd: cell.demand_usd,
+      short_usd: cell.short_usd,
+      share:
+        supply.with_resets_usd > 0
+          ? cell.demand_usd / supply.with_resets_usd
+          : 0,
+      addition: model.additions[0],
+    }
+    if (
+      !best ||
+      COVERAGE_RANK[row.coverage] > COVERAGE_RANK[best.coverage] ||
+      (COVERAGE_RANK[row.coverage] === COVERAGE_RANK[best.coverage] &&
+        row.share > best.share)
+    ) {
+      best = row
+    }
+  }
+  return best
+}
+
+/**
+ * The sentences that name a tight or short quota: its lead, and the
+ * accounts to add, which point to the account pool tab. Only for a binding
+ * that is not enough.
+ */
+export function quotaSentences(
+  t: TFunction,
+  fmt: InsightsFormat,
+  binding: QuotaBinding
+): { tone: Tone; lead: string; add: string } {
+  const window = windowName(t, binding.hours)
+  const lead =
+    binding.coverage === 'short'
+      ? t('Quota is short: {{window}} leaves {{amount}} of demand unserved.', {
+          window,
+          amount: fmt.usdWhole(binding.short_usd),
+        })
+      : t(
+          'Quota is the bottleneck: {{window}} demand is {{share}} of supply.',
+          {
+            window,
+            share: fmt.pct(binding.share),
+          }
+        )
+  const item = binding.addition
+  const add = item
+    ? t('Add {{count}} × {{plan}}, see the account pool tab.', {
+        count: accountsToAdd(item) ?? t('over {{count}}', { count: 30 }),
+        plan: accountPrice(item.plan, item.tier)?.label ?? item.tier,
+      })
+    : t('See the account pool tab.')
+  return {
+    tone: binding.coverage === 'short' ? 'danger' : 'warning',
+    lead,
+    add,
   }
 }
 

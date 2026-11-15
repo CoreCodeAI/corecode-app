@@ -26,14 +26,15 @@ import {
   poolPeakOf,
   rangeEnd,
 } from '../capacity-analysis'
+import { quotaBinding, quotaSentences, windowName } from '../components/outlook'
 import type { Tone } from '../components/shared'
 import {
   HEADROOM_SHARE,
   useInsightsFormat,
   type InsightsRangeInfo,
 } from '../lib'
-import type { CapacityInsights } from '../types'
-import { sentences, useChange, type TabVerdict } from './shared'
+import type { CapacityInsights, EngineOutlook } from '../types'
+import { sentences, useChange, worse, type TabVerdict } from './shared'
 
 /**
  * The capacity tab's verdict over the slots in view: every pool slot, or one
@@ -42,12 +43,17 @@ import { sentences, useChange, type TabVerdict } from './shared'
  * provider's verdict leaves it out. With an hourly series it names the hour
  * the engine turned most away, why, and what to do. The engine's caps and
  * budgets are their own causes, with their own actions.
+ *
+ * With the account pool's outlook it names the limit nearest to binding:
+ * a tight or short quota leads, at least a warning, and the slots lead
+ * when quota has room. Without an outlook the wording is unchanged.
  */
 export function useCapacityVerdict(
   data: CapacityInsights | undefined,
   previous: CapacityInsights | undefined,
   scope?: { slots: number; userLimits: boolean },
-  range?: InsightsRangeInfo
+  range?: InsightsRangeInfo,
+  outlook?: EngineOutlook
 ): TabVerdict | undefined {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -70,6 +76,33 @@ export function useCapacityVerdict(
   if (slots && overSlots) tone = 'danger'
   else if (pool >= POOL_FULL_DANGER) tone = 'danger'
   else if (pool + engine.limit + engine.budget + limited > 0) tone = 'warning'
+  // The quota is read under the account pool's default forecast, through
+  // quotaBinding; the slots are read as above.
+  const quota = quotaBinding(outlook)
+  const quotaLine =
+    quota && quota.coverage !== 'enough'
+      ? quotaSentences(t, fmt, quota)
+      : undefined
+  if (quotaLine) tone = worse(tone, quotaLine.tone)
+  const slotsNear = slots > 0 && peak >= slots * HEADROOM_SHARE
+  const leadParts: string[] = []
+  if (quotaLine) {
+    leadParts.push(quotaLine.lead, quotaLine.add)
+  } else if (quota && slots > 0) {
+    const window = windowName(t, quota.hours)
+    const share = fmt.pct(quota.share)
+    leadParts.push(
+      slotsNear
+        ? t(
+            'Slots are the bottleneck; quota has room: {{window}} demand is {{share}} of supply.',
+            { window, share }
+          )
+        : t('Neither limit binds: {{window}} demand is {{share}} of supply.', {
+            window,
+            share,
+          })
+    )
+  }
   const poolSentence = (): string => {
     const count = fmt.num(pool)
     if (!diagnosis) {
@@ -130,6 +163,7 @@ export function useCapacityVerdict(
   return {
     tone,
     ...sentences(
+      ...leadParts,
       (() => {
         const moved = change(data.requests, previous?.requests)
         const requests = fmt.num(data.requests)

@@ -29,9 +29,11 @@ import {
 } from './analysis'
 import type { Tone } from './components/shared'
 import {
+  FAILURE_WARNING_RATE,
   HEADROOM_SHARE,
   HOUR_SAMPLE,
   rangeSpan,
+  SMALL_SAMPLE,
   SPIKE_FACTOR,
   SPIKE_FLOOR,
   type InsightsRangeInfo,
@@ -240,19 +242,22 @@ export function diagnoseRejections(
   return { total, hours, worst, saturated, cause }
 }
 
-/** One hour's failure rate beside what is usual for it. */
+/** One hour's failure rate beside what is usual for the range. */
 export type FailureHour = {
   hour: number
   requests: number
   errors: number
   /** errors / requests; null under HOUR_SAMPLE requests. */
   rate: number | null
-  /** The previous period's same hour; null under HOUR_SAMPLE requests or without one. */
+  /** The previous period's same hour, for reference; null under HOUR_SAMPLE requests or without one. */
   previousRate: number | null
-  /** The previous period's same hour, or else the median rated closed hour. */
-  baseline: number | null
+  /** The median rate of the range's rated closed hours; null without one. */
+  usual: number | null
   open: boolean
-  /** At least SPIKE_FLOOR failures and SPIKE_FACTOR times the baseline, beyond chance. */
+  /**
+   * At least SMALL_SAMPLE requests and SPIKE_FLOOR failures, and a rate
+   * beyond chance above both SPIKE_FACTOR times usual and FAILURE_WARNING_RATE.
+   */
   spike: boolean
 }
 
@@ -264,9 +269,10 @@ function rateOf(
 }
 
 /**
- * Each hour's failure rate against the previous period's same hour, or,
- * where that has too few requests, the median of the range's rated closed
- * hours. The open hour is drawn but never flagged or used as a baseline.
+ * Each hour's failure rate beside the range's usual hour: the median rate of
+ * its rated closed hours, which one bad hour cannot move. A previous-period
+ * hour is shown for reference only. The open hour is drawn but never flagged
+ * or used as the usual rate.
  */
 export function failureHours(
   hourly: CapacityHour[],
@@ -283,22 +289,24 @@ export function failureHours(
   return hourly.map((row, index) => {
     const open = isOpenHour(row.hour, end)
     const rate = rateOf(row)
-    const previousRate = rateOf(before[index])
-    const baseline = previousRate ?? usual
     const spike =
       !open &&
       rate !== null &&
-      baseline !== null &&
+      usual !== null &&
+      row.requests >= SMALL_SAMPLE &&
       row.errors >= SPIKE_FLOOR &&
-      rate >= SPIKE_FACTOR * baseline &&
-      rateIsAbove(row.errors, row.requests, baseline)
+      rateIsAbove(
+        row.errors,
+        row.requests,
+        Math.max(SPIKE_FACTOR * usual, FAILURE_WARNING_RATE)
+      )
     return {
       hour: row.hour,
       requests: row.requests,
       errors: row.errors,
       rate,
-      previousRate,
-      baseline,
+      previousRate: rateOf(before[index]),
+      usual,
       open,
       spike,
     }

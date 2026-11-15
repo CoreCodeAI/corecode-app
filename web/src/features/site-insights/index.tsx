@@ -285,11 +285,19 @@ export function SiteInsights() {
   })
   // The Claude pool's quota ahead moves with the pool, so it refreshes with
   // it. Its failure is shown in its own panel, not as a toast on every poll.
+  // The capacity tab and the overview read the same query for their verdicts,
+  // which fall back to their own wording without it.
   const outlook = useQuery({
     queryKey: ['site-insights', 'pool-outlook'],
     queryFn: getPoolOutlook,
-    enabled: tab === 'pool' && provider === 'claude',
-    refetchInterval: poolRefresh * 1000 || false,
+    enabled:
+      (tab === 'pool' && provider === 'claude') ||
+      tab === 'capacity' ||
+      tab === 'overview',
+    refetchInterval:
+      tab === 'pool'
+        ? poolRefresh * 1000 || false
+        : (REFRESH_MS.capacity ?? false),
     meta: { errorToast: false },
   })
   // How a typical day's requests spread over its hours, to project the days
@@ -616,6 +624,7 @@ export function SiteInsights() {
                             vendor: next === 'all' ? undefined : next,
                           }),
                         }),
+                      outlook: outlook.data,
                     }}
                   />
                 ) : (
@@ -625,6 +634,7 @@ export function SiteInsights() {
                     refreshMs={REFRESH_MS}
                     onOpen={openTab}
                     range={range}
+                    outlook={outlook.data}
                   />
                 )}
               </Suspense>
@@ -657,6 +667,7 @@ function InsightsView(props: {
   capacity: {
     vendor: CapacityVendor
     onVendor: (vendor: CapacityVendor) => void
+    outlook: EngineOutlook | undefined
   }
 }) {
   // Each query key includes the view, so data always matches it. The
@@ -677,6 +688,7 @@ function InsightsView(props: {
           onVendor={props.capacity.onVendor}
           range={range}
           onOpen={onOpen}
+          outlook={props.capacity.outlook}
           {...states}
         />
       )

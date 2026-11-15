@@ -31,9 +31,12 @@ import {
   type RejectionDiagnosis,
 } from '../capacity-analysis'
 import {
+  FAILURE_WARNING_RATE,
   HOUR_SAMPLE,
   joinSentences,
+  SMALL_SAMPLE,
   SPIKE_FACTOR,
+  SPIKE_FLOOR,
   useHourAxis,
   useInsightsDefinitions,
   useInsightsFormat,
@@ -223,13 +226,13 @@ export function FailureRatePanel(props: {
   const rated = hours.some((hour) => hour.rate !== null)
   let description: string
   const [first] = spikes
-  if (spikes.length === 1 && first.rate !== null && first.baseline !== null) {
+  if (spikes.length === 1 && first.rate !== null && first.usual !== null) {
     description = t(
       '{{time}} failed {{rate}} of its requests, against a usual {{baseline}}.',
       {
         time: fmt.time(first.hour),
         rate: fmt.pct(first.rate),
-        baseline: fmt.pct(first.baseline),
+        baseline: fmt.pct(first.usual),
       }
     )
   } else if (spikes.length > 1) {
@@ -246,7 +249,9 @@ export function FailureRatePanel(props: {
       }
     )
   } else if (rated) {
-    description = t('No hour failed far above its usual rate.')
+    description = t(
+      'Failures were steady: no hour failed far above its usual rate.'
+    )
   } else {
     description = t('Too few requests in any hour to give it a rate.')
   }
@@ -256,8 +261,14 @@ export function FailureRatePanel(props: {
       description={description}
       help={joinSentences(
         t(
-          'Failed requests over requests, per hour. An hour under {{count}} requests has no rate. Usual is the previous period’s same hour, or the median hour when that has too few requests. Requests a per-user limit turned away never reach the logs and are not counted.',
-          { count: HOUR_SAMPLE }
+          'Failed requests over requests, per hour. An hour under {{count}} requests has no rate. Usual is the median hour of the range. An hour is flagged with {{requests}} requests or more, {{failures}} failures or more, and a rate beyond chance above {{factor}}× usual and {{floor}}. Requests a per-user limit turned away never reach the logs and are not counted.',
+          {
+            count: HOUR_SAMPLE,
+            requests: fmt.num(SMALL_SAMPLE),
+            failures: fmt.num(SPIKE_FLOOR),
+            factor: SPIKE_FACTOR,
+            floor: fmt.pct(FAILURE_WARNING_RATE),
+          }
         ),
         props.definition
       )}
