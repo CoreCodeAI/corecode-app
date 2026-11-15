@@ -317,6 +317,14 @@ const (
 	UpstreamCostSourceNone     = "none"
 )
 
+// The granularity of an upstream bill: a request-level read of a new-api
+// site, or day totals read from a Sub2API site and spread over its hours by
+// revenue (UpstreamBillDay).
+const (
+	UpstreamCostGranularityRequest = "request"
+	UpstreamCostGranularityDay     = "day"
+)
+
 // UpstreamChannel is one channel over the range. Attempts are Requests plus
 // Errors; ClientErrors is the part of Errors the customers' requests caused
 // (customerFault), and FailureRate is the rest of Errors over the attempts.
@@ -326,7 +334,9 @@ const (
 // monthly fee spread over the range ("fee"). UnmatchedCostUSD is the part of
 // the bill whose model no model row of the channel takes, so it is in CostUSD
 // but in no UpstreamModel. LatestCostAt is the newest upstream cost stored for
-// the channel, at any time.
+// the channel, at any time. CostGranularity is "request" for a bill read per
+// request, "day" for one read per day and model and spread over the hours by
+// revenue, and empty when the cost is not a bill.
 //
 // A disabled channel is listed when it had traffic in the range or was
 // disabled automatically; StatusReason and StatusTime say why and when, or,
@@ -354,6 +364,7 @@ type UpstreamChannel struct {
 	RevenueUSD       float64      `json:"revenue_usd"`
 	CostUSD          float64      `json:"cost_usd"`
 	CostSource       string       `json:"cost_source"`
+	CostGranularity  string       `json:"cost_granularity,omitempty"`
 	MonthlyFeeUSD    float64      `json:"monthly_fee_usd"`
 	LatestCostAt     int64        `json:"latest_cost_at"`
 	UpstreamGroup    string       `json:"upstream_group"`
@@ -652,6 +663,41 @@ func upstreamInsightsFromHours(r InsightsRange, hours []*insightHour, stale int)
 	for _, row := range latestRows {
 		latestOf[row.ChannelId] = row
 	}
+	bills, err := ReadUpstreamBillDays(r.Start-86400, r.End)
+	if err != nil {
+		return nil, err
+	}
+	billReads, err := UpstreamBillReads()
+	if err != nil {
+		return nil, err
+	}
+	if len(bills) > 0 {
+		revenue, err := billHourRevenue(r, hours, bills)
+		if err != nil {
+			return nil, err
+		}
+		for _, bill := range bills {
+			// A channel read per request keeps its request rows alone.
+			if _, requestLevel := latestOf[bill.ChannelId]; requestLevel || bill.ModelName == "" || bill.CostUSD == 0 {
+				continue
+			}
+			shares := costShares(bill.ChannelId, bill.ModelName)
+			for hour, share := range billHourShares(r, revenue[bill.ChannelId], bill.DayStart) {
+				part := bill.CostUSD * share
+				if len(shares) == 0 {
+					unmatchedCost[bill.ChannelId] += part
+				}
+				for name, modelShare := range shares {
+					costByModel[insightChannelKey{bill.ChannelId, name}] += part * modelShare
+				}
+				costByChannel[bill.ChannelId] += part
+				dayOf(r.DayStart(hour), bill.ChannelId).CostUSD += part
+				if hourStarts != nil {
+					hourOf(hour, bill.ChannelId).CostUSD += part
+				}
+			}
+		}
+	}
 	fees, err := ReadUpstreamFees()
 	if err != nil {
 		return nil, err
@@ -707,6 +753,12 @@ func upstreamInsightsFromHours(r InsightsRange, hours []*insightHour, stale int)
 			row.LatestCostAt = last.CreatedAt
 			row.UpstreamGroup = last.GroupName
 			row.UpstreamRatio = last.GroupRatio
+			row.CostGranularity = UpstreamCostGranularityRequest
+		} else if read, billed := billReads[channel.Id]; billed {
+			row.CostSource = UpstreamCostSourceUpstream
+			row.CostUSD = costByChannel[channel.Id]
+			row.LatestCostAt = read
+			row.CostGranularity = UpstreamCostGranularityDay
 		} else if fee := fees[channel.Id]; fee > 0 {
 			row.CostSource = UpstreamCostSourceFee
 			row.CostUSD = fee * span / 30
@@ -774,6 +826,73 @@ func upstreamInsightsFromHours(r InsightsRange, hours []*insightHour, stale int)
 		result.Rescues = []UpstreamRescue{}
 	}
 	return result, nil
+}
+
+// billHourRevenue returns each channel's revenue by hour over every supplier
+// day the bills begin in. The hours inside r come from hours; a day cut by
+// r's edge also needs the hours outside it, which are read here.
+func billHourRevenue(r InsightsRange, hours []*insightHour, bills []UpstreamBillDay) (map[int]map[int64]float64, error) {
+	revenue := map[int]map[int64]float64{}
+	add := func(list []*insightHour, keep func(start int64) bool) {
+		for _, hour := range list {
+			if !keep(hour.start) {
+				continue
+			}
+			for key, channel := range hour.channels {
+				if key.channel == 0 {
+					continue
+				}
+				if revenue[key.channel] == nil {
+					revenue[key.channel] = map[int64]float64{}
+				}
+				revenue[key.channel][hour.start] += float64(channel.row.Quota)
+			}
+		}
+	}
+	inRange := func(start int64) bool { return start >= r.Start && start < r.End }
+	add(hours, inRange)
+	edges := map[int64]bool{}
+	for _, bill := range bills {
+		if bill.DayStart+86400 <= r.Start || bill.DayStart >= r.End {
+			continue
+		}
+		if bill.DayStart < r.Start || bill.DayStart+86400 > r.End {
+			edges[bill.DayStart] = true
+		}
+	}
+	for day := range edges {
+		outside, _, err := loadInsightHoursStale(InsightsRange{Start: day, End: day + 86400})
+		if err != nil {
+			return nil, err
+		}
+		add(outside, func(start int64) bool { return !inRange(start) })
+	}
+	return revenue, nil
+}
+
+// billHourShares returns the share of a supplier day's bill that each hour
+// of the day inside r takes: the channel's revenue in the hour over its
+// revenue over the whole day. A day the channel earned nothing in is split
+// evenly over its 24 hours. Shares over the whole day sum to one, so a day
+// cut by r's edge takes only its hours inside r.
+func billHourShares(r InsightsRange, revenue map[int64]float64, dayStart int64) map[int64]float64 {
+	var dayRevenue float64
+	for i := range 24 {
+		dayRevenue += revenue[dayStart+int64(i)*3600]
+	}
+	shares := map[int64]float64{}
+	for i := range 24 {
+		hour := dayStart + int64(i)*3600
+		if hour < r.Start || hour >= r.End {
+			continue
+		}
+		if dayRevenue == 0 {
+			shares[hour] = 1.0 / 24
+		} else {
+			shares[hour] = revenue[hour] / dayRevenue
+		}
+	}
+	return shares
 }
 
 // channelFailureRate is the attempts that failed through the channel's fault
