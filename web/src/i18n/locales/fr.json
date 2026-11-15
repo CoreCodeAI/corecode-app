@@ -9458,6 +9458,14 @@
     "The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.": "La clé API, le secret du webhook et le produit appartiennent à un même mode. Remplacez les trois en passant du mode test au mode live.",
     "Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.": "Envoie les requêtes à l'environnement de test de Dodo Payments, où aucun argent n'est débité. Les commandes de test payées créditent tout de même le compte.",
     "Administrators only": "Administrateurs uniquement",
-    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Affiche le moyen de paiement Dodo Payments aux administrateurs uniquement et refuse les commandes des autres utilisateurs."
+    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Affiche le moyen de paiement Dodo Payments aux administrateurs uniquement et refuse les commandes des autres utilisateurs.",
+    "To name the wallet button, add a payment method with type dodopayments under General.": "Pour nommer le bouton du portefeuille, ajoutez un moyen de paiement de type dodopayments dans Général.",
+    "Payment method types": "Types de moyens de paiement",
+    "Comma-separated Dodo method types, such as we_chat_pay. Leave empty to offer every method the order allows.": "Types de moyens Dodo séparés par des virgules, par exemple we_chat_pay. Laissez vide pour proposer tous les moyens que la commande permet.",
+    "Order cap (CNY)": "Plafond par commande (CNY)",
+    "The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.": "Le montant maximal d'une commande ; 0 pour aucun plafond. WeChat Pay accepte au plus 1000 par paiement.",
+    "Enter Dodo Payments method types separated by commas, such as we_chat_pay.": "Saisissez des types de moyens Dodo Payments séparés par des virgules, par exemple we_chat_pay.",
+    "The Dodo Payments order cap must be a number of yuan, 0 or more.": "Le plafond Dodo Payments doit être un montant en yuans, égal ou supérieur à 0.",
+    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "Ce moyen de paiement accepte au plus {{max}} ¥ par commande. Choisissez un montant plus petit ou un autre moyen."
   }
 }

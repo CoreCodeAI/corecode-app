@@ -9458,6 +9458,14 @@
     "The API key, webhook secret and product belong to one mode. Replace all three when switching between test and live.": "API 키, 웹훅 시크릿, 상품은 하나의 모드에 속합니다. 테스트와 라이브를 전환할 때는 세 가지를 모두 교체하세요.",
     "Send requests to the Dodo Payments test environment, where no money moves. Paid test orders still credit the account.": "요청을 Dodo Payments 테스트 환경으로 보내며 실제 결제는 발생하지 않습니다. 결제된 테스트 주문도 계정에 충전됩니다.",
     "Administrators only": "관리자 전용",
-    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Dodo Payments 결제 수단을 관리자에게만 표시하고 다른 사용자의 주문은 거부합니다."
+    "Show the Dodo Payments method to administrators only, and refuse orders from anyone else.": "Dodo Payments 결제 수단을 관리자에게만 표시하고 다른 사용자의 주문은 거부합니다.",
+    "To name the wallet button, add a payment method with type dodopayments under General.": "지갑 버튼 이름을 지정하려면 일반 설정에서 type이 dodopayments인 결제 수단을 추가하세요.",
+    "Payment method types": "결제 수단 유형",
+    "Comma-separated Dodo method types, such as we_chat_pay. Leave empty to offer every method the order allows.": "쉼표로 구분한 Dodo 결제 수단 유형(예: we_chat_pay). 비워 두면 주문에서 가능한 모든 수단을 제공합니다.",
+    "Order cap (CNY)": "주문당 한도(CNY)",
+    "The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.": "한 주문에서 청구할 수 있는 최대 금액. 0은 한도 없음. WeChat Pay는 결제당 최대 1000입니다.",
+    "Enter Dodo Payments method types separated by commas, such as we_chat_pay.": "쉼표로 구분한 Dodo Payments 결제 수단 유형을 입력하세요(예: we_chat_pay).",
+    "The Dodo Payments order cap must be a number of yuan, 0 or more.": "Dodo Payments 주문 한도는 0 이상의 위안 금액이어야 합니다.",
+    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "이 결제 수단은 주문당 최대 ¥{{max}}입니다. 더 작은 금액이나 다른 수단을 선택하세요."
   }
 }

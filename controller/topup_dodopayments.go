@@ -96,6 +96,10 @@ func RequestDodoPaymentsPay(c *gin.Context) {
 		paymentError(c, common.NewMessage("Payment amount is too low"))
 		return
 	}
+	if maxMoney := setting.DodoPaymentsMaxMoney; maxMoney > 0 && payMoney > maxMoney {
+		paymentError(c, common.NewMessage("This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.", map[string]any{"max": strconv.FormatFloat(maxMoney, 'f', -1, 64)}))
+		return
+	}
 	bonusQuota, err := topUpBonusQuota(req.Amount)
 	if err == nil && bonusQuota > 0 {
 		quota, _ := getTopUpQuota(req.Amount)
@@ -146,6 +150,7 @@ func RequestDodoPaymentsPay(c *gin.Context) {
 // createDodoPaymentsCheckout opens a checkout charging fen in CNY on the
 // configured product and returns its session id and page. A discount code
 // or another currency would change what is charged, so both are turned off.
+// DodoPaymentsMethodTypes, when set, limits the methods offered.
 func createDodoPaymentsCheckout(ctx context.Context, fen int64, email string, userID int) (sessionID string, checkoutURL string, err error) {
 	payload := map[string]any{
 		"product_cart": []map[string]any{{
@@ -164,6 +169,9 @@ func createDodoPaymentsCheckout(ctx context.Context, fen int64, email string, us
 	}
 	if email = strings.TrimSpace(email); email != "" {
 		payload["customer"] = map[string]string{"email": email}
+	}
+	if methodTypes := setting.GetDodoPaymentsMethodTypes(); len(methodTypes) > 0 {
+		payload["allowed_payment_method_types"] = methodTypes
 	}
 	body, err := common.Marshal(payload)
 	if err != nil {

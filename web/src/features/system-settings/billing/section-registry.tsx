@@ -194,6 +194,8 @@ const BILLING_SECTIONS = [
           DodoPaymentsProductId: settings.DodoPaymentsProductId ?? '',
           DodoPaymentsTestMode: settings.DodoPaymentsTestMode,
           DodoPaymentsAdminOnly: settings.DodoPaymentsAdminOnly,
+          DodoPaymentsMethodTypes: settings.DodoPaymentsMethodTypes ?? '',
+          DodoPaymentsMaxMoney: settings.DodoPaymentsMaxMoney ?? 0,
           CreemApiKey: settings.CreemApiKey,
           CreemWebhookSecret: settings.CreemWebhookSecret,
           CreemTestMode: settings.CreemTestMode,

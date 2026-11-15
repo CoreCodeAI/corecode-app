@@ -321,6 +321,19 @@ func UpdateOption(c *gin.Context) {
 			common.ApiErrorT(c, "Unsupported NOWPayments currency. Only the listed USDT and USDC networks are accepted.")
 			return
 		}
+	case "DodoPaymentsMethodTypes":
+		if !slices.ContainsFunc(setting.ParseDodoPaymentsMethodTypes(fmt.Sprint(option.Value)), func(methodType string) bool {
+			return !setting.ValidDodoPaymentsMethodType(methodType)
+		}) {
+			break
+		}
+		common.ApiErrorT(c, "Enter Dodo Payments method types separated by commas, such as we_chat_pay.")
+		return
+	case "DodoPaymentsMaxMoney":
+		if maxMoney, err := strconv.ParseFloat(strings.TrimSpace(fmt.Sprint(option.Value)), 64); err != nil || maxMoney < 0 {
+			common.ApiErrorT(c, "The Dodo Payments order cap must be a number of yuan, 0 or more.")
+			return
+		}
 	case "NowPaymentsFeishuWebhook":
 		if err := service.ValidateFeishuBotWebhook(option.Value.(string)); err != nil {
 			common.ApiErrorT(c, "Enter a Feishu or Lark custom bot webhook, starting with https://open.feishu.cn/open-apis/bot/v2/hook/.")

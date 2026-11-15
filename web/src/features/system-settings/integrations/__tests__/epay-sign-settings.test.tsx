@@ -55,6 +55,8 @@ const defaults: PaymentValues = {
   DodoPaymentsProductId: '',
   DodoPaymentsTestMode: true,
   DodoPaymentsAdminOnly: true,
+  DodoPaymentsMethodTypes: '',
+  DodoPaymentsMaxMoney: 0,
   StripeApiSecret: '',
   StripeWebhookSecret: '',
   StripePriceId: '',
