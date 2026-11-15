@@ -816,6 +816,10 @@ export type FinanceInsights = StaleHours & {
   hourly?: FinanceHour[] | null
   /** When the plan_accounts pool snapshot was taken, unix ms; 0 without an engine report. No pool history exists. Absent before the server's release. */
   plan_accounts_observed_at_ms?: number
+  /** What each plan's accounts served at official prices over the range; absent before the engine's release and on an engine without the usage endpoint. */
+  plan_usage?: EnginePlanUsage
+  /** Why plan_usage could not be read; absent when it was read. */
+  plan_usage_error?: string
   /** Credit check-ins awarded in the range, quota dollars (exact). Absent before the server's release. */
   checkin_credit_usd?: number
   /** Sign-up and invitee bonuses logged in the range, counts. Absent before the server's release. */
@@ -1089,6 +1093,29 @@ export type EnginePlanCount = {
   tier: string
   accounts: number
   eligible: number
+}
+
+/** Official-price usage summed over some accounts. */
+export type EngineUsageTotal = {
+  accounts: number
+  requests: number
+  failures: number
+  served_usd: number
+}
+
+/** One pool plan and tier with what its accounts served over the range; accounts are those that served a request. */
+export type EnginePlanUsageRow = EngineUsageTotal & {
+  plan: string
+  tier: string
+  /** Served accounts created after the range began. */
+  added_in_range: number
+}
+
+/** What the engine served at official prices, by plan; removed and unattributed usage are apart. */
+export type EnginePlanUsage = {
+  plans: EnginePlanUsageRow[]
+  removed: EngineUsageTotal
+  unattributed: EngineUsageTotal
 }
 
 /** Claude's cost at official prices, as corecode-engine recorded it. */

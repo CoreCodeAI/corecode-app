@@ -224,6 +224,12 @@ type FinanceResponse struct {
 	// Accounts outside every group have an empty vendor.
 	PlanAccounts           []service.EnginePlanCount `json:"plan_accounts"`
 	PlanAccountsObservedAt int64                     `json:"plan_accounts_observed_at_ms"`
+	// PlanUsage is what each plan's accounts served at official prices over the
+	// range, from the engine's per-credential usage. Absent on an engine that
+	// predates the endpoint; PlanUsageError holds a failed read or a pool that
+	// did not read, so the join could not be made.
+	PlanUsage      *service.EnginePlanUsage `json:"plan_usage,omitempty"`
+	PlanUsageError string                   `json:"plan_usage_error,omitempty"`
 	// StartTime and EndTime are the range; MatchedSince is where the days the
 	// engine reported begin, so a cost over time covers the same span.
 	StartTime    int64 `json:"start_time"`
@@ -243,6 +249,10 @@ func GetFinanceInsights(c *gin.Context) {
 		// serves, as on the capacity view.
 		poolDone := make(chan service.EnginePool, 1)
 		go func() { poolDone <- service.RecentEnginePool(2 * time.Minute) }()
+		// The engine's usage per credential is a live read like the two above,
+		// so it is fetched beside them and kept out of cachedRead.
+		usageDone := make(chan service.EngineCredentialUsage, 1)
+		go func() { usageDone <- service.FetchEngineCredentialUsage(r.Start*1000, r.End*1000) }()
 		insights, err := cachedRead("finance", r, model.GetFinanceInsights)
 		if err != nil {
 			return nil, err
@@ -261,6 +271,18 @@ func GetFinanceInsights(c *gin.Context) {
 		response.PlanAccounts = service.EnginePlanCounts(pool)
 		response.PlanAccountsObservedAt = pool.ObservedAt
 		response.PlansError = cmp.Or(pool.Error, pool.EstimateError)
+		usage := <-usageDone
+		if usage.Configured && !usage.Unsupported {
+			switch {
+			case usage.Error != "":
+				response.PlanUsageError = usage.Error
+			case pool.Error != "":
+				response.PlanUsageError = pool.Error
+			default:
+				planUsage := service.EnginePlanUsageByCredential(pool.Accounts, usage, r.Start*1000)
+				response.PlanUsage = &planUsage
+			}
+		}
 		return response, nil
 	})
 }

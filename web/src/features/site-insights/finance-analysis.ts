@@ -47,6 +47,8 @@ import type {
   FinanceHour,
   FinanceInsights,
   GroupConsumption,
+  EnginePlanUsage,
+  EngineUsageTotal,
   OrderMethodFunnel,
   PlanBookRow,
   UserSpendRow,
@@ -693,5 +695,158 @@ export function claudeEarned(
     earnedYuan: row.recognized_revenue * covered,
     perCharge:
       row.customer_usd > 0 ? row.recognized_revenue / row.customer_usd : null,
+  }
+}
+
+/**
+ * Requests a plan needs before its served ÷ cost is coloured. The funds tab
+ * has no request floor of its own, so this is its floor for a rate.
+ */
+export const PLAN_MIN_REQUESTS = MIN_CHECKOUTS
+
+/** One plan's, or one removed or unattributed group's, served value against its cost. */
+export type ServedRow = {
+  key: string
+  plan: string
+  tier: string
+  /** Served accounts; the removed accounts' count for the removed row. */
+  accounts: number
+  addedInRange: number
+  requests: number
+  failures: number
+  servedUSD: number
+  /** Share of all value served over the range; null when nothing was served. */
+  share: number | null
+  /** Served value over the plan's cost of the same range; null without a cost. */
+  perCost: number | null
+  /** Enough requests for perCost to be coloured. */
+  judged: boolean
+}
+
+export type PlanServed = {
+  /** Every value served over the range, rows and extra groups alike: the engine's total. */
+  totalUSD: number
+  /** One row per costed plan, in the order given. */
+  rows: ServedRow[]
+  /** Usage with no costed row: removed accounts, unattributed use and plans without a cost. */
+  muted: ServedRow[]
+  /** Accounts that served and were created inside the range, over all plans. */
+  addedInRange: number
+  /** The judged plans with the highest and lowest served ÷ cost; null under two judged plans. */
+  most: ServedRow | null
+  least: ServedRow | null
+}
+
+function servedRow(
+  key: string,
+  plan: string,
+  tier: string,
+  total: EngineUsageTotal,
+  addedInRange: number,
+  totalUSD: number,
+  costUSD: number | null
+): ServedRow {
+  const perCost =
+    costUSD !== null && costUSD > 0 ? total.served_usd / costUSD : null
+  return {
+    key,
+    plan,
+    tier,
+    accounts: total.accounts,
+    addedInRange,
+    requests: total.requests,
+    failures: total.failures,
+    servedUSD: total.served_usd,
+    share: totalUSD > 0 ? total.served_usd / totalUSD : null,
+    perCost,
+    judged: perCost !== null && total.requests >= PLAN_MIN_REQUESTS,
+  }
+}
+
+const planKey = (plan: string, tier: string) => `${plan}/${tier}`
+
+const EMPTY_TOTAL: EngineUsageTotal = {
+  accounts: 0,
+  requests: 0,
+  failures: 0,
+  served_usd: 0,
+}
+
+/**
+ * Joins what the engine served by plan to the plan rows the funds tab costs.
+ * A costed plan with no usage has zeros; usage with no costed row, removed
+ * accounts and unattributed use are muted rows. Shares are of the whole
+ * served total, so they add up to 100%.
+ */
+export function planServed(input: {
+  usage: EnginePlanUsage
+  costed: { plan: string; tier: string; costUSD: number | null }[]
+}): PlanServed {
+  const planRows = input.usage.plans
+  const totalUSD =
+    planRows.reduce((sum, row) => sum + row.served_usd, 0) +
+    input.usage.removed.served_usd +
+    input.usage.unattributed.served_usd
+  const usageOf = new Map(
+    planRows.map((row) => [planKey(row.plan, row.tier), row])
+  )
+  const costedKeys = new Set(
+    input.costed.map((cost) => planKey(cost.plan, cost.tier))
+  )
+  const rows = input.costed.map((cost) => {
+    const usage = usageOf.get(planKey(cost.plan, cost.tier))
+    return servedRow(
+      planKey(cost.plan, cost.tier),
+      cost.plan,
+      cost.tier,
+      usage ?? EMPTY_TOTAL,
+      usage?.added_in_range ?? 0,
+      totalUSD,
+      cost.costUSD
+    )
+  })
+  const muted = planRows
+    .filter((row) => !costedKeys.has(planKey(row.plan, row.tier)))
+    .map((row) =>
+      servedRow(
+        planKey(row.plan, row.tier),
+        row.plan,
+        row.tier,
+        row,
+        row.added_in_range,
+        totalUSD,
+        null
+      )
+    )
+  muted.push(
+    servedRow('removed', '', '', input.usage.removed, 0, totalUSD, null),
+    servedRow(
+      'unattributed',
+      '',
+      '',
+      { ...input.usage.unattributed, accounts: 0 },
+      0,
+      totalUSD,
+      null
+    )
+  )
+  const judged = rows.filter((row) => row.judged)
+  let most: ServedRow | null = null
+  let least: ServedRow | null = null
+  if (judged.length >= 2) {
+    most = judged.reduce((best, row) =>
+      (row.perCost ?? 0) > (best.perCost ?? 0) ? row : best
+    )
+    least = judged.reduce((low, row) =>
+      (row.perCost ?? 0) < (low.perCost ?? 0) ? row : low
+    )
+  }
+  return {
+    totalUSD,
+    rows,
+    muted,
+    addedInRange: planRows.reduce((sum, row) => sum + row.added_in_range, 0),
+    most,
+    least,
   }
 }
