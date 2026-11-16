@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2, Wallet } from 'lucide-react'
+import { Clock, Loader2, Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -347,6 +347,10 @@ export function InvoiceForm(props: {
               )}
               {hasTax ? t('Submit and pay tax') : t('Submit application')}
             </Button>
+            <p className='text-muted-foreground -mt-2 flex items-center justify-center gap-1.5 text-xs'>
+              <Clock className='size-3.5 shrink-0' aria-hidden='true' />
+              {t('Issuing an invoice can take up to 5 business days.')}
+            </p>
           </form>
         </Form>
       </CardContent>
