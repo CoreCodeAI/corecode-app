@@ -274,6 +274,7 @@ func SetApiRouter(router *gin.Engine) {
 				affiliateRootRoute.GET("/users/:id/commissions", controller.AdminGetUserAffiliateCommissions)
 				affiliateRootRoute.GET("/users/:id/invitees", controller.AdminGetUserAffiliateInvitees)
 				affiliateRootRoute.GET("/withdrawals", controller.AdminGetAffiliateWithdrawals)
+				affiliateRootRoute.GET("/withdrawal-count", controller.AdminGetAffiliateWithdrawalCount)
 				affiliateRootRoute.POST("/withdrawals/:id/pay", controller.AdminPayAffiliateWithdrawal)
 				affiliateRootRoute.POST("/withdrawals/:id/reject", controller.AdminRejectAffiliateWithdrawal)
 			}
