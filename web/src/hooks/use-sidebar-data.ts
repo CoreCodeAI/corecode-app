@@ -54,6 +54,7 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import type { SidebarBadges, SidebarData } from '@/components/layout/types'
+import { usePendingWithdrawalCount } from '@/features/affiliates/hooks/use-pending-withdrawal-count'
 import { useFeedbackUnreadCount } from '@/features/feedback/hooks/use-feedback-unread'
 import { useInvoiceReviewCount } from '@/features/invoice/hooks/use-invoice-review-count'
 import { useStatus } from '@/hooks/use-status'
@@ -70,6 +71,7 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
   const { t } = useTranslation()
   const unreadFeedback = useFeedbackUnreadCount()
   const invoiceReviews = useInvoiceReviewCount()
+  const pendingWithdrawals = usePendingWithdrawalCount()
   const { status } = useStatus()
   const role = useAuthStore((s) => s.auth.user?.role)
   // Customers get a plainer name; "Dashboard" sits beside "Overview" for them.
@@ -236,6 +238,8 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             url: '/affiliates',
             icon: HandCoins,
             requiredRole: ROLE.SUPER_ADMIN,
+            badge:
+              pendingWithdrawals > 0 ? String(pendingWithdrawals) : undefined,
           },
           {
             title: t('Redemption Codes'),

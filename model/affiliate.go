@@ -1063,3 +1063,11 @@ func ListAffiliateWithdrawals(userId int, status string, pageInfo *common.PageIn
 	}
 	return withdrawals, total, nil
 }
+
+// CountPendingAffiliateWithdrawals counts the withdrawals waiting for an
+// administrator to pay or reject.
+func CountPendingAffiliateWithdrawals() (int64, error) {
+	var count int64
+	err := DB.Model(&AffiliateWithdrawal{}).Where("status = ?", AffiliateWithdrawalPending).Count(&count).Error
+	return count, err
+}

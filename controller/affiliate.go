@@ -563,6 +563,17 @@ func AdminGetAffiliateWithdrawals(c *gin.Context) {
 	common.ApiSuccess(c, pageInfo)
 }
 
+// AdminGetAffiliateWithdrawalCount counts the withdrawals waiting for an
+// administrator, for the console sidebar.
+func AdminGetAffiliateWithdrawalCount(c *gin.Context) {
+	count, err := model.CountPendingAffiliateWithdrawals()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"count": count})
+}
+
 type adminAffiliateWithdrawalRequest struct {
 	Note string `json:"note"`
 }

@@ -190,6 +190,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"PUT /api/affiliate/admin/users/:id/address-exemption": accessTokenScopeRule("user:write"),
 	"GET /api/affiliate/admin/users/:id/commissions":       accessTokenScopeRule("user:read"),
 	"GET /api/affiliate/admin/withdrawals":                 accessTokenScopeRule("billing:read"),
+	"GET /api/affiliate/admin/withdrawal-count":            accessTokenScopeRule("billing:read"),
 	"POST /api/affiliate/admin/withdrawals/:id/pay":        accessTokenScopeRule("billing:write"),
 	"POST /api/affiliate/admin/withdrawals/:id/reject":     accessTokenScopeRule("billing:write"),
 
