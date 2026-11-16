@@ -367,10 +367,23 @@ type ActivityHour struct {
 
 // RetentionCohort is the share of one day's sign-ups active on each of the
 // following days; Days[0] is the sign-up day. Days past now are left out.
+// Active counts the sign-ups active on each of those days, the numerators of
+// Days. Activated and Paid are the same cohort narrowed to the sign-ups who
+// made a request and to those who paid, each with its own counts.
 type RetentionCohort struct {
-	Day  int64     `json:"day"`
-	Size int64     `json:"size"`
-	Days []float64 `json:"days"`
+	Day       int64            `json:"day"`
+	Size      int64            `json:"size"`
+	Days      []float64        `json:"days"`
+	Active    []int64          `json:"active"`
+	Activated RetentionSegment `json:"activated"`
+	Paid      RetentionSegment `json:"paid"`
+}
+
+// RetentionSegment is a part of a RetentionCohort: its sign-ups and how many
+// of them were active on each of the cohort's days, as Active.
+type RetentionSegment struct {
+	Size   int64   `json:"size"`
+	Active []int64 `json:"active"`
 }
 
 // UserSpend is one user's consumption in the range.
@@ -539,38 +552,68 @@ func GetActivityInsights(r InsightsRange) (*ActivityInsights, error) {
 }
 
 // retentionCohorts groups the range's sign-ups by day, newest 30 days at
-// most, and reads their activity from activeByDay.
+// most, and reads their activity from activeByDay. A cohort's activated part
+// is the sign-ups the funnel counts as activated (a request, RequestCount) and
+// its paid part those with a paid order, as the funnel counts payers.
 func retentionCohorts(r InsightsRange, activeByDay map[int64]map[int]bool) ([]RetentionCohort, error) {
 	start := max(r.Start, r.DayStart(r.End)-29*86400)
-	var users []struct {
-		Id        int
-		CreatedAt int64
-	}
-	if err := DB.Model(&User{}).Select("id, created_at").
-		Where("created_at >= ? AND created_at < ? AND role < ?", start, r.End, customerRoleBound).Find(&users).Error; err != nil {
+	users, err := readRiskUsers(func(tx *gorm.DB) *gorm.DB {
+		return tx.Where("created_at >= ? AND created_at < ? AND role < ?", start, r.End, customerRoleBound)
+	})
+	if err != nil {
 		return nil, err
 	}
-	members := make(map[int64][]int)
+	orders, err := readPaidOrders(0, 0)
+	if err != nil {
+		return nil, err
+	}
+	payers := make(map[int]bool)
+	for _, order := range orders {
+		if order.Money > 0 {
+			payers[order.UserId] = true
+		}
+	}
+	members := make(map[int64][]riskUserRow)
 	for _, user := range users {
 		day := r.DayStart(user.CreatedAt)
-		members[day] = append(members[day], user.Id)
+		members[day] = append(members[day], user)
 	}
 	today := r.DayStart(r.End - 1)
 	result := make([]RetentionCohort, 0, len(members))
-	for day, ids := range members {
-		cohort := RetentionCohort{Day: day, Size: int64(len(ids))}
+	for day, rows := range members {
+		var ids, activated, paid []int
+		for _, user := range rows {
+			ids = append(ids, user.Id)
+			if user.RequestCount > 0 {
+				activated = append(activated, user.Id)
+			}
+			if payers[user.Id] {
+				paid = append(paid, user.Id)
+			}
+		}
+		cohort := RetentionCohort{Day: day, Size: int64(len(ids)),
+			Activated: RetentionSegment{Size: int64(len(activated))}, Paid: RetentionSegment{Size: int64(len(paid))}}
 		for offset := int64(0); offset < retentionDays && day+offset*86400 <= today; offset++ {
 			activeIDs := activeByDay[day+offset*86400]
-			var count int64
-			for _, id := range ids {
-				if activeIDs[id] {
-					count++
-				}
-			}
+			count := countActive(activeIDs, ids)
+			cohort.Active = append(cohort.Active, count)
 			cohort.Days = append(cohort.Days, ratio(float64(count), float64(len(ids))))
+			cohort.Activated.Active = append(cohort.Activated.Active, countActive(activeIDs, activated))
+			cohort.Paid.Active = append(cohort.Paid.Active, countActive(activeIDs, paid))
 		}
 		result = append(result, cohort)
 	}
 	slices.SortFunc(result, func(a, b RetentionCohort) int { return cmp.Compare(b.Day, a.Day) })
 	return result, nil
+}
+
+// countActive counts the ids that are active in a day.
+func countActive(active map[int]bool, ids []int) int64 {
+	var count int64
+	for _, id := range ids {
+		if active[id] {
+			count++
+		}
+	}
+	return count
 }

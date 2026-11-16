@@ -108,6 +108,7 @@ import {
   type Tone,
   Verdict,
 } from './shared'
+import { TTFTTrendPanel } from './ttft-trend-panel'
 
 // The model map's own floor: models with fewer requests are noise there.
 const MAP_MIN_REQUESTS = 20
@@ -711,6 +712,12 @@ export function QualityTab(props: {
           rate={data.error_rate}
         />
       )}
+      <TTFTTrendPanel
+        series={data?.ttft_vendors}
+        staleHours={data?.stale_hours}
+        source={props.sources?.view}
+        range={range}
+      />
       <Panel
         title={t('Model map')}
         help={t(

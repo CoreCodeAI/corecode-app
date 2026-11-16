@@ -224,3 +224,46 @@ func TestKeyHourKeepsTopKeysAndFoldsTheRest(t *testing.T) {
 	assert.Equal(t, folded, other.Requests)
 	assert.Equal(t, wantRequests, requests, "the totals are whole")
 }
+
+// The customers with the most service failures, each with the model that
+// failed most for them. A customer's own 400 is not a service failure, and
+// staff's failures are left out. alice's one service failure, bob's served
+// requests and the no-key row do not earn a place on the list over carol's.
+func TestFailingUsersLeaveStaffAndCustomerFaultsOut(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			const hour = int64(1759248000)
+			users := newKeyTestUsers(t)
+			carol := registerAffiliateTestUser(t, "carol", "")
+			carolKey := &Token{UserId: carol.Id, Name: "carol-app", Key: "key-carol-app", Status: common.TokenStatusEnabled}
+			require.NoError(t, DB.Create(carolKey).Error)
+			failed := func(user *User, token *Token, at int64, requestID, modelName, status string) Log {
+				return Log{UserId: user.Id, Username: user.Username, Type: LogTypeError, CreatedAt: hour + at, UseTime: 1, ModelName: modelName,
+					ChannelId: 1, RequestId: requestID, TokenId: token.Id, TokenName: token.Name, Content: status, Other: `{}`}
+			}
+			logs := keyTestLogs(users, hour)
+			logs = append(logs,
+				failed(carol, carolKey, 10, "c1", "gpt-6", "status_code=502, upstream failed"),
+				failed(carol, carolKey, 20, "c2", "gpt-6", "status_code=502, upstream failed"),
+				failed(carol, carolKey, 30, "c3", "gpt-6", "status_code=502, upstream failed"),
+				failed(carol, carolKey, 40, "c4", "claude-x", "status_code=400, invalid prompt"),
+				failed(users.root, users.rootKey, 50, "rr1", "gpt-6", "status_code=502, upstream failed"),
+				failed(users.root, users.rootKey, 60, "rr2", "gpt-6", "status_code=502, upstream failed"),
+			)
+			require.NoError(t, LOG_DB.Create(&logs).Error)
+
+			keys, err := GetKeyInsights(InsightsRange{Start: hour, End: hour + 3600})
+			require.NoError(t, err)
+			require.Len(t, keys.FailingUsers, 2, "carol and alice; bob served everything and root is staff")
+			assert.Equal(t, FailingUser{
+				UserRef: UserRef{UserID: carol.Id, Username: "carol"}, Requests: 4, ServiceFailures: 3,
+				ServiceFailureRate: 0.75, TopModel: "gpt-6", TopModelFailures: 3,
+			}, keys.FailingUsers[0], "carol's 400 is hers; the three 502s are the service's")
+			assert.Equal(t, FailingUser{
+				UserRef: UserRef{UserID: users.alice.Id, Username: "alice"}, Requests: 3, ServiceFailures: 1,
+				ServiceFailureRate: 0.3333, TopModel: "gpt-6", TopModelFailures: 1,
+			}, keys.FailingUsers[1])
+		})
+	}
+}

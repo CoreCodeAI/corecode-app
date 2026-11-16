@@ -183,3 +183,47 @@ func TestFirstPaymentTimingStopsAtTheRangeEnd(t *testing.T) {
 	assert.EqualValues(t, 0, growth.FirstPayment.Payers, "a payment after the range's end is not counted")
 	assert.Zero(t, growth.FirstPayment.MedianHours)
 }
+
+// A cohort's activated part is the sign-ups who made a request and its paid
+// part the ones who paid. alice signed up and never requested; bob requested
+// but never paid; carol paid. Each part counts its own sign-ups and the ones
+// active on each day, and the cohort's counts are the sum over everyone.
+func TestRetentionCohortsSplitActivatedAndPaid(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			const day1 = int64(1759190400)
+			dollar := int(common.QuotaPerUnit)
+			signedUp := day1 + 86400 + 100
+			alice := registerAffiliateTestUser(t, "alice", "")
+			bob := registerAffiliateTestUser(t, "bob", "")
+			carol := registerAffiliateTestUser(t, "carol", "")
+			require.NoError(t, DB.Model(&User{}).Where("id IN ?", []int{alice.Id, bob.Id, carol.Id}).Update("created_at", signedUp).Error)
+			require.NoError(t, DB.Model(&User{}).Where("id = ?", bob.Id).Update("request_count", 2).Error)
+			require.NoError(t, DB.Model(&User{}).Where("id = ?", carol.Id).Update("request_count", 1).Error)
+			require.NoError(t, DB.Create(&TopUp{UserId: carol.Id, Money: 10, Amount: 10, TradeNo: "T-carol", PaymentMethod: "stripe",
+				Status: common.TopUpStatusSuccess, CreateTime: signedUp + 3600}).Error)
+			require.NoError(t, DB.Create(&[]QuotaData{
+				{UserID: carol.Id, Username: "carol", ModelName: "gpt-6", CreatedAt: signedUp, Count: 1, Quota: dollar, TokenUsed: 10},
+				{UserID: bob.Id, Username: "bob", ModelName: "gpt-6", CreatedAt: signedUp + 86400, Count: 1, Quota: dollar, TokenUsed: 10},
+			}).Error)
+
+			activity, err := GetActivityInsights(InsightsRange{Start: day1, End: day1 + 30*86400})
+			require.NoError(t, err)
+			var cohort *RetentionCohort
+			for i := range activity.Retention {
+				if activity.Retention[i].Day == day1+86400 {
+					cohort = &activity.Retention[i]
+				}
+			}
+			require.NotNil(t, cohort)
+			assert.EqualValues(t, 3, cohort.Size, "every sign-up is in the cohort")
+			assert.EqualValues(t, 2, cohort.Activated.Size, "alice never requested")
+			assert.EqualValues(t, 1, cohort.Paid.Size, "only carol paid")
+			require.Len(t, cohort.Active, 29)
+			assert.EqualValues(t, []int64{1, 1, 0}, cohort.Active[:3], "carol on D0, bob on D1")
+			assert.EqualValues(t, []int64{1, 1, 0}, cohort.Activated.Active[:3], "the activated part: carol on D0, bob on D1")
+			assert.EqualValues(t, []int64{1, 0, 0}, cohort.Paid.Active[:3], "the paid part: carol on D0 only")
+		})
+	}
+}

@@ -232,7 +232,85 @@ type KeyInsights struct {
 	StaffRequests      int64         `json:"staff_requests"`
 	StaffQuotaUSD      float64       `json:"staff_quota_usd"`
 	StaffKeys          []APIKeyUsage `json:"staff_keys"`
-	StaleHours         int           `json:"stale_hours"`
+	// FailingUsers are the customers with the most service failures, most
+	// first, at most failingUsersListed; staff and keys with no owner are left out.
+	FailingUsers []FailingUser `json:"failing_users"`
+	StaleHours   int           `json:"stale_hours"`
+}
+
+// failingUsersListed is how many customers KeyInsights.FailingUsers names.
+const failingUsersListed = 20
+
+// FailingUser is one customer's requests over the range, the ones the service
+// failed (a failure the customer did not cause), and the model that failed
+// most for them. TopModelFailures counts that model's service failures.
+type FailingUser struct {
+	UserRef
+	Requests           int64   `json:"requests"`
+	ServiceFailures    int64   `json:"service_failures"`
+	ServiceFailureRate float64 `json:"service_failure_rate"`
+	TopModel           string  `json:"top_model"`
+	TopModelFailures   int64   `json:"top_model_failures"`
+}
+
+// failingUserTotal is one customer's figures before the ranking.
+type failingUserTotal struct {
+	requests int64
+	failures int64
+	models   map[string]int64
+}
+
+// failingUsers ranks the customers by service failures over the key totals.
+// Rows of staff keys and rows with no owner (token 0, the folded other keys)
+// are left out.
+func failingUsers(totals insightKeyTotals, staffIDs []int) ([]FailingUser, error) {
+	staff := make(map[int]bool, len(staffIDs))
+	for _, id := range staffIDs {
+		staff[id] = true
+	}
+	byUser := make(map[int]*failingUserTotal)
+	for key, row := range totals {
+		if key.staff || row.UserId <= 0 || staff[row.UserId] {
+			continue
+		}
+		total := byUser[row.UserId]
+		if total == nil {
+			total = &failingUserTotal{models: make(map[string]int64)}
+			byUser[row.UserId] = total
+		}
+		failures := row.Errors - row.ClientErrors
+		total.requests += row.Requests
+		total.failures += failures
+		total.models[key.model] += failures
+	}
+	list := make([]FailingUser, 0, len(byUser))
+	ids := make([]int, 0, len(byUser))
+	for id, total := range byUser {
+		if total.failures <= 0 {
+			continue
+		}
+		user := FailingUser{UserRef: UserRef{UserID: id}, Requests: total.requests, ServiceFailures: total.failures,
+			ServiceFailureRate: ratio(float64(total.failures), float64(total.requests))}
+		for name, failures := range total.models {
+			if failures > user.TopModelFailures || (failures == user.TopModelFailures && name < user.TopModel) {
+				user.TopModel, user.TopModelFailures = name, failures
+			}
+		}
+		list = append(list, user)
+		ids = append(ids, id)
+	}
+	slices.SortFunc(list, func(a, b FailingUser) int {
+		return cmp.Or(cmp.Compare(b.ServiceFailures, a.ServiceFailures), cmp.Compare(a.UserID, b.UserID))
+	})
+	list = list[:min(len(list), failingUsersListed)]
+	names, err := usernamesByID(ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		list[i].Username = names[list[i].UserID]
+	}
+	return list, nil
 }
 
 // keyTotal is one key's figures over the range, before the shares.
@@ -424,6 +502,13 @@ func GetKeyInsights(r InsightsRange) (*KeyInsights, error) {
 	if result.KeysTruncated {
 		usage := usageOf(other, customerQuota, names, tokenNames)
 		result.OtherKeys = &usage
+	}
+	staffIDs, err := StaffUserIDs()
+	if err != nil {
+		return nil, err
+	}
+	if result.FailingUsers, err = failingUsers(totals, staffIDs); err != nil {
+		return nil, err
 	}
 	return result, nil
 }
