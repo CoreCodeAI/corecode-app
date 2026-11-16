@@ -199,9 +199,9 @@ export function EngineCapsNote(props: { refusals: EngineRefusals }) {
 }
 
 /**
- * Each hour's failure rate beside the previous period's same hour. Hours
- * with too few requests have no rate; hours far above their usual rate are
- * flagged.
+ * Each hour's service failure rate beside the range's usual hour. Hours with
+ * too few service requests have no rate; hours far above their usual rate are
+ * flagged. The previous period's same hour is shown for reference.
  */
 export function FailureRatePanel(props: {
   hourly: CapacityHour[]
@@ -224,33 +224,39 @@ export function FailureRatePanel(props: {
   )
   const spikes = hours.filter((hour) => hour.spike)
   const rated = hours.some((hour) => hour.rate !== null)
+  const counted = t(
+    'Service failures: requests no channel could take and the customers’ own errors left out.'
+  )
   let description: string
   const [first] = spikes
   if (spikes.length === 1 && first.rate !== null && first.usual !== null) {
-    description = t(
-      '{{time}} failed {{rate}} of its requests, against a usual {{baseline}}.',
-      {
-        time: fmt.time(first.hour),
-        rate: fmt.pct(first.rate),
-        baseline: fmt.pct(first.usual),
-      }
+    description = joinSentences(
+      counted,
+      t(
+        '{{time}} failed {{rate}} of its service requests, against a usual {{baseline}}.',
+        {
+          time: fmt.time(first.hour),
+          rate: fmt.pct(first.rate),
+          baseline: fmt.pct(first.usual),
+        }
+      )
     )
   } else if (spikes.length > 1) {
-    description = t(
-      '{{count}} hours failed at least {{factor}}× their usual rate: {{times}}.',
-      {
+    description = joinSentences(
+      counted,
+      t('{{count}} hours failed far above their usual rate: {{times}}.', {
         count: fmt.num(spikes.length),
-        factor: SPIKE_FACTOR,
         times: [...spikes]
           .sort((a, b) => b.errors - a.errors)
           .slice(0, NAMED_SPIKES)
           .map((hour) => fmt.time(hour.hour))
           .join(', '),
-      }
+      })
     )
   } else if (rated) {
-    description = t(
-      'Failures were steady: no hour failed far above its usual rate.'
+    description = joinSentences(
+      counted,
+      t('Failures were steady: no hour failed far above its usual rate.')
     )
   } else {
     description = t('Too few requests in any hour to give it a rate.')
@@ -261,7 +267,7 @@ export function FailureRatePanel(props: {
       description={description}
       help={joinSentences(
         t(
-          'Failed requests over requests, per hour. An hour under {{count}} requests has no rate. Usual is the median hour of the range. An hour is flagged with {{requests}} requests or more, {{failures}} failures or more, and a rate beyond chance above {{factor}}× usual and {{floor}}. Requests a per-user limit turned away never reach the logs and are not counted.',
+          'Service failures over service requests, per hour: requests no channel could take and customers’ own 4xx are left out of both. An hour under {{count}} service requests has no rate. Usual is the median hour of the range. An hour is flagged with {{requests}} service requests or more, {{failures}} service failures or more, and a rate beyond chance above {{factor}}× usual and {{floor}}. Requests a per-user limit turned away never reach the logs and are not counted.',
           {
             count: HOUR_SAMPLE,
             requests: fmt.num(SMALL_SAMPLE),
@@ -291,9 +297,9 @@ export function FailureRatePanel(props: {
                     },
                   ]
                 : []),
-              { label: t('Failed'), value: fmt.num(hour.errors) },
+              { label: t('Service failures'), value: fmt.num(hour.errors) },
               {
-                label: t('Requests'),
+                label: t('Service requests'),
                 value:
                   hour.rate === null
                     ? t('{{count}}, too few for a rate', {

@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 import { alignPrevious, beforeLogs } from '../analysis'
+import { serviceFailureRows } from '../failure-hours'
 import {
   countsRequestsOnce,
   failureTone,
@@ -112,6 +113,14 @@ export function QualityHourlyPanels(props: {
   )
   const flags = hourFlags(props.rows, props.previous?.hourly, props.range.end)
   const worst = worstHour(props.rows, props.range.end)
+  // The failure rate reads the service's failures, as the flags do.
+  const failures = serviceFailureRows(props.rows)
+  const failuresBefore = serviceFailureRows(props.previous?.hourly ?? [])
+  const failureBefore = alignPrevious(
+    failures,
+    failuresBefore,
+    span(failures, failuresBefore)
+  )
   const sameHour = (value: string | undefined) =>
     value ? [{ label: t('Same hour, previous period'), value }] : []
   const rateFormat = useRateFormat()
@@ -123,30 +132,36 @@ export function QualityHourlyPanels(props: {
           title={t('Failure rate by hour')}
           description={
             worst && worst.error_rate > 0
-              ? t('Worst hour {{time}}: {{rate}} of {{count}} requests.', {
-                  time: fmt.time(worst.hour),
-                  rate: fmt.pct(worst.error_rate),
-                  count: fmt.num(worst.requests),
-                })
+              ? t(
+                  'Worst hour {{time}}: {{rate}} of {{count}} service requests.',
+                  {
+                    time: fmt.time(worst.hour),
+                    rate: fmt.pct(worst.error_rate),
+                    count: fmt.num(worst.requests),
+                  }
+                )
               : undefined
           }
           help={t(
-            'An hour with under 20 requests has no rate, and an hour with none is not 0%. An hour is colored when its failure rate is, beyond chance, three times that of the same hour of the previous period (or the range’s median hour) and above 2%. The axis always reaches 5%, the dashed line, where a rate turns red, so a calm range reads calm. The last hour is still filling.'
+            'Service failures over service requests: requests no channel could take and the customers’ own 4xx are left out. An hour with under 20 service requests has no rate, and an hour with none is not 0%. An hour is colored when its rate is, beyond chance, above three times the range’s usual hour (its median) and above 2%, with at least 100 service requests and 20 failures. The same hour of the previous period is shown for reference. The axis always reaches 5%, the dashed line, where a rate turns red, so a calm range reads calm. The last hour is still filling.'
           )}
         >
           <BarSeries
             ariaLabel={t('Failure rate by hour')}
             series={[{ label: t('Failure rate'), format: rateFormat }]}
             reference={redLine}
-            points={hours.bars(props.rows, props.range.end, (row, index) => {
-              const prev = before[index]
+            points={hours.bars(failures, props.range.end, (row, index) => {
+              const prev = failureBefore[index]
               const flag = flagAt(flags, row.hour)
               return {
                 values: [rateBar(row.requests, row.error_rate, HOUR_SAMPLE)],
                 tone: flag?.failing ? 'danger' : undefined,
                 extra: [
-                  { label: t('Failed'), value: fmt.num(row.errors) },
-                  { label: t('Requests'), value: fmt.num(row.requests) },
+                  { label: t('Service failures'), value: fmt.num(row.errors) },
+                  {
+                    label: t('Service requests'),
+                    value: fmt.num(row.requests),
+                  },
                   { label: t('Range rate'), value: fmt.pct(props.rate) },
                   ...sameHour(
                     prev && prev.requests >= HOUR_SAMPLE

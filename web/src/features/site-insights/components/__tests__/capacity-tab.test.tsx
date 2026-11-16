@@ -228,6 +228,58 @@ describe('capacity analysis', () => {
     ])
   })
 
+  it('flags the hours a service outage hit, not hours of refusals the service could not serve', () => {
+    const day = 86400
+    // Thirty quiet hours, ten hours where no-channel refusals were most of the
+    // failures (the production shape), and one hour with a real upstream outage.
+    const rows = Array.from({ length: 41 }, (_, index) => {
+      const at = day + index * HOUR
+      if (index === 40) {
+        return hour(at, {
+          requests: 1000,
+          errors: 150,
+          service_requests: 1000,
+          service_errors: 150,
+        })
+      }
+      if (index >= 30) {
+        return hour(at, {
+          requests: 300,
+          errors: 60,
+          service_requests: 245,
+          service_errors: 5,
+        })
+      }
+      return hour(at, {
+        requests: 1000,
+        errors: 2,
+        service_requests: 1000,
+        service_errors: 2,
+      })
+    })
+    const end = day + 41 * HOUR
+    const flagged = (series: CapacityHour[]) =>
+      failureHours(series, [], day, end)
+        .filter((row) => row.spike)
+        .map((row) => row.hour)
+    expect(flagged(rows)).toEqual([day + 40 * HOUR])
+    // Without the service's counts the same hours read as they did: each
+    // refusal hour flags beside the outage.
+    const unsplit = rows.map((row) => ({
+      ...row,
+      service_requests: undefined,
+      service_errors: undefined,
+    }))
+    expect(flagged(unsplit)).toHaveLength(11)
+    // One hour without the counts drops the whole series back to the logged ones.
+    const mixed = rows.map((row, index) =>
+      index === 0
+        ? { ...row, service_requests: undefined, service_errors: undefined }
+        : row
+    )
+    expect(flagged(mixed)).toHaveLength(11)
+  })
+
   it('does not flag a low-volume hour with a high rate', () => {
     const day = 86400
     const rows = [
@@ -285,6 +337,25 @@ describe('capacity tab by range', () => {
   const now = 30 * 86400
   const day = { start: now - 86400, end: now, days: 1, hourly: true }
   const week = { start: now - 7 * 86400, end: now, days: 7, hourly: false }
+
+  it('names the service failures and says they were steady when no hour stood out', () => {
+    const data = insights()
+    // Each hour: 60 failures, 55 of them no-channel refusals, so 5 of 945.
+    data.hourly = Array.from({ length: 24 }, (_, index) =>
+      hour(now - 24 * HOUR + index * HOUR, {
+        requests: 1000,
+        errors: 60,
+        service_requests: 945,
+        service_errors: 5,
+      })
+    )
+    render(<CapacityTab data={data} vendor='all' range={day} />, { wrapper })
+    expect(
+      screen.getByText(
+        'Service failures: requests no channel could take and the customers’ own errors left out. Failures were steady: no hour failed far above its usual rate.'
+      )
+    ).toBeTruthy()
+  })
 
   it('drops the weekday grid under a week and diagnoses short-pool 429s', () => {
     const data = insights()

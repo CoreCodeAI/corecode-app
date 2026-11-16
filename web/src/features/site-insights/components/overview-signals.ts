@@ -33,7 +33,7 @@ import {
   SMALL_SAMPLE,
   paymentMethodLabel,
 } from '../lib'
-import { categoryOwner, serviceFailureRate } from '../quality-analysis'
+import { serviceFailureRate, unservedOf } from '../quality-analysis'
 import type {
   CapacityInsights,
   EngineOutlook,
@@ -299,13 +299,11 @@ export function overviewServiceSignals(
       })
     }
 
-    // The service's failures: the customers' own 4xx are left out, as the
-    // quality tab's rate leaves them out; the raw rate is the fallback.
+    // The service's failures: requests no channel could take and the
+    // customers' own 4xx are left out, as the quality tab's rate leaves them
+    // out; the raw rate is the fallback.
     const serviceRate = serviceFailureRate(quality) ?? quality.error_rate
-    const clientErrors = (quality.error_categories ?? [])
-      .filter((item) => categoryOwner(item.name) === 'client')
-      .reduce((sum, item) => sum + item.count, 0)
-    const serviceErrors = Math.max(0, quality.errors - clientErrors)
+    const serviceErrors = Math.max(0, quality.errors - unservedOf(quality))
     const rateTone =
       quality.requests >= SMALL_SAMPLE ? failureTone(serviceRate) : 'default'
     if (rateTone === 'danger' || rateTone === 'warning') {

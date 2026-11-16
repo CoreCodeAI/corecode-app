@@ -61,6 +61,11 @@ import (
 // only the hours stored at version 7 and counts the rest in stale_hours. 7
 // also splits the requests no channel could take by group, model and user
 // (insightSummary.NoChannel); a version-6 hour has the category's count only.
+// insightHourCategories is the first version that keeps an hour's failed
+// requests by category (insightSummary.Categories). An older hour's categories
+// are unknown, so its service failure counts are absent.
+const insightHourCategories = 5
+
 const (
 	insightHourVersion   = 7
 	insightHourLookahead = 2 * 3600
@@ -268,12 +273,14 @@ func peakInHour(events []concurrencyEvent, start, end int64) (int, int64) {
 // insightHour is one hour in memory: its summary, users and models. stale is
 // a stored hour of an older version, whose newer figures read zero.
 type insightHour struct {
-	start    int64
-	stale    bool
-	summary  insightSummary
-	users    map[int]*InsightUserHour
-	models   map[string]*insightModel
-	channels map[insightChannelKey]*insightChannel
+	start int64
+	stale bool
+	// uncategorised is a stored hour of a version before insightHourCategories.
+	uncategorised bool
+	summary       insightSummary
+	users         map[int]*InsightUserHour
+	models        map[string]*insightModel
+	channels      map[insightChannelKey]*insightChannel
 	// keys is the hour's figures by API key; nil for an hour read from the
 	// store, whose key rows the keys view reads by SQL.
 	keys map[insightKeyRowKey]*InsightKeyHour
@@ -1225,6 +1232,7 @@ func loadInsightHoursStale(r InsightsRange) ([]*insightHour, int, error) {
 			continue
 		}
 		hour.stale = row.Version < insightHourVersion
+		hour.uncategorised = row.Version < insightHourCategories
 		hours[row.HourStart] = hour
 	}
 	var users []InsightUserHour

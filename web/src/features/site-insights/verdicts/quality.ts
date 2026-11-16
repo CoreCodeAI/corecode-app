@@ -205,11 +205,14 @@ export function useQualityVerdict(
   if (window) tone = worse(tone, 'warning')
   let hours: string | null = null
   if (window && window.from.hour === window.to.hour) {
-    hours = t('Failures peaked at {{time}}: {{rate}} of {{count}} requests.', {
-      time: fmt.time(window.worst.hour),
-      rate: fmt.pct(window.worst.error_rate),
-      count: fmt.num(window.worst.requests),
-    })
+    hours = t(
+      'Failures peaked at {{time}}: {{rate}} of {{count}} service requests.',
+      {
+        time: fmt.time(window.worst.hour),
+        rate: fmt.pct(window.worst.error_rate),
+        count: fmt.num(window.worst.requests),
+      }
+    )
   } else if (window) {
     hours = t(
       'Failures ran high from {{from}} to {{to}}, peaking at {{rate}}.',

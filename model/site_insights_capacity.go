@@ -15,6 +15,12 @@ type CapacityHour struct {
 	PoolPeak          *int  `json:"pool_peak,omitempty"`
 	EngineRejections  int64 `json:"engine_rejections"`
 	UpstreamRateLimit int64 `json:"upstream_rate_limits"`
+	// ServiceRequests and ServiceErrors are the requests the service could
+	// have served and the failed ones it caused: the requests no channel could
+	// take and the customers' own errors are left out (serviceFailureCounts).
+	// Absent on an hour stored before categories were kept that has failures.
+	ServiceRequests *int64 `json:"service_requests,omitempty"`
+	ServiceErrors   *int64 `json:"service_errors,omitempty"`
 }
 
 // UserPeak is the most requests one user had in flight at once.
@@ -122,6 +128,7 @@ func GetCapacityInsights(r InsightsRange, vendor string) (*CapacityInsights, err
 			EngineRejections:  summary.EngineRejections,
 			UpstreamRateLimit: summary.UpstreamRateLimit,
 		}
+		row.ServiceRequests, row.ServiceErrors = serviceFailureCounts(hour.uncategorised && hour.summary.Errors > 0, summary.Requests, summary.Errors, summary.Categories)
 		if !hour.stale {
 			row.PoolPeak = &summary.PoolPeak
 		}

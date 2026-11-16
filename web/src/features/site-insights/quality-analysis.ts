@@ -31,13 +31,17 @@ import {
   type Contribution,
 } from './analysis'
 import {
+  isFailureSpike,
+  serviceFailureRows,
+  usualFailureRate,
+} from './failure-hours'
+import {
   CLIENT_CATEGORIES,
   ENGINE_CATEGORIES,
   failureTone,
   HOUR_SAMPLE,
   MIN_TASKS,
   SMALL_SAMPLE,
-  SPIKE_FACTOR,
 } from './lib'
 import type {
   NamedCount,
@@ -276,7 +280,7 @@ export type HourFlag = {
   errors: number
   error_rate: number
   ttft_p95_ms: number
-  /** Failure rate beyond chance above its baseline. */
+  /** The service failure rate far above the usual hour, beyond chance. */
   failing: boolean
   /** First-token p95 at twice its baseline or more, and past 10 seconds. */
   slow: boolean
@@ -284,31 +288,30 @@ export type HourFlag = {
 
 const SLOW_TTFT_MS = 10000
 const SLOW_FACTOR = 2
-// Below this rate an hour's failures are not flagged, whatever its baseline.
-const HOUR_RATE_FLOOR = 0.02
-
 /**
- * The closed hours whose failure rate or first-token p95 stood out against
- * the same hour of the previous period, or the range's median closed hour
- * where that hour had too few requests. An hour needs HOUR_SAMPLE requests.
- * A failing hour's rate is beyond chance above SPIKE_FACTOR times its
- * baseline and above 2%.
+ * The closed hours whose service failure rate or first-token p95 stood out.
+ * The failure rate is judged as the capacity tab judges its hours
+ * (failure-hours.ts): against the range's usual hour, never the previous
+ * period's same hour, which is for reference only. The first-token p95 still
+ * reads the same hour of the previous period, or the range's median closed
+ * hour where that hour had too few requests. An hour needs HOUR_SAMPLE
+ * requests.
  */
 export function hourFlags(
-  hourly: QualityHour[] | null | undefined,
-  previousHourly: QualityHour[] | null | undefined,
+  hourlyRows: QualityHour[] | null | undefined,
+  previousRows: QualityHour[] | null | undefined,
   end: number
 ): HourFlag[] {
-  const rows = hourly ?? []
+  const rows = serviceFailureRows(hourlyRows ?? [])
   if (rows.length === 0) return []
   const closed = closedHours(rows, end).filter(
     (row) => row.requests >= HOUR_SAMPLE
   )
-  const medianRate = median(closed.map((row) => row.error_rate))
+  const usual = usualFailureRate(rows, end)
   const medianP95 = median(
     closed.filter((row) => row.ttft_p95_ms > 0).map((row) => row.ttft_p95_ms)
   )
-  const previous = previousHourly ?? []
+  const previous = serviceFailureRows(previousRows ?? [])
   const span = previous.length > 0 ? rows[0].hour - previous[0].hour : 0
   const aligned =
     span > 0 ? alignPrevious(rows, previous, span) : rows.map(() => undefined)
@@ -317,14 +320,9 @@ export function hourFlags(
     if (isOpenHour(row.hour, end) || row.requests < HOUR_SAMPLE) return
     const before = aligned[index]
     const sampled = !!before && before.requests >= HOUR_SAMPLE
-    const rateBase = sampled ? before.error_rate : medianRate
     const p95Base =
       sampled && before.ttft_p95_ms > 0 ? before.ttft_p95_ms : medianP95
-    const failing = rateIsAbove(
-      row.errors,
-      row.requests,
-      Math.max(SPIKE_FACTOR * rateBase, HOUR_RATE_FLOOR)
-    )
+    const failing = isFailureSpike(row, usual)
     const slow =
       row.ttft_p95_ms > SLOW_TTFT_MS &&
       p95Base > 0 &&
@@ -353,7 +351,7 @@ export function worstHour(
   hourly: QualityHour[] | null | undefined,
   end: number
 ): QualityHour | undefined {
-  return closedHours(hourly ?? [], end)
+  return closedHours(serviceFailureRows(hourly ?? []), end)
     .filter((row) => row.requests >= HOUR_SAMPLE)
     .reduce<QualityHour | undefined>(
       (top, row) => (!top || row.error_rate > top.error_rate ? row : top),
@@ -420,19 +418,36 @@ export function failureOwners(
 }
 
 /**
- * The failure rate with customers' client errors (4xx) left out of both the
- * failures and the requests: what the service itself failed. A request no
- * channel served, an engine limit and an upstream's refused key count as
- * the service's. Null without categories.
+ * The requests the service could not have served, which the service failure
+ * rate leaves out of both its failures and its requests: the requests no
+ * channel could take (routing) and the customers' own errors (client). Zero
+ * without categories.
+ */
+export function unservedOf(
+  data: Pick<QualityInsights, 'error_categories'>
+): number {
+  return (data.error_categories ?? [])
+    .filter((item) => {
+      const owner = categoryOwner(item.name)
+      return owner === 'client' || owner === 'routing'
+    })
+    .reduce((sum, item) => sum + item.count, 0)
+}
+
+/**
+ * The failure rate of what the service itself failed: requests no channel
+ * could take and the customers' own errors (4xx) left out of both the failures
+ * and the requests. An engine limit, a budget and an upstream's refused key
+ * count as the service's. Null without categories.
  */
 export function serviceFailureRate(
   data: Pick<QualityInsights, 'requests' | 'errors' | 'error_categories'>
 ): number | null {
   if (!data.error_categories) return null
-  const client = clientErrorsOf(data)
-  const requests = data.requests - client
+  const unserved = unservedOf(data)
+  const requests = data.requests - unserved
   if (requests <= 0) return null
-  return Math.max(0, data.errors - client) / requests
+  return Math.max(0, data.errors - unserved) / requests
 }
 
 /**
@@ -448,18 +463,19 @@ export function clientErrorsOf(
 }
 
 /**
- * The service's own requests and failures, customers' bad requests left out
- * of both, in the shape failureShift compares. Null without the categories.
+ * The service's own requests and failures, unserved requests left out of
+ * both (see unservedOf), in the shape failureShift compares. Null without the
+ * categories.
  */
 export function serviceRow(
   data: Pick<QualityInsights, 'requests' | 'errors' | 'error_categories'>
 ): { requests: number; errors: number; error_rate: number } | null {
   const rate = serviceFailureRate(data)
   if (rate == null) return null
-  const client = clientErrorsOf(data)
+  const unserved = unservedOf(data)
   return {
-    requests: data.requests - client,
-    errors: Math.max(0, data.errors - client),
+    requests: data.requests - unserved,
+    errors: Math.max(0, data.errors - unserved),
     error_rate: rate,
   }
 }

@@ -127,6 +127,15 @@ function qualityHour(index: number, requests: number, errors: number) {
   }
 }
 
+/** An hour the server counts as the service's: no refusals or client errors. */
+function servedHour(index: number, requests: number, errors: number) {
+  return {
+    ...qualityHour(index, requests, errors),
+    service_requests: requests,
+    service_errors: errors,
+  }
+}
+
 function qualityModel(model: string, requests: number, errors: number) {
   return {
     model,
@@ -169,10 +178,10 @@ describe('QualityTab diagnosis', () => {
       },
     ],
     hourly: [
-      qualityHour(0, 100, 1),
-      qualityHour(1, 100, 40),
-      qualityHour(2, 100, 2),
-      qualityHour(3, 100, 1),
+      servedHour(0, 100, 1),
+      servedHour(1, 100, 40),
+      servedHour(2, 100, 2),
+      servedHour(3, 100, 1),
     ],
     models: [
       qualityModel('quiet-model', 300, 3),
@@ -200,7 +209,7 @@ describe('QualityTab diagnosis', () => {
     expect(screen.getByText('Failure rate by hour')).toBeInTheDocument()
     expect(screen.queryByText('Daily failure rate')).not.toBeInTheDocument()
     expect(
-      screen.getByText(/^Worst hour .*: 40% of 100 requests\.$/)
+      screen.getByText(/^Worst hour .*: 40% of 100 service requests\.$/)
     ).toBeInTheDocument()
   })
 
@@ -621,7 +630,9 @@ describe('QualityTab round 3', () => {
       />
     )
     expect(
-      screen.getByText('Leaves out 10 client errors (4xx).')
+      screen.getByText(
+        'Leaves out 10 requests no channel took or client errors (4xx).'
+      )
     ).toBeInTheDocument()
   })
 

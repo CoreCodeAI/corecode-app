@@ -139,6 +139,10 @@ export type QualityHour = {
   error_rate: number
   ttft_p50_ms: number
   ttft_p95_ms: number
+  /** The requests the service could have served; absent on an hour stored before categories. */
+  service_requests?: number
+  /** The failed requests the service caused: no-channel refusals and 4xx left out. */
+  service_errors?: number
 }
 
 /** Charges as FinanceInsights.daily's fields of the same names. */
@@ -187,6 +191,10 @@ export type CapacityHour = {
   pool_peak?: number
   engine_rejections: number
   upstream_rate_limits: number
+  /** The requests the service could have served; absent on an hour stored before categories that failed. */
+  service_requests?: number
+  /** The failed requests the service caused: no-channel refusals and the customers' 4xx left out. */
+  service_errors?: number
 }
 
 export type EngineQuotaWindow = {

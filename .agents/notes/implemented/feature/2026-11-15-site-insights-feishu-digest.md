@@ -24,7 +24,7 @@ The attention lines are a Go mirror of the console's rules. Each threshold in `s
 | Pool full, budget refusals | `overview-signals.ts`, `capacity-engine`, `capacity-engine-budget` | any refusal |
 | Upstream key refused (401/402/403) | `overview-signals.ts`, `upstream-auth` | any refusal |
 | No channel for a request | `overview-signals.ts`, `quality-no-channel` | any refusal |
-| Service failure rate | `overview-signals.ts`, `quality-rate` | over 100 requests; warning above 2%, danger above 5% (`SMALL_SAMPLE`, `failureTone`) |
+| Service failure rate | `overview-signals.ts`, `quality-rate` | over 100 requests, with requests no channel could take and customers' 4xx left out; warning above 2%, danger above 5% (`SMALL_SAMPLE`, `failureTone`) |
 | Image and video task failure | `overview-signals.ts`, `failingTasks` | 100 finished tasks, failure rate above 5% (`SMALL_SAMPLE`, `FAILING_RATE`) |
 | Checkout completion drop | `overview-signals.ts`, `completionDrop` | 5 checkouts in both days; under half the day before (`MIN_ORDERS`, `COMPLETION_DROP_SHARE`) |
 | Upstream channel failing | `overview-analysis.ts`, `failingChannels` | 100 attempts, failure rate above 5% |

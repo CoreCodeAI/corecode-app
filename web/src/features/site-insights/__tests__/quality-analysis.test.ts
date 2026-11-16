@@ -145,36 +145,65 @@ describe('quality analysis', () => {
     expect(mixShift(9300, 9000, now, before)).toBeNull()
   })
 
-  it('flags closed hours against the same hour before, leaving the open hour out', () => {
+  it('flags closed hours against the range’s usual hour, leaving the open hour out', () => {
     const h = 3600
+    // Five steady hours at 1% set the usual hour; the previous period's hours
+    // are for reference only and do not set the threshold.
     const rows = [
-      hour(10 * h, 100, 1),
+      ...[6, 7, 8, 9, 10].map((n) => hour(n * h, 100, 1)),
       hour(11 * h, 100, 20),
       hour(12 * h, 100, 18, 30000),
       hour(13 * h, 100, 40),
     ]
-    const previous = [
-      hour(10 * h - 4 * h, 100, 1),
-      hour(11 * h - 4 * h, 100, 1),
-      hour(12 * h - 4 * h, 100, 1, 5000),
-      hour(13 * h - 4 * h, 100, 1),
-    ]
+    const previous = [6, 7, 8, 9, 10, 11, 12, 13].map((n) =>
+      hour((n - 4) * h, 100, n === 12 ? 0 : 1, n === 12 ? 5000 : 4000)
+    )
     const end = 13 * h + 600
     const flags = hourFlags(rows, previous, end)
+    // Hour 12 is slow but has 18 failures, under the 20 a failing hour needs.
     expect(
       flags.map((flag) => [flag.hour / h, flag.failing, flag.slow])
     ).toEqual([
       [11, true, false],
-      [12, true, true],
+      [12, false, true],
     ])
     expect(worstHour(rows, end)?.hour).toBe(11 * h)
     const window = failingWindow(flags)
     expect([window?.from.hour, window?.to.hour, window?.worst.hour]).toEqual([
       11 * h,
-      12 * h,
+      11 * h,
       11 * h,
     ])
     expect(hourFlags([hour(0, 10, 9)], [], 7200)).toEqual([])
+  })
+
+  it('does not flag an hour against a zero baseline in the previous period', () => {
+    const h = 3600
+    // Every hour fails 20%; the same hours of the previous period had none.
+    // A zero baseline made every failure beyond it, so the usual hour decides.
+    const rows = Array.from({ length: 12 }, (_, index) =>
+      hour((index + 2) * h, 100, 20)
+    )
+    const previous = rows.map((row) => hour(row.hour - 4 * h, 100, 0))
+    expect(hourFlags(rows, previous, 14 * h)).toEqual([])
+  })
+
+  it('flags no hour whose failures were refusals no channel could take', () => {
+    const h = 3600
+    // The production shape: thirty quiet hours, and ten hours where no-channel
+    // refusals were most of the failures. The service failed 5 of 245.
+    const rows = Array.from({ length: 40 }, (_, index) => {
+      const quiet = index < 30
+      const requests = quiet ? 1000 : 300
+      const errors = quiet ? 2 : 60
+      const serviceErrors = quiet ? 2 : 5
+      return {
+        ...hour(index * h, requests, errors),
+        service_requests: requests - (errors - serviceErrors),
+        service_errors: serviceErrors,
+      }
+    })
+    expect(hourFlags(rows, [], 40 * h)).toEqual([])
   })
 
   it('splits customers’ failures by owner and leaves client errors out of the service rate', () => {
@@ -225,14 +254,15 @@ describe('quality analysis', () => {
       { owner: 'routing', count: 3 },
       { owner: 'client', count: 1 },
     ])
-    // Only the client error leaves the service rate: (15 - 1) / (701 - 1).
+    // The client error and the no-channel refusals leave the service rate:
+    // (15 - 1 - 3) / (701 - 1 - 3).
     expect(
       serviceFailureRate({
         requests: 701,
         errors: 15,
         error_categories: categories,
       })
-    ).toBe(0.02)
+    ).toBeCloseTo(11 / 697, 12)
   })
 
   it('adds what a cut list leaves out as one row', () => {

@@ -396,23 +396,28 @@ func siteInsightsDigestFindings(in digestInput) []digestFinding {
 }
 
 // digestServiceFailures and digestServiceRate mirror serviceFailureRate
-// (quality-analysis.ts): customers' own 4xx are left out of both counts. The
-// raw rate is the fallback when no request is left.
+// (quality-analysis.ts): requests no channel could take and customers' own 4xx
+// are left out of both counts. The raw rate is the fallback when no request is
+// left.
 func digestServiceFailures(q *model.QualityInsights) int64 {
-	client := digestCategory(q.ErrorCategories, model.ErrorClient)
-	return max(0, q.Errors-client)
+	return max(0, q.Errors-digestExcluded(q))
 }
 
 func digestServiceRate(q *model.QualityInsights) float64 {
 	if q == nil {
 		return 0
 	}
-	client := digestCategory(q.ErrorCategories, model.ErrorClient)
-	requests := q.Requests - client
+	requests := q.Requests - digestExcluded(q)
 	if requests <= 0 {
 		return q.ErrorRate
 	}
 	return float64(digestServiceFailures(q)) / float64(requests)
+}
+
+// digestExcluded is the requests the service could not have served: refused
+// for want of a channel, or the customers' own errors (ErrorClient).
+func digestExcluded(q *model.QualityInsights) int64 {
+	return digestCategory(q.ErrorCategories, model.ErrorClient) + digestCategory(q.ErrorCategories, model.ErrorNoChannel)
 }
 
 func digestCategory(categories []model.NamedCount, name string) int64 {
