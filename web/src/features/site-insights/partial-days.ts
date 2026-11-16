@@ -57,6 +57,15 @@ export const InsightsSpanContext = createContext<{
 export const MIN_PROJECTED_SHARE = 0.15
 
 /**
+ * Whether a previous period's daily point is part of a day. The previous
+ * period is floored at its ends the way the current range is, so its first
+ * and last days are partial too; a reference point there reads as one.
+ */
+export function previousDayPartial(index: number, count: number): boolean {
+  return index === 0 || index === count - 1
+}
+
+/**
  * The share of a typical day's requests that falls in [from, to), unix
  * seconds, by the profile's share for each UTC hour; part of an hour counts
  * in proportion.

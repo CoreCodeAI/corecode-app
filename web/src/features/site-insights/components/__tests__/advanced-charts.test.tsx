@@ -19,6 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { formatCompactNumber } from '@/lib/format'
+
 import { foldIntoWeek } from '../../lib'
 import { FunnelChart, ModelMap, WeekHeatmap } from '../advanced-charts'
 
@@ -152,5 +154,19 @@ describe('advanced charts', () => {
     expect(screen.getByText(/50% went on/)).toBeTruthy()
     expect(screen.getByText(/20% went on/)).toBeTruthy()
     expect(screen.getByText('10%')).toBeTruthy()
+  })
+})
+
+describe('compact figures at their boundaries', () => {
+  it('reads English in thousands, millions and billions', () => {
+    expect(formatCompactNumber(999_000, 'en')).toBe('999K')
+    expect(formatCompactNumber(1_000_000, 'en')).toBe('1M')
+    expect(formatCompactNumber(10_254_384_179, 'en')).toBe('10.3B')
+  })
+
+  it('reads Chinese in 万 and 亿, as the other compact figures do', () => {
+    expect(formatCompactNumber(9_999_000, 'zh-CN')).toBe('999.9万')
+    expect(formatCompactNumber(1_000_000, 'zh-CN')).toBe('100万')
+    expect(formatCompactNumber(10_254_384_179, 'zh-CN')).toBe('102.5亿')
   })
 })

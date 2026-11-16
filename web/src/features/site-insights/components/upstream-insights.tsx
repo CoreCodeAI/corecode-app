@@ -51,6 +51,7 @@ import {
   upstreamHourlySeries,
   upstreamIncidents,
   upstreamTotals,
+  offAxisSeries,
   type UpstreamModelRow,
 } from '../upstream'
 import {
@@ -96,6 +97,13 @@ export function UpstreamHourlyCharts(props: {
   const inIncident = (hour: number) =>
     incidents.some((item) => hour >= item.start && hour < item.end)
   const muted = (at: number) => series.hasOther && at === series.named.length
+  // Channels with a small share of the attempts sit above the failure chart's
+  // axis, so the busy ones keep the scale.
+  const offAxis = offAxisSeries(
+    labels.map((_, at) =>
+      series.hours.reduce((sum, hour) => sum + hour.attempts[at], 0)
+    )
+  )
   const help = useUpstreamHelp()
   const splits = splitsClientErrors(props.data)
   const revenue = useRevenueBars(series.hours)
@@ -127,7 +135,7 @@ export function UpstreamHourlyCharts(props: {
           )}
           series={labels.map((label, at) => ({
             label,
-            compact: fmt.num,
+            compact: fmt.numCompact,
             muted: muted(at),
           }))}
         />
@@ -168,9 +176,12 @@ export function UpstreamHourlyCharts(props: {
             logsSince
           )}
           series={labels.map((label, at) => ({
-            label,
+            label: offAxis[at]
+              ? t('{{name}}, off scale', { name: label })
+              : label,
             format: fmt.pct,
             muted: muted(at),
+            offScale: offAxis[at],
           }))}
         />
       </Panel>

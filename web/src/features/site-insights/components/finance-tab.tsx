@@ -40,7 +40,7 @@ import {
   type InsightsTab,
   paymentMethodLabel,
 } from '../lib'
-import { usePartialDays } from '../partial-days'
+import { previousDayPartial, usePartialDays } from '../partial-days'
 import type { BusinessInsights, FinanceInsights } from '../types'
 import { useFinanceVerdict } from '../verdicts'
 import { ModelMixPanel, VendorMarginPanel } from './business-panels'
@@ -98,6 +98,10 @@ export function FinanceTab(props: {
     : undefined
   const hours = financeHours(data, range)
   const daily = data?.daily ?? []
+  // The previous period's days, read beside this one's by their place in the range.
+  const earlierDays = comparable?.daily ?? []
+  const earlierRevenue = (day?: { topup: number; subscription: number }) =>
+    day ? day.topup + day.subscription : undefined
   // Partial days at either end of the range are never the best day.
   const best = bestWholeDay(daily, data?.start_time, data?.end_time)
   const peak = hours ? peakHour(hours, range.end) : undefined
@@ -261,11 +265,13 @@ export function FinanceTab(props: {
           <BarSeries
             ariaLabel={t('Daily revenue')}
             series={revenueSeries}
-            points={daily.map((day) => ({
+            points={daily.map((day, index) => ({
               key: day.day,
               title: fmt.day(day.day),
               values: [day.topup, day.subscription],
               partial: partialDay(day.day, [day.topup, day.subscription]),
+              previous: earlierRevenue(earlierDays.at(index)),
+              previousPartial: previousDayPartial(index, earlierDays.length),
               missing: bucketBeforeLogs(day.day, 'day', logsSince),
               extra: [
                 {

@@ -30,7 +30,7 @@ import {
   type InsightsSources,
   type InsightsTab,
 } from '../lib'
-import { usePartialDays } from '../partial-days'
+import { previousDayPartial, usePartialDays } from '../partial-days'
 import type { RiskInsights } from '../types'
 import { useRiskVerdict } from '../verdicts'
 import { largestSurge, useSurgeText } from '../verdicts/risk'
@@ -137,6 +137,13 @@ export function RiskTab(props: {
     data?.series_unit === 'day'
       ? partialDay(point.at, [point.count])
       : undefined
+  // The previous period at a point: a day by its place in the range, an hour
+  // by the hour one range earlier.
+  const earlierAt = (index: number, at: number) => {
+    if (daily) return previous?.signup_series.at(index)?.count
+    if (span == null) return undefined
+    return previousAt.get(at - span)
+  }
   const sameHourExtra = (at: number) => {
     if (daily || span == null || !previous) return undefined
     const before = previousAt.get(at - span)
@@ -245,10 +252,14 @@ export function RiskTab(props: {
         previous: previous?.signups,
         better: 'neutral',
       },
-      trend: series.map((point) => ({
+      trend: series.map((point, index) => ({
         title: pointTitle(point.at),
         value: point.count,
         partial: pointPartial(point),
+        previous: earlierAt(index, point.at),
+        previousPartial:
+          daily &&
+          previousDayPartial(index, previous?.signup_series.length ?? 0),
       })),
       tone: surge ? 'warning' : undefined,
       hint:

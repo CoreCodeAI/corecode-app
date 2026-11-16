@@ -51,6 +51,25 @@ export const INCIDENT_RATE = 0.05
 /** Every channel under this failure rate, as failureTone's default, is all clear. */
 export const CLEAR_RATE = 0.02
 
+/**
+ * A channel with under this share of the range's attempts is drawn above a
+ * failure-rate chart's axis, which the busier channels set: one small channel
+ * at a high rate would otherwise press every busy channel onto zero.
+ */
+export const AXIS_SHARE = 0.05
+
+/**
+ * Which series of a failure-rate chart sit above its axis, by each series'
+ * attempts over the range. The busiest series always sets the axis.
+ */
+export function offAxisSeries(attempts: number[]): boolean[] {
+  const all = attempts.reduce((sum, count) => sum + count, 0)
+  const busiest = attempts.indexOf(Math.max(...attempts))
+  return attempts.map(
+    (count, index) => all > 0 && index !== busiest && count / all < AXIS_SHARE
+  )
+}
+
 const HOUR = 3600
 
 export const attemptsOf = (row: { requests: number; errors: number }) =>

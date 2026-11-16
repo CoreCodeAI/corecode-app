@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQueries } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
-import { beforeLogs } from '../analysis'
+import { alignPrevious, beforeLogs, closedHours } from '../analysis'
 import type { InsightsView } from '../api'
 import {
   ATTENTION,
@@ -31,6 +31,7 @@ import {
   OVERVIEW_VIEWS,
   previousBeforeLogs,
   rangeHours,
+  rangeSpan,
   SECTIONS,
   SMALL_SAMPLE,
   sourceState,
@@ -45,7 +46,7 @@ import {
   type InsightsTab,
   attentionLabel,
 } from '../lib'
-import { usePartialDays } from '../partial-days'
+import { previousDayPartial, usePartialDays } from '../partial-days'
 import { onSale } from '../quality-analysis'
 import type {
   ActivityInsights,
@@ -62,7 +63,6 @@ import { checkoutLossFindings, refundedCheckoutFindings } from './checkout-loss'
 import { DigestSettings } from './digest-settings'
 import { Findings, StaleNote, type Finding } from './insight-kit'
 import {
-  closedTrend,
   FAILING_RATE,
   marginCard,
   overviewExtraSignals,
@@ -105,6 +105,41 @@ const EARLIER_VIEWS = [
   'upstream',
   'activity',
 ] as const satisfies readonly InsightsView[]
+
+/**
+ * An hourly series as trend points, the hour still filling left out. Each
+ * point's previous-period value is the hour one range earlier, where that
+ * period has it and the comparison holds.
+ */
+function hourlyTrend<T extends { hour: number }, B extends { hour: number }>(
+  rows: T[],
+  end: number,
+  options: {
+    title: (hour: number) => string
+    value: (row: T) => number
+    earlier: B[] | null | undefined
+    earlierValue: (row: B) => number
+    span: number
+    gate: boolean
+    /** An hour before the logs: drawn missing, not as zero. */
+    missing?: (hour: number) => boolean
+  }
+): TrendPoint[] {
+  const closed = closedHours(rows, end)
+  const before = alignPrevious(closed, options.earlier, options.span)
+  return closed.map((row, index) => {
+    const prior = before[index]
+    return {
+      title: options.title(row.hour),
+      value: options.value(row),
+      missing: options.missing?.(row.hour),
+      previous:
+        options.gate && options.span > 0 && prior
+          ? options.earlierValue(prior)
+          : undefined,
+    }
+  })
+}
 
 /** Vendors the quality verdict names when they fail. */
 const NAMED_VENDORS = new Set(['claude', 'codex', 'grok', 'gemini', 'media'])
@@ -451,66 +486,109 @@ export function OverviewTab(props: {
   }
 
   // A short range reads by the hour, the hour still filling left out; a
-  // longer one by the day.
+  // longer one by the day. The previous period is read at the same place in
+  // its range: a day by its place (day 1 with day 1), an hour by the hour one
+  // range earlier. Nothing is compared where that period is missing.
   const hourly = range?.hourly ?? false
   const end = range?.end ?? 0
-  const hourPoints = (points: { hour: number; value: number }[]) =>
-    points.map((point) => ({
-      title: hours.title(point.hour),
-      value: point.value,
-    }))
+  const span = range ? rangeSpan(range) : 0
+  const revenueOf = (row: { topup: number; subscription: number }) =>
+    row.topup + row.subscription
+  const financeBefore = previousFinance?.daily ?? []
   let revenueTrend: TrendPoint[] | undefined = (finance?.daily ?? []).map(
-    (day) => {
-      const value = day.topup + day.subscription
+    (day, index) => {
+      const value = revenueOf(day)
+      const before = financeBefore.at(index)
       return {
         title: fmt.day(day.day),
         value,
         partial: financeDay(day.day, [value]),
+        previous: previousMissing || !before ? undefined : revenueOf(before),
+        previousPartial: previousDayPartial(index, financeBefore.length),
       }
     }
   )
+  // The requests of a previous period counted on another basis are not
+  // compared, as the figures above are not.
+  const requestsComparable =
+    !previousMissing &&
+    countsRequestsOnce(previousQuality) === countsRequestsOnce(quality)
+  const requestsBefore = previousQuality?.daily ?? []
   let requestsTrend: TrendPoint[] | undefined = (quality?.daily ?? []).map(
-    (day) => ({
-      title: fmt.day(day.day),
-      value: day.requests,
-      partial: qualityDay(day.day, [day.requests]),
-      missing: beforeLogs(day.day, 86400, logsSince),
-    })
+    (day, index) => {
+      const before = requestsBefore.at(index)
+      return {
+        title: fmt.day(day.day),
+        value: day.requests,
+        partial: qualityDay(day.day, [day.requests]),
+        missing: beforeLogs(day.day, 86400, logsSince),
+        previous: requestsComparable && before ? before.requests : undefined,
+        previousPartial: previousDayPartial(index, requestsBefore.length),
+      }
+    }
   )
   let signupTrend: TrendPoint[] | undefined
-  if (hourly) {
-    revenueTrend = finance?.hourly
-      ? hourPoints(
-          closedTrend(
-            finance.hourly,
-            end,
-            (row) => row.topup + row.subscription
-          )
-        )
-      : undefined
-    const requestHours: { hour: number; requests: number }[] | undefined =
-      quality?.hourly ?? capacity?.hourly
-    // An hour before the logs has no data: drawn missing, not as zero.
-    requestsTrend = requestHours
-      ? closedTrend(requestHours, end, (row) => row.requests).map((point) => ({
-          title: hours.title(point.hour),
-          value: point.value,
-          missing: beforeLogs(point.hour, 3600, logsSince),
-        }))
-      : undefined
-  }
   if (risk?.signup_series) {
     const series = risk.signup_series.map((point) => ({
       hour: point.at,
       value: point.count,
     }))
+    // Sign-ups of the previous period, on the same unit as this one.
+    const earlier =
+      previousRisk?.series_unit === risk.series_unit
+        ? (previousRisk.signup_series ?? []).map((point) => ({
+            hour: point.at,
+            value: point.count,
+          }))
+        : []
     signupTrend =
       risk.series_unit === 'hour'
-        ? hourPoints(closedTrend(series, end || Infinity, (row) => row.value))
-        : series.map((point) => ({
+        ? hourlyTrend(series, end || Infinity, {
+            title: (hour) => hours.title(hour),
+            value: (row) => row.value,
+            earlier,
+            earlierValue: (row) => row.value,
+            span,
+            gate: true,
+          })
+        : series.map((point, index) => ({
             title: fmt.day(point.hour),
             value: point.value,
+            previous: earlier.at(index)?.value,
+            previousPartial: previousDayPartial(index, earlier.length),
           }))
+  }
+  if (hourly) {
+    revenueTrend = finance?.hourly
+      ? hourlyTrend(finance.hourly, end, {
+          title: (hour) => hours.title(hour),
+          value: revenueOf,
+          earlier: previousFinance?.hourly,
+          earlierValue: revenueOf,
+          span,
+          gate: !previousMissing,
+        })
+      : undefined
+    const requestHours: { hour: number; requests: number }[] | undefined =
+      quality?.hourly ?? capacity?.hourly
+    const earlierRequests:
+      | { hour: number; requests: number }[]
+      | null
+      | undefined = quality?.hourly
+      ? previousQuality?.hourly
+      : previousCapacity?.hourly
+    // An hour before the logs has no data: drawn missing, not as zero.
+    requestsTrend = requestHours
+      ? hourlyTrend(requestHours, end, {
+          title: (hour) => hours.title(hour),
+          value: (row) => row.requests,
+          earlier: earlierRequests,
+          earlierValue: (row) => row.requests,
+          span,
+          gate: requestsComparable,
+          missing: (hour) => beforeLogs(hour, 3600, logsSince),
+        })
+      : undefined
   }
   const qualitySampled = (quality?.requests ?? 0) >= SMALL_SAMPLE
   const once = countsRequestsOnce(quality)

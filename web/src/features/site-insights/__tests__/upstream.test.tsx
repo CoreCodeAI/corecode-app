@@ -33,6 +33,7 @@ import {
   channelTokens,
   faultsOf,
   feeBreakEven,
+  offAxisSeries,
   idleDisabled,
   partialBill,
   revenuePerRequest,
@@ -641,5 +642,14 @@ describe('UpstreamTab round 2', () => {
     expect(screen.getAllByText(/quota exhausted/).length).toBeGreaterThan(0)
     expect(screen.getByText('Tasks by channel')).toBeInTheDocument()
     expect(screen.getByText('content blocked (6)')).toBeInTheDocument()
+  })
+})
+
+describe('channels above a failure chart axis', () => {
+  it('lifts a channel under the share of attempts, never the busiest', () => {
+    expect(offAxisSeries([260_000, 269])).toEqual([false, true])
+    expect(offAxisSeries([100, 100])).toEqual([false, false])
+    expect(offAxisSeries([0, 0])).toEqual([false, false])
+    expect(offAxisSeries([])).toEqual([])
   })
 })

@@ -24,6 +24,7 @@ import {
   dayShare,
   InsightsSpanContext,
   type PartialMark,
+  previousDayPartial,
   usePartialDays,
 } from '../../partial-days'
 import { BarSeries, Sparkline } from '../shared'
@@ -183,5 +184,13 @@ describe('partial days in the charts', () => {
     )
     // The axis reaches the projection, not only what has come in.
     expect(screen.getAllByText('400').length).toBeGreaterThan(0)
+  })
+})
+
+describe('previous period edges', () => {
+  it('marks the first and last previous days as part of a day', () => {
+    expect(previousDayPartial(0, 7)).toBe(true)
+    expect(previousDayPartial(3, 7)).toBe(false)
+    expect(previousDayPartial(6, 7)).toBe(true)
   })
 })
