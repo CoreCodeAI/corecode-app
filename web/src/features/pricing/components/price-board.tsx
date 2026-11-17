@@ -66,7 +66,12 @@ import {
 } from '../lib/group-vendors'
 import { getConfiguredGroupRatio } from '../lib/model-helpers'
 import {
-  formatYuan,
+  CNY_MONEY,
+  PRICE_CURRENCY_LABEL,
+  type PriceCurrency,
+  type PriceMoney,
+} from '../lib/price-currency'
+import {
   getBaseUnitPrices,
   UNIT_PRICE_KEYS,
   type UnitPriceKey,
@@ -191,8 +196,8 @@ function groupDescription(value: unknown): string {
 
 /**
  * CoreCode fork: the model square as a price list. Each model's four Claude
- * Code prices in CNY at the chosen group, the official price struck through
- * beside them, and the share saved. Every figure comes from the live recharge
+ * Code prices at the chosen group in the chosen currency, the official price
+ * struck through beside them, and the share saved. Every figure comes from the live recharge
  * price, exchange rate, group ratios and each model's markup over the official
  * price; a marked-up model's saving explains itself in a tooltip. A model
  * billed per request, such as an image model, is listed apart with its price
@@ -205,6 +210,11 @@ export function PriceBoard(props: {
   usableGroup: Record<string, unknown>
   priceRate: number
   usdExchangeRate: number
+  /** The currency prices are shown in; CNY when absent. */
+  money?: PriceMoney
+  /** The currencies offered; with onCurrencyChange, the board shows a picker. */
+  currencies?: PriceCurrency[]
+  onCurrencyChange?: (value: PriceCurrency) => void
   /** The search text; the board keeps its own copy while typing and reports each change. */
   search: string
   onSearchChange: (value: string) => void
@@ -213,6 +223,7 @@ export function PriceBoard(props: {
   onModelClick: (modelName: string) => void
 }) {
   const { t } = useTranslation()
+  const money = props.money ?? CNY_MONEY
   const { groups, vendors } = listGroups(
     props.models,
     props.groupRatio,
@@ -308,7 +319,7 @@ export function PriceBoard(props: {
     return (
       <>
         <span className='font-mono font-semibold tabular-nums'>
-          <span className='text-primary'>{formatYuan(groupYuan(usd))}</span>
+          <span className='text-primary'>{money.format(groupYuan(usd))}</span>
           <span className='text-muted-foreground text-xs font-normal'>
             {' '}
             {t('/ 1M tokens')}
@@ -316,7 +327,7 @@ export function PriceBoard(props: {
         </span>
         <span className='text-muted-foreground block font-mono text-xs tabular-nums line-through'>
           {t('Official {{price}}', {
-            price: formatYuan(officialYuan(usd, markup)),
+            price: money.format(officialYuan(usd, markup)),
           })}
         </span>
       </>
@@ -393,7 +404,7 @@ export function PriceBoard(props: {
     const yuan = getOfficialSecondYuan(model, props.usdExchangeRate)
     if (yuan === null) return null
     return officialLine(
-      t('Official {{price}} / second', { price: formatYuan(yuan) }),
+      t('Official {{price}} / second', { price: money.format(yuan) }),
       struck
     )
   }
@@ -640,6 +651,34 @@ export function PriceBoard(props: {
                 </SelectGroup>
               </SelectContent>
             </Select>
+            {props.onCurrencyChange && props.currencies && (
+              <Select
+                items={props.currencies.map((value) => ({
+                  value,
+                  label: PRICE_CURRENCY_LABEL[value],
+                }))}
+                value={money.currency}
+                onValueChange={(value) => {
+                  if (value) props.onCurrencyChange?.(value as PriceCurrency)
+                }}
+              >
+                <SelectTrigger
+                  className='w-full sm:w-32'
+                  aria-label={t('Currency')}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  <SelectGroup>
+                    {props.currencies.map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {PRICE_CURRENCY_LABEL[value]}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {description && (
@@ -781,7 +820,7 @@ export function PriceBoard(props: {
                               <span className='flex items-center justify-end gap-2'>
                                 <span className='text-primary font-semibold'>
                                   {t('{{price}} / second', {
-                                    price: formatYuan(groupYuan(price.usd)),
+                                    price: money.format(groupYuan(price.usd)),
                                   })}
                                 </span>
                                 {mediaChip(
@@ -809,12 +848,12 @@ export function PriceBoard(props: {
                                       {tier.size}{' '}
                                     </span>
                                     <span className='text-primary font-semibold'>
-                                      {formatYuan(groupYuan(tier.usd))}
+                                      {money.format(groupYuan(tier.usd))}
                                     </span>
                                     {official !== null &&
                                       officialLine(
                                         t('Official {{price}}', {
-                                          price: formatYuan(official),
+                                          price: money.format(official),
                                         }),
                                         true
                                       )}
@@ -896,7 +935,7 @@ export function PriceBoard(props: {
                           {modelName(model)}
                         </th>
                         <td className='text-primary px-4 py-3 text-right font-mono font-semibold whitespace-nowrap tabular-nums'>
-                          {formatYuan(groupYuan(usd))}
+                          {money.format(groupYuan(usd))}
                           {officialSecondLine(model, false)}
                         </td>
                       </tr>

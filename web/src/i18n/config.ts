@@ -204,8 +204,15 @@ export const i18nReady = i18n
       escapeValue: false, // not needed for react as it escapes by default
     },
     detection: {
-      order: ['localStorage', 'navigator'],
-      caches: ['localStorage'],
+      // CoreCode fork: the static site (corecode-infra's site/docs/prefs.js)
+      // writes the reader's language to the i18next cookie and the
+      // i18nextLng localStorage key, for example when they land on /zh-tw/.
+      // The console reads the cookie first and writes both on every change,
+      // so a switch here carries back to the site. The cookie keeps the
+      // detector's name, path and SameSite defaults and lasts a year.
+      order: ['cookie', 'localStorage', 'navigator'],
+      caches: ['localStorage', 'cookie'],
+      cookieMinutes: 525600,
       // Browsers report `zh-CN`/`zh-TW`/`zh`; map them onto our `zhCN`/`zhTW`
       // codes (non-Chinese codes pass through for normal supportedLngs matching).
       convertDetectedLanguage,

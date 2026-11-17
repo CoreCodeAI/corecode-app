@@ -42,6 +42,7 @@ import {
 } from '../lib/claude-code-estimate'
 import { CLAUDE_VENDOR, modelVendor } from '../lib/group-vendors'
 import { isTokenBasedModel } from '../lib/model-helpers'
+import type { PriceMoney } from '../lib/price-currency'
 import type { PricingModel } from '../types'
 
 const DAYS_PER_MONTH = 30
@@ -86,8 +87,10 @@ function WorkloadNumber(props: {
  */
 export function ClaudeCodeEstimator(props: {
   models: PricingModel[]
-  /** CNY recharged for $1 of credit; the estimate is shown in CNY. */
+  /** CNY recharged for $1 of credit. */
   priceRate: number
+  /** The currency the estimate is shown in; CNY when absent. */
+  money?: PriceMoney
   selectedGroup?: string
   className?: string
 }) {
@@ -119,8 +122,9 @@ export function ClaudeCodeEstimator(props: {
   const savedShare =
     estimate.perDayWithoutCache > 0 ? saved / estimate.perDayWithoutCache : 0
   const yuan = (usd: number) => {
-    const value = usd * props.priceRate
-    return `¥${value.toLocaleString('en-US', {
+    const paid = usd * props.priceRate
+    const value = props.money ? props.money.convert(paid) : paid
+    return `${props.money?.symbol ?? '¥'}${value.toLocaleString('en-US', {
       maximumFractionDigits: Math.abs(value) >= 1 ? 2 : 4,
     })}`
   }

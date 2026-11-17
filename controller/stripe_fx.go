@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -112,6 +113,7 @@ func stripeHKDPerCNY(ctx context.Context) (decimal.Decimal, error) {
 	rate, err := fetchHKDPerCNY(ctx)
 	if err == nil {
 		hkdPerCNY.rate, hkdPerCNY.fetchedAt, hkdPerCNY.nextFetch = rate, now, now.Add(hkdPerCNYRefresh)
+		hkdPerCNYLatest.Store(&hkdPerCNYQuote{rate: rate, fetchedAt: now})
 		return rate, nil
 	}
 	hkdPerCNY.nextFetch = now.Add(time.Minute)
@@ -172,7 +174,47 @@ const stripeHKDDiscountMax = 0.05
 // market's, so without the discount the customer pays slightly more than
 // the CNY price.
 func stripeHKDCents(payMoney float64, hkdPerCNY decimal.Decimal) int64 {
-	discount := decimal.NewFromFloat(min(max(setting.StripeHKDDiscount, 0), stripeHKDDiscountMax))
-	return decimal.NewFromFloat(payMoney).Mul(hkdPerCNY).Mul(decimal.NewFromInt(1).Sub(discount)).
+	return decimal.NewFromFloat(payMoney).Mul(stripeChargedHKDPerCNY(hkdPerCNY)).
 		Mul(decimal.NewFromInt(100)).Floor().IntPart()
+}
+
+// stripeChargedHKDPerCNY is what Checkout charges in HKD for one CNY: the
+// market rate less StripeHKDDiscount.
+func stripeChargedHKDPerCNY(hkdPerCNY decimal.Decimal) decimal.Decimal {
+	discount := decimal.NewFromFloat(min(max(setting.StripeHKDDiscount, 0), stripeHKDDiscountMax))
+	return hkdPerCNY.Mul(decimal.NewFromInt(1).Sub(discount))
+}
+
+// hkdPerCNYQuote is one successfully fetched rate.
+type hkdPerCNYQuote struct {
+	rate      decimal.Decimal
+	fetchedAt time.Time
+}
+
+// hkdPerCNYLatest is the last fetched rate, readable without the lock that
+// stripeHKDPerCNY holds while it fetches.
+var hkdPerCNYLatest atomic.Pointer[hkdPerCNYQuote]
+
+// hkdPerCNYRefreshing keeps pricing requests to one background fetch at a time.
+var hkdPerCNYRefreshing atomic.Bool
+
+// pricingHKDPerCNY is the HKD the pricing page shows for one CNY of price:
+// what Checkout would charge for it, rounded to four decimals, or 0 when no
+// rate younger than hkdPerCNYMaxAge is known. It never waits on a fetch, so
+// GET /api/pricing stays fast; when the rate is older than hkdPerCNYRefresh,
+// or missing, it starts one in the background for later requests.
+func pricingHKDPerCNY() float64 {
+	quote := hkdPerCNYLatest.Load()
+	if (quote == nil || time.Since(quote.fetchedAt) >= hkdPerCNYRefresh) && hkdPerCNYRefreshing.CompareAndSwap(false, true) {
+		go func() {
+			defer hkdPerCNYRefreshing.Store(false)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			_, _ = stripeHKDPerCNY(ctx)
+		}()
+	}
+	if quote == nil || time.Since(quote.fetchedAt) > hkdPerCNYMaxAge {
+		return 0
+	}
+	return stripeChargedHKDPerCNY(quote.rate).Round(4).InexactFloat64()
 }

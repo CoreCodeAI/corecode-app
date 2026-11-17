@@ -34,6 +34,7 @@ import {
 import { VIEW_MODES } from './constants'
 import { usePricingData } from './hooks/use-pricing-data'
 import { usePricingUrlState } from './hooks/use-pricing-url-state'
+import { availablePriceCurrencies, priceMoney } from './lib/price-currency'
 
 // The drawer opens on a model click; its code stays out of the page's first load.
 const ModelDetailsDrawer = lazy(() =>
@@ -57,7 +58,10 @@ export function Pricing() {
     isLoading,
     priceRate,
     usdExchangeRate,
+    hkdPerCny,
   } = usePricingData()
+  const rates = { usdExchangeRate, hkdPerCny }
+  const money = priceMoney(url.currency, rates)
 
   const selectedModel = useMemo(
     () =>
@@ -105,7 +109,7 @@ export function Pricing() {
             </h1>
             <p className='text-muted-foreground/80 mt-3 text-sm sm:mt-4 sm:text-base'>
               {t(
-                'Official and group prices in CNY, side by side, so the cost is easy to compare.'
+                'Official and group prices side by side, so the cost is easy to compare.'
               )}
             </p>
             {/* CoreCode fork: Claude Code is the product; lead with it. */}
@@ -136,6 +140,9 @@ export function Pricing() {
               usableGroup={usableGroup || {}}
               priceRate={priceRate}
               usdExchangeRate={usdExchangeRate}
+              money={money}
+              currencies={availablePriceCurrencies(rates)}
+              onCurrencyChange={url.setCurrency}
               search={url.search}
               onSearchChange={url.setSearch}
               sort={url.sort}
@@ -143,7 +150,11 @@ export function Pricing() {
               onModelClick={url.openModel}
             />
 
-            <ClaudeCodeEstimator models={models || []} priceRate={priceRate} />
+            <ClaudeCodeEstimator
+              models={models || []}
+              priceRate={priceRate}
+              money={money}
+            />
           </main>
 
           {selectedModel && (
@@ -166,6 +177,7 @@ export function Pricing() {
                 autoGroups={autoGroups || []}
                 priceRate={priceRate ?? 1}
                 usdExchangeRate={usdExchangeRate ?? 1}
+                money={money}
                 tokenUnit='M'
               />
             </Suspense>

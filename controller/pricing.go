@@ -73,6 +73,9 @@ func GetPricing(c *gin.Context) {
 		"supported_endpoint": model.GetSupportedEndpointMap(),
 		"auto_groups":        service.GetUserAutoGroup(group),
 		"pricing_version":    "a42d372ccf0b5dd13ecf71203521f9d2",
+		// CoreCode: HKD per CNY of price, for the pricing page's HKD view; 0
+		// while no rate is known. See pricingHKDPerCNY.
+		"hkd_per_cny": pricingHKDPerCNY(),
 	})
 }
 
