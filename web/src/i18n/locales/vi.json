@@ -9553,6 +9553,11 @@
     "The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.": "Số tiền tối đa một đơn hàng được thu; 0 là không giới hạn. WeChat Pay nhận tối đa 1000 mỗi lần thanh toán.",
     "Enter Dodo Payments method types separated by commas, such as we_chat_pay.": "Nhập các loại phương thức Dodo Payments, phân tách bằng dấu phẩy, ví dụ we_chat_pay.",
     "The Dodo Payments order cap must be a number of yuan, 0 or more.": "Giới hạn đơn Dodo Payments phải là số tiền nhân dân tệ từ 0 trở lên.",
-    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "Phương thức này nhận tối đa ¥{{max}} mỗi đơn. Hãy chọn số tiền nhỏ hơn hoặc phương thức khác."
+    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "Phương thức này nhận tối đa ¥{{max}} mỗi đơn. Hãy chọn số tiền nhỏ hơn hoặc phương thức khác.",
+    "Uncounted models": "Mô hình không tính",
+    "Uncounted model refusal limit": "Giới hạn từ chối của mô hình không tính",
+    "Model refusal (not counted)": "Mô hình tự từ chối (không tính)",
+    "Model name prefixes, separated by commas, whose upstream classifier often refuses a client's own system prompt or tools. Their refusals of a warn-first category are recorded but never count as violations or use a warning; the refused conversation is still held.": "Tiền tố tên mô hình, phân tách bằng dấu phẩy, mà bộ phân loại phía nguồn thường từ chối do chính lời nhắc hệ thống hoặc công cụ của ứng dụng. Các lần từ chối thuộc nhóm cảnh báo trước của chúng chỉ được ghi lại, không tính là vi phạm và không dùng lượt cảnh báo; cuộc hội thoại bị từ chối vẫn được giữ.",
+    "Stop forwarding a customer's requests to the uncounted models once the upstream has refused this many of them within 24 hours, and tell the customer to use another model. 0 always forwards them.": "Ngừng chuyển tiếp yêu cầu của khách hàng tới các mô hình không tính khi phía nguồn đã từ chối số lần này trong 24 giờ, và đề nghị khách hàng dùng mô hình khác. 0 luôn chuyển tiếp."
   }
 }

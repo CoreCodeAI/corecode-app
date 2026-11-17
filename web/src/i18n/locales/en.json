@@ -9553,6 +9553,11 @@
     "The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.": "The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.",
     "Enter Dodo Payments method types separated by commas, such as we_chat_pay.": "Enter Dodo Payments method types separated by commas, such as we_chat_pay.",
     "The Dodo Payments order cap must be a number of yuan, 0 or more.": "The Dodo Payments order cap must be a number of yuan, 0 or more.",
-    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method."
+    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.",
+    "Uncounted models": "Uncounted models",
+    "Uncounted model refusal limit": "Uncounted model refusal limit",
+    "Model refusal (not counted)": "Model refusal (not counted)",
+    "Model name prefixes, separated by commas, whose upstream classifier often refuses a client's own system prompt or tools. Their refusals of a warn-first category are recorded but never count as violations or use a warning; the refused conversation is still held.": "Model name prefixes, separated by commas, whose upstream classifier often refuses a client's own system prompt or tools. Their refusals of a warn-first category are recorded but never count as violations or use a warning; the refused conversation is still held.",
+    "Stop forwarding a customer's requests to the uncounted models once the upstream has refused this many of them within 24 hours, and tell the customer to use another model. 0 always forwards them.": "Stop forwarding a customer's requests to the uncounted models once the upstream has refused this many of them within 24 hours, and tell the customer to use another model. 0 always forwards them."
   }
 }

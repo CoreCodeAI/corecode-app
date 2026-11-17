@@ -9553,6 +9553,11 @@
     "The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.": "Максимальная сумма одного заказа; 0 — без лимита. WeChat Pay принимает не более 1000 за платёж.",
     "Enter Dodo Payments method types separated by commas, such as we_chat_pay.": "Введите типы способов оплаты Dodo Payments через запятую, например we_chat_pay.",
     "The Dodo Payments order cap must be a number of yuan, 0 or more.": "Лимит заказа Dodo Payments должен быть суммой в юанях не меньше 0.",
-    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "Этот способ оплаты принимает не более ¥{{max}} за заказ. Выберите меньшую сумму или другой способ."
+    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "Этот способ оплаты принимает не более ¥{{max}} за заказ. Выберите меньшую сумму или другой способ.",
+    "Uncounted models": "Неучитываемые модели",
+    "Uncounted model refusal limit": "Лимит отказов неучитываемых моделей",
+    "Model refusal (not counted)": "Отказ модели (не засчитано)",
+    "Model name prefixes, separated by commas, whose upstream classifier often refuses a client's own system prompt or tools. Their refusals of a warn-first category are recorded but never count as violations or use a warning; the refused conversation is still held.": "Префиксы имён моделей через запятую, чей вышестоящий классификатор часто отказывает из-за собственного системного промпта или инструментов клиента. Их отказы в категориях с предупреждением записываются, но не считаются нарушениями и не расходуют предупреждения; отклонённый диалог по-прежнему удерживается.",
+    "Stop forwarding a customer's requests to the uncounted models once the upstream has refused this many of them within 24 hours, and tell the customer to use another model. 0 always forwards them.": "Прекратить пересылать запросы клиента к неучитываемым моделям, когда вышестоящий сервис отклонил столько из них за 24 часа, и предложить клиенту другую модель. 0 — пересылать всегда."
   }
 }

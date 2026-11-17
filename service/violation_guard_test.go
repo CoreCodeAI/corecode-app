@@ -176,6 +176,13 @@ func checkViolationGuard(t *testing.T, userId int, request dto.Request) *types.N
 	return CheckViolationGuard(c, &relaycommon.RelayInfo{UserId: userId, Request: request})
 }
 
+func checkViolationGuardModel(t *testing.T, userId int, modelName string, request dto.Request) *types.NewAPIError {
+	t.Helper()
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	return CheckViolationGuard(c, &relaycommon.RelayInfo{UserId: userId, OriginModelName: modelName, Request: request})
+}
+
 func violationActions(t *testing.T, userId int) []string {
 	t.Helper()
 	var records []model.ViolationRecord
@@ -206,7 +213,7 @@ func TestViolationStrikePolicy(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
 			useViolationTestDB(t, dialect)
-			for id, role := range map[int]int{1: common.RoleCommonUser, 2: common.RoleCommonUser, 3: common.RoleAdminUser, 4: common.RoleCommonUser, 5: common.RoleCommonUser, 6: common.RoleCommonUser, 7: common.RoleCommonUser, 8: common.RoleCommonUser, 9: common.RoleCommonUser, 10: common.RoleCommonUser, 11: common.RoleCommonUser, 12: common.RoleCommonUser, 13: common.RoleCommonUser, 14: common.RoleCommonUser, 15: common.RoleCommonUser, 16: common.RoleCommonUser, 17: common.RoleCommonUser} {
+			for id, role := range map[int]int{1: common.RoleCommonUser, 2: common.RoleCommonUser, 3: common.RoleAdminUser, 4: common.RoleCommonUser, 5: common.RoleCommonUser, 6: common.RoleCommonUser, 7: common.RoleCommonUser, 8: common.RoleCommonUser, 9: common.RoleCommonUser, 10: common.RoleCommonUser, 11: common.RoleCommonUser, 12: common.RoleCommonUser, 13: common.RoleCommonUser, 14: common.RoleCommonUser, 15: common.RoleCommonUser, 16: common.RoleCommonUser, 17: common.RoleCommonUser, 18: common.RoleCommonUser, 19: common.RoleCommonUser} {
 				require.NoError(t, model.DB.Create(&model.User{Id: id, Username: fmt.Sprintf("violation-user-%d", id), AffCode: fmt.Sprintf("vg%d", id), Password: "unused", Role: role, Status: common.UserStatusEnabled, Group: "default"}).Error)
 			}
 
@@ -394,6 +401,71 @@ func TestViolationStrikePolicy(t *testing.T) {
 				}
 				assert.Equal(t, []string{"enforce:warn", "enforce:merged", "enforce:merged"}, violationActions(t, 13))
 				assert.Nil(t, checkViolationGuard(t, 13, next))
+			})
+
+			t.Run("a lenient refusal by an uncounted model counts against no one, and after the limit that model is stopped", func(t *testing.T) {
+				fable := lenient
+				fable.SuspendHours = 3
+				fable.LenientWarnings = 2
+				fable.UncountedModels = "claude-fable"
+				fable.ModelRefusalLimit = 3
+				refuse := func(userId int, modelName, category, key, excerpt string, at int64) {
+					require.NoError(t, applyViolationStrike(fable, model.ViolationRecord{UserId: userId, ModelName: modelName, Category: category, ConversationKey: key, Excerpt: excerpt}, at))
+				}
+				now := common.GetTimestamp()
+
+				// User 4089 on 2026-11-17: Fable refused the first request of every
+				// new Hermes Agent conversation as cyber, including one whose only
+				// human text was "test"; Opus answered the same context. Two
+				// warnings and a 3-hour suspension followed.
+				resetViolationGuardState()
+				*operation_setting.GetViolationGuardSetting() = fable
+				refuse(18, "claude-fable-5-2", "cyber", "review", "用fable再次复核之前的工作", now-3600)
+				refuse(18, "claude-fable-5-1", "cyber", "review-again", "用fable再次复核之前的工作", now-3000)
+				assert.Nil(t, checkViolationGuardModel(t, 18, "claude-fable-5-2", fresh), "below the limit Fable is forwarded")
+				refuse(18, "claude-fable-5-2", "cyber", "probe", "test", now-60)
+				assert.Equal(t, slices.Repeat([]string{"enforce:model_refusal"}, 3), violationActions(t, 18), "nothing counts against the customer")
+				for _, name := range []string{"claude-fable-5-2", "Claude-Fable-5-1"} {
+					apiErr := checkViolationGuardModel(t, 18, name, fresh)
+					require.NotNil(t, apiErr, name)
+					assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+					assert.Equal(t, types.ErrorCodeViolationModelRefusalBlocked, apiErr.GetErrorCode())
+				}
+				assert.Nil(t, checkViolationGuardModel(t, 18, "claude-opus-5-5", fresh), "other models still pass")
+				excerpts, err := model.GetRecentRefusedExcerpts(now-day, 100)
+				require.NoError(t, err)
+				assert.NotContains(t, excerpts, "test", "an uncounted refusal is not compared with other customers' messages")
+
+				resetViolationGuardState()
+				require.NotNil(t, checkViolationGuardModel(t, 18, "claude-fable-5-2", fresh), "the count survives a restart")
+				observeFable := fable
+				observeFable.Mode = operation_setting.ViolationGuardModeObserve
+				*operation_setting.GetViolationGuardSetting() = observeFable
+				assert.Nil(t, checkViolationGuardModel(t, 18, "claude-fable-5-2", fresh), "observe mode only logs")
+				unlimited := fable
+				unlimited.ModelRefusalLimit = 0
+				*operation_setting.GetViolationGuardSetting() = unlimited
+				assert.Nil(t, checkViolationGuardModel(t, 18, "claude-fable-5-2", fresh), "a limit of 0 always forwards")
+				*operation_setting.GetViolationGuardSetting() = fable
+				require.NoError(t, ForgiveViolations(18))
+				assert.Nil(t, checkViolationGuardModel(t, 18, "claude-fable-5-2", fresh), "forgiving clears the count")
+				resetViolationGuardState()
+				assert.Nil(t, checkViolationGuardModel(t, 18, "claude-fable-5-2", fresh), "and the reloaded count leaves forgiven refusals out")
+
+				// The conversation is still held, and blocked once refused again.
+				// The warnings are untouched: the customer's first lenient refusal
+				// by another model warns, and a category that is not lenient
+				// suspends on Fable too.
+				resetViolationGuardState()
+				refuse(19, "claude-fable-5-2", "cyber", refusedKey, "test", now-300)
+				assert.Nil(t, checkViolationGuardModel(t, 19, "claude-fable-5-2", resent), "a held conversation continues")
+				refuse(19, "claude-fable-5-2", "cyber", refusedKey, "test", now-240)
+				apiErr := checkViolationGuardModel(t, 19, "claude-fable-5-2", resent)
+				require.NotNil(t, apiErr)
+				assert.Equal(t, types.ErrorCodeViolationConversationBlocked, apiErr.GetErrorCode())
+				refuse(19, "claude-opus-5-5", "cyber", "opus", "scan my own server", now-600)
+				refuse(19, "claude-fable-5-2", "bio", "bio", "culture a pathogen", now-60)
+				assert.Equal(t, []string{"enforce:model_refusal", "enforce:model_refusal", "enforce:warn", "enforce:suspend"}, violationActions(t, 19))
 			})
 
 			t.Run("a lenient refusal holds its conversation until the upstream refuses it again", func(t *testing.T) {

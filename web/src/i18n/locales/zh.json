@@ -9553,6 +9553,11 @@
     "The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.": "单笔订单最多收取的金额；0 表示不设上限。微信支付单笔最多 1000。",
     "Enter Dodo Payments method types separated by commas, such as we_chat_pay.": "请输入以逗号分隔的 Dodo Payments 支付方式类型，例如 we_chat_pay。",
     "The Dodo Payments order cap must be a number of yuan, 0 or more.": "Dodo Payments 单笔上限必须是不小于 0 的人民币金额。",
-    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "该支付方式单笔最多 ¥{{max}}。请选择更小的金额或其他支付方式。"
+    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "该支付方式单笔最多 ¥{{max}}。请选择更小的金额或其他支付方式。",
+    "Uncounted models": "不计违规的模型",
+    "Uncounted model refusal limit": "不计违规模型的拒绝上限",
+    "Model refusal (not counted)": "模型自身拦截（不计次）",
+    "Model name prefixes, separated by commas, whose upstream classifier often refuses a client's own system prompt or tools. Their refusals of a warn-first category are recorded but never count as violations or use a warning; the refused conversation is still held.": "模型名前缀，用逗号分隔。这些模型的上游分类器常因客户端自带的系统提示或工具而拒绝。它们在「先警告的类别」下的拒绝只记录，不计违规、不占警告次数；被拒的对话仍会保留。",
+    "Stop forwarding a customer's requests to the uncounted models once the upstream has refused this many of them within 24 hours, and tell the customer to use another model. 0 always forwards them.": "24 小时内上游拒绝某客户发往这些模型的请求达到此次数后，暂停转发其对这些模型的请求，并提示客户换用其他模型。0 表示始终转发。"
   }
 }

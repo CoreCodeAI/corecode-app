@@ -24,6 +24,7 @@ export type ViolationAction =
   | 'merged'
   | 'warn'
   | 'client_check'
+  | 'model_refusal'
   | 'strike'
   | 'suspend'
   | 'ban'

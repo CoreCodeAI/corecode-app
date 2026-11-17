@@ -17,6 +17,10 @@ const (
 	// ViolationActionClientCheck is a lenient refusal of a request the client
 	// sent on its own, such as Claude Code's auto mode check: not counted.
 	ViolationActionClientCheck = "client_check"
+	// ViolationActionModelRefusal is a lenient refusal by a model whose
+	// upstream classifier refuses clients' own context, such as Fable's: not
+	// counted.
+	ViolationActionModelRefusal = "model_refusal"
 )
 
 // ViolationModeExempt marks a refusal by an administrator, which is recorded
@@ -225,13 +229,14 @@ func HasViolationInConversation(userId int, conversationKey string, since int64)
 	return count > 0, err
 }
 
-// GetRecentClientChecks returns, per user, when each refused client check
-// recorded after since and not forgiven was refused, oldest first. Checks of
-// exempt administrators are left out.
-func GetRecentClientChecks(since int64) (map[int][]int64, error) {
+// GetRecentUncountedRefusals returns, per user, when each refusal recorded
+// with the action, client_check or model_refusal, after since and not
+// forgiven was refused, oldest first. Refusals of exempt administrators are
+// left out.
+func GetRecentUncountedRefusals(action string, since int64) (map[int][]int64, error) {
 	var records []ViolationRecord
 	err := DB.Select("user_id", "created_at").
-		Where("created_at > ? AND action = ? AND mode <> ?", since, ViolationActionClientCheck, ViolationModeExempt).
+		Where("created_at > ? AND action = ? AND mode <> ?", since, action, ViolationModeExempt).
 		Order("created_at").Find(&records).Error
 	if err != nil {
 		return nil, err
@@ -327,11 +332,12 @@ const RiskGateCategoryPrefix = "gate:"
 // since the given time, newest first, at most limit of them. Violations the
 // risk gate recorded itself are left out: they are its own verdicts, not
 // refusals. So are refusals of exempt administrators, whose probes would
-// otherwise block each other.
+// otherwise block each other, and uncounted refusals, whose excerpt is not
+// what the upstream refused.
 func GetRecentRefusedExcerpts(since int64, limit int) ([]string, error) {
 	var excerpts []string
 	err := DB.Model(&ViolationRecord{}).
-		Where("created_at > ? AND excerpt <> '' AND mode <> ? AND action <> ? AND (category IS NULL OR category NOT LIKE ?)", since, ViolationModeExempt, ViolationActionClientCheck, RiskGateCategoryPrefix+"%").
+		Where("created_at > ? AND excerpt <> '' AND mode <> ? AND action NOT IN ? AND (category IS NULL OR category NOT LIKE ?)", since, ViolationModeExempt, []string{ViolationActionClientCheck, ViolationActionModelRefusal}, RiskGateCategoryPrefix+"%").
 		Order("id desc").Limit(limit).Pluck("excerpt", &excerpts).Error
 	return excerpts, err
 }

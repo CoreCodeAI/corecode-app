@@ -9553,6 +9553,11 @@
     "The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.": "Le montant maximal d'une commande ; 0 pour aucun plafond. WeChat Pay accepte au plus 1000 par paiement.",
     "Enter Dodo Payments method types separated by commas, such as we_chat_pay.": "Saisissez des types de moyens Dodo Payments séparés par des virgules, par exemple we_chat_pay.",
     "The Dodo Payments order cap must be a number of yuan, 0 or more.": "Le plafond Dodo Payments doit être un montant en yuans, égal ou supérieur à 0.",
-    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "Ce moyen de paiement accepte au plus {{max}} ¥ par commande. Choisissez un montant plus petit ou un autre moyen."
+    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "Ce moyen de paiement accepte au plus {{max}} ¥ par commande. Choisissez un montant plus petit ou un autre moyen.",
+    "Uncounted models": "Modèles non comptés",
+    "Uncounted model refusal limit": "Limite des refus des modèles non comptés",
+    "Model refusal (not counted)": "Refus du modèle (non compté)",
+    "Model name prefixes, separated by commas, whose upstream classifier often refuses a client's own system prompt or tools. Their refusals of a warn-first category are recorded but never count as violations or use a warning; the refused conversation is still held.": "Préfixes de noms de modèles, séparés par des virgules, dont le classificateur en amont refuse souvent le prompt système ou les outils du client lui-même. Leurs refus d'une catégorie à avertissement préalable sont enregistrés mais ne comptent jamais comme violations et n'utilisent pas d'avertissement ; la conversation refusée reste retenue.",
+    "Stop forwarding a customer's requests to the uncounted models once the upstream has refused this many of them within 24 hours, and tell the customer to use another model. 0 always forwards them.": "Arrêter de transmettre les requêtes d'un client vers les modèles non comptés lorsque l'amont en a refusé ce nombre en 24 heures, et lui indiquer d'utiliser un autre modèle. 0 les transmet toujours."
   }
 }
