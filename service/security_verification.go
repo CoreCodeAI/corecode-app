@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"encoding/json"
 	"errors"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -50,7 +51,10 @@ const (
 	// marked refunded. It sits under the admin.user. prefix so only
 	// administrators can obtain it.
 	VerificationScopeAdminTopUpRefund = "admin.user.topup.refund"
-	verificationScopeAdminUserPrefix  = "admin.user."
+	// VerificationScopeAdminTopUpOffline binds the exact offline payment being
+	// recorded: user, money, quota, payment time and whether it backfills.
+	VerificationScopeAdminTopUpOffline = "admin.user.topup.offline"
+	verificationScopeAdminUserPrefix   = "admin.user."
 )
 
 // adminUserManageActions are the ManageUser actions that change a user's
@@ -100,6 +104,24 @@ type AdminUserManageContext struct {
 // as NormalizeTopUpRefundTradeNos returns them.
 type AdminTopUpRefundContext struct {
 	TradeNos []string `json:"trade_nos"`
+}
+
+// AdminTopUpOfflineContext is the offline payment an administrator records,
+// as NormalizeTopUpOffline returns it. Money is in the payment currency,
+// rounded to the cent, and Amount in whole quota dollars.
+type AdminTopUpOfflineContext struct {
+	UserID   int     `json:"user_id"`
+	Money    float64 `json:"money"`
+	Amount   int64   `json:"amount"`
+	PaidAt   int64   `json:"paid_at"`
+	Backfill bool    `json:"backfill"`
+}
+
+// NormalizeTopUpOffline rounds Money to the cent, so a proof matches the
+// request whatever digits each sent, and reports false for an incomplete one.
+func NormalizeTopUpOffline(context AdminTopUpOfflineContext) (AdminTopUpOfflineContext, bool) {
+	context.Money = math.Round(context.Money*100) / 100
+	return context, context.UserID > 0 && context.Money > 0 && context.Amount > 0 && context.PaidAt > 0
 }
 
 // MaxTopUpRefundBatch bounds one refund marking, which locks every order.
@@ -262,6 +284,16 @@ func BindVerificationOperation(operation VerificationOperation) (VerificationBin
 			return VerificationBinding{}, ErrVerificationContextInvalid
 		}
 		normalized = AdminTopUpRefundContext{TradeNos: tradeNos}
+	case VerificationScopeAdminTopUpOffline:
+		var context AdminTopUpOfflineContext
+		if len(fields) != 5 || common.Unmarshal(operation.Context, &context) != nil {
+			return VerificationBinding{}, ErrVerificationContextInvalid
+		}
+		offline, ok := NormalizeTopUpOffline(context)
+		if !ok {
+			return VerificationBinding{}, ErrVerificationContextInvalid
+		}
+		normalized = offline
 	case VerificationScopeAdminUserCreate:
 		var context AdminUserCreateContext
 		if len(fields) != 1 || common.Unmarshal(fields["role"], &context.Role) != nil || context.Role < common.RoleAdminUser || !common.IsValidateRole(context.Role) {
@@ -372,7 +404,8 @@ func securityVerificationPolicy(scope string, state model.UserVerificationState)
 		VerificationScopePasswordSet, VerificationScopePasswordChange, VerificationScopeAccountDelete,
 		VerificationScopeAdminUserCreate, VerificationScopeAdminUserUpdate, VerificationScopeAdminUserDelete,
 		VerificationScopeAdminUserManage, VerificationScopeAdminUserPasskeyReset,
-		VerificationScopeAdminUserTwoFADisable, VerificationScopeAdminUserBindingClear, VerificationScopeAdminTopUpRefund:
+		VerificationScopeAdminUserTwoFADisable, VerificationScopeAdminUserBindingClear, VerificationScopeAdminTopUpRefund,
+		VerificationScopeAdminTopUpOffline:
 		if scope == VerificationScopeAccountDelete && state.Role == common.RoleRootUser {
 			return nil, ErrVerificationForbidden
 		}
@@ -443,7 +476,8 @@ func GetVerificationRequirements(identity AuthIdentity, scope string) (*Verifica
 			case VerificationScopeAccountBind, VerificationScopeAccountUnbind, VerificationScopePasswordSet, VerificationScopePasswordChange, VerificationScopeAccountDelete,
 				VerificationScopeAdminUserCreate, VerificationScopeAdminUserUpdate, VerificationScopeAdminUserDelete,
 				VerificationScopeAdminUserManage, VerificationScopeAdminUserPasskeyReset,
-				VerificationScopeAdminUserTwoFADisable, VerificationScopeAdminUserBindingClear, VerificationScopeAdminTopUpRefund:
+				VerificationScopeAdminUserTwoFADisable, VerificationScopeAdminUserBindingClear, VerificationScopeAdminTopUpRefund,
+				VerificationScopeAdminTopUpOffline:
 				methods[i].Available, methods[i].Reason = false, "Password authentication is disabled."
 			}
 		}

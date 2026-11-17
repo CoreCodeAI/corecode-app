@@ -27,6 +27,7 @@ var auditContentTemplates = map[string]string{
 	"user.quota_subtract":       "Decreased user quota by ${quota}",
 	"user.quota_override":       "Overrode user quota from ${from} to ${to}",
 	"user.quota_replay":         "Replayed a user quota adjustment without changing the balance",
+	"user.topup_offline":        "Recorded an offline payment of ${money} for ${amount} quota dollars",
 	"user.topup_refund":         "Marked ${count} top-up orders refunded (${money})",
 	"user.binding_clear":        "Cleared ${bindingType} binding for user ${username}",
 	"user.2fa_disable":          "Force-disabled two-factor authentication for the user",

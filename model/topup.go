@@ -41,6 +41,9 @@ const (
 	PaymentMethodNowPayments     = "nowpayments"
 	PaymentMethodDodoPayments    = "dodopayments"
 	PaymentMethodBalance         = "balance"
+	// PaymentMethodOffline is money received outside new-api, such as a
+	// company's bank transfer, recorded by an administrator.
+	PaymentMethodOffline = "offline"
 )
 
 const (
@@ -52,7 +55,15 @@ const (
 	PaymentProviderNowPayments  = "nowpayments"
 	PaymentProviderDodoPayments = "dodopayments"
 	PaymentProviderBalance      = "balance"
+	// PaymentProviderOffline marks an offline payment whose order credited
+	// the wallet when it was recorded; PaymentProviderOfflineBackfill one
+	// that pays for quota administrators had already added by hand.
+	PaymentProviderOffline         = "offline"
+	PaymentProviderOfflineBackfill = "offline_backfill"
 )
+
+// offlinePaymentProviders are the providers of recorded offline payments.
+var offlinePaymentProviders = []string{PaymentProviderOffline, PaymentProviderOfflineBackfill}
 
 var (
 	ErrPaymentMethodMismatch = errors.New("payment method mismatch")

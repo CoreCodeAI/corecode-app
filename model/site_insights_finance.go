@@ -982,7 +982,9 @@ type walletPrice struct {
 
 // readWalletPrices returns the price of each paying customer's wallet over
 // the credits it received before end: paid top-ups with their bonus, manual
-// adjustments by an administrator, and redemption codes. A credit outside
+// adjustments by an administrator, and redemption codes. An offline backfill
+// is paid quota that came in as a manual adjustment, so it moves that much
+// from given to paid. A credit outside
 // these (a sign-up or invitation reward) is not counted, which leaves that
 // wallet's price a little high.
 func readWalletPrices(end int64) (map[int]walletPrice, error) {
@@ -1011,6 +1013,7 @@ func readWalletPrices(end int64) (map[int]walletPrice, error) {
 		entry.money += order.Money
 		entry.paid += order.Amount*int64(common.QuotaPerUnit) + order.BonusQuota
 		entry.bonus += order.BonusQuota
+		entry.given -= order.backfilled()
 	}
 	if err := eachQuotaAdjustment(0, end, func(log AuditLog) {
 		if !log.Success || log.Other.Op == nil {

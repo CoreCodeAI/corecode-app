@@ -137,3 +137,61 @@ func chargeRefunded(ctx context.Context, event stripe.Event, callerIp string) {
 	}
 	logger.LogInfo(ctx, common.LogText("Stripe charge refunded, order marked refunded trade_no=%s charge=%s client_ip=%s", tradeNo, charge, callerIp))
 }
+
+// AdminRecordOfflineTopUpRequest is an offline payment to record; see
+// service.AdminTopUpOfflineContext. PaidAt defaults to now.
+type AdminRecordOfflineTopUpRequest struct {
+	UserId   int     `json:"user_id"`
+	Money    float64 `json:"money"`
+	Amount   int64   `json:"amount"`
+	PaidAt   int64   `json:"paid_at"`
+	Backfill bool    `json:"backfill"`
+}
+
+// AdminRecordOfflineTopUp records money a customer paid outside new-api, such
+// as an enterprise's bank transfer, as a paid order (model.RecordOfflineTopUp).
+// Like marking a refund it changes revenue, so it needs a step-up proof bound
+// to the exact payment, and writes a user.topup_offline audit entry. The
+// console has no control for it; a script calls it with a personal access
+// token (billing:write).
+func AdminRecordOfflineTopUp(c *gin.Context) {
+	var req AdminRecordOfflineTopUpRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	if req.PaidAt == 0 {
+		req.PaidAt = common.GetTimestamp()
+	}
+	payment, ok := service.NormalizeTopUpOffline(service.AdminTopUpOfflineContext{
+		UserID: req.UserId, Money: req.Money, Amount: req.Amount, PaidAt: req.PaidAt, Backfill: req.Backfill,
+	})
+	if !ok {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	authorization := requireAdminUserProof(c, service.VerificationScopeAdminTopUpOffline, payment)
+	if authorization == nil {
+		return
+	}
+	topUp, err := model.RecordOfflineTopUp(model.OfflineTopUpInput{
+		UserId: payment.UserID, Money: payment.Money, Amount: payment.Amount, PaidAt: payment.PaidAt,
+		Backfill: payment.Backfill, CallerIp: c.ClientIP(),
+	})
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if _, err := model.RefreshUserPaidMoney(topUp.UserId); err != nil {
+		common.SysError(common.LogText("failed to refresh paid total of user %d: %s", topUp.UserId, err.Error()))
+	}
+	recordManageAuditFor(c, topUp.UserId, "user.topup_offline", map[string]any{
+		"trade_no":            topUp.TradeNo,
+		"money":               decimal.NewFromFloat(topUp.Money).StringFixed(2),
+		"amount":              topUp.Amount,
+		"paid_at":             topUp.CreateTime,
+		"backfill":            payment.Backfill,
+		"verification_method": authorization.Method,
+	})
+	common.ApiSuccess(c, topUp)
+}

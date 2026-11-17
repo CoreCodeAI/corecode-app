@@ -148,6 +148,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/user/topup/stats":                        accessTokenScopeRule("billing:read"),
 	"POST /api/user/topup/complete":                    accessTokenScopeRule("billing:write"),
 	"POST /api/user/topup/refund":                      accessTokenScopeRule("billing:write"),
+	"POST /api/user/topup/offline":                     accessTokenScopeRule("billing:write"),
 	"GET /api/user/search":                             accessTokenScopeRule("user:read"),
 	"GET /api/user/violations":                         accessTokenScopeRule("user:read"),
 	"POST /api/user/:id/violations/lift":               accessTokenScopeRule("user:write"),

@@ -206,8 +206,13 @@ func UsersPaidMoney(userIds []int) (map[int]float64, error) {
 	return paid, nil
 }
 
+// affiliatePaidCents is what a user paid that earns their inviter
+// commission: AffiliatePaidMoney without offline payments, whose terms are
+// settled with the payer directly.
 func affiliatePaidCents(tx *gorm.DB, userId int) (int64, error) {
-	money, err := AffiliatePaidMoney(tx, userId)
+	var money float64
+	err := paidTopUps(tx).Where("user_id = ? AND (top_ups.payment_provider IS NULL OR top_ups.payment_provider NOT IN ?)", userId, offlinePaymentProviders).
+		Select("COALESCE(SUM(money), 0)").Scan(&money).Error
 	if err != nil {
 		return 0, err
 	}

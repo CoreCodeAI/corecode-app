@@ -173,3 +173,49 @@ func TestStripeChargeRefundedMarksOnlyFullRefunds(t *testing.T) {
 	deliver("pi_plan", true)
 	assert.Equal(t, map[string]string{"ref_paid_a": "refunded", "ref_paid_b": "success", "ref_plan": "refunded", "ref_open": "pending", "plan order": "refunded"}, refundStatuses(t))
 }
+
+func TestAdminRecordOfflineTopUpNeedsAProofForTheExactPayment(t *testing.T) {
+	_, identity, target := setupAdminUserTest(t)
+	require.NoError(t, model.DB.AutoMigrate(&model.TopUp{}))
+	record := func(body string, proof string) (*httptest.ResponseRecorder, securityEnrollmentResponse) {
+		response := adminUserRequest(http.MethodPost, "/api/user/topup/offline", body, proof, identity, common.RoleRootUser, nil, AdminRecordOfflineTopUp)
+		var result securityEnrollmentResponse
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		return response, result
+	}
+	paidAt := time.Now().Unix() - 3600
+	payment := fmt.Sprintf(`{"user_id":%d,"money":700,"amount":1000,"paid_at":%d,"backfill":false}`, target.Id, paidAt)
+	proof := func() string {
+		return issueSecurityEnrollmentProof(t, identity, service.VerificationOperation{Scope: service.VerificationScopeAdminTopUpOffline, Context: []byte(payment)}, service.VerificationMethodPassword)
+	}
+	offlineOrders := func() int64 {
+		var count int64
+		require.NoError(t, model.DB.Model(&model.TopUp{}).Where("payment_method = ?", model.PaymentMethodOffline).Count(&count).Error)
+		return count
+	}
+
+	response, result := record(payment, "")
+	assert.Equal(t, http.StatusForbidden, response.Code)
+	assert.Equal(t, "SECURITY_PROOF_REQUIRED", result.Code)
+	response, result = record(fmt.Sprintf(`{"user_id":%d,"money":7000,"amount":1000,"paid_at":%d}`, target.Id, paidAt), proof())
+	assert.Equal(t, http.StatusForbidden, response.Code)
+	assert.Equal(t, "SECURITY_PROOF_CONTEXT_MISMATCH", result.Code, "the proof binds the amount of money")
+	assert.Zero(t, offlineOrders())
+
+	// The request may omit backfill and send more digits than the cent.
+	_, result = record(fmt.Sprintf(`{"user_id":%d,"money":700.001,"amount":1000,"paid_at":%d}`, target.Id, paidAt), proof())
+	require.True(t, result.Success, result.Message)
+	assert.EqualValues(t, 1, offlineOrders())
+	stored, err := model.GetUserById(target.Id, false)
+	require.NoError(t, err)
+	assert.Equal(t, target.Quota+1000*int(common.QuotaPerUnit), stored.Quota)
+	assert.Equal(t, 700.0, model.CachedUserPaidMoney(target.Id), "the paid total is refreshed")
+
+	var audits []model.AuditLog
+	require.NoError(t, model.LOG_DB.Where("action = ?", "user.topup_offline").Find(&audits).Error)
+	require.Len(t, audits, 1)
+	params, err := common.Marshal(audits[0].Other.Op.Params)
+	require.NoError(t, err)
+	assert.Contains(t, string(params), `"money":"700.00"`)
+	assert.Contains(t, string(params), `"backfill":false`)
+}

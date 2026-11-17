@@ -234,6 +234,7 @@ func readWalletHistory(end int64) (walletHistory, error) {
 		if !order.Subscription {
 			history[order.UserId] = append(history[order.UserId], walletCredit{
 				at: order.CreateTime, money: order.Money, paid: order.Amount*int64(common.QuotaPerUnit) + order.BonusQuota,
+				given: -order.backfilled(),
 			})
 		}
 	}
