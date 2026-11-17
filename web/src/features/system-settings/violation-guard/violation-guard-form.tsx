@@ -61,6 +61,8 @@ const violationGuardSchema = z.object({
   lenient_categories: z.string(),
   lenient_warnings: z.number().int().min(0),
   client_check_limit: z.number().int().min(0),
+  uncounted_models: z.string(),
+  model_refusal_limit: z.number().int().min(0),
 })
 
 type ViolationGuardFormValues = z.output<typeof violationGuardSchema>
@@ -74,6 +76,8 @@ export type ViolationGuardValues = {
   'violation_guard_setting.lenient_categories': string
   'violation_guard_setting.lenient_warnings': number
   'violation_guard_setting.client_check_limit': number
+  'violation_guard_setting.uncounted_models': string
+  'violation_guard_setting.model_refusal_limit': number
 }
 
 type ViolationGuardFormProps = {
@@ -91,6 +95,8 @@ const toFormValues = (
   lenient_categories: defaults['violation_guard_setting.lenient_categories'],
   lenient_warnings: defaults['violation_guard_setting.lenient_warnings'],
   client_check_limit: defaults['violation_guard_setting.client_check_limit'],
+  uncounted_models: defaults['violation_guard_setting.uncounted_models'],
+  model_refusal_limit: defaults['violation_guard_setting.model_refusal_limit'],
 })
 
 const toOptionValues = (
@@ -105,6 +111,8 @@ const toOptionValues = (
     values.lenient_categories.trim(),
   'violation_guard_setting.lenient_warnings': values.lenient_warnings,
   'violation_guard_setting.client_check_limit': values.client_check_limit,
+  'violation_guard_setting.uncounted_models': values.uncounted_models.trim(),
+  'violation_guard_setting.model_refusal_limit': values.model_refusal_limit,
 })
 
 export function ViolationGuardForm(props: ViolationGuardFormProps) {
@@ -142,7 +150,8 @@ export function ViolationGuardForm(props: ViolationGuardFormProps) {
       | 'ban_strikes'
       | 'strike_window_days'
       | 'lenient_warnings'
-      | 'client_check_limit',
+      | 'client_check_limit'
+      | 'model_refusal_limit',
     label: string,
     description: string,
     min: number
@@ -299,6 +308,32 @@ export function ViolationGuardForm(props: ViolationGuardFormProps) {
             t('Client check limit'),
             t(
               'Stop forwarding the client checks of a customer, such as the check Claude Code auto mode sends before a tool call, once the upstream has refused this many of them within 24 hours. They never count as violations. 0 always forwards them.'
+            ),
+            0
+          )}
+          <FormField
+            control={form.control}
+            name='uncounted_models'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Uncounted models')}</FormLabel>
+                <FormControl>
+                  <Input placeholder='claude-fable' {...field} />
+                </FormControl>
+                <FormDescription>
+                  {t(
+                    "Model name prefixes, separated by commas, whose upstream classifier often refuses a client's own system prompt or tools. Their refusals of a warn-first category are recorded but never count as violations or use a warning; the refused conversation is still held."
+                  )}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          {numberField(
+            'model_refusal_limit',
+            t('Uncounted model refusal limit'),
+            t(
+              "Stop forwarding a customer's requests to the uncounted models once the upstream has refused this many of them within 24 hours, and tell the customer to use another model. 0 always forwards them."
             ),
             0
           )}

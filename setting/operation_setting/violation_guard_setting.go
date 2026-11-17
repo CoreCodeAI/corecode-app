@@ -46,11 +46,26 @@ type ViolationGuardSetting struct {
 	// upstream has refused this many of them within ClientCheckWindowSeconds;
 	// 0 always forwards them. See clientCheckRefusal in the service package.
 	ClientCheckLimit int `json:"client_check_limit"`
+	// UncountedModels lists model name prefixes, separated by commas or
+	// whitespace, whose refusals of a lenient category neither warn nor
+	// strike: the upstream's classifier for these models refuses ordinary
+	// requests for the client's own system prompt and tools. Such a refusal
+	// is recorded as model_refusal and holds its conversation; see
+	// ModelRefusalLimit.
+	UncountedModels string `json:"uncounted_models"`
+	// ModelRefusalLimit stops forwarding a customer's requests to the
+	// uncounted models once the upstream has refused this many of them within
+	// ModelRefusalWindowSeconds; 0 always forwards them.
+	ModelRefusalLimit int `json:"model_refusal_limit"`
 }
 
 // ClientCheckWindowSeconds is how long a refused client check counts toward
 // ClientCheckLimit.
 const ClientCheckWindowSeconds = 24 * 3600
+
+// ModelRefusalWindowSeconds is how long a model_refusal counts toward
+// ModelRefusalLimit.
+const ModelRefusalWindowSeconds = 24 * 3600
 
 // LenientWarningWindowSeconds is how long a lenient incident counts toward
 // LenientWarnings.
@@ -62,13 +77,31 @@ func (s ViolationGuardSetting) LenientCategory(category string) bool {
 	if category == "" {
 		return false
 	}
-	separator := func(r rune) bool { return r == ',' || r == '，' || unicode.IsSpace(r) }
-	for _, lenient := range strings.FieldsFunc(s.LenientCategories, separator) {
+	for _, lenient := range strings.FieldsFunc(s.LenientCategories, violationGuardListSeparator) {
 		if strings.EqualFold(lenient, category) {
 			return true
 		}
 	}
 	return false
+}
+
+// UncountedModel reports whether the model's name starts with one of
+// UncountedModels.
+func (s ViolationGuardSetting) UncountedModel(modelName string) bool {
+	if modelName == "" {
+		return false
+	}
+	modelName = strings.ToLower(modelName)
+	for _, prefix := range strings.FieldsFunc(s.UncountedModels, violationGuardListSeparator) {
+		if strings.HasPrefix(modelName, strings.ToLower(prefix)) {
+			return true
+		}
+	}
+	return false
+}
+
+func violationGuardListSeparator(r rune) bool {
+	return r == ',' || r == '，' || unicode.IsSpace(r)
 }
 
 var violationGuardSetting = ViolationGuardSetting{
@@ -85,6 +118,12 @@ var violationGuardSetting = ViolationGuardSetting{
 	// A client that keeps sending checks the upstream refuses costs the pool
 	// account a refusal each time, and the customer gains nothing from them.
 	ClientCheckLimit: 5,
+	// Fable's classifier refuses agent clients' context about seven times as
+	// often as Opus's, so its refusals rarely say what the customer asked.
+	UncountedModels: "claude-fable",
+	// Three refusals in a day show the client's context keeps being refused;
+	// the customer can use another model meanwhile.
+	ModelRefusalLimit: 3,
 }
 
 func init() {
@@ -103,7 +142,7 @@ func ValidateViolationGuardOption(field string, value string) error {
 		if value != ViolationGuardModeObserve && value != ViolationGuardModeEnforce {
 			return fmt.Errorf("Violation guard mode must be observe or enforce")
 		}
-	case "suspend_hours", "ban_strikes", "client_check_limit", "lenient_warnings":
+	case "suspend_hours", "ban_strikes", "client_check_limit", "lenient_warnings", "model_refusal_limit":
 		if number, err := strconv.Atoi(value); err != nil || number < 0 {
 			return fmt.Errorf("Violation guard %s must be a non-negative whole number", field)
 		}

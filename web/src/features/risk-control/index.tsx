@@ -54,6 +54,8 @@ const defaultViolationGuard: ViolationGuardValues = {
   'violation_guard_setting.lenient_categories': 'reasoning_extraction',
   'violation_guard_setting.lenient_warnings': 2,
   'violation_guard_setting.client_check_limit': 5,
+  'violation_guard_setting.uncounted_models': 'claude-fable',
+  'violation_guard_setting.model_refusal_limit': 3,
 }
 
 const defaultRiskGate: RiskGateValues = {

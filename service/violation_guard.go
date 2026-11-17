@@ -54,8 +54,10 @@ const minViolationMergeSeconds = 10 * 60
 const warningMergeSeconds = 2 * 60
 
 // violationGuardState is what the relay checks on every request: suspended
-// users, the refused conversations of each user, and when each user's client
-// checks were refused within ClientCheckWindowSeconds, oldest first. It lives
+// users, the refused conversations of each user, when each user's client
+// checks were refused within ClientCheckWindowSeconds, and when each user's
+// requests to the uncounted models were refused within
+// ModelRefusalWindowSeconds, oldest first. It lives
 // in process memory because one new-api instance serves the relay. It loads from the database on first use, and every strike or lift
 // writes the database first and then this copy.
 var violationGuardState = struct {
@@ -64,6 +66,7 @@ var violationGuardState = struct {
 	suspendedUntil map[int]int64
 	conversations  map[int]map[string]model.RefusedConversation
 	clientChecks   map[int][]int64
+	modelRefusals  map[int][]int64
 }{}
 
 func loadViolationGuardState(setting *operation_setting.ViolationGuardSetting, now, windowStart int64) bool {
@@ -78,12 +81,15 @@ func loadViolationGuardState(setting *operation_setting.ViolationGuardSetting, n
 	if err == nil {
 		conversations, err = model.GetRefusedViolationConversations(windowStart, setting.LenientCategory)
 	}
-	var clientChecks map[int][]int64
+	var clientChecks, modelRefusals map[int][]int64
 	if err == nil {
-		clientChecks, err = model.GetRecentClientChecks(now - operation_setting.ClientCheckWindowSeconds)
+		clientChecks, err = model.GetRecentUncountedRefusals(model.ViolationActionClientCheck, now-operation_setting.ClientCheckWindowSeconds)
+	}
+	if err == nil {
+		modelRefusals, err = model.GetRecentUncountedRefusals(model.ViolationActionModelRefusal, now-operation_setting.ModelRefusalWindowSeconds)
 	}
 	if err != nil {
-		common.SysError(common.LogText("violation guard: failed to load suspensions, refused conversations and client checks: %s", err.Error()))
+		common.SysError(common.LogText("violation guard: failed to load suspensions, refused conversations and uncounted refusals: %s", err.Error()))
 		return false
 	}
 	violationGuardState.Lock()
@@ -92,6 +98,7 @@ func loadViolationGuardState(setting *operation_setting.ViolationGuardSetting, n
 		violationGuardState.suspendedUntil = suspended
 		violationGuardState.conversations = conversations
 		violationGuardState.clientChecks = clientChecks
+		violationGuardState.modelRefusals = modelRefusals
 		violationGuardState.loaded = true
 	}
 	return true
@@ -102,6 +109,7 @@ const (
 	violationVerdictSuspended    = "suspended"
 	violationVerdictConversation = "conversation"
 	violationVerdictClientCheck  = "client_check"
+	violationVerdictModelRefusal = "model_refusal"
 	violationVerdictResend       = "resend"
 )
 
@@ -123,7 +131,8 @@ func violationRefusedRecently(userId int) bool {
 
 // CheckViolationGuard rejects, before any channel is used, a request from an
 // account suspended for a violation, a client check from an account whose
-// client checks the upstream keeps refusing, a request that resends a
+// client checks the upstream keeps refusing, a request to an uncounted model
+// from an account whose requests to those models it keeps refusing, a request that resends a
 // conversation the upstream refused, or a request that repeats a held
 // conversation's refused request with no new human message. In observe mode it only logs what it would reject. When
 // the state cannot be loaded the request passes.
@@ -134,7 +143,7 @@ func CheckViolationGuard(c *gin.Context, info *relaycommon.RelayInfo) *types.New
 
 // violationGuardVerdict is CheckViolationGuard that also reports what it
 // found, violationVerdictSuspended, violationVerdictClientCheck,
-// violationVerdictConversation or violationVerdictResend, in either mode.
+// violationVerdictModelRefusal, violationVerdictConversation or violationVerdictResend, in either mode.
 func violationGuardVerdict(c *gin.Context, info *relaycommon.RelayInfo) (string, *types.NewAPIError) {
 	setting := operation_setting.GetViolationGuardSetting()
 	if !setting.Enabled || info == nil {
@@ -161,8 +170,19 @@ func violationGuardVerdict(c *gin.Context, info *relaycommon.RelayInfo) (string,
 		logger.LogInfo(c, common.LogText("violation guard (observe): user %d is suspended; enforce mode would reject this request", info.UserId))
 		return violationVerdictSuspended, nil
 	}
+	if limit := setting.ModelRefusalLimit; limit > 0 && setting.UncountedModel(info.OriginModelName) {
+		if refused := recentUncountedRefusals(model.ViolationActionModelRefusal, info.UserId, now-operation_setting.ModelRefusalWindowSeconds); refused >= limit {
+			if !enforce {
+				logger.LogInfo(c, common.LogText("violation guard (observe): user %d asked for %s after %d of its requests were refused; enforce mode would reject this request", info.UserId, info.OriginModelName, refused))
+				return violationVerdictModelRefusal, nil
+			}
+			RequestPolicy(c).AddEvent(PolicyEvent{ErrorCode: string(types.ErrorCodeViolationModelRefusalBlocked), ErrorSource: "local", Decision: PolicyDecision{Action: "stop", Reason: "local_rejection", Source: "global"}, Health: "unchanged"})
+			return violationVerdictModelRefusal, types.NewErrorWithStatusCode(errors.New(i18n.T(c, i18n.MsgViolationModelRefusalBlocked, map[string]any{"Count": refused, "Model": info.OriginModelName})),
+				types.ErrorCodeViolationModelRefusalBlocked, http.StatusForbidden, types.ErrOptionWithSkipRetry())
+		}
+	}
 	if limit := setting.ClientCheckLimit; limit > 0 && clientCheckRequest(info.Request) {
-		if refused := recentClientChecks(info.UserId, now); refused >= limit {
+		if refused := recentUncountedRefusals(model.ViolationActionClientCheck, info.UserId, now-operation_setting.ClientCheckWindowSeconds); refused >= limit {
 			if !enforce {
 				logger.LogInfo(c, common.LogText("violation guard (observe): user %d sent a client check after %d were refused; enforce mode would reject this request", info.UserId, refused))
 				return violationVerdictClientCheck, nil
@@ -262,7 +282,7 @@ func RecordUpstreamRefusal(c *gin.Context, info *relaycommon.RelayInfo) {
 			common.SysError(common.LogText("violation guard: failed to record a refusal for user %d: %s", record.UserId, err.Error()))
 			return
 		}
-		if user, err := model.GetUserCache(record.UserId); err == nil && !violationExempt(user.Role) && !clientCheckRefusal(setting, record) {
+		if user, err := model.GetUserCache(record.UserId); err == nil && !violationExempt(user.Role) && !clientCheckRefusal(setting, record) && !modelRefusal(setting, record) {
 			rememberRefusedMessage(record.Excerpt)
 		}
 	})
@@ -278,6 +298,14 @@ func clientCheckRefusal(setting operation_setting.ViolationGuardSetting, record 
 	return setting.LenientCategory(record.Category) && strings.HasPrefix(record.Excerpt, clientCheckPrefix)
 }
 
+// modelRefusal reports whether a refusal came from a model whose upstream
+// classifier refuses clients' own context: the excerpt, the customer's latest
+// message, is then rarely what was refused. Only lenient categories qualify,
+// so a refusal of another category on these models still counts.
+func modelRefusal(setting operation_setting.ViolationGuardSetting, record model.ViolationRecord) bool {
+	return setting.LenientCategory(record.Category) && setting.UncountedModel(record.ModelName)
+}
+
 // clientCheckPrefix starts the latest human message of a client check.
 const clientCheckPrefix = "<transcript>"
 
@@ -291,14 +319,17 @@ func clientCheckRequest(request dto.Request) bool {
 	return len(messages) > 0 && strings.HasPrefix(messages[len(messages)-1], clientCheckPrefix)
 }
 
-// recentClientChecks counts the user's client checks the upstream refused
-// within ClientCheckWindowSeconds before now.
-func recentClientChecks(userId int, now int64) int {
-	since := now - operation_setting.ClientCheckWindowSeconds
+// recentUncountedRefusals counts the user's refusals recorded with the
+// action, client_check or model_refusal, after since.
+func recentUncountedRefusals(action string, userId int, since int64) int {
 	violationGuardState.RLock()
 	defer violationGuardState.RUnlock()
+	times := violationGuardState.clientChecks[userId]
+	if action == model.ViolationActionModelRefusal {
+		times = violationGuardState.modelRefusals[userId]
+	}
 	refused := 0
-	for _, refusedAt := range violationGuardState.clientChecks[userId] {
+	for _, refusedAt := range times {
 		if refusedAt > since {
 			refused++
 		}
@@ -343,10 +374,13 @@ func applyViolationStrike(setting operation_setting.ViolationGuardSetting, recor
 	}
 
 	mergeSeconds := max(int64(setting.SuspendHours)*3600, minViolationMergeSeconds)
-	// A refused client check is recorded and its conversation held, but it
-	// neither starts nor joins an incident.
+	// A refused client check, or a lenient refusal by an uncounted model, is
+	// recorded and its conversation held, but it neither starts nor joins an
+	// incident.
 	if clientCheckRefusal(setting, record) {
 		record.Action = model.ViolationActionClientCheck
+	} else if modelRefusal(setting, record) {
+		record.Action = model.ViolationActionModelRefusal
 	} else {
 		lenient := setting.LenientCategory(record.Category)
 		repeated := false
@@ -433,6 +467,11 @@ func applyViolationStrike(setting operation_setting.ViolationGuardSetting, recor
 		checks := slices.DeleteFunc(violationGuardState.clientChecks[record.UserId], func(refusedAt int64) bool { return refusedAt <= since })
 		violationGuardState.clientChecks[record.UserId] = append(checks, now)
 	}
+	if violationGuardState.loaded && record.Action == model.ViolationActionModelRefusal {
+		since := now - operation_setting.ModelRefusalWindowSeconds
+		refusals := slices.DeleteFunc(violationGuardState.modelRefusals[record.UserId], func(refusedAt int64) bool { return refusedAt <= since })
+		violationGuardState.modelRefusals[record.UserId] = append(refusals, now)
+	}
 	violationGuardState.Unlock()
 
 	if record.Mode != operation_setting.ViolationGuardModeEnforce {
@@ -474,6 +513,7 @@ func ForgiveViolations(userId int) error {
 	delete(violationGuardState.suspendedUntil, userId)
 	delete(violationGuardState.conversations, userId)
 	delete(violationGuardState.clientChecks, userId)
+	delete(violationGuardState.modelRefusals, userId)
 	return nil
 }
 

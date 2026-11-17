@@ -9553,6 +9553,11 @@
     "The most one order may charge; 0 for no cap. WeChat Pay takes at most 1000 per payment.": "1 回の注文で請求できる上限額。0 は上限なし。WeChat Pay は 1 回 1000 までです。",
     "Enter Dodo Payments method types separated by commas, such as we_chat_pay.": "Dodo Payments の支払い方法の種類をカンマ区切りで入力してください（例: we_chat_pay）。",
     "The Dodo Payments order cap must be a number of yuan, 0 or more.": "Dodo Payments の上限は 0 以上の人民元金額にしてください。",
-    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "この支払い方法は 1 注文あたり最大 ¥{{max}} です。金額を減らすか、別の方法を選んでください。"
+    "This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.": "この支払い方法は 1 注文あたり最大 ¥{{max}} です。金額を減らすか、別の方法を選んでください。",
+    "Uncounted models": "カウントしないモデル",
+    "Uncounted model refusal limit": "カウントしないモデルの拒否上限",
+    "Model refusal (not counted)": "モデル側の拒否（カウントなし）",
+    "Model name prefixes, separated by commas, whose upstream classifier often refuses a client's own system prompt or tools. Their refusals of a warn-first category are recorded but never count as violations or use a warning; the refused conversation is still held.": "カンマ区切りのモデル名プレフィックス。これらのモデルの上流分類器は、クライアント自身のシステムプロンプトやツールを理由に拒否することがよくあります。「まず警告するカテゴリ」での拒否は記録のみで、違反にも警告回数にもカウントしません。拒否された会話は引き続き保留されます。",
+    "Stop forwarding a customer's requests to the uncounted models once the upstream has refused this many of them within 24 hours, and tell the customer to use another model. 0 always forwards them.": "24 時間以内に上流がこれらのモデルへの顧客のリクエストをこの回数拒否すると、そのモデルへのリクエストの転送を停止し、別のモデルを使うよう案内します。0 は常に転送します。"
   }
 }
