@@ -407,13 +407,25 @@ type paidOrder struct {
 	Amount        int64
 	BonusQuota    int64
 	PaymentMethod string
-	TradeNo       string
-	CreateTime    int64
-	Subscription  bool
+	// PaymentProvider tells an offline backfill (PaymentProviderOfflineBackfill)
+	// apart: it pays for quota already added by hand.
+	PaymentProvider string
+	TradeNo         string
+	CreateTime      int64
+	Subscription    bool
+}
+
+// backfilled is the quota an offline backfill pays for that administrators
+// had added by hand, and zero for any other order.
+func (order paidOrder) backfilled() int64 {
+	if order.PaymentProvider != PaymentProviderOfflineBackfill {
+		return 0
+	}
+	return order.Amount * int64(common.QuotaPerUnit)
 }
 
 func readPaidOrders(start, end int64) ([]paidOrder, error) {
-	query := DB.Model(&TopUp{}).Select("user_id, money, amount, bonus_quota, payment_method, trade_no, create_time").
+	query := DB.Model(&TopUp{}).Select("user_id, money, amount, bonus_quota, payment_method, payment_provider, trade_no, create_time").
 		Where("status = ? AND (payment_provider IS NULL OR payment_provider <> ?)", common.TopUpStatusSuccess, PaymentProviderBalance)
 	if start > 0 {
 		query = query.Where("create_time >= ?", start)

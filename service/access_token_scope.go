@@ -226,6 +226,7 @@ var accessTokenVerificationScopes = map[string]string{
 	VerificationScopeAdminUserTwoFADisable: "user:write",
 	VerificationScopeAdminUserBindingClear: "user:write",
 	VerificationScopeAdminTopUpRefund:      "billing:write",
+	VerificationScopeAdminTopUpOffline:     "billing:write",
 	VerificationScopePasskeyRegister:       "account_security:write",
 	VerificationScopePasskeyDelete:         "account_security:write",
 	VerificationScopeTwoFASetup:            "account_security:write",
