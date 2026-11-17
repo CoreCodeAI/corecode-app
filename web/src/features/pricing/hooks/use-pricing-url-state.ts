@@ -24,12 +24,21 @@ import {
   parseBoardSort,
   type BoardSort,
 } from '../lib/board-rows'
+import {
+  DEFAULT_PRICE_CURRENCY,
+  parsePriceCurrency,
+  readStoredPriceCurrency,
+  storePriceCurrency,
+  type PriceCurrency,
+} from '../lib/price-currency'
 
 const route = getRouteApi('/pricing/')
 
 /**
- * CoreCode fork: the pricing page's search text, sort key and open model live
- * in the URL (`?search=&sort=&model=`), so a link reproduces the view. Opening
+ * CoreCode fork: the pricing page's search text, sort key, currency and open
+ * model live in the URL (`?search=&sort=&currency=&model=`), so a link
+ * reproduces the view. A picked currency is also remembered for later visits;
+ * without either, prices show in USD. Opening
  * a model adds a history entry, so Back closes its drawer; a visitor who landed
  * on a link with `model` already set closes it without leaving the page.
  */
@@ -62,6 +71,20 @@ export function usePricingUrlState() {
     [navigate]
   )
 
+  const setCurrency = useCallback(
+    (value: PriceCurrency) => {
+      storePriceCurrency(value)
+      void navigate({
+        search: (prev) => ({
+          ...prev,
+          currency: value === DEFAULT_PRICE_CURRENCY ? undefined : value,
+        }),
+        replace: true,
+      })
+    },
+    [navigate]
+  )
+
   const openModel = useCallback(
     (name: string) => {
       openedHere.current = true
@@ -85,9 +108,14 @@ export function usePricingUrlState() {
   return {
     search: search.search ?? '',
     sort: parseBoardSort(search.sort),
+    currency:
+      parsePriceCurrency(search.currency) ??
+      readStoredPriceCurrency() ??
+      DEFAULT_PRICE_CURRENCY,
     model: search.model ?? null,
     setSearch,
     setSort,
+    setCurrency,
     openModel,
     closeModel,
   }

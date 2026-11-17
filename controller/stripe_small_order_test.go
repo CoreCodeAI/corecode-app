@@ -33,8 +33,10 @@ func setHKDPerCNYForTest(t *testing.T, rate string) {
 func resetHKDPerCNYForTest(t *testing.T) {
 	t.Helper()
 	hkdPerCNY.rate, hkdPerCNY.fetchedAt, hkdPerCNY.nextFetch = decimal.Zero, time.Time{}, time.Time{}
+	hkdPerCNYLatest.Store(nil)
 	t.Cleanup(func() {
 		hkdPerCNY.rate, hkdPerCNY.fetchedAt, hkdPerCNY.nextFetch = decimal.Zero, time.Time{}, time.Time{}
+		hkdPerCNYLatest.Store(nil)
 	})
 }
 

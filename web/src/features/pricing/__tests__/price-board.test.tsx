@@ -27,6 +27,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { PriceBoard } from '../components/price-board'
+import { availablePriceCurrencies, priceMoney } from '../lib/price-currency'
 import type { PricingModel } from '../types'
 
 const GROUP = 'Claude 满血'
@@ -303,4 +304,42 @@ it('shows only the per-request table for a group of per-request models', () => {
   ).getByRole('row', { name: /grok-imagine-image/ })
   expect(within(row).getByText('¥0.06')).toBeVisible()
   expect(screen.queryByText('Input price')).toBeNull()
+})
+
+it('shows the same prices in USD and HKD, keeping the saving, and offers the picked currencies', async () => {
+  const onCurrencyChange = vi.fn()
+  const rates = { usdExchangeRate: 6.8, hkdPerCny: 1.089 }
+  const board = (currency: 'usd' | 'hkd') => (
+    <PriceBoard
+      models={[opus]}
+      groupRatio={{ [GROUP]: 1.5 }}
+      usableGroup={{ [GROUP]: '' }}
+      priceRate={1}
+      usdExchangeRate={6.8}
+      money={priceMoney(currency, rates)}
+      currencies={availablePriceCurrencies(rates)}
+      onCurrencyChange={onCurrencyChange}
+      {...boardControls()}
+      onModelClick={vi.fn()}
+    />
+  )
+  const { rerender } = render(board('usd'))
+
+  // ¥6 paid and ¥27.2 official, at $1 = ¥6.8: the official price is the USD list price.
+  expect(within(desktopRow()).getByText('$0.8824')).toBeVisible()
+  expect(within(desktopRow()).getByText('Official $4')).toBeVisible()
+  expect(within(desktopRow()).getByText('Save 78%')).toBeVisible()
+
+  rerender(board('hkd'))
+  expect(within(desktopRow()).getByText('HK$6.534')).toBeVisible()
+  expect(within(desktopRow()).getByText('Official HK$29.6208')).toBeVisible()
+  expect(within(desktopRow()).getByText('Save 78%')).toBeVisible()
+
+  await userEvent
+    .setup()
+    .click(screen.getByRole('combobox', { name: 'Currency' }))
+  await userEvent
+    .setup()
+    .click(await screen.findByRole('option', { name: 'CNY ¥' }))
+  expect(onCurrencyChange).toHaveBeenCalledWith('cny')
 })

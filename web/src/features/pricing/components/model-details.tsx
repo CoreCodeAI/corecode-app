@@ -89,6 +89,12 @@ import {
 } from '../lib/plugin-pricing'
 import { formatFixedPrice, formatGroupPrice } from '../lib/price'
 import {
+  DEFAULT_PRICE_CURRENCY,
+  priceMoney,
+  readStoredPriceCurrency,
+  type PriceMoney,
+} from '../lib/price-currency'
+import {
   evaluateTaskUsageExamples,
   getTaskEnumFields,
   getTaskNumberFields,
@@ -1513,6 +1519,8 @@ export interface ModelDetailsContentProps {
   usdExchangeRate: number
   tokenUnit: TokenUnit
   showRechargePrice?: boolean
+  /** The currency of the Claude Code estimate; CNY when absent. */
+  money?: PriceMoney
   /** Absolute link to this model's details; shows a "Copy link" button. */
   shareUrl?: string
 }
@@ -1604,6 +1612,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
             <ClaudeCodeEstimator
               models={[props.model]}
               priceRate={props.priceRate}
+              money={props.money}
             />
           )}
 
@@ -1674,7 +1683,15 @@ export function ModelDetails() {
     isLoading,
     priceRate,
     usdExchangeRate,
+    hkdPerCny,
   } = usePricingData()
+  const money = priceMoney(
+    readStoredPriceCurrency() ?? DEFAULT_PRICE_CURRENCY,
+    {
+      usdExchangeRate,
+      hkdPerCny,
+    }
+  )
 
   const tokenUnit: TokenUnit =
     search.tokenUnit === 'K' ? 'K' : DEFAULT_TOKEN_UNIT
@@ -1755,6 +1772,7 @@ export function ModelDetails() {
           usdExchangeRate={usdExchangeRate ?? 1}
           tokenUnit={tokenUnit}
           showRechargePrice={search.rechargePrice ?? false}
+          money={money}
           shareUrl={`${window.location.origin}/pricing/${encodeURIComponent(model.model_name)}`}
           endpointMap={
             (endpointMap as Record<

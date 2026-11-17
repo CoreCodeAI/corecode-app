@@ -12,7 +12,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The console renders only once the visitor's locale has loaded, and the bundle
 // asks for it only after it has downloaded and run. This inline script picks the
-// language as i18next will (the `i18nextLng` cache, then the browser languages,
+// language as i18next will (the `i18next` cookie, then the `i18nextLng`
+// localStorage cache, then the browser languages,
 // mapped as convertDetectedLanguage maps them) and preloads that locale's parts
 // the page renders from beside the entry bundle: the boot part, then the core
 // and rest parts as window.__localeTier, which pluginPreloadRoute's script sets
@@ -32,7 +33,7 @@ function pluginPreloadLocale(): RsbuildPlugin {
           urls[tier][part[2]] = assetPrefix + file
         }
         if (!urls[0].en) return tags
-        const script = `(function(){var u=${JSON.stringify(urls)};function p(c){if(!c)return;var x=String(c).toLowerCase().replace(/_/g,'-');if(x.indexOf('zh')===0)return /^(zhtw|zh-tw|zh-hk|zh-mo|zh-hant)/.test(x)?'zhTW':'zhCN';if(u[0][c])return c;x=x.split('-')[0];if(u[0][x])return x}var c;try{c=p(localStorage.getItem('i18nextLng'))}catch(e){}var n=navigator.languages||[navigator.language];for(var i=0;!c&&i<n.length;i++)c=p(n[i]);c=c||'en';var t=window.__localeTier;if(t===undefined)t=1;for(i=0;i<=t;i++){if(!u[i][c])continue;var l=document.createElement('link');l.rel='preload';l.as='script';l.href=u[i][c];document.head.appendChild(l)}})()`
+        const script = `(function(){var u=${JSON.stringify(urls)};function p(c){if(!c)return;var x=String(c).toLowerCase().replace(/_/g,'-');if(x.indexOf('zh')===0)return /^(zhtw|zh-tw|zh-hk|zh-mo|zh-hant)/.test(x)?'zhTW':'zhCN';if(u[0][c])return c;x=x.split('-')[0];if(u[0][x])return x}var c=p((document.cookie.match(/(?:^|;\\s*)i18next=([^;]*)/)||[])[1]);try{if(!c)c=p(localStorage.getItem('i18nextLng'))}catch(e){}var n=navigator.languages||[navigator.language];for(var i=0;!c&&i<n.length;i++)c=p(n[i]);c=c||'en';var t=window.__localeTier;if(t===undefined)t=1;for(i=0;i<=t;i++){if(!u[i][c])continue;var l=document.createElement('link');l.rel='preload';l.as='script';l.href=u[i][c];document.head.appendChild(l)}})()`
         tags.headTags.unshift({ tag: 'script', children: script })
         return tags
       })

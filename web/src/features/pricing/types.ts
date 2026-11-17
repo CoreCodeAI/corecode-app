@@ -143,6 +143,8 @@ export type PricingData = {
   usable_group: Record<string, { desc: string; ratio: number }>
   supported_endpoint: Record<string, string>
   auto_groups: string[]
+  /** CoreCode fork: HKD charged per yuan; 0 while the server has no rate. */
+  hkd_per_cny?: number
 }
 
 export type TokenUnit = 'M' | 'K'
