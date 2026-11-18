@@ -22,17 +22,19 @@ For commercial licensing, please contact support@quantumnous.com
  * times the credit spent) or the official price in yuan; a reader picks how
  * it is shown:
  *
- * - CNY (the default): yuan as they are, which is what a customer is charged
+ * - CNY (the fallback): yuan as they are, which is what a customer is charged
  *   (top-up is in yuan, ¥1 per $1 of credit).
  * - USD: yuan ÷ the site's reference rate (`usd_exchange_rate`), so the
  *   official price reads as the vendor's USD list price and every saving keeps
  *   its share.
  * - HKD: yuan × what Stripe Checkout charges in HKD for one yuan
  *   (`hkd_per_cny` in /api/pricing); offered only while the server has a rate.
+ *
+ * With no pick in the URL or in storage, the currency follows the reader's
+ * interface language (`defaultPriceCurrency`).
  */
 export const PRICE_CURRENCIES = ['usd', 'cny', 'hkd'] as const
 export type PriceCurrency = (typeof PRICE_CURRENCIES)[number]
-export const DEFAULT_PRICE_CURRENCY: PriceCurrency = 'cny'
 
 const SYMBOL: Record<PriceCurrency, string> = {
   usd: '$',
@@ -78,6 +80,28 @@ export type PriceRates = {
   hkdPerCny?: number
 }
 
+/**
+ * The currency a reader sees before picking one, from the language i18next
+ * resolved (the console's `zhCN`/`zhTW` codes or a BCP-47 tag): Traditional
+ * Chinese (zh-TW, zh-HK, zh-MO, zh-Hant*) is HKD while the server has a rate,
+ * other Chinese is CNY, every other language is USD, and a missing language is
+ * CNY, the yuan a customer is charged.
+ */
+export function defaultPriceCurrency(
+  language: string | null | undefined,
+  rates: Pick<PriceRates, 'hkdPerCny'>
+): PriceCurrency {
+  const tag = (language ?? '').toLowerCase().replaceAll(/[-_]/g, '')
+  if (!tag) return 'cny'
+  if (!tag.startsWith('zh')) return 'usd'
+  const traditional =
+    tag === 'zhtw' ||
+    tag === 'zhhk' ||
+    tag === 'zhmo' ||
+    tag.startsWith('zhhant')
+  return traditional && (rates.hkdPerCny ?? 0) > 0 ? 'hkd' : 'cny'
+}
+
 /** The currencies the rates allow; HKD needs a rate. */
 export function availablePriceCurrencies(rates: PriceRates): PriceCurrency[] {
   return PRICE_CURRENCIES.filter(
@@ -95,7 +119,7 @@ export type PriceMoney = {
 }
 
 /**
- * How to show yuan in `wanted`, or in the default (CNY) when the rates cannot give it.
+ * How to show yuan in `wanted`, or in CNY when the rates cannot give it.
  * At most four decimals, no trailing zeros: "$0.5588", "¥3.8", "HK$4.1382".
  */
 export function priceMoney(
@@ -104,7 +128,7 @@ export function priceMoney(
 ): PriceMoney {
   const currency = availablePriceCurrencies(rates).includes(wanted)
     ? wanted
-    : DEFAULT_PRICE_CURRENCY
+    : defaultPriceCurrency(undefined, rates)
   const perYuanBy: Record<PriceCurrency, number> = {
     usd: 1 / Math.max(rates.usdExchangeRate, 0.001),
     cny: 1,

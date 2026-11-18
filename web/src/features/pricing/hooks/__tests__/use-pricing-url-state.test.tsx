@@ -25,7 +25,8 @@ import {
 } from '@tanstack/react-router'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, expect, it } from 'vitest'
+import i18next from 'i18next'
+import { afterEach, beforeAll, expect, it } from 'vitest'
 import z from 'zod'
 
 import { PriceBoard } from '../../components/price-board'
@@ -33,6 +34,7 @@ import { priceMoney } from '../../lib/price-currency'
 import type { PricingModel } from '../../types'
 import { usePricingUrlState } from '../use-pricing-url-state'
 
+const RATES = { usdExchangeRate: 6.8, hkdPerCny: 1.089 }
 const GROUP = 'Claude 满血'
 
 function claude(id: number, name: string, input: number): PricingModel {
@@ -52,7 +54,7 @@ const models = [
 ]
 
 function Page() {
-  const url = usePricingUrlState()
+  const url = usePricingUrlState(RATES)
   return (
     <>
       <PriceBoard
@@ -65,8 +67,8 @@ function Page() {
         onSearchChange={url.setSearch}
         sort={url.sort}
         onSortChange={url.setSort}
-        money={priceMoney(url.currency, { usdExchangeRate: 6.8 })}
-        currencies={['usd', 'cny']}
+        money={priceMoney(url.currency, RATES)}
+        currencies={['usd', 'cny', 'hkd']}
         onCurrencyChange={url.setCurrency}
         onModelClick={url.openModel}
       />
@@ -108,10 +110,26 @@ function search(router: Awaited<ReturnType<typeof renderAt>>) {
   return router.state.location.search as Record<string, unknown>
 }
 
-afterEach(() => {
+beforeAll(() => {
+  for (const lng of ['zhCN', 'zhTW']) {
+    i18next.addResourceBundle(lng, 'translation', {})
+  }
+})
+
+afterEach(async () => {
   cleanup()
   localStorage.clear()
+  await i18next.changeLanguage('en')
 })
+
+async function renderIn(language: string, entry: string) {
+  await i18next.changeLanguage(language)
+  return renderAt(entry)
+}
+
+function currencyPicker() {
+  return screen.getByRole('combobox', { name: 'Currency' })
+}
 
 it('starts from the search text and sort in a shared link', async () => {
   await renderAt('/pricing/?search=opus&sort=output')
@@ -187,21 +205,59 @@ it('opens the model of a shared link, and closing it stays on the page', async (
   expect(router.state.location.pathname).toBe('/pricing')
 })
 
-it('shows yuan by default, writes USD to the URL when picked, and drops CNY', async () => {
-  const router = await renderAt('/pricing/')
+it('shows yuan by default for a Chinese reader, and keeps a picked CNY in the URL', async () => {
+  const router = await renderIn('zhCN', '/pricing/')
   const user = userEvent.setup()
-  expect(screen.getByRole('combobox', { name: 'Currency' })).toHaveTextContent(
-    'CNY ¥'
-  )
+  expect(currencyPicker()).toHaveTextContent('CNY ¥')
+  expect(search(router).currency).toBeUndefined()
 
-  await user.click(screen.getByRole('combobox', { name: 'Currency' }))
+  await user.click(currencyPicker())
   await user.click(await screen.findByRole('option', { name: 'USD $' }))
   await waitFor(() => expect(search(router).currency).toBe('usd'))
-  expect(screen.getByRole('combobox', { name: 'Currency' })).toHaveTextContent(
-    'USD $'
-  )
+  expect(currencyPicker()).toHaveTextContent('USD $')
 
-  await user.click(screen.getByRole('combobox', { name: 'Currency' }))
+  // CNY is written too: a link without the parameter opens in each reader's
+  // own default, so an English reader would not see the sharer's yuan.
+  await user.click(currencyPicker())
   await user.click(await screen.findByRole('option', { name: 'CNY ¥' }))
-  await waitFor(() => expect(search(router).currency).toBeUndefined())
+  await waitFor(() => expect(search(router).currency).toBe('cny'))
+})
+
+it('defaults to the reader language: USD for English, HKD for zh-TW, CNY for zh', async () => {
+  await renderIn('en', '/pricing/')
+  expect(currencyPicker()).toHaveTextContent('USD $')
+  expect(screen.getAllByText(/^\$/).length).toBeGreaterThan(0)
+  cleanup()
+
+  await renderIn('zhTW', '/pricing/')
+  expect(currencyPicker()).toHaveTextContent('HKD HK$')
+  expect(screen.getAllByText(/^HK\$/).length).toBeGreaterThan(0)
+  cleanup()
+
+  await renderIn('zhCN', '/pricing/')
+  expect(currencyPicker()).toHaveTextContent('CNY ¥')
+  expect(screen.getAllByText(/^¥/).length).toBeGreaterThan(0)
+})
+
+it('lets a ?currency= link, then a stored pick, override the language default', async () => {
+  await renderIn('en', '/pricing/?currency=cny')
+  expect(currencyPicker()).toHaveTextContent('CNY ¥')
+  cleanup()
+
+  await renderIn('zhCN', '/pricing/?currency=usd')
+  expect(currencyPicker()).toHaveTextContent('USD $')
+  cleanup()
+
+  localStorage.setItem('corecode:pricing-currency', 'hkd')
+  await renderIn('en', '/pricing/')
+  expect(currencyPicker()).toHaveTextContent('HKD HK$')
+  cleanup()
+
+  await renderIn('zhCN', '/pricing/?currency=usd')
+  expect(currencyPicker()).toHaveTextContent('USD $')
+})
+
+it('does not store a language default, only a pick', async () => {
+  await renderIn('en', '/pricing/')
+  expect(localStorage.getItem('corecode:pricing-currency')).toBeNull()
 })

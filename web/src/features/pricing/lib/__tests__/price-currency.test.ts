@@ -20,7 +20,7 @@ import { expect, it } from 'vitest'
 
 import {
   availablePriceCurrencies,
-  DEFAULT_PRICE_CURRENCY,
+  defaultPriceCurrency,
   parsePriceCurrency,
   priceMoney,
 } from '../price-currency'
@@ -48,8 +48,43 @@ it('reads only the currencies it knows from a URL or storage', () => {
   expect(parsePriceCurrency(undefined)).toBeNull()
 })
 
-it('defaults to CNY, the yuan a customer is charged, and still shows USD when picked', () => {
-  expect(DEFAULT_PRICE_CURRENCY).toBe('cny')
-  expect(priceMoney(DEFAULT_PRICE_CURRENCY, rates).format(6)).toBe('¥6')
-  expect(priceMoney('usd', rates).currency).toBe('usd')
+it('defaults Simplified Chinese, and a missing language, to CNY', () => {
+  for (const language of [
+    'zh',
+    'zhCN',
+    'zh-CN',
+    'zh-SG',
+    'zh-Hans',
+    'zh-Hans-CN',
+  ]) {
+    expect(defaultPriceCurrency(language, rates)).toBe('cny')
+  }
+  expect(defaultPriceCurrency(undefined, rates)).toBe('cny')
+  expect(defaultPriceCurrency(null, rates)).toBe('cny')
+  expect(defaultPriceCurrency('', rates)).toBe('cny')
+})
+
+it('defaults Traditional Chinese to HKD only while the server has a rate', () => {
+  for (const language of [
+    'zhTW',
+    'zh-TW',
+    'zh_HK',
+    'zh-MO',
+    'zh-Hant',
+    'zh-Hant-TW',
+  ]) {
+    expect(defaultPriceCurrency(language, rates)).toBe('hkd')
+    expect(defaultPriceCurrency(language, { hkdPerCny: 0 })).toBe('cny')
+    expect(defaultPriceCurrency(language, {})).toBe('cny')
+  }
+})
+
+it('defaults every other language to USD, and still shows what was picked', () => {
+  for (const language of ['en', 'en-US', 'ja', 'ko', 'ru', 'fr', 'vi', 'de']) {
+    expect(defaultPriceCurrency(language, rates)).toBe('usd')
+  }
+  expect(priceMoney(defaultPriceCurrency('cn', rates), rates).format(6.8)).toBe(
+    '$1'
+  )
+  expect(priceMoney('cny', rates).format(6)).toBe('¥6')
 })

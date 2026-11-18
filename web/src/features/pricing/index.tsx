@@ -46,9 +46,6 @@ const ModelDetailsDrawer = lazy(() =>
 export function Pricing() {
   const { t } = useTranslation()
   useDocumentTitle(t('Model Pricing'))
-  const url = usePricingUrlState()
-  const selectedModelName = url.model
-
   const {
     models,
     groupRatio,
@@ -61,6 +58,8 @@ export function Pricing() {
     hkdPerCny,
   } = usePricingData()
   const rates = { usdExchangeRate, hkdPerCny }
+  const url = usePricingUrlState(rates)
+  const selectedModelName = url.model
   const money = priceMoney(url.currency, rates)
 
   const selectedModel = useMemo(
