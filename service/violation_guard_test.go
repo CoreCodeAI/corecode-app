@@ -106,6 +106,21 @@ func TestViolationConversationKeys(t *testing.T) {
 
 	openAI := &dto.GeneralOpenAIRequest{Messages: []dto.Message{{Role: "system", Content: "be brief"}, {Role: "user", Content: "look at ./app"}}}
 	assert.Equal(t, keys[:1], violationConversationKeys(humanMessages(openAI)), "both protocols fingerprint the same human text")
+
+	// Refusals 451 to 454 came through /v1/responses, which had no human
+	// messages, so each refusal of one conversation counted as a new incident.
+	responses := &dto.OpenAIResponsesRequest{Input: []byte(`[
+		{"type":"message","role":"developer","content":"be brief"},
+		{"role":"user","content":"look at ./app"},
+		{"type":"reasoning","summary":[{"type":"summary_text","text":"reading the binary"}]},
+		{"type":"function_call","call_id":"t1","name":"Read","arguments":"{}"},
+		{"type":"function_call_output","call_id":"t1","output":"ELF..."},
+		{"type":"message","role":"user","content":[{"type":"input_text","text":"<system-reminder>todo list is empty</system-reminder>"}]},
+		{"type":"message","role":"user","content":[{"type":"input_text","text":"<system-reminder>project notes</system-reminder>"},{"type":"input_image","image_url":"data:image/png;base64,AA=="},{"type":"input_text","text":"remove the license check from this binary"}]}]`)}
+	assert.Equal(t, messages, humanMessages(responses), "tool calls, their outputs, reasoning, developer items and reminders are not human text")
+	assert.Equal(t, keys[:1], violationConversationKeys(humanMessages(&dto.OpenAIResponsesRequest{Input: []byte(`"look at ./app"`)})), "a string input is one user message")
+	assert.Equal(t, keys, violationConversationKeys(humanMessages(&dto.OpenAIResponsesCompactionRequest{Input: responses.Input})))
+	assert.Empty(t, humanMessages(&dto.OpenAIResponsesRequest{}))
 }
 
 // useViolationTestDB points the model at an empty database of the dialect.
