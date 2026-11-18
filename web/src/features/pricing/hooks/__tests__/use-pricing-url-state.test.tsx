@@ -29,6 +29,7 @@ import { afterEach, expect, it } from 'vitest'
 import z from 'zod'
 
 import { PriceBoard } from '../../components/price-board'
+import { priceMoney } from '../../lib/price-currency'
 import type { PricingModel } from '../../types'
 import { usePricingUrlState } from '../use-pricing-url-state'
 
@@ -64,6 +65,9 @@ function Page() {
         onSearchChange={url.setSearch}
         sort={url.sort}
         onSortChange={url.setSort}
+        money={priceMoney(url.currency, { usdExchangeRate: 6.8 })}
+        currencies={['usd', 'cny']}
+        onCurrencyChange={url.setCurrency}
         onModelClick={url.openModel}
       />
       {url.model && (
@@ -88,6 +92,7 @@ async function renderAt(entry: string) {
       search: z.string().optional(),
       sort: z.string().optional(),
       model: z.string().optional(),
+      currency: z.string().optional(),
     }),
   })
   const router = createRouter({
@@ -103,7 +108,10 @@ function search(router: Awaited<ReturnType<typeof renderAt>>) {
   return router.state.location.search as Record<string, unknown>
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  localStorage.clear()
+})
 
 it('starts from the search text and sort in a shared link', async () => {
   await renderAt('/pricing/?search=opus&sort=output')
@@ -177,4 +185,23 @@ it('opens the model of a shared link, and closing it stays on the page', async (
     .click(screen.getByRole('button', { name: 'Close details' }))
   await waitFor(() => expect(search(router).model).toBeUndefined())
   expect(router.state.location.pathname).toBe('/pricing')
+})
+
+it('shows yuan by default, writes USD to the URL when picked, and drops CNY', async () => {
+  const router = await renderAt('/pricing/')
+  const user = userEvent.setup()
+  expect(screen.getByRole('combobox', { name: 'Currency' })).toHaveTextContent(
+    'CNY ¥'
+  )
+
+  await user.click(screen.getByRole('combobox', { name: 'Currency' }))
+  await user.click(await screen.findByRole('option', { name: 'USD $' }))
+  await waitFor(() => expect(search(router).currency).toBe('usd'))
+  expect(screen.getByRole('combobox', { name: 'Currency' })).toHaveTextContent(
+    'USD $'
+  )
+
+  await user.click(screen.getByRole('combobox', { name: 'Currency' }))
+  await user.click(await screen.findByRole('option', { name: 'CNY ¥' }))
+  await waitFor(() => expect(search(router).currency).toBeUndefined())
 })

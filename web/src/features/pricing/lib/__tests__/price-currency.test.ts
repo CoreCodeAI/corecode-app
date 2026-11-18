@@ -20,6 +20,7 @@ import { expect, it } from 'vitest'
 
 import {
   availablePriceCurrencies,
+  DEFAULT_PRICE_CURRENCY,
   parsePriceCurrency,
   priceMoney,
 } from '../price-currency'
@@ -34,15 +35,21 @@ it('shows yuan in USD at the site rate, as yuan, and in HKD at the Checkout rate
   expect(priceMoney('usd', rates).format(0.019)).toBe('$0.0028')
 })
 
-it('offers HKD only while the server has a rate, and falls back to USD without one', () => {
+it('offers HKD only while the server has a rate, and falls back to CNY without one', () => {
   expect(availablePriceCurrencies(rates)).toEqual(['usd', 'cny', 'hkd'])
   const noRate = { usdExchangeRate: 6.8, hkdPerCny: 0 }
   expect(availablePriceCurrencies(noRate)).toEqual(['usd', 'cny'])
-  expect(priceMoney('hkd', noRate).currency).toBe('usd')
+  expect(priceMoney('hkd', noRate).currency).toBe('cny')
 })
 
 it('reads only the currencies it knows from a URL or storage', () => {
   expect(parsePriceCurrency('hkd')).toBe('hkd')
   expect(parsePriceCurrency('HKD')).toBeNull()
   expect(parsePriceCurrency(undefined)).toBeNull()
+})
+
+it('defaults to CNY, the yuan a customer is charged, and still shows USD when picked', () => {
+  expect(DEFAULT_PRICE_CURRENCY).toBe('cny')
+  expect(priceMoney(DEFAULT_PRICE_CURRENCY, rates).format(6)).toBe('¥6')
+  expect(priceMoney('usd', rates).currency).toBe('usd')
 })
