@@ -22,16 +22,17 @@ For commercial licensing, please contact support@quantumnous.com
  * times the credit spent) or the official price in yuan; a reader picks how
  * it is shown:
  *
- * - USD (the default): yuan ÷ the site's reference rate (`usd_exchange_rate`),
- *   so the official price reads as the vendor's USD list price and every
- *   saving keeps its share.
- * - CNY: yuan as they are.
+ * - CNY (the default): yuan as they are, which is what a customer is charged
+ *   (top-up is in yuan, ¥1 per $1 of credit).
+ * - USD: yuan ÷ the site's reference rate (`usd_exchange_rate`), so the
+ *   official price reads as the vendor's USD list price and every saving keeps
+ *   its share.
  * - HKD: yuan × what Stripe Checkout charges in HKD for one yuan
  *   (`hkd_per_cny` in /api/pricing); offered only while the server has a rate.
  */
 export const PRICE_CURRENCIES = ['usd', 'cny', 'hkd'] as const
 export type PriceCurrency = (typeof PRICE_CURRENCIES)[number]
-export const DEFAULT_PRICE_CURRENCY: PriceCurrency = 'usd'
+export const DEFAULT_PRICE_CURRENCY: PriceCurrency = 'cny'
 
 const SYMBOL: Record<PriceCurrency, string> = {
   usd: '$',
@@ -94,7 +95,7 @@ export type PriceMoney = {
 }
 
 /**
- * How to show yuan in `wanted`, or in USD when the rates cannot give it.
+ * How to show yuan in `wanted`, or in the default (CNY) when the rates cannot give it.
  * At most four decimals, no trailing zeros: "$0.5588", "¥3.8", "HK$4.1382".
  */
 export function priceMoney(
