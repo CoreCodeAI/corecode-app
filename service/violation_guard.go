@@ -559,8 +559,56 @@ func humanMessages(request dto.Request) []string {
 			}
 			messages = append(messages, humanMessageText(texts))
 		}
+	case *dto.OpenAIResponsesRequest:
+		messages = responsesHumanMessages(request.Input)
+	case *dto.OpenAIResponsesCompactionRequest:
+		messages = responsesHumanMessages(request.Input)
 	}
 	return slices.DeleteFunc(messages, func(message string) bool { return message == "" })
+}
+
+// responsesHumanMessages returns the user messages of a Responses API input,
+// oldest first: the input itself when it is a string, otherwise the input_text
+// parts of each user message item. Tool outputs, reasoning and developer
+// items are not human text, as tool results are not in a Claude request.
+func responsesHumanMessages(input []byte) []string {
+	if common.GetJsonType(input) == "string" {
+		var text string
+		if common.Unmarshal(input, &text) != nil {
+			return nil
+		}
+		return []string{humanMessageText([]string{text})}
+	}
+	var items []dto.Input
+	if common.Unmarshal(input, &items) != nil {
+		return nil
+	}
+	var messages []string
+	for _, item := range items {
+		if item.Role != "user" || (item.Type != "" && item.Type != "message") {
+			continue
+		}
+		switch common.GetJsonType(item.Content) {
+		case "string":
+			var text string
+			if common.Unmarshal(item.Content, &text) == nil {
+				messages = append(messages, humanMessageText([]string{text}))
+			}
+		case "array":
+			var parts []dto.MediaInput
+			if common.Unmarshal(item.Content, &parts) != nil {
+				continue
+			}
+			texts := make([]string, 0, len(parts))
+			for _, part := range parts {
+				if part.Type == "input_text" {
+					texts = append(texts, part.Text)
+				}
+			}
+			messages = append(messages, humanMessageText(texts))
+		}
+	}
+	return messages
 }
 
 // violationConversationKeys fingerprints a conversation by its human
