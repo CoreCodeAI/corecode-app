@@ -89,7 +89,7 @@ import {
 } from '../lib/plugin-pricing'
 import { formatFixedPrice, formatGroupPrice } from '../lib/price'
 import {
-  DEFAULT_PRICE_CURRENCY,
+  defaultPriceCurrency,
   priceMoney,
   readStoredPriceCurrency,
   type PriceMoney,
@@ -1668,7 +1668,7 @@ export function ModelDetailsDrawer(props: ModelDetailsDrawerProps) {
 }
 
 export function ModelDetails() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { modelId } = useParams({ from: '/pricing/$modelId/' })
   useDocumentTitle(modelId ? `${modelId} · ${t('Model Pricing')}` : undefined)
   const search = useSearch({ from: '/pricing/$modelId/' })
@@ -1686,11 +1686,11 @@ export function ModelDetails() {
     hkdPerCny,
   } = usePricingData()
   const money = priceMoney(
-    readStoredPriceCurrency() ?? DEFAULT_PRICE_CURRENCY,
-    {
-      usdExchangeRate,
-      hkdPerCny,
-    }
+    readStoredPriceCurrency() ??
+      defaultPriceCurrency(i18n.resolvedLanguage ?? i18n.language, {
+        hkdPerCny,
+      }),
+    { usdExchangeRate, hkdPerCny }
   )
 
   const tokenUnit: TokenUnit =

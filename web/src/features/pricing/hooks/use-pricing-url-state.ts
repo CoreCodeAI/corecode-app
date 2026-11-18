@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { getRouteApi, useRouter } from '@tanstack/react-router'
 import { useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import {
   DEFAULT_BOARD_SORT,
@@ -25,11 +26,12 @@ import {
   type BoardSort,
 } from '../lib/board-rows'
 import {
-  DEFAULT_PRICE_CURRENCY,
+  defaultPriceCurrency,
   parsePriceCurrency,
   readStoredPriceCurrency,
   storePriceCurrency,
   type PriceCurrency,
+  type PriceRates,
 } from '../lib/price-currency'
 
 const route = getRouteApi('/pricing/')
@@ -38,11 +40,15 @@ const route = getRouteApi('/pricing/')
  * CoreCode fork: the pricing page's search text, sort key, currency and open
  * model live in the URL (`?search=&sort=&currency=&model=`), so a link
  * reproduces the view. A picked currency is also remembered for later visits;
- * without either, prices show in USD. Opening
+ * without either, it follows the reader's language (`defaultPriceCurrency`).
+ * A pick is always written to the URL, even when it equals the reader's own
+ * default, because a link without `currency` opens in each reader's default and
+ * would change the sharer's view. Opening
  * a model adds a history entry, so Back closes its drawer; a visitor who landed
  * on a link with `model` already set closes it without leaving the page.
  */
-export function usePricingUrlState() {
+export function usePricingUrlState(rates: Pick<PriceRates, 'hkdPerCny'> = {}) {
+  const { i18n } = useTranslation()
   const search = route.useSearch()
   const navigate = route.useNavigate()
   const router = useRouter()
@@ -77,7 +83,7 @@ export function usePricingUrlState() {
       void navigate({
         search: (prev) => ({
           ...prev,
-          currency: value === DEFAULT_PRICE_CURRENCY ? undefined : value,
+          currency: value,
         }),
         replace: true,
       })
@@ -111,7 +117,7 @@ export function usePricingUrlState() {
     currency:
       parsePriceCurrency(search.currency) ??
       readStoredPriceCurrency() ??
-      DEFAULT_PRICE_CURRENCY,
+      defaultPriceCurrency(i18n.resolvedLanguage ?? i18n.language, rates),
     model: search.model ?? null,
     setSearch,
     setSort,
