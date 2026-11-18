@@ -35,8 +35,8 @@ var ErrOfflineBackfillExceedsGrants = errors.New("the backfill exceeds the quota
 // views read the order as paying for that much of the quota administrators
 // added (user.quota_add and the other adjustments), which then stops
 // counting as given. A backfill may not exceed the net quota added by hand,
-// less earlier backfills. Offline orders earn no affiliate commission and
-// are not invoiceable.
+// less earlier backfills. Offline orders earn no affiliate commission; the
+// customer may invoice them like a gateway order.
 func RecordOfflineTopUp(input OfflineTopUpInput) (*TopUp, error) {
 	now := common.GetTimestamp()
 	if input.UserId <= 0 || input.Money <= 0 || input.Amount <= 0 || input.PaidAt <= 0 || input.PaidAt > now {

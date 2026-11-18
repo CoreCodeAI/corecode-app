@@ -50,13 +50,17 @@ const (
 	InvoiceTaxWxpay   = "wxpay"
 )
 
-// invoiceableProviders are the gateways whose orders brought money in.
-// A plan bought with balance spent a top-up that is invoiced on its own, and
-// a redemption code carries no payment, so neither is listed.
+// invoiceableProviders are the providers whose orders brought money in: the
+// gateways, and the offline payments administrators record, whose money is
+// in CNY like a gateway order's. A plan bought with balance spent a top-up
+// that is invoiced on its own, and a redemption code carries no payment, so
+// neither is listed.
 var invoiceableProviders = []string{
 	PaymentProviderEpay,
 	PaymentProviderStripe,
 	PaymentProviderNowPayments,
+	PaymentProviderOffline,
+	PaymentProviderOfflineBackfill,
 }
 
 // The errors reach the console, so they carry message keys.

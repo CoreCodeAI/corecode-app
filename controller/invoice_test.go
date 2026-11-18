@@ -530,3 +530,47 @@ func TestInvoiceGatewayAmounts(t *testing.T) {
 		})
 	}
 }
+
+// TestInvoiceOfflineOrders: an offline payment an administrator recorded is
+// invoiceable like a gateway order, whether it credited the wallet or paid
+// for quota already added by hand, and a refunded one is not.
+func TestInvoiceOfflineOrders(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInvoiceTestDB(t, dialect)
+			now := common.GetTimestamp()
+			offline := func(id int, provider string, money float64, status string) *model.TopUp {
+				return &model.TopUp{Id: id, UserId: 11, Amount: 5900, Money: money, TradeNo: "OFFLINE-11-" + strconv.Itoa(id),
+					PaymentMethod: model.PaymentMethodOffline, PaymentProvider: provider, Status: status,
+					CreateTime: now - 86400, CompleteTime: now - 86400}
+			}
+			for _, order := range []*model.TopUp{
+				offline(301, model.PaymentProviderOfflineBackfill, 5000, common.TopUpStatusSuccess),
+				offline(302, model.PaymentProviderOffline, 3000, common.TopUpStatusSuccess),
+				offline(303, model.PaymentProviderOffline, 1000, common.TopUpStatusRefunded),
+			} {
+				require.NoError(t, model.DB.Create(order).Error)
+			}
+			orders, err := model.ListInvoiceableOrders(11)
+			require.NoError(t, err)
+			amounts := map[int]int64{}
+			for _, order := range orders {
+				if order.OrderType == model.InvoiceOrderTopUp {
+					amounts[order.OrderId] = order.AmountCents
+				}
+			}
+			assert.Equal(t, int64(500000), amounts[301], "a backfill")
+			assert.Equal(t, int64(300000), amounts[302], "a credited offline payment")
+			assert.NotContains(t, amounts, 303, "a refunded offline payment")
+
+			// ¥5000 carries ¥200 of tax, $200 of balance at ¥1 per dollar.
+			require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", 11).Update("quota", 300*500000).Error)
+			id := submittedId(t, submitInvoice(t, 11, company(orderRef(model.InvoiceOrderTopUp, 301), "balance")))
+			invoice := storedInvoice(t, id)
+			assert.Equal(t, int64(500000), invoice.OrderCents)
+			assert.Equal(t, int64(20000), invoice.TaxCents)
+			assert.NotContains(t, invoiceableKeys(t, 11), "topup:301")
+			assert.Contains(t, invoiceableKeys(t, 11), "topup:302")
+		})
+	}
+}
