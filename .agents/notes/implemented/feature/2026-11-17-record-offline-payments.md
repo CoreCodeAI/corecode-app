@@ -55,9 +55,8 @@ the money it paid as revenue.
 - The channels view's `GrantedUSD` still lists hand-added quota in its range
   as granted. Its gift consumption and outstanding gift do follow the backfill,
   through `readWalletHistory`.
-- Offline orders are not invoiceable in the invoice center, because
-  `invoiceableProviders` does not list them. Enterprise invoices are issued
-  outside it.
+- Offline orders were at first not invoiceable in the invoice center;
+  [they are since 2026-11-18](2026-11-18-invoice-offline-orders.md).
 - The console shows `offline` as the raw payment method name and the audit
   entry in its server English, because no locale key was added. This keeps
   the change server-only.
