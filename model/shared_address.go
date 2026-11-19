@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -30,6 +31,12 @@ const (
 	// from a home address all buy the plan, which is why they were made.
 	sharedExitBystanders = 5
 )
+
+// limitedPlanRecentRequests bounds how many of the buyer's latest requests are
+// read for the addresses they used.
+const limitedPlanRecentRequests = 200
+
+var ErrSubscriptionAddressShared error = common.NewMessage("This discounted plan is limited to one per person, and accounts on your network have already bought it. Regular top-up is available")
 
 var ErrSubscriptionAddressTaken error = common.NewMessage("This plan has already been bought from your network. Contact support if you need it")
 
@@ -295,9 +302,18 @@ func CheckSubscriptionPurchaseFrom(userId int, plan *SubscriptionPlan, ip string
 	if err := CheckSubscriptionPurchase(userId, plan); err != nil {
 		return err
 	}
-	if plan.MaxPurchasePerUser <= 0 || ip == "" {
+	if plan.MaxPurchasePerUser <= 0 {
 		return nil
 	}
+	if ip != "" {
+		if err := checkSharedAddressOfBuyer(userId, plan, ip); err != nil {
+			return err
+		}
+	}
+	return checkLimitedPlanAddressFarm(userId, plan, ip)
+}
+
+func checkSharedAddressOfBuyer(userId int, plan *SubscriptionPlan, ip string) error {
 	since := common.GetTimestamp() - sharedAddressWindowSeconds
 	var buyers []int
 	if err := DB.Model(&UserSubscription{}).
@@ -319,6 +335,76 @@ func CheckSubscriptionPurchaseFrom(userId int, plan *SubscriptionPlan, ip string
 		return err
 	}
 	return ErrSubscriptionAddressTaken
+}
+
+// checkLimitedPlanAddressFarm refuses a plan limited per user when the buyer's
+// addresses (the one the purchase comes from and the ones their last
+// requests came from) carry at least the threshold of other accounts that
+// already hold the plan. A studio that gives each account its own order
+// address still sends every account's requests from one place.
+//
+// An address is a shared exit, and proves nothing, when at least
+// sharedExitBystanders accounts that never took a plan limited per user used
+// it and they are no fewer than the plan's holders there. sharedExit's other
+// test, many requesters in a week, is not used here: a studio's own accounts
+// all send requests, and twenty of them would pass for a proxy node.
+func checkLimitedPlanAddressFarm(userId int, plan *SubscriptionPlan, ip string) error {
+	setting := operation_setting.GetLimitedPlanAddressSetting()
+	if !setting.Enabled {
+		return nil
+	}
+	exempt, err := subscriptionAddressExempt(userId)
+	if err != nil || exempt {
+		return err
+	}
+	since := common.GetTimestamp() - sharedAddressWindowSeconds
+	addresses := map[string]bool{}
+	if ip != "" {
+		addresses[ip] = true
+	}
+	var recent []string
+	if err := LOG_DB.Model(&Log{}).Where("user_id = ? AND type = ? AND created_at > ? AND ip <> ''", userId, LogTypeConsume, since).
+		Order("id desc").Limit(limitedPlanRecentRequests).Pluck("ip", &recent).Error; err != nil {
+		return err
+	}
+	for _, address := range recent {
+		addresses[address] = true
+	}
+	holders := map[int]bool{}
+	for address := range addresses {
+		users, err := addressUsers(address, since, nil)
+		if err != nil {
+			return err
+		}
+		users = slices.DeleteFunc(users, func(id int) bool { return id == userId })
+		if len(users) == 0 {
+			continue
+		}
+		var held []int
+		if err := DB.Model(&UserSubscription{}).
+			Where("plan_id = ? AND user_id IN ? AND source <> ?", plan.Id, users, "admin").
+			Distinct().Pluck("user_id", &held).Error; err != nil {
+			return err
+		}
+		if len(held) == 0 {
+			continue
+		}
+		limited, err := limitedPlanBuyers(users, since)
+		if err != nil {
+			return err
+		}
+		if bystanders := len(users) - len(limited); bystanders >= sharedExitBystanders && bystanders >= len(held) {
+			continue
+		}
+		for _, id := range held {
+			holders[id] = true
+		}
+	}
+	if len(holders) < max(setting.Threshold, 1) {
+		return nil
+	}
+	common.SysLog(common.LogText("subscription: refused user %d plan %d, %d other accounts holding it on %d addresses", userId, plan.Id, len(holders), len(addresses)))
+	return ErrSubscriptionAddressShared
 }
 
 // SubscriptionAddressExemption lets one account buy a plan from an address
