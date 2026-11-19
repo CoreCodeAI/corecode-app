@@ -38,7 +38,7 @@ func TestNowPaymentsSubscriptionPurchase(t *testing.T) {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.TopUp{}, &model.Log{}, &model.SubscriptionPlan{}, &model.SubscriptionOrder{}, &model.UserSubscription{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.TopUp{}, &model.Log{}, &model.SubscriptionPlan{}, &model.SubscriptionOrder{}, &model.UserSubscription{}, &model.SubscriptionAddressExemption{}, &model.UserSession{}))
 	model.DB, model.LOG_DB = db, db
 	common.RedisEnabled = false
 	common.QuotaPerUnit = 500000

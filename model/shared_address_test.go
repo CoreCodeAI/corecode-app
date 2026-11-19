@@ -205,6 +205,13 @@ func TestLimitedPlanOnePerNetworkDatabaseMatrix(t *testing.T) {
 			farmer := registerAffiliateTestUser(t, "net_farmer", "")
 			addressTestRequest(t, farmer.Id, farm, now-100)
 			assert.ErrorIs(t, CheckSubscriptionPurchaseFrom(farmer.Id, newcomer, "192.0.2.4"), ErrSubscriptionAddressShared)
+
+			// A new account that has sent no request is judged by the address
+			// of the purchase itself: the studio's next account is refused.
+			fresh := registerAffiliateTestUser(t, "net_fresh", "")
+			assert.ErrorIs(t, CheckSubscriptionPurchaseFrom(fresh.Id, newcomer, farm), ErrSubscriptionAddressShared,
+				"no request yet, the purchase comes from an address already holding twenty buyers")
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(fresh.Id, newcomer, "192.0.2.9"), "no request yet, an unshared address")
 		})
 	}
 }
