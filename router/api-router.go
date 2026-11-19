@@ -189,6 +189,8 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/nowpayments/amount", controller.RequestNowPaymentsAmount)
 				selfRoute.POST("/nowpayments/pay", middleware.CriticalRateLimit(), controller.RequestNowPaymentsPay)
 				selfRoute.POST("/dodopayments/pay", middleware.CriticalRateLimit(), controller.RequestDodoPaymentsPay)
+				selfRoute.POST("/chain-deposit/address", middleware.CriticalRateLimit(), controller.RequestChainDepositAddress)
+				selfRoute.POST("/chain-deposit/check", middleware.CriticalRateLimit(), controller.RequestChainDepositCheck)
 				selfRoute.POST("/aff_transfer", middleware.UserCriticalRateLimit("aff-transfer"), controller.TransferAffQuota)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
 				selfRoute.POST("/terms/consent", controller.AcceptTermsConsent)

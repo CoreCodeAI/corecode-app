@@ -143,7 +143,21 @@ func GetTopUpInfo(c *gin.Context) {
 		}))
 	}
 
+	// CoreCode addition: on-chain deposits take no amount, so the wallet opens
+	// the customer's address instead of asking for one. The method appears only
+	// to users the server lets use it.
+	chainDepositAvailable := canUseChainDeposit(c.GetInt("role"))
+	if chainDepositAvailable {
+		payMethods = append(payMethods, map[string]string{
+			"name":      "On-chain deposit (USDT/USDC)",
+			"type":      model.PaymentMethodChainDeposit,
+			"color":     "#26A17B",
+			"min_topup": "0",
+		})
+	}
+
 	data := gin.H{
+		"chain_deposit_available":          chainDepositAvailable,
 		"enable_online_topup":              isEpayTopUpEnabled(),
 		"enable_stripe_topup":              isStripeTopUpEnabled(),
 		"enable_creem_topup":               isCreemTopUpEnabled(),

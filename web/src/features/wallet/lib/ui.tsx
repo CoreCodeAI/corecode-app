@@ -182,6 +182,13 @@ export function getPaymentIcon(
           style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.DODOPAYMENTS] }}
         />
       )
+    case PAYMENT_TYPES.CHAIN_DEPOSIT:
+      return (
+        <CircleDollarSign
+          className={className}
+          style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.CHAIN_DEPOSIT] }}
+        />
+      )
     case PAYMENT_TYPES.NOWPAYMENTS:
       return (
         <CircleDollarSign

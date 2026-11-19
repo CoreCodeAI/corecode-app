@@ -27,6 +27,7 @@ const (
 	SystemTaskTypeChannelBalance     = "channel_balance"
 	SystemTaskTypeCleanup            = "system_task_cleanup"
 	SystemTaskTypeTopupWatch         = "topup_watch"
+	SystemTaskTypeChainDeposit       = "chain_deposit"
 	SystemTaskTypeSiteInsightsDigest = "site_insights_digest"
 
 	systemTaskCleanupBatchSize = 500

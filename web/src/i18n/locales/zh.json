@@ -9600,6 +9600,26 @@
     "Your balance is empty, so requests fail with insufficient quota until you add credits.": "你的余额为 0,充值前请求会因额度不足而失败。",
     "Your key and config": "你的密钥和配置",
     "Your trial plan from the invitation already covers your first requests.": "邀请带来的试用套餐已经够你发出第一批请求。",
-    "Your {{amount}} trial plan from the invitation already covers your first requests.": "邀请带来的 {{amount}} 试用套餐已经够你发出第一批请求。"
+    "Your {{amount}} trial plan from the invitation already covers your first requests.": "邀请带来的 {{amount}} 试用套餐已经够你发出第一批请求。",
+    "On-chain deposit (USDT/USDC)": "链上充值 (USDT/USDC)",
+    "Deposit service address": "充值服务地址",
+    "HMAC secret": "HMAC 密钥",
+    "Enable on-chain deposit": "启用链上充值",
+    "Show the method in the wallet and issue new addresses. Turning it off does not stop crediting.": "在钱包中显示该支付方式并发放新地址。关闭后不会停止入账。",
+    "Show the on-chain deposit method to administrators only, and refuse address requests from anyone else.": "链上充值仅对管理员显示，其他用户的地址请求会被拒绝。",
+    "Failed to get the deposit address": "获取充值地址失败",
+    "Failed to check the deposit": "检查充值失败",
+    "Checked. Your balance updates once the transfer is credited.": "已检查。转账入账后，余额会自动更新。",
+    "Send USDT or USDC to your own deposit address. No amount is needed: whatever arrives is credited.": "向你专属的充值地址转入 USDT 或 USDC。无需输入金额：到账多少就入账多少。",
+    "I've sent it": "我已转账",
+    "Copy address": "复制地址",
+    "Copy contract address": "复制合约地址",
+    "Send only on BNB Smart Chain (BEP-20) or Arbitrum One. Other networks are not supported.": "只能通过 BNB Smart Chain (BEP-20) 或 Arbitrum One 转账，不支持其他网络。",
+    "Send only the tokens listed below. Tokens on other chains are not credited automatically.": "只能转入下方列出的代币。其他链上的代币不会自动入账。",
+    "Any amount of at least 1 USD is credited at the wallet rate, with the usual top-up bonus. A smaller amount waits until your deposits add up to 1 USD.": "任意金额只要不低于 1 美元，就按钱包汇率入账，并享受常规充值赠送。不足 1 美元的部分会等累计满 1 美元后再入账。",
+    "BNB Smart Chain deposits are credited within about a minute, Arbitrum One within about 15 minutes after the transfer.": "BNB Smart Chain 转账约 1 分钟内入账，Arbitrum One 约在转账后 15 分钟内入账。",
+    "After sending, press the button below to have the address checked right away.": "转账后，点击下方按钮，立即检查该地址。",
+    "No deposit address yet. Open the deposit address first.": "还没有充值地址，请先打开充值地址。",
+    "Checked a moment ago. Try again in a few seconds.": "刚刚已检查过，请几秒后再试。"
   }
 }

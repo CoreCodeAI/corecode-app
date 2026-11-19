@@ -9600,6 +9600,26 @@
     "Your balance is empty, so requests fail with insufficient quota until you add credits.": "Баланс пуст, поэтому запросы будут завершаться ошибкой нехватки квоты, пока вы не пополните счёт.",
     "Your key and config": "Ваш ключ и настройки",
     "Your trial plan from the invitation already covers your first requests.": "Пробный тариф из приглашения уже покрывает ваши первые запросы.",
-    "Your {{amount}} trial plan from the invitation already covers your first requests.": "Пробный тариф на {{amount}} из приглашения уже покрывает ваши первые запросы."
+    "Your {{amount}} trial plan from the invitation already covers your first requests.": "Пробный тариф на {{amount}} из приглашения уже покрывает ваши первые запросы.",
+    "On-chain deposit (USDT/USDC)": "Ончейн-пополнение (USDT/USDC)",
+    "Deposit service address": "Адрес сервиса пополнения",
+    "HMAC secret": "Секрет HMAC",
+    "Enable on-chain deposit": "Включить ончейн-пополнение",
+    "Show the method in the wallet and issue new addresses. Turning it off does not stop crediting.": "Показывать способ в кошельке и выдавать новые адреса. Отключение не останавливает зачисление.",
+    "Show the on-chain deposit method to administrators only, and refuse address requests from anyone else.": "Показывать ончейн-пополнение только администраторам и отклонять запросы адреса от остальных.",
+    "Failed to get the deposit address": "Не удалось получить адрес для пополнения",
+    "Failed to check the deposit": "Не удалось проверить пополнение",
+    "Checked. Your balance updates once the transfer is credited.": "Проверено. Баланс обновится, когда перевод будет зачислен.",
+    "Send USDT or USDC to your own deposit address. No amount is needed: whatever arrives is credited.": "Отправьте USDT или USDC на свой адрес для пополнения. Сумму вводить не нужно: зачисляется всё, что поступило.",
+    "I've sent it": "Я отправил",
+    "Copy address": "Копировать адрес",
+    "Copy contract address": "Копировать адрес контракта",
+    "Send only on BNB Smart Chain (BEP-20) or Arbitrum One. Other networks are not supported.": "Отправляйте только в сети BNB Smart Chain (BEP-20) или Arbitrum One. Другие сети не поддерживаются.",
+    "Send only the tokens listed below. Tokens on other chains are not credited automatically.": "Отправляйте только токены из списка ниже. Токены в других сетях автоматически не зачисляются.",
+    "Any amount of at least 1 USD is credited at the wallet rate, with the usual top-up bonus. A smaller amount waits until your deposits add up to 1 USD.": "Любая сумма от 1 USD зачисляется по курсу кошелька с обычным бонусом за пополнение. Меньшая сумма ждёт, пока ваши пополнения не составят 1 USD.",
+    "BNB Smart Chain deposits are credited within about a minute, Arbitrum One within about 15 minutes after the transfer.": "Пополнения в BNB Smart Chain зачисляются примерно за минуту, в Arbitrum One — примерно через 15 минут после перевода.",
+    "After sending, press the button below to have the address checked right away.": "После отправки нажмите кнопку ниже, чтобы сразу проверить адрес.",
+    "No deposit address yet. Open the deposit address first.": "Адреса для пополнения ещё нет. Сначала откройте адрес для пополнения.",
+    "Checked a moment ago. Try again in a few seconds.": "Только что проверено. Повторите через несколько секунд."
   }
 }

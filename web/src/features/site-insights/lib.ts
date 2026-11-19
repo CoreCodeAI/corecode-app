@@ -968,6 +968,7 @@ export function paymentMethodLabel(method: string, t: TFunction): string {
   if (viaStripe[method]) return `Stripe · ${viaStripe[method]}`
   if (method === 'nowpayments') return 'NOWPayments'
   if (method === 'dodopayments') return 'Dodo Payments'
+  if (method === 'chain_deposit') return t('On-chain deposit (USDT/USDC)')
   return getPaymentMethodName(method, t) || method
 }
 

@@ -22,6 +22,7 @@ import { PAYMENT_TYPES } from '../constants'
 import type { PaymentMethod } from '../types'
 import {
   dispatchSelectedPayment,
+  isChainDepositPayment,
   isStripePayment,
   isWaffoPayment,
   isWaffoPancakePayment,
@@ -177,5 +178,11 @@ describe('payment dispatch', () => {
 
     expect(success).toBe(true)
     expect(calls).toEqual(['dodopayments:50'])
+  })
+
+  test('knows an on-chain deposit asks for no amount', () => {
+    expect(isChainDepositPayment(PAYMENT_TYPES.CHAIN_DEPOSIT)).toBe(true)
+    expect(isChainDepositPayment(PAYMENT_TYPES.NOWPAYMENTS)).toBe(false)
+    expect(isChainDepositPayment(undefined)).toBe(false)
   })
 })

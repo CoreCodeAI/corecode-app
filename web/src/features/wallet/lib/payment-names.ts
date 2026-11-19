@@ -31,6 +31,7 @@ const PAYMENT_METHOD_NAME_KEYS: Readonly<Record<string, string>> = {
   [PAYMENT_TYPES.WECHAT]: 'WeChat Pay',
   [PAYMENT_TYPES.STRIPE_WECHAT_PAY]: 'WeChat Pay',
   [PAYMENT_TYPES.STRIPE_CARD]: 'Card',
+  [PAYMENT_TYPES.CHAIN_DEPOSIT]: 'On-chain deposit (USDT/USDC)',
 }
 
 /** A payment method's button name in the reader's language. */

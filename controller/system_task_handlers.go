@@ -24,6 +24,7 @@ func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
 	service.RegisterSystemTaskHandler(systemTaskCleanupHandler{})
 	service.RegisterSystemTaskHandler(topupWatchHandler{})
+	service.RegisterSystemTaskHandler(chainDepositHandler{})
 	service.RegisterSystemTaskHandler(siteInsightsDigestHandler{})
 }
 
@@ -57,6 +58,29 @@ func (topupWatchHandler) Run(ctx context.Context, task *model.SystemTask, runner
 		return
 	}
 	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, result, nil)
+}
+
+// chainDepositHandler credits on-chain deposits: one pass over the deposit
+// service's feed every 15 seconds while the service is configured. It runs
+// with the method switched off too, because addresses already issued keep
+// receiving. The lease gives one run at a time; the pass is also safe when two
+// run at once (model.CreditChainDeposit, model.AdvanceChainDepositCursor).
+type chainDepositHandler struct{}
+
+func (chainDepositHandler) Type() string { return model.SystemTaskTypeChainDeposit }
+
+func (chainDepositHandler) Enabled() bool { return isChainDepositConfigured() }
+
+func (chainDepositHandler) Interval() time.Duration { return 15 * time.Second }
+
+func (chainDepositHandler) NewPayload() any { return nil }
+
+func (chainDepositHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	if err := RunChainDepositPass(ctx); err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, nil, nil)
 }
 
 // siteInsightsDigestHandler posts the daily site insights digest

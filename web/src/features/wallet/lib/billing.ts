@@ -73,6 +73,7 @@ export const PAYMENT_METHOD_NAMES: Record<string, string> = {
   wxpay: 'WeChat Pay',
   waffo: 'Waffo',
   balance: 'Balance',
+  chain_deposit: 'On-chain deposit (USDT/USDC)',
 }
 
 /**

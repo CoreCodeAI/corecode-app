@@ -211,6 +211,10 @@ const paymentSchema = z.object({
     }
   ),
   DodoPaymentsMaxMoney: z.coerce.number().min(0),
+  ChainDepositEnabled: z.boolean(),
+  ChainDepositAdminOnly: z.boolean(),
+  ChainDepositApiUrl: z.string(),
+  ChainDepositHmacSecret: z.string(),
   CreemApiKey: z.string(),
   CreemWebhookSecret: z.string(),
   CreemTestMode: z.boolean(),
@@ -558,6 +562,10 @@ export function PaymentSettingsSection({
       DodoPaymentsAdminOnly: values.DodoPaymentsAdminOnly,
       DodoPaymentsMethodTypes: values.DodoPaymentsMethodTypes.trim(),
       DodoPaymentsMaxMoney: values.DodoPaymentsMaxMoney,
+      ChainDepositEnabled: values.ChainDepositEnabled,
+      ChainDepositAdminOnly: values.ChainDepositAdminOnly,
+      ChainDepositApiUrl: values.ChainDepositApiUrl.trim(),
+      ChainDepositHmacSecret: values.ChainDepositHmacSecret.trim(),
       CreemApiKey: values.CreemApiKey.trim(),
       CreemWebhookSecret: values.CreemWebhookSecret.trim(),
       CreemTestMode: values.CreemTestMode,
@@ -626,6 +634,10 @@ export function PaymentSettingsSection({
       DodoPaymentsMethodTypes:
         initialRef.current.DodoPaymentsMethodTypes.trim(),
       DodoPaymentsMaxMoney: initialRef.current.DodoPaymentsMaxMoney,
+      ChainDepositEnabled: initialRef.current.ChainDepositEnabled,
+      ChainDepositAdminOnly: initialRef.current.ChainDepositAdminOnly,
+      ChainDepositApiUrl: initialRef.current.ChainDepositApiUrl.trim(),
+      ChainDepositHmacSecret: initialRef.current.ChainDepositHmacSecret.trim(),
       CreemApiKey: initialRef.current.CreemApiKey.trim(),
       CreemWebhookSecret: initialRef.current.CreemWebhookSecret.trim(),
       CreemTestMode: initialRef.current.CreemTestMode,
@@ -892,6 +904,37 @@ export function PaymentSettingsSection({
       updates.push({
         key: 'DodoPaymentsMaxMoney',
         value: sanitized.DodoPaymentsMaxMoney,
+      })
+    }
+
+    if (sanitized.ChainDepositEnabled !== initial.ChainDepositEnabled) {
+      updates.push({
+        key: 'ChainDepositEnabled',
+        value: sanitized.ChainDepositEnabled,
+      })
+    }
+
+    if (sanitized.ChainDepositAdminOnly !== initial.ChainDepositAdminOnly) {
+      updates.push({
+        key: 'ChainDepositAdminOnly',
+        value: sanitized.ChainDepositAdminOnly,
+      })
+    }
+
+    if (sanitized.ChainDepositApiUrl !== initial.ChainDepositApiUrl) {
+      updates.push({
+        key: 'ChainDepositApiUrl',
+        value: sanitized.ChainDepositApiUrl,
+      })
+    }
+
+    if (
+      sanitized.ChainDepositHmacSecret &&
+      sanitized.ChainDepositHmacSecret !== initial.ChainDepositHmacSecret
+    ) {
+      updates.push({
+        key: 'ChainDepositHmacSecret',
+        value: sanitized.ChainDepositHmacSecret,
       })
     }
 
@@ -1174,11 +1217,14 @@ export function PaymentSettingsSection({
           />
           <Tabs defaultValue='general' className='min-w-0'>
             <div className='overflow-x-auto pb-1'>
-              <TabsList className='grid min-w-[59rem] grid-cols-8'>
+              <TabsList className='grid min-w-[67rem] grid-cols-9'>
                 <TabsTrigger value='general'>{t('General')}</TabsTrigger>
                 <TabsTrigger value='epay'>Epay</TabsTrigger>
                 <TabsTrigger value='nowpayments'>NOWPayments</TabsTrigger>
                 <TabsTrigger value='dodopayments'>Dodo Payments</TabsTrigger>
+                <TabsTrigger value='chaindeposit'>
+                  {t('On-chain deposit (USDT/USDC)')}
+                </TabsTrigger>
                 <TabsTrigger value='stripe'>{t('Stripe')}</TabsTrigger>
                 <TabsTrigger value='creem'>Creem</TabsTrigger>
                 <TabsTrigger value='waffo-pancake'>Waffo Pancake</TabsTrigger>
@@ -2091,6 +2137,105 @@ export function PaymentSettingsSection({
                         <FormDescription>
                           {t(
                             'Show the Dodo Payments method to administrators only, and refuse orders from anyone else.'
+                          )}
+                        </FormDescription>
+                      </SettingsSwitchContent>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </SettingsSwitchItem>
+                  )}
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent
+              value='chaindeposit'
+              className={paymentTabContentClassName}
+            >
+              <div className='space-y-4'>
+                <h3 className='text-lg font-medium'>
+                  {t('On-chain deposit (USDT/USDC)')}
+                </h3>
+
+                <div className='grid gap-6 md:grid-cols-2'>
+                  <FormField
+                    control={form.control}
+                    name='ChainDepositApiUrl'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Deposit service address')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder='http://10.240.13.4:8081'
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='ChainDepositHmacSecret'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('HMAC secret')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='password'
+                            autoComplete='new-password'
+                            {...field}
+                            onChange={(event) =>
+                              field.onChange(event.target.value)
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('Leave blank unless updating')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name='ChainDepositEnabled'
+                  render={({ field }) => (
+                    <SettingsSwitchItem>
+                      <SettingsSwitchContent>
+                        <FormLabel>{t('Enable on-chain deposit')}</FormLabel>
+                        <FormDescription>
+                          {t(
+                            'Show the method in the wallet and issue new addresses. Turning it off does not stop crediting.'
+                          )}
+                        </FormDescription>
+                      </SettingsSwitchContent>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </SettingsSwitchItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='ChainDepositAdminOnly'
+                  render={({ field }) => (
+                    <SettingsSwitchItem>
+                      <SettingsSwitchContent>
+                        <FormLabel>{t('Administrators only')}</FormLabel>
+                        <FormDescription>
+                          {t(
+                            'Show the on-chain deposit method to administrators only, and refuse address requests from anyone else.'
                           )}
                         </FormDescription>
                       </SettingsSwitchContent>

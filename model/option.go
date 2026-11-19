@@ -145,6 +145,10 @@ func InitOptionMap() {
 	common.OptionMap["DodoPaymentsProductId"] = setting.DodoPaymentsProductId
 	common.OptionMap["DodoPaymentsTestMode"] = strconv.FormatBool(setting.DodoPaymentsTestMode)
 	common.OptionMap["DodoPaymentsAdminOnly"] = strconv.FormatBool(setting.DodoPaymentsAdminOnly)
+	common.OptionMap["ChainDepositEnabled"] = strconv.FormatBool(setting.ChainDepositEnabled)
+	common.OptionMap["ChainDepositAdminOnly"] = strconv.FormatBool(setting.ChainDepositAdminOnly)
+	common.OptionMap["ChainDepositApiUrl"] = setting.ChainDepositApiUrl
+	common.OptionMap["ChainDepositHmacSecret"] = setting.ChainDepositHmacSecret
 	common.OptionMap["DodoPaymentsMethodTypes"] = setting.DodoPaymentsMethodTypes
 	common.OptionMap["DodoPaymentsMaxMoney"] = strconv.FormatFloat(setting.DodoPaymentsMaxMoney, 'f', -1, 64)
 	common.OptionMap["WaffoPancakeStoreID"] = setting.WaffoPancakeStoreID
@@ -670,6 +674,14 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.DodoPaymentsTestMode = value == "true"
 	case "DodoPaymentsAdminOnly":
 		setting.DodoPaymentsAdminOnly = value == "true"
+	case "ChainDepositEnabled":
+		setting.ChainDepositEnabled = value == "true"
+	case "ChainDepositAdminOnly":
+		setting.ChainDepositAdminOnly = value == "true"
+	case "ChainDepositApiUrl":
+		setting.ChainDepositApiUrl = value
+	case "ChainDepositHmacSecret":
+		setting.ChainDepositHmacSecret = value
 	case "DodoPaymentsMethodTypes":
 		setting.DodoPaymentsMethodTypes = value
 	case "DodoPaymentsMaxMoney":
