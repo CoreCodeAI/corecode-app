@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -103,6 +104,107 @@ func TestNewcomerPlanOnePerAddressDatabaseMatrix(t *testing.T) {
 			buy(old, newcomer, now-sharedAddressWindowSeconds-60)
 			addressTestSession(t, old.Id, "198.51.100.50", now-sharedAddressWindowSeconds-60)
 			assert.NoError(t, CheckSubscriptionPurchaseFrom(second.Id, newcomer, "198.51.100.50"))
+		})
+	}
+}
+
+// A studio opens each order from another address but sends every account's
+// requests from one place, so the rule reads the buyer's request addresses.
+func TestLimitedPlanOnePerNetworkDatabaseMatrix(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useAffiliateTestDB(t, dialect)
+			now := common.GetTimestamp()
+			previous := *operation_setting.GetLimitedPlanAddressSetting()
+			*operation_setting.GetLimitedPlanAddressSetting() = operation_setting.LimitedPlanAddressSetting{Enabled: true, Threshold: 2}
+			t.Cleanup(func() { *operation_setting.GetLimitedPlanAddressSetting() = previous })
+			newcomer := &SubscriptionPlan{Title: "newcomer", PriceAmount: 29.9, DurationUnit: SubscriptionDurationDay, DurationValue: 7, Enabled: true, MaxPurchasePerUser: 1}
+			unlimited := &SubscriptionPlan{Title: "monthly", PriceAmount: 99, DurationUnit: SubscriptionDurationDay, DurationValue: 30, Enabled: true}
+			for _, plan := range []*SubscriptionPlan{newcomer, unlimited} {
+				require.NoError(t, DB.Create(plan).Error)
+				InvalidateSubscriptionPlanCache(plan.Id)
+				t.Cleanup(func() { InvalidateSubscriptionPlanCache(plan.Id) })
+			}
+			hold := func(user *User, source string) {
+				t.Helper()
+				require.NoError(t, DB.Create(&UserSubscription{UserId: user.Id, PlanId: newcomer.Id, Status: "active", Source: source,
+					StartTime: now - 600, EndTime: now + 86400, CreatedAt: now - 600, UpdatedAt: now - 600}).Error)
+			}
+			studio := "198.51.100.20"
+			a := registerAffiliateTestUser(t, "net_a", "")
+			b := registerAffiliateTestUser(t, "net_b", "")
+			c := registerAffiliateTestUser(t, "net_c", "")
+			addressTestRequest(t, a.Id, studio, now-3000)
+			addressTestRequest(t, b.Id, studio, now-2000)
+			addressTestRequest(t, c.Id, "203.0.113.77", now-2000)
+			addressTestRequest(t, c.Id, studio, now-1000)
+
+			hold(a, "order")
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(c.Id, newcomer, "192.0.2.1"), "one holder is below the threshold of two")
+			hold(b, "order")
+			assert.ErrorIs(t, CheckSubscriptionPurchaseFrom(c.Id, newcomer, "192.0.2.1"), ErrSubscriptionAddressShared,
+				"the order comes from another address; the buyer's own requests came from the studio's")
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(c.Id, unlimited, "192.0.2.1"), "a plan without a per-user limit is never refused")
+
+			loner := registerAffiliateTestUser(t, "net_loner", "")
+			addressTestRequest(t, loner.Id, "203.0.113.78", now-1000)
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(loner.Id, newcomer, "192.0.2.2"), "another address")
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(loner.Id, newcomer, ""), "no address from the order, none from the requests")
+
+			old := registerAffiliateTestUser(t, "net_old", "")
+			addressTestRequest(t, old.Id, studio, now-sharedAddressWindowSeconds-60)
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(old.Id, newcomer, "192.0.2.3"), "a request older than 30 days is not an address")
+
+			require.NoError(t, SetSubscriptionAddressExemption(c.Id, true, 1))
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(c.Id, newcomer, "192.0.2.1"), "an exempt account")
+			require.NoError(t, SetSubscriptionAddressExemption(c.Id, false, 1))
+			assert.ErrorIs(t, CheckSubscriptionPurchaseFrom(c.Id, newcomer, "192.0.2.1"), ErrSubscriptionAddressShared)
+
+			operation_setting.GetLimitedPlanAddressSetting().Enabled = false
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(c.Id, newcomer, "192.0.2.1"), "setting off")
+			operation_setting.GetLimitedPlanAddressSetting().Enabled = true
+			operation_setting.GetLimitedPlanAddressSetting().Threshold = 3
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(c.Id, newcomer, "192.0.2.1"), "two holders, threshold three")
+			operation_setting.GetLimitedPlanAddressSetting().Threshold = 2
+
+			// A plan an administrator bound is not a purchase.
+			admin := &SubscriptionPlan{Title: "admin-bound", PriceAmount: 9.9, DurationUnit: SubscriptionDurationDay, DurationValue: 7, Enabled: true, MaxPurchasePerUser: 1}
+			require.NoError(t, DB.Create(admin).Error)
+			InvalidateSubscriptionPlanCache(admin.Id)
+			t.Cleanup(func() { InvalidateSubscriptionPlanCache(admin.Id) })
+			for i := range 3 {
+				granted := registerAffiliateTestUser(t, fmt.Sprintf("net_granted_%d", i), "")
+				addressTestRequest(t, granted.Id, studio, now-900)
+				require.NoError(t, DB.Create(&UserSubscription{UserId: granted.Id, PlanId: admin.Id, Status: "active", Source: "admin",
+					StartTime: now - 600, EndTime: now + 86400, CreatedAt: now - 600, UpdatedAt: now - 600}).Error)
+			}
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(c.Id, admin, "192.0.2.1"), "three administrator-bound holders")
+
+			// A proxy node carries many customers who never took the plan.
+			node := "198.51.100.30"
+			addressTestRequest(t, c.Id, node, now-500)
+			for i := range sharedExitBystanders {
+				addressTestRequest(t, 400000+i, node, now-500)
+			}
+			addressTestRequest(t, a.Id, node, now-500)
+			addressTestRequest(t, b.Id, node, now-500)
+			require.NoError(t, DB.Where("user_id IN ?", []int{a.Id, b.Id}).Delete(&UserSubscription{}).Error)
+			hold(a, "order")
+			hold(b, "order")
+			// The buyer no longer sends from the studio, only from the node.
+			require.NoError(t, LOG_DB.Where("user_id = ? AND ip = ?", c.Id, studio).Delete(&Log{}).Error)
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(c.Id, newcomer, "192.0.2.1"), "holders are outnumbered by bystanders on a proxy node")
+
+			// Twenty accounts that all hold the plan are a studio, not a proxy node.
+			farm := "198.51.100.40"
+			for i := range sharedExitUsers {
+				member := registerAffiliateTestUser(t, fmt.Sprintf("net_farm_%d", i), "")
+				addressTestRequest(t, member.Id, farm, now-300)
+				hold(member, "order")
+			}
+			farmer := registerAffiliateTestUser(t, "net_farmer", "")
+			addressTestRequest(t, farmer.Id, farm, now-100)
+			assert.ErrorIs(t, CheckSubscriptionPurchaseFrom(farmer.Id, newcomer, "192.0.2.4"), ErrSubscriptionAddressShared)
 		})
 	}
 }

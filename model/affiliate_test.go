@@ -519,7 +519,7 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 			// still bind it.
 			assert.ErrorIs(t, CheckSubscriptionPurchase(d1.Id, trial), ErrSubscriptionGifted)
 			require.NoError(t, DB.Model(&User{}).Where("id = ?", d1.Id).Update("quota", 100*affiliateDollar).Error)
-			assert.ErrorIs(t, PurchaseSubscriptionWithBalance(d1.Id, trial.Id), ErrSubscriptionGifted)
+			assert.ErrorIs(t, PurchaseSubscriptionWithBalance(d1.Id, trial.Id, ""), ErrSubscriptionGifted)
 			_, err = AdminBindSubscription(d1.Id, trial.Id, "")
 			require.NoError(t, err)
 
@@ -641,7 +641,10 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 			// The invitee list shows who received the plan at sign-up.
 			e := registerAffiliateTestUser(t, "aff_e", d.AffCode)
 			require.NoError(t, DB.Model(&User{}).Where("id = ?", e.Id).Update("quota", 100*affiliateDollar).Error)
-			require.NoError(t, PurchaseSubscriptionWithBalance(e.Id, trial.Id))
+			require.NoError(t, PurchaseSubscriptionWithBalance(e.Id, trial.Id, "198.51.5.101"))
+			var walletOrder SubscriptionOrder
+			require.NoError(t, DB.Where("user_id = ? AND payment_provider = ?", e.Id, PaymentProviderBalance).First(&walletOrder).Error)
+			assert.Equal(t, "198.51.5.101", walletOrder.Ip, "a wallet purchase records the address it came from")
 			invitees, _, err := ListAffiliateInvitees(d.Id, &common.PageInfo{Page: 1, PageSize: 20})
 			require.NoError(t, err)
 			byName := map[string]*AffiliateInvitee{}
@@ -673,7 +676,7 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 			newcomerPlan := &SubscriptionPlan{Title: "newcomer", PriceAmount: 29.9, DurationUnit: SubscriptionDurationDay, DurationValue: 7, Enabled: true, RegisteredAfter: cutoff}
 			require.NoError(t, DB.Create(newcomerPlan).Error)
 			require.NoError(t, DB.Model(&User{}).Where("id = ?", early.Id).Update("quota", 100*affiliateDollar).Error)
-			assert.ErrorIs(t, PurchaseSubscriptionWithBalance(early.Id, newcomerPlan.Id), ErrSubscriptionNotEligible)
+			assert.ErrorIs(t, PurchaseSubscriptionWithBalance(early.Id, newcomerPlan.Id, ""), ErrSubscriptionNotEligible)
 			assert.NoError(t, CheckSubscriptionPurchase(newcomer.Id, newcomerPlan))
 			_, err = AdminBindSubscription(early.Id, newcomerPlan.Id, "")
 			require.NoError(t, err, "an administrator can bind it to anyone")

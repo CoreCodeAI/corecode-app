@@ -876,5 +876,6 @@
   "failed to load invitee %d for the gift email: %v": "读取被邀请用户 %d 失败，未发送赠送通知邮件: %v",
   "failed to load inviter %d for the gift email: %v": "读取邀请人 %d 失败，未发送赠送通知邮件: %v",
   "failed to send the gift email to user %d: %v": "向用户 %d 发送赠送通知邮件失败: %v",
-  "plugin scheduled failed: plugin=%s channel_id=%d key_index=%d category=%s": "插件定时任务失败：plugin=%s channel_id=%d key_index=%d category=%s"
+  "plugin scheduled failed: plugin=%s channel_id=%d key_index=%d category=%s": "插件定时任务失败：plugin=%s channel_id=%d key_index=%d category=%s",
+  "subscription: refused user %d plan %d, %d other accounts holding it on %d addresses": "订阅: 已拒绝用户 %d 购买套餐 %d，其网络地址（%[4]d 个）上已有 %[3]d 个其他账号持有该套餐"
 }
