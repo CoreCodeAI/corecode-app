@@ -144,14 +144,14 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 			}
 		}
 		// Claude Code's breakpoints default to 5 minutes, which a pause while
-		// a task runs outlasts; give a long prompt 1 hour unless the client
-		// chose. A short prompt keeps 5 minutes: rewriting it after a pause is
-		// cheap, and the 1h write price on every turn would cost more. A
-		// non-stream request is skipped: Claude Code sends those for auto
-		// mode checks, whose cache writes are never read back. Switching ttl
-		// between turns keeps the cached prefix, so crossing the threshold
-		// costs no rewrite. It runs after the param override, so a ttl an
-		// operator's override wrote counts as the client's choice.
+		// a task runs outlasts; give a prompt from the threshold 1 hour unless
+		// the client chose. A non-stream request is skipped: Claude Code sends
+		// those for auto mode checks, whose cache writes are never read back.
+		// A 1h breakpoint does not read a prefix written only under 5m, so a
+		// conversation crossing a non-zero threshold rewrites its prefix once;
+		// a threshold of 0 gives 1 hour from the first turn and never switches.
+		// It runs after the param override, so a ttl an operator's override
+		// wrote counts as the client's choice.
 		claudeSettings := model_setting.GetClaudeSettings()
 		if info.ChannelType == constant.ChannelTypeAnthropic && info.IsStream &&
 			claudeSettings.DefaultPromptCacheTTL == "1h" &&
