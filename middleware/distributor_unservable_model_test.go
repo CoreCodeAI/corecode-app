@@ -80,8 +80,8 @@ func TestDistributeExplainsModelsTheRequestCannotReach(t *testing.T) {
 		common.MemoryCacheEnabled = memoryCache
 		model.InitChannelCache()
 		for _, tc := range []struct {
-			name, group, path, model string
-			wantStatus               int
+			name, group, path, model, lang string
+			wantStatus                     int
 			// wantMessage is a fragment of the error message; recorded is
 			// whether the refusal is written as a no_channel error log.
 			wantMessage string
@@ -90,17 +90,21 @@ func TestDistributeExplainsModelsTheRequestCannotReach(t *testing.T) {
 			{name: "gpt model on a claude key, messages", group: "claude", path: "/v1/messages", model: "gpt-6.1-sol",
 				wantStatus: http.StatusNotFound, wantMessage: "model: gpt-6.1-sol. This key's group claude does not offer model gpt-6.1-sol. Groups that offer it: gpt.", recorded: true},
 			{name: "gpt model on a claude key, responses", group: "claude", path: "/v1/responses", model: "gpt-6.1-sol",
-				wantStatus: http.StatusNotFound, wantMessage: "Groups that offer it: gpt. Change the key's group", recorded: true},
+				wantStatus: http.StatusNotFound, wantMessage: "Groups that offer it: gpt. Use a key of one of those groups, or change this key's group, on the API keys page of the console (https://corecode.live/keys)", recorded: true},
+			{name: "gpt model on a claude key, in Chinese", group: "claude", path: "/v1/responses", model: "gpt-6.1-sol", lang: "zh-CN",
+				wantStatus: http.StatusNotFound, wantMessage: "这个密钥的分组 claude 不提供模型 gpt-6.1-sol，提供它的分组：gpt。请在控制台密钥页（https://corecode.live/keys）换用其中一个分组的密钥，或把这个密钥的分组改成其中之一", recorded: true},
 			{name: "model outside the auto list names its usable group", group: "auto", path: "/v1/responses", model: "gpt-5.6-sol",
 				wantStatus: http.StatusNotFound, wantMessage: "This key's group auto does not offer model gpt-5.6-sol. Groups that offer it: welfare.", recorded: true},
 			{name: "model only a group the user may not use serves", group: "gpt", path: "/v1/responses", model: "internal-model",
 				wantStatus: http.StatusNotFound, wantMessage: "Model internal-model does not exist or has been retired", recorded: true},
+			{name: "unlisted model, in Traditional Chinese", group: "gpt", path: "/v1/responses", model: "gpt-9", lang: "zh-TW",
+				wantStatus: http.StatusNotFound, wantMessage: "模型 gpt-9 不存在或已下線，請檢查模型名稱；GET /v1/models 列出這個金鑰能用的模型。CoreCode 提供的全部模型：https://corecode.live/model/"},
 			{name: "model on an endpoint its channel does not serve", group: "auto", path: "/v1/messages", model: "chat-only-model",
 				wantStatus: http.StatusBadRequest, wantMessage: "Model chat-only-model is not served on /v1/messages", recorded: true},
 			{name: "every channel of the model is down", group: "gpt", path: "/v1/responses", model: "gpt-6-astra",
 				wantStatus: http.StatusServiceUnavailable, wantMessage: "No available channel for model gpt-6-astra under group gpt", recorded: true},
 			{name: "unlisted model", group: "gpt", path: "/v1/responses", model: "gpt-9",
-				wantStatus: http.StatusNotFound, wantMessage: "Model gpt-9 does not exist or has been retired"},
+				wantStatus: http.StatusNotFound, wantMessage: "Model gpt-9 does not exist or has been retired. Check the model name; GET /v1/models lists the models this key can use. Every model CoreCode offers: https://corecode.live/model/"},
 			{name: "served model through auto", group: "auto", path: "/v1/chat/completions", model: "chat-only-model", wantStatus: http.StatusNoContent},
 			{name: "served model", group: "gpt", path: "/v1/responses", model: "gpt-6.1-sol", wantStatus: http.StatusNoContent},
 		} {
@@ -116,6 +120,9 @@ func TestDistributeExplainsModelsTheRequestCannotReach(t *testing.T) {
 				body := []byte(fmt.Sprintf(`{"model":%q,"max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`, tc.model))
 				request := httptest.NewRequest(http.MethodPost, tc.path, bytes.NewReader(body))
 				request.Header.Set("Content-Type", "application/json")
+				if tc.lang != "" {
+					request.Header.Set("Accept-Language", tc.lang)
+				}
 				recorder := httptest.NewRecorder()
 				router.ServeHTTP(recorder, request)
 
