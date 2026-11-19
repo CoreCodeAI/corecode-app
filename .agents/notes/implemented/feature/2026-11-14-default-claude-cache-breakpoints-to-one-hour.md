@@ -58,14 +58,19 @@ Customers can set `CLAUDE_CODE_PROMPT_CACHE_TTL=1h`, and few do.
   param override produced, so a ttl an override writes counts as the client's
   choice and can never sit behind a 1h breakpoint.
 
-## Switching ttl keeps the cache
+## Switching ttl rewrites the prefix once
 
-A cache entry is matched by prefix, not by ttl. A turn that switches from 5m
-to 1h reads the prefix the earlier 5m turns wrote, and its 1h entry covers the
-whole prefix up to its breakpoint. So crossing the threshold costs one turn's
-increment at the 1h price, not a rewrite. A compaction that drops the prompt
-below the threshold returns to 5m the same way. With `CountToken` off, the
-estimate is 0 and the rule never applies above a 0 threshold.
+This section first said that a cache entry is matched by prefix, not by ttl,
+so crossing the threshold would cost one turn's increment. Production logs
+showed otherwise on 2026-11-19. A 1h breakpoint reads an earlier 1h entry, but
+not a prefix written only under 5m. So the first turn of a conversation that
+crosses a non-zero threshold writes its whole prefix again at the 1h price,
+even seconds after the previous turn. After that the conversation reads its 1h
+entries, including after a compaction drops it back under the threshold.
+
+A threshold of 0 gives every streamed request 1 hour from its first turn, so
+no conversation switches. With `CountToken` off, the estimate is 0 and the
+rule never applies above a 0 threshold.
 
 ## Rollout and rollback
 

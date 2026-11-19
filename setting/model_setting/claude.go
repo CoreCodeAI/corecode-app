@@ -27,8 +27,10 @@ type ClaudeSettings struct {
 	// turns it on; any other value sends the breakpoints as the client did.
 	DefaultPromptCacheTTL string `json:"default_prompt_cache_ttl"`
 	// DefaultPromptCacheTTLMinTokens is the estimated prompt size from which
-	// DefaultPromptCacheTTL applies. Below it a pause rewrites little, and the
-	// 1h write price on every turn would cost more than the pauses save.
+	// DefaultPromptCacheTTL applies. Below it a pause rewrites little, but a
+	// conversation that crosses it rewrites its prefix once, since a 1h
+	// breakpoint does not read a prefix written only under 5m. 0 applies the
+	// ttl from the first turn.
 	DefaultPromptCacheTTLMinTokens int `json:"default_prompt_cache_ttl_min_tokens"`
 }
 
