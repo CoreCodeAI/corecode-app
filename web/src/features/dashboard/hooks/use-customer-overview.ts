@@ -80,7 +80,7 @@ const recentLogsQueryOptions = queryOptions({
   staleTime: 30 * 1000,
 })
 
-const overviewKeysQueryOptions = queryOptions({
+export const overviewKeysQueryOptions = queryOptions({
   queryKey: ['dashboard', 'overview', 'api-keys'],
   queryFn: async () =>
     requireServerSuccess(await getApiKeys({ p: 1, size: 50 })).data?.items ??

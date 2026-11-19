@@ -24,6 +24,7 @@ import { Link } from '@tanstack/react-router'
  * filled them, so an empty deployment never shows placeholder cards.
  */
 import { BookOpen, KeyRound } from 'lucide-react'
+import { lazy, Suspense, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -61,11 +62,24 @@ import { SpendTrendPanel } from './spend-trend-panel'
 import { UptimePanel } from './uptime-panel'
 import { UsageHighlights } from './usage-highlights'
 
+// The onboarding wizard's host, loaded only for an account with no request. The
+// comment before the path keeps scripts/i18n-locale-split-loader.mjs from
+// following the import, so the wizard's strings stay out of the core locale
+// part that every first load of this page downloads.
+const OnboardingLauncher = lazy(
+  () =>
+    import(
+      /* webpackChunkName: "onboarding-launcher" */ '@/features/onboarding/components/onboarding-launcher'
+    )
+)
+
 export function OverviewDashboard() {
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.auth.user)
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
   const firstRun = user ? isFirstRun(user) : false
+  // Fixed at mount: the first request must not unmount the wizard that reports it.
+  const [hostsOnboarding] = useState(firstRun)
   const { status } = useStatus()
   const overview = useCustomerOverview()
   const balanceStatus = useBalanceStatus(
@@ -109,6 +123,11 @@ export function OverviewDashboard() {
             recent={overview.recent}
             firstRun={firstRun}
           />
+          {hostsOnboarding && (
+            <Suspense fallback={null}>
+              <OnboardingLauncher />
+            </Suspense>
+          )}
           {firstRun && (
             <FirstRunChecklist
               loading={overview.keysLoading}
