@@ -9600,6 +9600,26 @@
     "Your balance is empty, so requests fail with insufficient quota until you add credits.": "残高が空のため、チャージするまでリクエストはクォータ不足で失敗します。",
     "Your key and config": "キーと設定",
     "Your trial plan from the invitation already covers your first requests.": "招待で付与された体験プランで、最初のリクエストはすでにまかなえます。",
-    "Your {{amount}} trial plan from the invitation already covers your first requests.": "招待で付与された {{amount}} の体験プランで、最初のリクエストはすでにまかなえます。"
+    "Your {{amount}} trial plan from the invitation already covers your first requests.": "招待で付与された {{amount}} の体験プランで、最初のリクエストはすでにまかなえます。",
+    "On-chain deposit (USDT/USDC)": "オンチェーン入金 (USDT/USDC)",
+    "Deposit service address": "入金サービスのアドレス",
+    "HMAC secret": "HMAC シークレット",
+    "Enable on-chain deposit": "オンチェーン入金を有効にする",
+    "Show the method in the wallet and issue new addresses. Turning it off does not stop crediting.": "ウォレットにこの方式を表示し、新しいアドレスを発行します。オフにしても反映処理は止まりません。",
+    "Show the on-chain deposit method to administrators only, and refuse address requests from anyone else.": "オンチェーン入金を管理者にのみ表示し、他のユーザーからのアドレス要求を拒否します。",
+    "Failed to get the deposit address": "入金アドレスの取得に失敗しました",
+    "Failed to check the deposit": "入金の確認に失敗しました",
+    "Checked. Your balance updates once the transfer is credited.": "確認しました。送金が反映されると残高が更新されます。",
+    "Send USDT or USDC to your own deposit address. No amount is needed: whatever arrives is credited.": "ご自身の入金アドレスに USDT または USDC を送金してください。金額の入力は不要で、届いた分がそのまま反映されます。",
+    "I've sent it": "送金しました",
+    "Copy address": "アドレスをコピー",
+    "Copy contract address": "コントラクトアドレスをコピー",
+    "Send only on BNB Smart Chain (BEP-20) or Arbitrum One. Other networks are not supported.": "BNB Smart Chain (BEP-20) または Arbitrum One でのみ送金してください。その他のネットワークには対応していません。",
+    "Send only the tokens listed below. Tokens on other chains are not credited automatically.": "下に記載のトークンのみ送金してください。他のチェーンのトークンは自動では反映されません。",
+    "Any amount of at least 1 USD is credited at the wallet rate, with the usual top-up bonus. A smaller amount waits until your deposits add up to 1 USD.": "1 USD 以上であれば金額を問わず、ウォレットのレートで反映され、通常のチャージボーナスが付きます。1 USD に満たない分は、入金の合計が 1 USD に達するまで待機します。",
+    "BNB Smart Chain deposits are credited within about a minute, Arbitrum One within about 15 minutes after the transfer.": "BNB Smart Chain の入金は約1分以内、Arbitrum One は送金から約15分以内に反映されます。",
+    "After sending, press the button below to have the address checked right away.": "送金後、下のボタンを押すとアドレスをすぐに確認します。",
+    "No deposit address yet. Open the deposit address first.": "入金アドレスがまだありません。先に入金アドレスを開いてください。",
+    "Checked a moment ago. Try again in a few seconds.": "たった今確認しました。数秒後にもう一度お試しください。"
   }
 }

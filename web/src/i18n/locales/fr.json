@@ -9600,6 +9600,26 @@
     "Your balance is empty, so requests fail with insufficient quota until you add credits.": "Votre solde est vide : les requêtes échoueront faute de quota tant que vous n'aurez pas ajouté de crédits.",
     "Your key and config": "Votre clé et sa configuration",
     "Your trial plan from the invitation already covers your first requests.": "Le forfait d'essai offert par l'invitation couvre déjà vos premières requêtes.",
-    "Your {{amount}} trial plan from the invitation already covers your first requests.": "Le forfait d'essai de {{amount}} offert par l'invitation couvre déjà vos premières requêtes."
+    "Your {{amount}} trial plan from the invitation already covers your first requests.": "Le forfait d'essai de {{amount}} offert par l'invitation couvre déjà vos premières requêtes.",
+    "On-chain deposit (USDT/USDC)": "Dépôt on-chain (USDT/USDC)",
+    "Deposit service address": "Adresse du service de dépôt",
+    "HMAC secret": "Secret HMAC",
+    "Enable on-chain deposit": "Activer le dépôt on-chain",
+    "Show the method in the wallet and issue new addresses. Turning it off does not stop crediting.": "Afficher la méthode dans le portefeuille et émettre de nouvelles adresses. La désactiver n'arrête pas le crédit.",
+    "Show the on-chain deposit method to administrators only, and refuse address requests from anyone else.": "Afficher le dépôt on-chain aux administrateurs uniquement et refuser les demandes d'adresse des autres utilisateurs.",
+    "Failed to get the deposit address": "Impossible d'obtenir l'adresse de dépôt",
+    "Failed to check the deposit": "Impossible de vérifier le dépôt",
+    "Checked. Your balance updates once the transfer is credited.": "Vérifié. Votre solde sera mis à jour une fois le transfert crédité.",
+    "Send USDT or USDC to your own deposit address. No amount is needed: whatever arrives is credited.": "Envoyez des USDT ou USDC à votre propre adresse de dépôt. Aucun montant n'est à saisir : tout ce qui arrive est crédité.",
+    "I've sent it": "Je l'ai envoyé",
+    "Copy address": "Copier l'adresse",
+    "Copy contract address": "Copier l'adresse du contrat",
+    "Send only on BNB Smart Chain (BEP-20) or Arbitrum One. Other networks are not supported.": "Envoyez uniquement sur BNB Smart Chain (BEP-20) ou Arbitrum One. Les autres réseaux ne sont pas pris en charge.",
+    "Send only the tokens listed below. Tokens on other chains are not credited automatically.": "Envoyez uniquement les jetons listés ci-dessous. Les jetons d'autres chaînes ne sont pas crédités automatiquement.",
+    "Any amount of at least 1 USD is credited at the wallet rate, with the usual top-up bonus. A smaller amount waits until your deposits add up to 1 USD.": "Tout montant d'au moins 1 USD est crédité au taux du portefeuille, avec le bonus de recharge habituel. Un montant inférieur attend que vos dépôts atteignent 1 USD.",
+    "BNB Smart Chain deposits are credited within about a minute, Arbitrum One within about 15 minutes after the transfer.": "Les dépôts sur BNB Smart Chain sont crédités en une minute environ, ceux sur Arbitrum One environ 15 minutes après le transfert.",
+    "After sending, press the button below to have the address checked right away.": "Après l'envoi, appuyez sur le bouton ci-dessous pour faire vérifier l'adresse immédiatement.",
+    "No deposit address yet. Open the deposit address first.": "Pas encore d'adresse de dépôt. Ouvrez d'abord l'adresse de dépôt.",
+    "Checked a moment ago. Try again in a few seconds.": "Vérifié à l'instant. Réessayez dans quelques secondes."
   }
 }

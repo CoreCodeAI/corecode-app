@@ -129,6 +129,22 @@ func canUseDodoPayments(role int) bool {
 	return !setting.DodoPaymentsAdminOnly || role >= common.RoleAdminUser
 }
 
+// isChainDepositConfigured reports whether the deposit service can be called.
+// Crediting runs on it alone, so addresses already issued keep crediting while
+// the method is switched off.
+func isChainDepositConfigured() bool {
+	return strings.TrimSpace(setting.ChainDepositApiUrl) != "" && strings.TrimSpace(setting.ChainDepositHmacSecret) != ""
+}
+
+// canUseChainDeposit reports whether a user with this role may see and use
+// on-chain deposits: anyone once the method is open, else administrators only.
+func canUseChainDeposit(role int) bool {
+	if !setting.ChainDepositEnabled || !isChainDepositConfigured() || !isPaymentComplianceConfirmed() {
+		return false
+	}
+	return !setting.ChainDepositAdminOnly || role >= common.RoleAdminUser
+}
+
 func isEpayTopUpEnabled() bool {
 	if !isPaymentComplianceConfirmed() {
 		return false

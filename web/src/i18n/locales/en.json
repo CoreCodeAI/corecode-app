@@ -9600,6 +9600,26 @@
     "Your balance is empty, so requests fail with insufficient quota until you add credits.": "Your balance is empty, so requests fail with insufficient quota until you add credits.",
     "Your key and config": "Your key and config",
     "Your trial plan from the invitation already covers your first requests.": "Your trial plan from the invitation already covers your first requests.",
-    "Your {{amount}} trial plan from the invitation already covers your first requests.": "Your {{amount}} trial plan from the invitation already covers your first requests."
+    "Your {{amount}} trial plan from the invitation already covers your first requests.": "Your {{amount}} trial plan from the invitation already covers your first requests.",
+    "On-chain deposit (USDT/USDC)": "On-chain deposit (USDT/USDC)",
+    "Deposit service address": "Deposit service address",
+    "HMAC secret": "HMAC secret",
+    "Enable on-chain deposit": "Enable on-chain deposit",
+    "Show the method in the wallet and issue new addresses. Turning it off does not stop crediting.": "Show the method in the wallet and issue new addresses. Turning it off does not stop crediting.",
+    "Show the on-chain deposit method to administrators only, and refuse address requests from anyone else.": "Show the on-chain deposit method to administrators only, and refuse address requests from anyone else.",
+    "Failed to get the deposit address": "Failed to get the deposit address",
+    "Failed to check the deposit": "Failed to check the deposit",
+    "Checked. Your balance updates once the transfer is credited.": "Checked. Your balance updates once the transfer is credited.",
+    "Send USDT or USDC to your own deposit address. No amount is needed: whatever arrives is credited.": "Send USDT or USDC to your own deposit address. No amount is needed: whatever arrives is credited.",
+    "I've sent it": "I've sent it",
+    "Copy address": "Copy address",
+    "Copy contract address": "Copy contract address",
+    "Send only on BNB Smart Chain (BEP-20) or Arbitrum One. Other networks are not supported.": "Send only on BNB Smart Chain (BEP-20) or Arbitrum One. Other networks are not supported.",
+    "Send only the tokens listed below. Tokens on other chains are not credited automatically.": "Send only the tokens listed below. Tokens on other chains are not credited automatically.",
+    "Any amount of at least 1 USD is credited at the wallet rate, with the usual top-up bonus. A smaller amount waits until your deposits add up to 1 USD.": "Any amount of at least 1 USD is credited at the wallet rate, with the usual top-up bonus. A smaller amount waits until your deposits add up to 1 USD.",
+    "BNB Smart Chain deposits are credited within about a minute, Arbitrum One within about 15 minutes after the transfer.": "BNB Smart Chain deposits are credited within about a minute, Arbitrum One within about 15 minutes after the transfer.",
+    "After sending, press the button below to have the address checked right away.": "After sending, press the button below to have the address checked right away.",
+    "No deposit address yet. Open the deposit address first.": "No deposit address yet. Open the deposit address first.",
+    "Checked a moment ago. Try again in a few seconds.": "Checked a moment ago. Try again in a few seconds."
   }
 }

@@ -205,6 +205,16 @@ export function isDodoPayment(paymentType: string | undefined): boolean {
   return paymentType === PAYMENT_TYPES.DODOPAYMENTS
 }
 
+/**
+ * Check if payment method is an on-chain deposit, which shows the customer's
+ * deposit address instead of asking for an amount
+ */
+export function isChainDepositPayment(
+  paymentType: string | undefined
+): boolean {
+  return paymentType === PAYMENT_TYPES.CHAIN_DEPOSIT
+}
+
 export interface PaymentProcessors {
   regular: (topupAmount: number, paymentType: string) => Promise<boolean>
   waffo: (topupAmount: number, payMethodIndex: number) => Promise<boolean>

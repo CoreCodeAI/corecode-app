@@ -16,7 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import {
+  lazy,
+  Suspense,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -49,6 +57,7 @@ import {
   getDefaultPaymentType,
   getMinTopupAmount,
   dispatchSelectedPayment,
+  isChainDepositPayment,
   paysThroughEpay,
 } from './lib'
 import type {
@@ -58,6 +67,14 @@ import type {
   CreemProduct,
   WaffoPayMethod,
 } from './types'
+
+// The address dialog draws a QR code; keep that library out of the wallet's
+// first load until a customer opens it.
+const ChainDepositDialog = lazy(() =>
+  import('./components/dialogs/chain-deposit-dialog').then((module) => ({
+    default: module.ChainDepositDialog,
+  }))
+)
 
 interface WalletProps {
   initialShowHistory?: boolean
@@ -81,6 +98,7 @@ export function Wallet(props: WalletProps) {
   const [creemDialogOpen, setCreemDialogOpen] = useState(false)
   const [selectedCreemProduct, setSelectedCreemProduct] =
     useState<CreemProduct | null>(null)
+  const [chainDepositOpen, setChainDepositOpen] = useState(false)
   const [showSubscriptionPanel, setShowSubscriptionPanel] = useState(true)
 
   const { status } = useStatus()
@@ -178,6 +196,11 @@ export function Wallet(props: WalletProps) {
 
   // Handle payment method selection
   const handlePaymentMethodSelect = async (method: PaymentMethod) => {
+    // An on-chain deposit asks for no amount: show the address instead.
+    if (isChainDepositPayment(method.type)) {
+      setChainDepositOpen(true)
+      return
+    }
     setSelectedPaymentMethod(method)
     setSelectedWaffoMethodIndex(null)
     // Keep the network chosen last time while it is still offered.
@@ -401,6 +424,16 @@ export function Wallet(props: WalletProps) {
         onOpenChange={setBillingDialogOpen}
         invoiceEnabled={status?.invoice_enabled === true}
       />
+
+      {chainDepositOpen && (
+        <Suspense fallback={null}>
+          <ChainDepositDialog
+            open={chainDepositOpen}
+            onOpenChange={setChainDepositOpen}
+            onChecked={() => void awaitPayment()}
+          />
+        </Suspense>
+      )}
 
       <CreemConfirmDialog
         open={creemDialogOpen}

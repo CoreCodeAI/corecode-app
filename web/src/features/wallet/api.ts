@@ -37,6 +37,7 @@ import type {
   AmountResponse,
   PaymentResponse,
   StripePaymentResponse,
+  ChainDepositAddressResponse,
   AffiliateCodeResponse,
   AffiliateTransferResponse,
   BillingHistoryResponse,
@@ -121,6 +122,26 @@ export async function calculateNowPaymentsAmount(
   request: AmountRequest
 ): Promise<AmountResponse> {
   const res = await api.post('/api/user/nowpayments/amount', request, {
+    skipBusinessError: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+/**
+ * Get, creating it on the first call, the caller's on-chain deposit address
+ */
+export async function getChainDepositAddress(): Promise<ChainDepositAddressResponse> {
+  const res = await api.post('/api/user/chain-deposit/address', undefined, {
+    skipBusinessError: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+/**
+ * Ask the deposit service to read the caller's address now ("I've sent it")
+ */
+export async function checkChainDeposit(): Promise<ApiResponse> {
+  const res = await api.post('/api/user/chain-deposit/check', undefined, {
     skipBusinessError: true,
   } as Record<string, unknown>)
   return res.data

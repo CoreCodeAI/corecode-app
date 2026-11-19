@@ -43,6 +43,8 @@ export const PAYMENT_TYPES = {
   NOWPAYMENTS: 'nowpayments',
   // CoreCode: Dodo Payments Checkout
   DODOPAYMENTS: 'dodopayments',
+  // CoreCode: a per-user on-chain deposit address; it takes no amount
+  CHAIN_DEPOSIT: 'chain_deposit',
 } as const
 
 /**
@@ -65,6 +67,7 @@ export const PAYMENT_ICON_COLORS = {
   [PAYMENT_TYPES.WAFFO_PANCAKE]: '#F97316',
   [PAYMENT_TYPES.NOWPAYMENTS]: '#26A17B',
   [PAYMENT_TYPES.DODOPAYMENTS]: '#0F172A',
+  [PAYMENT_TYPES.CHAIN_DEPOSIT]: '#26A17B',
 } as const
 
 /**

@@ -40,6 +40,7 @@ const (
 	PaymentMethodWaffoPancake    = "waffo_pancake"
 	PaymentMethodNowPayments     = "nowpayments"
 	PaymentMethodDodoPayments    = "dodopayments"
+	PaymentMethodChainDeposit    = "chain_deposit"
 	PaymentMethodBalance         = "balance"
 	// PaymentMethodOffline is money received outside new-api, such as a
 	// company's bank transfer, recorded by an administrator.
@@ -54,6 +55,7 @@ const (
 	PaymentProviderWaffoPancake = "waffo_pancake"
 	PaymentProviderNowPayments  = "nowpayments"
 	PaymentProviderDodoPayments = "dodopayments"
+	PaymentProviderChainDeposit = "chain_deposit"
 	PaymentProviderBalance      = "balance"
 	// PaymentProviderOffline marks an offline payment whose order credited
 	// the wallet when it was recorded; PaymentProviderOfflineBackfill one

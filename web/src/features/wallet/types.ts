@@ -42,6 +42,29 @@ export type AmountResponse = ApiResponse<string> & { hkd_amount?: string }
 export type PaymentResponse = ApiResponse<Record<string, unknown>> & {
   url?: string
 }
+/** One token a deposit address accepts on one network */
+export interface ChainDepositToken {
+  symbol: string
+  contract: string
+  decimals: number
+}
+
+/** A network a deposit address accepts, with its tokens */
+export interface ChainDepositNetwork {
+  network: string
+  name: string
+  chain_id: number
+  tokens: ChainDepositToken[]
+}
+
+/** The caller's deposit address and what it accepts */
+export interface ChainDepositAddress {
+  user_id: number
+  address: string
+  networks: ChainDepositNetwork[]
+}
+
+export type ChainDepositAddressResponse = ApiResponse<ChainDepositAddress>
 export type StripePaymentResponse = ApiResponse<{ pay_link: string }>
 export type AffiliateCodeResponse = ApiResponse<string>
 export type AffiliateTransferResponse = ApiResponse
@@ -163,6 +186,8 @@ export interface TopupInfo {
   enable_waffo_pancake_topup?: boolean
   /** Minimum topup amount for Waffo Pancake */
   waffo_pancake_min_topup?: number
+  /** Whether the on-chain deposit address method is open to this user */
+  chain_deposit_available?: boolean
   /** Stablecoin networks offered through NOWPayments; empty when it is off */
   nowpayments_currencies?: NowPaymentsCurrency[]
   /** Whether redemption code usage is enabled */

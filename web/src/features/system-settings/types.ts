@@ -351,6 +351,10 @@ export type BillingSettings = {
   DodoPaymentsAdminOnly: boolean
   DodoPaymentsMethodTypes?: string
   DodoPaymentsMaxMoney?: number
+  ChainDepositEnabled: boolean
+  ChainDepositAdminOnly: boolean
+  ChainDepositApiUrl?: string
+  ChainDepositHmacSecret?: string
   CreemApiKey: string
   CreemWebhookSecret: string
   CreemTestMode: boolean

@@ -47,6 +47,7 @@ import {
   getBonusLabel,
   getDiscountLabel,
   isBonusEligiblePayment,
+  isChainDepositPayment,
   getPaymentIcon,
   getMinTopupAmount,
   calculatePresetPricing,
@@ -496,7 +497,10 @@ export function RechargeFormCard({
                         method.min_topup || 0,
                         getMinTopupAmount(topupInfo)
                       )
-                      const disabled = minTopup > topupAmount
+                      // An on-chain deposit takes no amount.
+                      const disabled =
+                        !isChainDepositPayment(method.type) &&
+                        minTopup > topupAmount
                       const disabledReason = disabled
                         ? t('Minimum topup amount: {{amount}}', {
                             amount: minTopup,
