@@ -1,6 +1,7 @@
 package common
 
 import (
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -11,6 +12,21 @@ import (
 // ExtendedCacheTTLBeta is the anthropic-beta value Claude Code sends with
 // 1-hour cache breakpoints.
 const ExtendedCacheTTLBeta = "extended-cache-ttl-2025-04-11"
+
+// ClientCacheTTLHeader is the request header a client sends to keep the
+// upstream's 5-minute default instead of the relay's. Claude Code cannot say
+// so in the body: with CLAUDE_CODE_PROMPT_CACHE_TTL=5m it still sends bare
+// breakpoints, the same bytes as no setting. Its ANTHROPIC_CUSTOM_HEADERS
+// can send this header. The header is the relay's own and never goes
+// upstream.
+const ClientCacheTTLHeader = "X-CoreCode-Cache-TTL"
+
+// ClientKeepsFiveMinuteCacheTTL reports whether the request asked, through
+// ClientCacheTTLHeader, for its bare breakpoints to stay at 5 minutes. Only
+// "5m" counts; any other value leaves the relay's default in force.
+func ClientKeepsFiveMinuteCacheTTL(header http.Header) bool {
+	return strings.TrimSpace(header.Get(ClientCacheTTLHeader)) == "5m"
+}
 
 // DefaultPromptCacheTTL gives every cache_control breakpoint of a Claude
 // Messages body the given ttl, when the client set a ttl on none of them.

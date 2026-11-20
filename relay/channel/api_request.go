@@ -98,6 +98,10 @@ var passthroughSkipHeaderNamesLower = map[string]struct{}{
 	"sec-websocket-key":        {},
 	"sec-websocket-version":    {},
 	"sec-websocket-extensions": {},
+
+	// The relay's own cache ttl switch (relay/common.ClientCacheTTLHeader),
+	// read before the upstream call; an upstream has no use for it.
+	"x-corecode-cache-ttl": {},
 }
 
 var headerPassthroughRegexCache sync.Map // map[string]*regexp.Regexp

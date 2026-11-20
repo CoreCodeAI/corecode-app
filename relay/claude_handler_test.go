@@ -99,25 +99,31 @@ func TestClaudeHelperDefaultsStreamedBreakpointsToOneHour(t *testing.T) {
 		stream    string
 		clientTTL string
 		estimate  int
+		ttlHeader string
 		wantTTL   string
 		wantBeta  bool
+		wantLog   string
 	}{
-		{name: "streamed at the threshold", stream: "true", estimate: 200000, wantTTL: "1h", wantBeta: true},
+		{name: "streamed at the threshold", stream: "true", estimate: 200000, wantTTL: "1h", wantBeta: true, wantLog: "1h"},
 		{name: "streamed below the threshold", stream: "true", estimate: 199999},
 		{name: "non-stream", stream: "false", estimate: 300000},
 		{name: "client chose 5m", stream: "true", estimate: 300000, clientTTL: `,"ttl":"5m"`, wantTTL: "5m"},
+		{name: "client header keeps 5m", stream: "true", estimate: 300000, ttlHeader: " 5m ", wantLog: "client_5m"},
+		{name: "client header other value", stream: "true", estimate: 300000, ttlHeader: "1h", wantTTL: "1h", wantBeta: true, wantLog: "1h"},
+		{name: "client header with a body ttl", stream: "true", estimate: 300000, clientTTL: `,"ttl":"1h"`, ttlHeader: "5m", wantTTL: "1h"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			type outbound struct {
-				body []byte
-				beta string
+				body      []byte
+				beta      string
+				ttlHeader string
 			}
 			received := make(chan outbound, 1)
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				payload, err := io.ReadAll(r.Body)
 				if err == nil {
-					received <- outbound{body: payload, beta: r.Header.Get("anthropic-beta")}
+					received <- outbound{body: payload, beta: r.Header.Get("anthropic-beta"), ttlHeader: r.Header.Get(relaycommon.ClientCacheTTLHeader)}
 				}
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadGateway)
@@ -130,6 +136,9 @@ func TestClaudeHelperDefaultsStreamedBreakpointsToOneHour(t *testing.T) {
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(body))
 			c.Request.Header.Set("Content-Type", "application/json")
 			c.Request.Header.Set("anthropic-beta", "claude-code-20250219")
+			if tc.ttlHeader != "" {
+				c.Request.Header.Set(relaycommon.ClientCacheTTLHeader, tc.ttlHeader)
+			}
 			common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeAnthropic)
 			common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, upstream.URL)
 			request, err := helper.GetAndValidateClaudeRequest(c)
@@ -150,6 +159,8 @@ func TestClaudeHelperDefaultsStreamedBreakpointsToOneHour(t *testing.T) {
 			} else {
 				assert.Equal(t, "claude-code-20250219", sent.beta)
 			}
+			assert.Equal(t, tc.wantLog, c.GetString(service.DefaultCacheTTLLogKey))
+			assert.Empty(t, sent.ttlHeader)
 		})
 	}
 }

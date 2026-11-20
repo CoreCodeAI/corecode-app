@@ -98,6 +98,31 @@ func TestProcessHeaderOverride_NonTestKeepsClientHeaderPlaceholder(t *testing.T)
 	require.Equal(t, "trace-123", headers["x-upstream-trace"])
 }
 
+func TestProcessHeaderOverride_PassthroughKeepsTheCacheTTLSwitchHere(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	for _, rule := range []string{"*", "re:(?i)^x-"} {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+		ctx.Request.Header.Set("X-App", "cli")
+		ctx.Request.Header.Set(relaycommon.ClientCacheTTLHeader, "5m")
+
+		info := &relaycommon.RelayInfo{
+			ChannelMeta: &relaycommon.ChannelMeta{
+				HeadersOverride: map[string]any{rule: ""},
+			},
+		}
+
+		headers, err := processHeaderOverride(info, ctx)
+		require.NoError(t, err, rule)
+		require.Equal(t, "cli", headers["x-app"], rule)
+		_, forwarded := headers["x-corecode-cache-ttl"]
+		require.False(t, forwarded, rule)
+	}
+}
+
 func TestProcessHeaderOverride_RuntimeOverrideIsFinalHeaderMap(t *testing.T) {
 	t.Parallel()
 
