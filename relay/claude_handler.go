@@ -158,13 +158,17 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		if info.ChannelType == constant.ChannelTypeAnthropic && info.IsStream &&
 			claudeSettings.DefaultPromptCacheTTL == "1h" &&
 			info.GetEstimatePromptTokens() >= claudeSettings.DefaultPromptCacheTTLMinTokens {
-			if relaycommon.ClientKeepsFiveMinuteCacheTTL(c.Request.Header) {
-				c.Set(service.DefaultCacheTTLLogKey, "client_5m")
-			} else if rewritten, changed := relaycommon.DefaultPromptCacheTTL(jsonData, claudeSettings.DefaultPromptCacheTTL); changed {
-				bodyBeforeDefaultTTL = jsonData
-				jsonData = rewritten
-				common.SetContextKey(c, constant.ContextKeyClaudeDefaultCacheTTL, true)
-				c.Set(service.DefaultCacheTTLLogKey, claudeSettings.DefaultPromptCacheTTL)
+			if rewritten, changed := relaycommon.DefaultPromptCacheTTL(jsonData, claudeSettings.DefaultPromptCacheTTL); changed {
+				// Decided only once the body has bare breakpoints, so the log
+				// never reads client_5m for a body that set its own ttl.
+				if relaycommon.ClientKeepsFiveMinuteCacheTTL(c.Request.Header) {
+					c.Set(service.DefaultCacheTTLLogKey, "client_5m")
+				} else {
+					bodyBeforeDefaultTTL = jsonData
+					jsonData = rewritten
+					common.SetContextKey(c, constant.ContextKeyClaudeDefaultCacheTTL, true)
+					c.Set(service.DefaultCacheTTLLogKey, claudeSettings.DefaultPromptCacheTTL)
+				}
 			}
 		}
 

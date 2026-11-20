@@ -15,8 +15,9 @@ Code user who wants the cheaper 5-minute writes had no way to ask for them.
 ## Decision
 
 - **The client asks with `X-CoreCode-Cache-TTL: 5m`.** When the default rule
-  would apply and the request carries that header, `ClaudeHelper` leaves the
-  body as sent and adds no beta. One hour stays the default: only a client
+  would fill the body's bare breakpoints and the request carries that header,
+  `ClaudeHelper` leaves the body as sent and adds no beta. A body that set its
+  own ttl is sent as before and is not logged as `client_5m`. One hour stays the default: only a client
   that sets the header gets 5 minutes. Claude Code sends it through its
   documented `ANTHROPIC_CUSTOM_HEADERS`, for example in the `env` block of
   `~/.claude/settings.json`.
@@ -27,8 +28,9 @@ Code user who wants the cheaper 5-minute writes had no way to ask for them.
   the upstream as the client sent it. A bare breakpoint is 5 minutes at
   Anthropic; an upstream that applies its own default to bare breakpoints
   still can.
-- **The header never goes upstream.** It is in `passthroughSkipHeaderNamesLower`,
-  so a channel's `*` or regex passthrough rule does not forward it.
+- **Passthrough rules never forward the header.** It is in
+  `passthroughSkipHeaderNamesLower`, so a channel's `*` or regex rule skips
+  it. Only an operator who names it in a header or param override sends it on.
 - **Logged per request:** `admin_info.default_cache_ttl` is `client_5m` when
   the header kept the breakpoints bare.
 
@@ -43,8 +45,10 @@ Code user who wants the cheaper 5-minute writes had no way to ask for them.
 
 - `TestClaudeHelperDefaultsStreamedBreakpointsToOneHour`: with the header at
   ` 5m ` the body goes out without a ttl or the beta and the log reads
-  `client_5m`; with `1h` the default applies. The `5m` case fails with the
-  header check removed.
+  `client_5m`; with `1h` the default applies; with a body ttl the body is
+  sent as is and the log stays empty. No case forwards the header. The `5m`
+  case fails with the header check removed, and the body-ttl case fails when
+  the header is read before the body.
 - `TestProcessHeaderOverride_PassthroughKeepsTheCacheTTLSwitchHere`: `*` and a
   regex rule forward `X-App` but not the header. It fails with the skip entry
   removed.
