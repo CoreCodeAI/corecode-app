@@ -37,6 +37,7 @@ import type {
   AmountResponse,
   PaymentResponse,
   StripePaymentResponse,
+  ChainDepositActivityResponse,
   ChainDepositAddressResponse,
   ChainDepositQuoteResponse,
   AffiliateCodeResponse,
@@ -145,6 +146,16 @@ export async function getChainDepositQuote(
   amount: number
 ): Promise<ChainDepositQuoteResponse> {
   const res = await api.post('/api/user/chain-deposit/quote', { amount }, {
+    skipBusinessError: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+/**
+ * The caller's transfers of the last day and how far each has got
+ */
+export async function getChainDepositActivity(): Promise<ChainDepositActivityResponse> {
+  const res = await api.get('/api/user/chain-deposit/activity', {
     skipBusinessError: true,
   } as Record<string, unknown>)
   return res.data

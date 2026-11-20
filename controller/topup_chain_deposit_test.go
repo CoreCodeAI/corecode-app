@@ -41,6 +41,9 @@ type chainDepositStub struct {
 	badRequest []string // requests whose signature did not verify
 	requests   []string // "METHOD uri" of each request
 	checkCode  int
+	// transfers and totals are what /v1/activity answers.
+	transfers []map[string]any
+	totals    []map[string]any
 	// responseMode is "", "unsigned", "wrong" or "request-signature".
 	responseMode string
 }
@@ -85,6 +88,21 @@ func (s *chainDepositStub) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		answer = `{"user_id":1,"address":"0xAbC0000000000000000000000000000000000001","totals":[]}`
+	case r.URL.Path == "/v1/activity":
+		var request struct {
+			UserID int `json:"user_id"`
+		}
+		require.NoError(s.t, common.Unmarshal(body, &request))
+		transfers, totals := s.transfers, s.totals
+		if transfers == nil {
+			transfers = []map[string]any{}
+		}
+		if totals == nil {
+			totals = []map[string]any{}
+		}
+		raw, err := common.Marshal(map[string]any{"user_id": request.UserID, "transfers": transfers, "totals": totals})
+		require.NoError(s.t, err)
+		answer = string(raw)
 	case r.URL.Path == "/v1/feed":
 		after, _ := strconv.ParseInt(r.URL.Query().Get("after"), 10, 64)
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -693,4 +711,86 @@ func TestChainDepositQuoteIsTheLeastTransferThatKeepsTheTier(t *testing.T) {
 	stub.mu.Lock()
 	assert.Empty(t, stub.requests, "a quote never calls the deposit service")
 	stub.mu.Unlock()
+}
+
+func (s *chainDepositStub) setActivity(transfers []map[string]any, totals ...map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.transfers, s.totals = transfers, totals
+}
+
+func chainTransfer(hash string, token string, decimals int, amount string, confirmed bool) map[string]any {
+	return map[string]any{"network": "bsc", "token": token, "decimals": decimals, "amount": amount,
+		"tx_hash": hash, "seen_at": 1, "confirmed": confirmed}
+}
+
+func chainDepositStagesOf(t *testing.T, user *model.User) []map[string]any {
+	t.Helper()
+	body := callChainDeposit(RequestChainDepositActivity, user, "/api/user/chain-deposit/activity")
+	require.Equal(t, true, body["success"], "%v", body)
+	var out []map[string]any
+	for _, item := range body["data"].(map[string]any)["transfers"].([]any) {
+		out = append(out, item.(map[string]any))
+	}
+	return out
+}
+
+func TestChainDepositActivityFollowsATransferToItsCredit(t *testing.T) {
+	stub, _, db := setupChainDeposit(t)
+	user := chainDepositTestUser(t, db, "chain_activity", common.RoleAdminUser)
+	first := "0x" + strings.Repeat("ab", 32)
+	second := "0x" + strings.Repeat("cd", 32)
+
+	// Seen, not yet read at its block.
+	stub.setActivity([]map[string]any{chainTransfer(first, "USDT", 18, "12500000000000000000", false)})
+	stages := chainDepositStagesOf(t, user)
+	require.Len(t, stages, 1)
+	assert.Equal(t, "confirming", stages[0]["stage"])
+	assert.Equal(t, "12.5", stages[0]["amount"])
+	assert.Equal(t, "BNB Smart Chain", stages[0]["network_name"])
+	assert.Empty(t, chainDepositTopUps(t, db, user.Id))
+
+	// Confirmed: asking for the activity credits it without waiting for the
+	// scheduled pass, and answers the credit.
+	total := chainTotal(1, user.Id, "bsc", "USDT", 18, "12500000000000000000")
+	stub.setItems(total)
+	stub.setActivity([]map[string]any{chainTransfer(first, "USDT", 18, "12500000000000000000", true)}, total["total"].(map[string]any))
+	stages = chainDepositStagesOf(t, user)
+	require.Len(t, stages, 1)
+	assert.Equal(t, "credited", stages[0]["stage"])
+	// 12.5 dollars are 87.5 money at rate 7, 12.5 units at price 7, with
+	// the 20% tier at 10.
+	assert.InDelta(t, 12.5, stages[0]["credited"], 0.001)
+	assert.InDelta(t, 2.5, stages[0]["bonus"], 0.001)
+	require.Len(t, chainDepositTopUps(t, db, user.Id), 1)
+
+	// Half a dollar more waits for more; the first transfer stays credited.
+	stub.setActivity([]map[string]any{
+		chainTransfer(second, "USDT", 18, "500000000000000000", true),
+		chainTransfer(first, "USDT", 18, "12500000000000000000", true),
+	}, chainTotal(2, user.Id, "bsc", "USDT", 18, "13000000000000000000")["total"].(map[string]any))
+	stages = chainDepositStagesOf(t, user)
+	require.Len(t, stages, 2)
+	assert.Equal(t, "waiting", stages[0]["stage"])
+	assert.Equal(t, "credited", stages[1]["stage"])
+	// The first transfer's point is 13 less the half dollar after it, where
+	// the credit ended: it keeps showing that credit.
+	assert.InDelta(t, 12.5, stages[1]["credited"], 0.001)
+	assert.Nil(t, stages[0]["credited"])
+}
+
+func TestChainDepositActivityShowsCreditingWhenThePassCannotCredit(t *testing.T) {
+	stub, _, db := setupChainDeposit(t)
+	user := chainDepositTestUser(t, db, "chain_crediting", common.RoleAdminUser)
+	pass := chainDepositActivityPass
+	chainDepositActivityPass = func(context.Context) error { return nil }
+	t.Cleanup(func() { chainDepositActivityPass = pass })
+
+	stub.setActivity([]map[string]any{chainTransfer("0x"+strings.Repeat("ab", 32), "USDT0", 6, "3250000", true)},
+		chainTotal(1, user.Id, "bsc", "USDT0", 6, "3250000")["total"].(map[string]any))
+	stages := chainDepositStagesOf(t, user)
+	require.Len(t, stages, 1)
+	assert.Equal(t, "crediting", stages[0]["stage"])
+	assert.Equal(t, "USDT", stages[0]["token"])
+	assert.Equal(t, "3.25", stages[0]["amount"])
 }

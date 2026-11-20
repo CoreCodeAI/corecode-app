@@ -1,3 +1,6 @@
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { ArrowRight, ExternalLink, Gift, Loader2 } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -16,9 +19,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { ArrowRight, ExternalLink, Gift, Loader2 } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -32,6 +33,7 @@ import { handleServerError } from '@/lib/handle-server-error'
 
 import {
   checkChainDeposit,
+  getChainDepositActivity,
   getChainDepositAddress,
   getChainDepositQuote,
   isApiSuccess,
@@ -39,10 +41,12 @@ import {
 import { bonusRateToPercent } from '../../lib/bonus'
 import {
   chainDepositTokenUrl,
+  shownChainDepositTransfers,
   splitDepositAddress,
   usableChainDepositNetworks,
 } from '../../lib/chain-deposit'
 import { formatChargeMoney } from '../../lib/format'
+import { ChainDepositProgress } from './chain-deposit-progress'
 
 // What the server answers to a refused check. The console translates a server
 // message by its text, so the texts are named here, in the wallet's own chunk,
@@ -51,6 +55,9 @@ const CHAIN_DEPOSIT_CHECK_REFUSALS = [
   'No deposit address yet. Open the deposit address first.',
   'Checked a moment ago. Try again in a few seconds.',
 ] as const
+
+// How often the open dialog asks how its transfers are doing.
+const ACTIVITY_POLL_MS = 3000
 
 interface ChainDepositDialogProps {
   open: boolean
@@ -132,6 +139,40 @@ export function ChainDepositDialog({
   })
 
   const address = addressQuery.data
+
+  // While open, the dialog follows the transfers the service has seen.
+  const activityQuery = useQuery({
+    queryKey: ['chain-deposit-activity'],
+    enabled: open && !!address,
+    retry: false,
+    refetchInterval: ACTIVITY_POLL_MS,
+    queryFn: async () => {
+      const response = await getChainDepositActivity()
+      if (!isApiSuccess(response) || !response.data) {
+        throw new Error('no activity')
+      }
+      return response.data.transfers
+    },
+  })
+  const [now, setNow] = useState(() => Date.now() / 1000)
+  useEffect(() => {
+    if (activityQuery.dataUpdatedAt) setNow(activityQuery.dataUpdatedAt / 1000)
+  }, [activityQuery.dataUpdatedAt])
+  const transfers = shownChainDepositTransfers(activityQuery.data, now)
+
+  // A transfer turning credited refreshes the balance once.
+  const credited = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    const data = activityQuery.data
+    if (!data) return
+    const done = data
+      .filter((transfer) => transfer.stage === 'credited')
+      .map((transfer) => `${transfer.network}:${transfer.tx_hash}`)
+    const seen = credited.current
+    credited.current = new Set(done)
+    if (seen && done.some((key) => !seen.has(key))) onChecked?.()
+  }, [activityQuery.data, onChecked])
+
   const networks = usableChainDepositNetworks(address?.networks)
   const addressParts = address ? splitDepositAddress(address.address) : null
 
@@ -185,6 +226,9 @@ export function ChainDepositDialog({
 
       {address && (
         <div className='space-y-4 py-2'>
+          {transfers.length > 0 && (
+            <ChainDepositProgress transfers={transfers} networks={networks} />
+          )}
           {quote && (
             <div className='rounded-lg border p-4'>
               <div className='flex items-center justify-between gap-3'>
@@ -363,7 +407,7 @@ export function ChainDepositDialog({
             </li>
             <li>
               {t(
-                'After sending, press the button below to have the address checked right away.'
+                'Your transfer appears at the top of this window within seconds of reaching the chain. If it does not, press the button below.'
               )}
             </li>
           </ul>

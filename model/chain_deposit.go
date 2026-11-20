@@ -201,15 +201,43 @@ func ChainDepositNetworkName(network string) string {
 	return network
 }
 
+// ChainDepositTokenName is the token's symbol for people. Arbitrum's USDT0 is
+// USDT: exchanges send it as USDT on Arbitrum, and the dialog lists it so.
+func ChainDepositTokenName(token string) string {
+	if token == "USDT0" {
+		return "USDT"
+	}
+	return token
+}
+
+// ChainDepositCreditedOf returns what has been credited to a user, in base
+// units, keyed by network and token as ChainDepositKey names them.
+func ChainDepositCreditedOf(userId int) (map[string]*big.Int, error) {
+	var rows []ChainDepositCredit
+	if err := DB.Where("user_id = ?", userId).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	credited := make(map[string]*big.Int, len(rows))
+	for _, row := range rows {
+		value, err := parseChainDepositCredited(row.Credited)
+		if err != nil {
+			return nil, err
+		}
+		credited[ChainDepositKey(row.Network, row.Token)] = value
+	}
+	return credited, nil
+}
+
+// ChainDepositKey names one network's token.
+func ChainDepositKey(network string, token string) string {
+	return network + "/" + token
+}
+
 // chainDepositCreditMessage is a credit's log line. Its payment amount is the
 // coins that arrived and their network, which is what the customer sent,
 // rather than the top-up's money.
 func chainDepositCreditMessage(total ChainDepositTotal, result *ChainDepositResult) *common.Message {
-	token := total.Token
-	if token == "USDT0" {
-		// Arbitrum's USDT, sent as USDT from an exchange.
-		token = "USDT"
-	}
+	token := ChainDepositTokenName(total.Token)
 	message := topUpCreditMessage("Online top-up succeeded, amount added: {{quota}}, payment amount: {{amount}}",
 		"Online top-up succeeded, amount added: {{quota}} including a bonus of {{bonus}}, payment amount: {{amount}}", result.Quota, result.TopUp)
 	message.Params["amount"] = fmt.Sprintf("%s %s (%s)", result.Dollars.String(), token, ChainDepositNetworkName(total.Network))
