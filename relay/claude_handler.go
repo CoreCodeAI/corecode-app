@@ -151,12 +151,16 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		// conversation crossing a non-zero threshold rewrites its prefix once;
 		// a threshold of 0 gives 1 hour from the first turn and never switches.
 		// It runs after the param override, so a ttl an operator's override
-		// wrote counts as the client's choice.
+		// wrote counts as the client's choice. A client that sends
+		// X-CoreCode-Cache-TTL: 5m keeps its bare breakpoints, the only way
+		// Claude Code can choose 5 minutes.
 		claudeSettings := model_setting.GetClaudeSettings()
 		if info.ChannelType == constant.ChannelTypeAnthropic && info.IsStream &&
 			claudeSettings.DefaultPromptCacheTTL == "1h" &&
 			info.GetEstimatePromptTokens() >= claudeSettings.DefaultPromptCacheTTLMinTokens {
-			if rewritten, changed := relaycommon.DefaultPromptCacheTTL(jsonData, claudeSettings.DefaultPromptCacheTTL); changed {
+			if relaycommon.ClientKeepsFiveMinuteCacheTTL(c.Request.Header) {
+				c.Set(service.DefaultCacheTTLLogKey, "client_5m")
+			} else if rewritten, changed := relaycommon.DefaultPromptCacheTTL(jsonData, claudeSettings.DefaultPromptCacheTTL); changed {
 				bodyBeforeDefaultTTL = jsonData
 				jsonData = rewritten
 				common.SetContextKey(c, constant.ContextKeyClaudeDefaultCacheTTL, true)

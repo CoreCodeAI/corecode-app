@@ -99,13 +99,17 @@ func TestClaudeHelperDefaultsStreamedBreakpointsToOneHour(t *testing.T) {
 		stream    string
 		clientTTL string
 		estimate  int
+		ttlHeader string
 		wantTTL   string
 		wantBeta  bool
+		wantLog   string
 	}{
 		{name: "streamed at the threshold", stream: "true", estimate: 200000, wantTTL: "1h", wantBeta: true},
 		{name: "streamed below the threshold", stream: "true", estimate: 199999},
 		{name: "non-stream", stream: "false", estimate: 300000},
 		{name: "client chose 5m", stream: "true", estimate: 300000, clientTTL: `,"ttl":"5m"`, wantTTL: "5m"},
+		{name: "client header keeps 5m", stream: "true", estimate: 300000, ttlHeader: " 5m ", wantLog: "client_5m"},
+		{name: "client header other value", stream: "true", estimate: 300000, ttlHeader: "1h", wantTTL: "1h", wantBeta: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -130,6 +134,9 @@ func TestClaudeHelperDefaultsStreamedBreakpointsToOneHour(t *testing.T) {
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(body))
 			c.Request.Header.Set("Content-Type", "application/json")
 			c.Request.Header.Set("anthropic-beta", "claude-code-20250219")
+			if tc.ttlHeader != "" {
+				c.Request.Header.Set(relaycommon.ClientCacheTTLHeader, tc.ttlHeader)
+			}
 			common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeAnthropic)
 			common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, upstream.URL)
 			request, err := helper.GetAndValidateClaudeRequest(c)
@@ -149,6 +156,9 @@ func TestClaudeHelperDefaultsStreamedBreakpointsToOneHour(t *testing.T) {
 				assert.Equal(t, "claude-code-20250219,"+relaycommon.ExtendedCacheTTLBeta, sent.beta)
 			} else {
 				assert.Equal(t, "claude-code-20250219", sent.beta)
+			}
+			if tc.wantLog != "" {
+				assert.Equal(t, tc.wantLog, c.GetString(service.DefaultCacheTTLLogKey))
 			}
 		})
 	}
