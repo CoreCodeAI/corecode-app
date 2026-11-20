@@ -69,13 +69,19 @@ func GetPaymentSetting() *PaymentSetting {
 // of the highest tier at or below it, or 0 when no tier applies. Tiers are
 // ranges, so an amount typed between two tiers gets the lower one.
 func TopUpBonusRate(amount int64) float64 {
-	bestMin, rate := 0, 0.0
-	for minAmount, tierRate := range paymentSetting.AmountBonus {
-		if int64(minAmount) <= amount && minAmount > bestMin && tierRate > 0 {
-			bestMin, rate = minAmount, tierRate
+	_, rate := TopUpBonusTier(amount)
+	return rate
+}
+
+// TopUpBonusTier returns the tier TopUpBonusRate reads for amount: its
+// minimum and its rate, or 0 and 0 when no tier applies.
+func TopUpBonusTier(amount int64) (minAmount int64, rate float64) {
+	for tierMin, tierRate := range paymentSetting.AmountBonus {
+		if int64(tierMin) <= amount && int64(tierMin) > minAmount && tierRate > 0 {
+			minAmount, rate = int64(tierMin), tierRate
 		}
 	}
-	return rate
+	return minAmount, rate
 }
 
 // ValidateAmountBonus checks a payment_setting.amount_bonus value before it is

@@ -32,10 +32,13 @@ export const PAYMENT_POLL_INTERVAL_MS = 4000
 export const PAYMENT_WAIT_TIMEOUT_MS = 3 * 60 * 1000
 
 export type PaymentWaitStatus = 'idle' | 'waiting' | 'timeout'
+/** "tab" for a payment page opened elsewhere, "chain" for an on-chain transfer */
+export type PaymentWaitKind = 'tab' | 'chain'
 
 export function usePaymentConfirmation() {
   const refreshSelf = useRefreshSelf()
   const [status, setStatus] = useState<PaymentWaitStatus>('idle')
+  const [kind, setKind] = useState<PaymentWaitKind>('tab')
   // The window being watched; a stale poll from an ended one must do nothing.
   const sessionRef = useRef(0)
   const stopRef = useRef<() => void>(() => {})
@@ -48,9 +51,10 @@ export function usePaymentConfirmation() {
   }, [])
 
   const start = useCallback(
-    (baselineQuota: number) => {
+    (baselineQuota: number, waitKind: PaymentWaitKind = 'tab') => {
       stopRef.current()
       const session = ++sessionRef.current
+      setKind(waitKind)
       setStatus('waiting')
 
       let polling = false
@@ -98,5 +102,5 @@ export function usePaymentConfirmation() {
     []
   )
 
-  return { status, start, dismiss }
+  return { status, kind, start, dismiss }
 }

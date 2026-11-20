@@ -19,10 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { describe, expect, test } from 'vitest'
 
 import type { ChainDepositNetwork } from '../types'
-import {
-  chainDepositDelayMinutes,
-  usableChainDepositNetworks,
-} from './chain-deposit'
+import { usableChainDepositNetworks } from './chain-deposit'
 
 const bsc: ChainDepositNetwork = {
   network: 'bsc',
@@ -36,11 +33,5 @@ describe('chain deposit helpers', () => {
     const empty: ChainDepositNetwork = { ...bsc, network: 'base', tokens: [] }
     expect(usableChainDepositNetworks([bsc, empty])).toEqual([bsc])
     expect(usableChainDepositNetworks(undefined)).toEqual([])
-  })
-
-  test('gives the credit delay of the two networks', () => {
-    expect(chainDepositDelayMinutes('bsc')).toBe(1)
-    expect(chainDepositDelayMinutes('arbitrum')).toBe(15)
-    expect(chainDepositDelayMinutes('base')).toBeNull()
   })
 })

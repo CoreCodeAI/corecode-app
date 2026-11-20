@@ -27,13 +27,3 @@ export function usableChainDepositNetworks(
 ): ChainDepositNetwork[] {
   return (networks ?? []).filter((network) => network.tokens?.length > 0)
 }
-
-/**
- * How long a transfer takes to be credited, by network: BNB Smart Chain about
- * a minute, Arbitrum One about 15 minutes. Other networks name no estimate.
- */
-export function chainDepositDelayMinutes(network: string): number | null {
-  if (network === 'bsc') return 1
-  if (network === 'arbitrum') return 15
-  return null
-}

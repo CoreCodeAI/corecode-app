@@ -26,13 +26,16 @@ import { CopyButton } from '@/components/copy-button'
 import { Dialog } from '@/components/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { formatCurrencyFromUSD } from '@/lib/currency'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import {
   checkChainDeposit,
   getChainDepositAddress,
+  getChainDepositQuote,
   isApiSuccess,
 } from '../../api'
+import { bonusRateToPercent } from '../../lib/bonus'
 import { usableChainDepositNetworks } from '../../lib/chain-deposit'
 
 // What the server answers to a refused check. The console translates a server
@@ -46,6 +49,8 @@ const CHAIN_DEPOSIT_CHECK_REFUSALS = [
 interface ChainDepositDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** The amount picked in the wallet, priced as an estimate */
+  amount: number
   /** Called after the deposit service has read the address, to refresh the balance */
   onChecked?: () => void
 }
@@ -53,11 +58,13 @@ interface ChainDepositDialogProps {
 /**
  * The customer's own deposit address, the networks and tokens it accepts, and
  * the "I've sent it" button. It asks for no amount: whatever arrives is
- * credited.
+ * credited. The amount picked in the wallet is shown as an estimate of what to
+ * send, with the least transfer that keeps its bonus.
  */
 export function ChainDepositDialog({
   open,
   onOpenChange,
+  amount,
   onChecked,
 }: ChainDepositDialogProps) {
   const { t } = useTranslation()
@@ -76,6 +83,22 @@ export function ChainDepositDialog({
       return response.data
     },
   })
+
+  // An estimate only: a failed quote hides it and leaves the address usable.
+  const quoteQuery = useQuery({
+    queryKey: ['chain-deposit-quote', amount],
+    enabled: open && amount > 0,
+    retry: false,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const response = await getChainDepositQuote(amount)
+      if (!isApiSuccess(response) || !response.data?.usd) {
+        throw new Error('no quote')
+      }
+      return response.data
+    },
+  })
+  const quote = quoteQuery.data
 
   const check = useMutation({
     mutationFn: async () => {
@@ -154,6 +177,39 @@ export function ChainDepositDialog({
 
       {address && (
         <div className='space-y-4 py-2'>
+          {quote && (
+            <div className='bg-muted/50 space-y-1.5 rounded-lg p-3'>
+              <div className='text-muted-foreground text-xs'>
+                {t('Estimated transfer for {{amount}}', {
+                  amount: formatCurrencyFromUSD(quote.amount),
+                })}
+              </div>
+              <div className='text-xl font-semibold'>
+                {t('{{usd}} USDT or USDC', { usd: quote.usd })}
+              </div>
+              {quote.bonus_rate > 0 && quote.bonus_usd && (
+                <div className='text-xs'>
+                  {quote.lower_rate > 0
+                    ? t(
+                        'Send at least {{usd}} USDT or USDC in one transfer to get the {{percent}}% bonus. Less than that gets the lower tier, {{lower}}%.',
+                        {
+                          usd: quote.bonus_usd,
+                          percent: bonusRateToPercent(quote.bonus_rate),
+                          lower: bonusRateToPercent(quote.lower_rate),
+                        }
+                      )
+                    : t(
+                        'Send at least {{usd}} USDT or USDC in one transfer to get the {{percent}}% bonus. Less than that gets no bonus.',
+                        {
+                          usd: quote.bonus_usd,
+                          percent: bonusRateToPercent(quote.bonus_rate),
+                        }
+                      )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className='flex flex-col items-center gap-3'>
             <div className='rounded-lg bg-white p-3'>
               <QRCodeSVG value={address.address} size={160} />
@@ -188,28 +244,13 @@ export function ChainDepositDialog({
             </AlertDescription>
           </Alert>
 
-          <div className='space-y-3'>
+          <div className='space-y-1 text-sm'>
             {networks.map((network) => (
-              <div key={network.network} className='space-y-1.5'>
-                <div className='text-sm font-medium'>{network.name}</div>
-                {network.tokens.map((token) => (
-                  <div
-                    key={token.contract}
-                    className='flex items-center gap-1 text-xs'
-                  >
-                    <span className='w-14 shrink-0 font-medium'>
-                      {token.symbol}
-                    </span>
-                    <code className='text-muted-foreground min-w-0 flex-1 break-all'>
-                      {token.contract}
-                    </code>
-                    <CopyButton
-                      value={token.contract}
-                      tooltip={t('Copy contract address')}
-                      aria-label={t('Copy contract address')}
-                    />
-                  </div>
-                ))}
+              <div key={network.network} className='flex gap-2'>
+                <span className='font-medium'>{network.name}</span>
+                <span className='text-muted-foreground'>
+                  {network.tokens.map((token) => token.symbol).join(' / ')}
+                </span>
               </div>
             ))}
           </div>
@@ -222,7 +263,7 @@ export function ChainDepositDialog({
             </li>
             <li>
               {t(
-                'BNB Smart Chain deposits are credited within about a minute, Arbitrum One within about 15 minutes after the transfer.'
+                'Deposits on both networks are usually credited within a minute of the transfer.'
               )}
             </li>
             <li>

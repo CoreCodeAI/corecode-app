@@ -55,6 +55,20 @@ it('offers only a dismiss while waiting', async () => {
   expect(onDismiss).toHaveBeenCalledTimes(1)
 })
 
+it('speaks of a transfer, not another tab, for an on-chain deposit', () => {
+  render(
+    <PaymentPendingBanner
+      status='waiting'
+      kind='chain'
+      onOpenBilling={vi.fn()}
+      onDismiss={vi.fn()}
+    />
+  )
+
+  expect(screen.getByText('Waiting for your transfer')).toBeTruthy()
+  expect(screen.queryByText(/other tab/)).toBeNull()
+})
+
 it('points to Order History once the wait times out', async () => {
   const onOpenBilling = vi.fn()
   render(

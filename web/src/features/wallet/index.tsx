@@ -51,6 +51,7 @@ import {
   useWaffoPayment,
   useWaffoPancakePayment,
   usePaymentConfirmation,
+  type PaymentWaitKind,
 } from './hooks'
 import {
   findBonusTier,
@@ -142,10 +143,13 @@ export function Wallet(props: WalletProps) {
 
   // The payment was opened in another tab; watch for it to land. The balance
   // is read fresh first so credit that arrived earlier is not mistaken for it.
-  const awaitPayment = useCallback(async () => {
-    const fresh = await refreshSelf()
-    paymentWait.start(Number(fresh?.quota ?? user?.quota ?? 0))
-  }, [refreshSelf, paymentWait, user?.quota])
+  const awaitPayment = useCallback(
+    async (kind: PaymentWaitKind = 'tab') => {
+      const fresh = await refreshSelf()
+      paymentWait.start(Number(fresh?.quota ?? user?.quota ?? 0), kind)
+    },
+    [refreshSelf, paymentWait, user?.quota]
+  )
 
   useEffect(() => {
     if (props.initialShowHistory) {
@@ -331,6 +335,7 @@ export function Wallet(props: WalletProps) {
             <WalletStatsCard user={user} loading={userLoading} />
             <PaymentPendingBanner
               status={paymentWait.status}
+              kind={paymentWait.kind}
               onOpenBilling={() => setBillingDialogOpen(true)}
               onDismiss={paymentWait.dismiss}
             />
@@ -430,7 +435,8 @@ export function Wallet(props: WalletProps) {
           <ChainDepositDialog
             open={chainDepositOpen}
             onOpenChange={setChainDepositOpen}
-            onChecked={() => void awaitPayment()}
+            amount={topupAmount}
+            onChecked={() => void awaitPayment('chain')}
           />
         </Suspense>
       )}

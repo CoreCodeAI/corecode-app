@@ -38,6 +38,7 @@ import type {
   PaymentResponse,
   StripePaymentResponse,
   ChainDepositAddressResponse,
+  ChainDepositQuoteResponse,
   AffiliateCodeResponse,
   AffiliateTransferResponse,
   BillingHistoryResponse,
@@ -132,6 +133,18 @@ export async function calculateNowPaymentsAmount(
  */
 export async function getChainDepositAddress(): Promise<ChainDepositAddressResponse> {
   const res = await api.post('/api/user/chain-deposit/address', undefined, {
+    skipBusinessError: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+/**
+ * Price a top-up amount on chain, for the deposit dialog's estimate
+ */
+export async function getChainDepositQuote(
+  amount: number
+): Promise<ChainDepositQuoteResponse> {
+  const res = await api.post('/api/user/chain-deposit/quote', { amount }, {
     skipBusinessError: true,
   } as Record<string, unknown>)
   return res.data
