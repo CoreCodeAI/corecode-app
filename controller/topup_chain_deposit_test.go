@@ -599,6 +599,7 @@ func TestChainDepositQuoteIsTheLeastTransferThatKeepsTheTier(t *testing.T) {
 	}
 	// 5000 / 6.8 = 735.294…: 735.29 credits 4999.97, below the 7% tier.
 	q := quote(5000)
+	assert.Equal(t, 5000.0, q.Money, "Price 1: CNY equals the amount")
 	assert.Equal(t, "735.30", q.USD)
 	assert.Equal(t, "735.30", q.BonusUSD)
 	assert.Equal(t, 0.07, q.BonusRate)

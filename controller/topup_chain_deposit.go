@@ -306,6 +306,16 @@ func chainDepositTierAmount(units decimal.Decimal) decimal.Decimal {
 	return units
 }
 
+// chainDepositUnitsFor is a typed amount in top-up units: tokens divided by
+// QuotaPerUnit in token display, the amount itself otherwise.
+func chainDepositUnitsFor(amount int64) decimal.Decimal {
+	units := decimal.NewFromInt(amount)
+	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
+		return units.Div(decimal.NewFromFloat(common.QuotaPerUnit))
+	}
+	return units
+}
+
 // chainDepositDollarsFor is the least whole-cent dollar amount chainDepositPrice
 // reads as at least amount, in the amount a customer types: a transfer of it
 // credits the amount and reaches the amount's bonus tier, and one cent less
@@ -317,10 +327,7 @@ func chainDepositDollarsFor(amount int64) (decimal.Decimal, error) {
 	if !exchangeRate.IsPositive() || !price.IsPositive() || !quotaPerUnit.IsPositive() {
 		return decimal.Zero, errors.New("USDExchangeRate, Price and QuotaPerUnit must be positive")
 	}
-	target := decimal.NewFromInt(amount)
-	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
-		target = target.Div(quotaPerUnit)
-	}
+	target := chainDepositUnitsFor(amount)
 	cent := decimal.New(1, -2)
 	dollars := target.Mul(price).Div(exchangeRate).Div(cent).Ceil().Mul(cent)
 	// Division rounds; step up a cent at a time until the credit reads it.
@@ -337,13 +344,15 @@ func chainDepositDollarsFor(amount int64) (decimal.Decimal, error) {
 // chainDepositMaxQuoteAmount bounds a quote's amount far above any top-up.
 const chainDepositMaxQuoteAmount = 1_000_000_000
 
-// ChainDepositQuote is what a top-up amount costs on chain. USD is the least
-// transfer that credits Amount. When the amount earns a bonus, BonusUSD is
+// ChainDepositQuote is what a top-up amount costs on chain. Money is its
+// price in CNY, as the wallet's other methods name it before any group ratio
+// or discount; USD is the least transfer that credits Amount. When the amount earns a bonus, BonusUSD is
 // the least transfer that still earns BonusRate, the rate of the tier the
 // amount is in, and LowerRate is what a smaller transfer earns. A tier is
 // read per credited transfer.
 type ChainDepositQuote struct {
 	Amount    int64   `json:"amount"`
+	Money     float64 `json:"money"`
 	USD       string  `json:"usd"`
 	BonusRate float64 `json:"bonus_rate"`
 	BonusUSD  string  `json:"bonus_usd,omitempty"`
@@ -355,7 +364,8 @@ func chainDepositQuote(amount int64) (*ChainDepositQuote, error) {
 	if err != nil {
 		return nil, err
 	}
-	quote := &ChainDepositQuote{Amount: amount, USD: dollars.StringFixed(2)}
+	money := chainDepositUnitsFor(amount).Mul(decimal.NewFromFloat(operation_setting.Price)).Round(2)
+	quote := &ChainDepositQuote{Amount: amount, Money: money.InexactFloat64(), USD: dollars.StringFixed(2)}
 	tierMin, rate := operation_setting.TopUpBonusTier(amount)
 	if rate > 0 {
 		tierDollars, err := chainDepositDollarsFor(tierMin)

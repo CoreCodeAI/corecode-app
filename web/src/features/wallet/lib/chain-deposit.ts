@@ -27,3 +27,42 @@ export function usableChainDepositNetworks(
 ): ChainDepositNetwork[] {
   return (networks ?? []).filter((network) => network.tokens?.length > 0)
 }
+
+const EXPLORERS: Record<number, string> = {
+  56: 'https://bscscan.com',
+  97: 'https://testnet.bscscan.com',
+  42161: 'https://arbiscan.io',
+  421614: 'https://sepolia.arbiscan.io',
+}
+
+/**
+ * A token contract's page on its chain's block explorer, or null for a chain
+ * without a known explorer.
+ */
+export function chainDepositTokenUrl(
+  chainId: number,
+  contract: string
+): string | null {
+  const base = EXPLORERS[chainId]
+  return base ? `${base}/token/${contract}` : null
+}
+
+/**
+ * Splits an address so its first and last six characters can be checked at a
+ * glance: "0x" and six characters, the middle, and the last six.
+ */
+export function splitDepositAddress(address: string): {
+  head: string
+  middle: string
+  tail: string
+} {
+  const headLength = address.startsWith('0x') ? 8 : 6
+  if (address.length <= headLength + 6) {
+    return { head: address, middle: '', tail: '' }
+  }
+  return {
+    head: address.slice(0, headLength),
+    middle: address.slice(headLength, -6),
+    tail: address.slice(-6),
+  }
+}
