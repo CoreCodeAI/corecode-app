@@ -186,10 +186,34 @@ func CreditChainDeposit(total ChainDepositTotal, price func(dollars decimal.Deci
 	}
 	if result.Outcome == ChainDepositCredits {
 		syncCreditUserQuotaCache(result.TopUp.UserId, result.Quota, common.LogText("%s topup", PaymentProviderChainDeposit))
-		RecordTopupLog(result.TopUp.UserId, topUpCreditMessage("Online top-up succeeded, amount added: {{quota}}, payment amount: {{amount}}",
-			"Online top-up succeeded, amount added: {{quota}} including a bonus of {{bonus}}, payment amount: {{amount}}", result.Quota, result.TopUp), "", PaymentMethodChainDeposit, PaymentProviderChainDeposit)
+		RecordTopupLog(result.TopUp.UserId, chainDepositCreditMessage(total, result), "", PaymentMethodChainDeposit, PaymentProviderChainDeposit)
 	}
 	return result, nil
+}
+
+var chainDepositNetworkNames = map[string]string{"bsc": "BNB Smart Chain", "arbitrum": "Arbitrum One"}
+
+// ChainDepositNetworkName is the network's name for people.
+func ChainDepositNetworkName(network string) string {
+	if name, ok := chainDepositNetworkNames[network]; ok {
+		return name
+	}
+	return network
+}
+
+// chainDepositCreditMessage is a credit's log line. Its payment amount is the
+// coins that arrived and their network, which is what the customer sent,
+// rather than the top-up's money.
+func chainDepositCreditMessage(total ChainDepositTotal, result *ChainDepositResult) *common.Message {
+	token := total.Token
+	if token == "USDT0" {
+		// Arbitrum's USDT, sent as USDT from an exchange.
+		token = "USDT"
+	}
+	message := topUpCreditMessage("Online top-up succeeded, amount added: {{quota}}, payment amount: {{amount}}",
+		"Online top-up succeeded, amount added: {{quota}} including a bonus of {{bonus}}, payment amount: {{amount}}", result.Quota, result.TopUp)
+	message.Params["amount"] = fmt.Sprintf("%s %s (%s)", result.Dollars.String(), token, ChainDepositNetworkName(total.Network))
+	return message
 }
 
 // GetChainDepositCursor returns how far the deposit feed has been read,
