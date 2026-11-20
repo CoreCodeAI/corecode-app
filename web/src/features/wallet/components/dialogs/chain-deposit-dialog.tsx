@@ -264,25 +264,26 @@ export function ChainDepositDialog({
             <div className='rounded-lg bg-white p-3'>
               <QRCodeSVG value={address.address} size={160} />
             </div>
-            <div className='flex w-full items-center justify-center gap-2'>
-              <code className='bg-muted rounded-md px-3 py-2 text-center font-mono text-sm break-all sm:text-base'>
-                <span className='text-primary font-semibold'>
-                  {addressParts?.head}
-                </span>
-                <span className='text-muted-foreground'>
-                  {addressParts?.middle}
-                </span>
-                <span className='text-primary font-semibold'>
-                  {addressParts?.tail}
-                </span>
-              </code>
-              <CopyButton
-                value={address.address}
-                variant='outline'
-                tooltip={t('Copy address')}
-                aria-label={t('Copy address')}
-              />
-            </div>
+            <code className='bg-muted w-full rounded-md px-3 py-2 text-center font-mono text-sm break-all sm:text-base'>
+              <span className='text-primary font-semibold'>
+                {addressParts?.head}
+              </span>
+              <span className='text-muted-foreground'>
+                {addressParts?.middle}
+              </span>
+              <span className='text-primary font-semibold'>
+                {addressParts?.tail}
+              </span>
+            </code>
+            <CopyButton
+              value={address.address}
+              variant='outline'
+              size='sm'
+              tooltip={t('Copy address')}
+              aria-label={t('Copy address')}
+            >
+              {t('Copy address')}
+            </CopyButton>
           </div>
 
           <Alert variant='destructive'>
