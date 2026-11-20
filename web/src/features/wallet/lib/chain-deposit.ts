@@ -16,7 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { ChainDepositNetwork } from '../types'
+import type {
+  ChainDepositNetwork,
+  ChainDepositStage,
+  ChainDepositTransfer,
+} from '../types'
 
 /**
  * The networks a deposit address can be shown with: those that list at least
@@ -51,6 +55,14 @@ export function chainDepositTokenUrl(
  * Splits an address so its first and last six characters can be checked at a
  * glance: "0x" and six characters, the middle, and the last six.
  */
+export function chainDepositTxUrl(
+  chainId: number,
+  hash: string
+): string | null {
+  const base = EXPLORERS[chainId]
+  return base ? `${base}/tx/${hash}` : null
+}
+
 export function splitDepositAddress(address: string): {
   head: string
   middle: string
@@ -65,4 +77,44 @@ export function splitDepositAddress(address: string): {
     middle: address.slice(headLength, -6),
     tail: address.slice(-6),
   }
+}
+
+/** A progress step's state */
+export type ChainDepositStepState = 'done' | 'active' | 'held' | 'pending'
+
+/**
+ * The three steps a transfer goes through, detected, confirmed and credited,
+ * at a stage. A transfer under 1 USD holds at the last step.
+ */
+export function chainDepositSteps(
+  stage: ChainDepositStage
+): [ChainDepositStepState, ChainDepositStepState, ChainDepositStepState] {
+  switch (stage) {
+    case 'confirming':
+      return ['done', 'active', 'pending']
+    case 'crediting':
+      return ['done', 'done', 'active']
+    case 'waiting':
+      return ['done', 'done', 'held']
+    case 'credited':
+      return ['done', 'done', 'done']
+  }
+}
+
+/** How long a credited transfer stays in the dialog, in seconds */
+const SHOWN_AFTER_CREDIT = 30 * 60
+
+/**
+ * The transfers the dialog follows: every one not yet credited, and the
+ * credited ones seen in the last half hour before `now` (unix seconds).
+ */
+export function shownChainDepositTransfers(
+  transfers: ChainDepositTransfer[] | undefined,
+  now: number
+): ChainDepositTransfer[] {
+  return (transfers ?? []).filter(
+    (transfer) =>
+      transfer.stage !== 'credited' ||
+      transfer.seen_at >= now - SHOWN_AFTER_CREDIT
+  )
 }

@@ -178,6 +178,10 @@ type chainDepositFeed struct {
 	Next  int64                  `json:"next"`
 }
 
+// errChainDepositOtherUser: the service answered for a user the app did not
+// ask about.
+var errChainDepositOtherUser = errors.New("deposit service answered for another user")
+
 func chainDepositUserBody(userId int) []byte {
 	return []byte(`{"user_id":` + strconv.Itoa(userId) + `}`)
 }
@@ -192,7 +196,7 @@ func chainDepositFetchAddress(ctx context.Context, userId int) (*ChainDepositAdd
 		return nil, err
 	}
 	if address.UserID != userId || address.Address == "" {
-		return nil, errors.New("deposit service answered an address for another user")
+		return nil, errChainDepositOtherUser
 	}
 	return address, nil
 }

@@ -18,9 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { describe, expect, test } from 'vitest'
 
-import type { ChainDepositNetwork } from '../types'
+import type { ChainDepositNetwork, ChainDepositTransfer } from '../types'
 import {
+  chainDepositSteps,
   chainDepositTokenUrl,
+  chainDepositTxUrl,
+  shownChainDepositTransfers,
   splitDepositAddress,
   usableChainDepositNetworks,
 } from './chain-deposit'
@@ -47,6 +50,48 @@ describe('chain deposit helpers', () => {
       'https://arbiscan.io/token/0xaf88'
     )
     expect(chainDepositTokenUrl(8453, '0x1')).toBeNull()
+  })
+
+  test('links a transaction to its chain explorer', () => {
+    expect(chainDepositTxUrl(56, '0x81b4')).toBe(
+      'https://bscscan.com/tx/0x81b4'
+    )
+    expect(chainDepositTxUrl(8453, '0x1')).toBeNull()
+  })
+
+  test('walks a transfer through its three steps', () => {
+    expect(chainDepositSteps('confirming')).toEqual([
+      'done',
+      'active',
+      'pending',
+    ])
+    expect(chainDepositSteps('crediting')).toEqual(['done', 'done', 'active'])
+    expect(chainDepositSteps('waiting')).toEqual(['done', 'done', 'held'])
+    expect(chainDepositSteps('credited')).toEqual(['done', 'done', 'done'])
+  })
+
+  test('follows open transfers and credits of the last half hour', () => {
+    const now = 1_800_000_000
+    const transfer = (
+      stage: ChainDepositTransfer['stage'],
+      age: number
+    ): ChainDepositTransfer => ({
+      network: 'bsc',
+      network_name: 'BNB Smart Chain',
+      token: 'USDT',
+      amount: '5',
+      tx_hash: `0x${stage}${age}`,
+      seen_at: now - age,
+      stage,
+    })
+    const recent = transfer('credited', 60)
+    const old = transfer('credited', 31 * 60)
+    const open = transfer('confirming', 2 * 3600)
+    expect(shownChainDepositTransfers([recent, old, open], now)).toEqual([
+      recent,
+      open,
+    ])
+    expect(shownChainDepositTransfers(undefined, now)).toEqual([])
   })
 
   test('splits an address into its first and last six characters', () => {

@@ -83,6 +83,36 @@ export interface ChainDepositQuote {
 }
 
 export type ChainDepositQuoteResponse = ApiResponse<ChainDepositQuote>
+
+/**
+ * How far a transfer has got: confirming at its block, crediting once
+ * confirmed, waiting while what is left to credit is under 1 USD, credited
+ */
+export type ChainDepositStage =
+  | 'confirming'
+  | 'crediting'
+  | 'waiting'
+  | 'credited'
+
+/** One incoming transfer the deposit service saw, newest first */
+export interface ChainDepositTransfer {
+  network: string
+  network_name: string
+  token: string
+  /** Coins sent, as a decimal */
+  amount: string
+  tx_hash: string
+  /** Unix seconds */
+  seen_at: number
+  stage: ChainDepositStage
+  /** What the credit added, in wallet units, on the transfer it ended at */
+  credited?: number
+  bonus?: number
+}
+
+export type ChainDepositActivityResponse = ApiResponse<{
+  transfers: ChainDepositTransfer[]
+}>
 export type StripePaymentResponse = ApiResponse<{ pay_link: string }>
 export type AffiliateCodeResponse = ApiResponse<string>
 export type AffiliateTransferResponse = ApiResponse
