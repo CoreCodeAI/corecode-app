@@ -25,13 +25,21 @@ banner said to finish paying in another tab.
   route is refused to callers `canUseChainDeposit` refuses, takes amounts from 1 to 10^9,
   and never calls the deposit service. `operation_setting.TopUpBonusTier` returns the tier's
   minimum beside its rate; `TopUpBonusRate` now reads it.
-- **The dialog shows it above the address.** "充值 5000 预计需转账 735.30 USDT 或 USDC", and
-  "单笔转账需不少于 735.30 USDT 或 USDC，才能享受 7% 赠送；少于这个数，赠送按下一档 5%
-  计算" (or "则没有赠送" at the lowest tier). For an amount between tiers, such as 2000,
+- **The dialog shows it above the address**, as two large figures: 充值金额 ¥5,000 (the
+  quote's `money`, the amount times `Price`, with 到账 $5,000 + 赠送 $350 under it) and
+  需转账 735.30 USDT / USDC. The figure is exact, not an estimate: it is the least transfer
+  that credits the amount at the current rate. Under them: "单笔转账需不少于 735.30 USDT 或
+  USDC，才能享受 7% 赠送；少于这个数，赠送按上一档 5% 计算" (the owner's wording; or
+  "则没有赠送" at the lowest tier), and that what arrives is counted, so a withdrawal from an
+  exchange must add the exchange's fee. For an amount between tiers, such as 2000,
   the floor is the tier's own minimum's price (147.06 for 5%). "单笔" because the bonus is
   read per credited difference. A failed quote hides the estimate and leaves the address.
-- **Tokens by symbol only.** Each network lists its token symbols; the contracts and their
-  copy buttons are gone.
+- **Tokens by symbol, linked.** Each network lists its token symbols; each opens the
+  contract's page on BscScan or Arbiscan (`chainDepositTokenUrl`, by chain id) in a new tab.
+  The contracts are no longer printed.
+- **The address is centered and checkable.** Monospace, larger, with "0x" and the first six
+  characters and the last six in the primary color (`splitDepositAddress`), the copy button
+  beside it.
 - **Credit time.** One line for both networks, "通常在 1 分钟内入账", since the deposit
   service reads Arbitrum 20 blocks behind its head (`corecode-deposit` note
   `2026-11-20-read-arbitrum-near-its-head.md`). `chainDepositDelayMinutes` had no caller and

@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Loader2 } from 'lucide-react'
+import { ArrowRight, ExternalLink, Gift, Loader2 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -26,6 +26,7 @@ import { CopyButton } from '@/components/copy-button'
 import { Dialog } from '@/components/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { toIntlLocale } from '@/i18n/languages'
 import { formatCurrencyFromUSD } from '@/lib/currency'
 import { handleServerError } from '@/lib/handle-server-error'
 
@@ -36,7 +37,12 @@ import {
   isApiSuccess,
 } from '../../api'
 import { bonusRateToPercent } from '../../lib/bonus'
-import { usableChainDepositNetworks } from '../../lib/chain-deposit'
+import {
+  chainDepositTokenUrl,
+  splitDepositAddress,
+  usableChainDepositNetworks,
+} from '../../lib/chain-deposit'
+import { formatChargeMoney } from '../../lib/format'
 
 // What the server answers to a refused check. The console translates a server
 // message by its text, so the texts are named here, in the wallet's own chunk,
@@ -67,7 +73,8 @@ export function ChainDepositDialog({
   amount,
   onChecked,
 }: ChainDepositDialogProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
 
   const addressQuery = useQuery({
     queryKey: ['chain-deposit-address'],
@@ -126,6 +133,7 @@ export function ChainDepositDialog({
 
   const address = addressQuery.data
   const networks = usableChainDepositNetworks(address?.networks)
+  const addressParts = address ? splitDepositAddress(address.address) : null
 
   return (
     <Dialog
@@ -178,35 +186,77 @@ export function ChainDepositDialog({
       {address && (
         <div className='space-y-4 py-2'>
           {quote && (
-            <div className='bg-muted/50 space-y-1.5 rounded-lg p-3'>
-              <div className='text-muted-foreground text-xs'>
-                {t('Estimated transfer for {{amount}}', {
-                  amount: formatCurrencyFromUSD(quote.amount),
-                })}
-              </div>
-              <div className='text-xl font-semibold'>
-                {t('{{usd}} USDT or USDC', { usd: quote.usd })}
-              </div>
-              {quote.bonus_rate > 0 && quote.bonus_usd && (
-                <div className='text-xs'>
-                  {quote.lower_rate > 0
-                    ? t(
-                        'Send at least {{usd}} USDT or USDC in one transfer to get the {{percent}}% bonus. Less than that gets the lower tier, {{lower}}%.',
-                        {
-                          usd: quote.bonus_usd,
-                          percent: bonusRateToPercent(quote.bonus_rate),
-                          lower: bonusRateToPercent(quote.lower_rate),
-                        }
-                      )
-                    : t(
-                        'Send at least {{usd}} USDT or USDC in one transfer to get the {{percent}}% bonus. Less than that gets no bonus.',
-                        {
-                          usd: quote.bonus_usd,
-                          percent: bonusRateToPercent(quote.bonus_rate),
-                        }
-                      )}
+            <div className='rounded-lg border p-4'>
+              <div className='flex items-center justify-between gap-3'>
+                <div className='min-w-0 space-y-1'>
+                  <div className='text-muted-foreground text-xs'>
+                    {t('Top-up amount')}
+                  </div>
+                  <div className='text-2xl font-semibold tabular-nums'>
+                    {formatChargeMoney(quote.money, locale)}
+                  </div>
+                  <div className='text-muted-foreground text-xs tabular-nums'>
+                    {quote.bonus_rate > 0
+                      ? t('Credited {{amount}} + bonus {{bonus}}', {
+                          amount: formatCurrencyFromUSD(quote.amount),
+                          bonus: formatCurrencyFromUSD(
+                            quote.amount * quote.bonus_rate
+                          ),
+                        })
+                      : t('Credited {{amount}}', {
+                          amount: formatCurrencyFromUSD(quote.amount),
+                        })}
+                  </div>
                 </div>
-              )}
+                <ArrowRight
+                  className='text-muted-foreground h-5 w-5 shrink-0'
+                  aria-hidden
+                />
+                <div className='min-w-0 space-y-1 text-right'>
+                  <div className='text-muted-foreground text-xs'>
+                    {t('Amount to send')}
+                  </div>
+                  <div className='text-primary text-2xl font-semibold tabular-nums'>
+                    {quote.usd}
+                  </div>
+                  <div className='text-muted-foreground text-xs'>
+                    USDT / USDC
+                  </div>
+                </div>
+              </div>
+              <div className='mt-3 space-y-1.5 border-t pt-3 text-xs'>
+                {quote.bonus_rate > 0 && quote.bonus_usd && (
+                  <div className='flex items-start gap-2'>
+                    <Gift
+                      className='text-primary mt-0.5 h-3.5 w-3.5 shrink-0'
+                      aria-hidden
+                    />
+                    <span>
+                      {quote.lower_rate > 0
+                        ? t(
+                            'Send at least {{usd}} USDT or USDC in one transfer to get the {{percent}}% bonus. Less than that gets the lower tier, {{lower}}%.',
+                            {
+                              usd: quote.bonus_usd,
+                              percent: bonusRateToPercent(quote.bonus_rate),
+                              lower: bonusRateToPercent(quote.lower_rate),
+                            }
+                          )
+                        : t(
+                            'Send at least {{usd}} USDT or USDC in one transfer to get the {{percent}}% bonus. Less than that gets no bonus.',
+                            {
+                              usd: quote.bonus_usd,
+                              percent: bonusRateToPercent(quote.bonus_rate),
+                            }
+                          )}
+                    </span>
+                  </div>
+                )}
+                <div className='text-muted-foreground'>
+                  {t(
+                    'What arrives is counted: when withdrawing from an exchange, add its fee on top.'
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -214,9 +264,17 @@ export function ChainDepositDialog({
             <div className='rounded-lg bg-white p-3'>
               <QRCodeSVG value={address.address} size={160} />
             </div>
-            <div className='flex w-full items-center gap-1'>
-              <code className='bg-muted min-w-0 flex-1 rounded px-2 py-1.5 text-xs break-all'>
-                {address.address}
+            <div className='flex w-full items-center justify-center gap-2'>
+              <code className='bg-muted rounded-md px-3 py-2 text-center font-mono text-sm break-all sm:text-base'>
+                <span className='text-primary font-semibold'>
+                  {addressParts?.head}
+                </span>
+                <span className='text-muted-foreground'>
+                  {addressParts?.middle}
+                </span>
+                <span className='text-primary font-semibold'>
+                  {addressParts?.tail}
+                </span>
               </code>
               <CopyButton
                 value={address.address}
@@ -244,12 +302,48 @@ export function ChainDepositDialog({
             </AlertDescription>
           </Alert>
 
-          <div className='space-y-1 text-sm'>
+          <div className='divide-y rounded-lg border text-sm'>
             {networks.map((network) => (
-              <div key={network.network} className='flex gap-2'>
+              <div
+                key={network.network}
+                className='flex items-center justify-between gap-2 px-3 py-2'
+              >
                 <span className='font-medium'>{network.name}</span>
-                <span className='text-muted-foreground'>
-                  {network.tokens.map((token) => token.symbol).join(' / ')}
+                <span className='flex flex-wrap justify-end gap-1.5'>
+                  {network.tokens.map((token) => {
+                    const url = chainDepositTokenUrl(
+                      network.chain_id,
+                      token.contract
+                    )
+                    if (!url) {
+                      return (
+                        <span
+                          key={token.contract}
+                          className='text-muted-foreground text-xs'
+                        >
+                          {token.symbol}
+                        </span>
+                      )
+                    }
+                    const label = t(
+                      'View the {{symbol}} contract on the block explorer',
+                      { symbol: token.symbol }
+                    )
+                    return (
+                      <a
+                        key={token.contract}
+                        href={url}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        title={label}
+                        aria-label={label}
+                        className='hover:bg-muted inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium transition-colors'
+                      >
+                        {token.symbol}
+                        <ExternalLink className='h-3 w-3' aria-hidden />
+                      </a>
+                    )
+                  })}
                 </span>
               </div>
             ))}

@@ -72,6 +72,8 @@ export type ChainDepositAddressResponse = ApiResponse<ChainDepositAddress>
  */
 export interface ChainDepositQuote {
   amount: number
+  /** The amount's price in CNY */
+  money: number
   /** Dollars, two decimals */
   usd: string
   bonus_rate: number
