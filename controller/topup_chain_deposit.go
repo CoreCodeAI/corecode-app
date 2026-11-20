@@ -50,8 +50,6 @@ const (
 // each counted as one dollar. USDC.e is credited but never listed.
 var chainDepositTokens = map[string]bool{"USDT": true, "USDC": true, "USDT0": true, "USDC.e": true}
 
-var chainDepositNetworkNames = map[string]string{"bsc": "BNB Smart Chain", "arbitrum": "Arbitrum One"}
-
 // chainDepositStatusError is a refusal from the deposit service.
 type chainDepositStatusError struct {
 	Status int
@@ -424,19 +422,12 @@ func sendChainDepositFeishu(text string) {
 	}
 }
 
-func chainDepositNetworkName(network string) string {
-	if name, ok := chainDepositNetworkNames[network]; ok {
-		return name
-	}
-	return network
-}
-
 // chainDepositCreditedText describes a credit for the Feishu group.
 func chainDepositCreditedText(total model.ChainDepositTotal, result *model.ChainDepositResult) string {
 	return strings.Join([]string{
 		"✅ 链上充值到账",
 		"用户：" + nowPaymentsFeishuUser(total.UserId),
-		"网络：" + chainDepositNetworkName(total.Network),
+		"网络：" + model.ChainDepositNetworkName(total.Network),
 		"币种：" + total.Token,
 		"金额：" + result.Dollars.String() + " USD",
 		fmt.Sprintf("到账额度：%s（赠送 %s）", logger.FormatQuota(result.Quota), logger.FormatQuota(int(result.TopUp.BonusQuota))),
@@ -465,7 +456,7 @@ func applyChainDepositTotal(item *chainDepositTotalItem) (alert string, err erro
 	case errors.Is(err, gorm.ErrRecordNotFound), errors.Is(err, model.ErrTopUpQuotaLimitExceeded), errors.Is(err, model.ErrInvalidTopUpQuota), errors.Is(err, model.ErrWalletQuotaLimitExceeded):
 		// Retrying cannot help: say so, and the next change of the total
 		// credits the whole difference once the cause is fixed.
-		return fmt.Sprintf("⚠️ 链上充值告警: 未能入账 用户 #%d %s %s 累计 %s: %s", total.UserId, chainDepositNetworkName(total.Network), total.Token, total.Received.String(), err.Error()), nil
+		return fmt.Sprintf("⚠️ 链上充值告警: 未能入账 用户 #%d %s %s 累计 %s: %s", total.UserId, model.ChainDepositNetworkName(total.Network), total.Token, total.Received.String(), err.Error()), nil
 	case err != nil:
 		return "", err
 	}
@@ -475,7 +466,7 @@ func applyChainDepositTotal(item *chainDepositTotalItem) (alert string, err erro
 		sendChainDepositFeishu(chainDepositCreditedText(total, result))
 	case model.ChainDepositLower:
 		return fmt.Sprintf("⚠️ 链上充值告警: 累计到账低于已入账，未入账 用户 %s %s %s 服务累计 %s，已入账 %s（最小单位）",
-			nowPaymentsFeishuUser(total.UserId), chainDepositNetworkName(total.Network), total.Token, total.Received.String(), result.Credited.String()), nil
+			nowPaymentsFeishuUser(total.UserId), model.ChainDepositNetworkName(total.Network), total.Token, total.Received.String(), result.Credited.String()), nil
 	}
 	return "", nil
 }

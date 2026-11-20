@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"math"
 	"net/http"
@@ -244,6 +245,24 @@ func chainDepositQuota(t *testing.T, db *gorm.DB, userId int) int {
 	return user.Quota
 }
 
+// chainDepositLogParts returns each top-up log's structured content, oldest
+// first.
+func chainDepositLogParts(t *testing.T, db *gorm.DB, userId int) []common.Message {
+	t.Helper()
+	var logs []model.Log
+	require.NoError(t, db.Where("user_id = ? AND type = ?", userId, model.LogTypeTopup).Order("id").Find(&logs).Error)
+	parts := make([]common.Message, 0, len(logs))
+	for _, log := range logs {
+		var other struct {
+			ContentParts []common.Message `json:"content_parts"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(log.Other), &other))
+		require.Len(t, other.ContentParts, 1)
+		parts = append(parts, other.ContentParts[0])
+	}
+	return parts
+}
+
 func chainDepositTopUps(t *testing.T, db *gorm.DB, userId int) []model.TopUp {
 	t.Helper()
 	var topUps []model.TopUp
@@ -348,6 +367,26 @@ func TestChainDepositCreditsTheDifferenceWithBonusOnce(t *testing.T) {
 	require.Len(t, topUps, 2)
 	assert.EqualValues(t, 0, topUps[1].BonusQuota)
 	assert.Equal(t, 6250000+1250000+3750000, chainDepositQuota(t, db, user.Id))
+
+	// Each credit's record names the coins that arrived, not the total.
+	parts := chainDepositLogParts(t, db, user.Id)
+	require.Len(t, parts, 2)
+	assert.Equal(t, "Online top-up succeeded, amount added: {{quota}} including a bonus of {{bonus}}, payment amount: {{amount}}", parts[0].Key)
+	assert.Equal(t, "12.5 USDT (BNB Smart Chain)", parts[0].Params["amount"])
+	assert.Equal(t, "Online top-up succeeded, amount added: {{quota}}, payment amount: {{amount}}", parts[1].Key)
+	assert.Equal(t, "7.5 USDT (BNB Smart Chain)", parts[1].Params["amount"])
+}
+
+func TestChainDepositRecordNamesArbitrumUSDT0AsUSDT(t *testing.T) {
+	stub, _, db := setupChainDeposit(t)
+	user := chainDepositTestUser(t, db, "chain_usdt0", common.RoleCommonUser)
+
+	stub.setItems(chainTotal(1, user.Id, "arbitrum", "USDT0", 6, "3250000"))
+	require.NoError(t, RunChainDepositPass(context.Background()))
+
+	parts := chainDepositLogParts(t, db, user.Id)
+	require.Len(t, parts, 1)
+	assert.Equal(t, "3.25 USDT (Arbitrum One)", parts[0].Params["amount"])
 }
 
 func TestChainDepositRepeatedTotalCreditsOnce(t *testing.T) {
