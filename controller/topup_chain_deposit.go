@@ -281,11 +281,7 @@ func chainDepositPrice(dollars decimal.Decimal) (model.ChainDepositPrice, error)
 	if err != nil || quota <= 0 {
 		return model.ChainDepositPrice{}, model.ErrInvalidTopUpQuota
 	}
-	// A tier is read in the units a customer types: tokens in token display.
-	tierAmount := units
-	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
-		tierAmount = units.Mul(quotaPerUnit)
-	}
+	tierAmount := chainDepositTierAmount(units)
 	bonus := 0
 	if rate := operation_setting.TopUpBonusRate(tierAmount.Floor().IntPart()); rate > 0 {
 		bonus, err = common.WalletQuotaFromDecimalStrict(decimal.NewFromInt(int64(quota)).Mul(decimal.NewFromFloat(rate)).Floor())
@@ -299,6 +295,102 @@ func chainDepositPrice(dollars decimal.Decimal) (model.ChainDepositPrice, error)
 		Quota:      quota,
 		BonusQuota: int64(bonus),
 	}, nil
+}
+
+// chainDepositTierAmount is a credit of units in the amount a customer types,
+// which bonus tiers are read in: tokens in token display, units otherwise.
+func chainDepositTierAmount(units decimal.Decimal) decimal.Decimal {
+	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
+		return units.Mul(decimal.NewFromFloat(common.QuotaPerUnit))
+	}
+	return units
+}
+
+// chainDepositDollarsFor is the least whole-cent dollar amount chainDepositPrice
+// reads as at least amount, in the amount a customer types: a transfer of it
+// credits the amount and reaches the amount's bonus tier, and one cent less
+// may not.
+func chainDepositDollarsFor(amount int64) (decimal.Decimal, error) {
+	exchangeRate := decimal.NewFromFloat(operation_setting.USDExchangeRate)
+	price := decimal.NewFromFloat(operation_setting.Price)
+	quotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
+	if !exchangeRate.IsPositive() || !price.IsPositive() || !quotaPerUnit.IsPositive() {
+		return decimal.Zero, errors.New("USDExchangeRate, Price and QuotaPerUnit must be positive")
+	}
+	target := decimal.NewFromInt(amount)
+	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
+		target = target.Div(quotaPerUnit)
+	}
+	cent := decimal.New(1, -2)
+	dollars := target.Mul(price).Div(exchangeRate).Div(cent).Ceil().Mul(cent)
+	// Division rounds; step up a cent at a time until the credit reads it.
+	for range 3 {
+		units := dollars.Mul(exchangeRate).Div(price)
+		if chainDepositTierAmount(units).Floor().IntPart() >= amount {
+			return dollars, nil
+		}
+		dollars = dollars.Add(cent)
+	}
+	return decimal.Zero, fmt.Errorf("no cent amount reaches %d", amount)
+}
+
+// chainDepositMaxQuoteAmount bounds a quote's amount far above any top-up.
+const chainDepositMaxQuoteAmount = 1_000_000_000
+
+// ChainDepositQuote is what a top-up amount costs on chain. USD is the least
+// transfer that credits Amount. When the amount earns a bonus, BonusUSD is
+// the least transfer that still earns BonusRate, the rate of the tier the
+// amount is in, and LowerRate is what a smaller transfer earns. A tier is
+// read per credited transfer.
+type ChainDepositQuote struct {
+	Amount    int64   `json:"amount"`
+	USD       string  `json:"usd"`
+	BonusRate float64 `json:"bonus_rate"`
+	BonusUSD  string  `json:"bonus_usd,omitempty"`
+	LowerRate float64 `json:"lower_rate"`
+}
+
+func chainDepositQuote(amount int64) (*ChainDepositQuote, error) {
+	dollars, err := chainDepositDollarsFor(amount)
+	if err != nil {
+		return nil, err
+	}
+	quote := &ChainDepositQuote{Amount: amount, USD: dollars.StringFixed(2)}
+	tierMin, rate := operation_setting.TopUpBonusTier(amount)
+	if rate > 0 {
+		tierDollars, err := chainDepositDollarsFor(tierMin)
+		if err != nil {
+			return nil, err
+		}
+		quote.BonusRate = rate
+		quote.BonusUSD = tierDollars.StringFixed(2)
+		quote.LowerRate = operation_setting.TopUpBonusRate(tierMin - 1)
+	}
+	return quote, nil
+}
+
+// RequestChainDepositQuote answers what the amount the caller picked costs on
+// chain, and the least transfer that keeps its bonus. The deposit itself
+// takes any amount.
+func RequestChainDepositQuote(c *gin.Context) {
+	if !canUseChainDeposit(c.GetInt("role")) {
+		paymentError(c, common.NewMessage("Payment method does not exist"))
+		return
+	}
+	var req struct {
+		Amount int64 `json:"amount"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Amount <= 0 || req.Amount > chainDepositMaxQuoteAmount {
+		paymentError(c, common.NewMessage("Invalid parameters"))
+		return
+	}
+	quote, err := chainDepositQuote(req.Amount)
+	if err != nil {
+		logger.LogError(c.Request.Context(), common.LogText("chain deposit quote failed amount=%d error=%q", req.Amount, err.Error()))
+		paymentError(c, common.NewMessage("Invalid parameters"))
+		return
+	}
+	common.ApiSuccess(c, quote)
 }
 
 // chainDepositTotalToModel validates a total from the feed.

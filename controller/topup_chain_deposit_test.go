@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -578,4 +580,77 @@ func TestChainDepositCheckMapsServiceRefusals(t *testing.T) {
 		assert.NotEqual(t, true, body["success"])
 		assert.Contains(t, body["data"], want)
 	}
+}
+
+func TestChainDepositQuoteIsTheLeastTransferThatKeepsTheTier(t *testing.T) {
+	stub, _, db := setupChainDeposit(t)
+	admin := chainDepositTestUser(t, db, "chain_quote", common.RoleAdminUser)
+	customer := chainDepositTestUser(t, db, "chain_quote_customer", common.RoleCommonUser)
+	// Production's values on 2026-11-20.
+	common.QuotaPerUnit = 500000
+	operation_setting.Price = 1
+	operation_setting.USDExchangeRate = 6.8
+	operation_setting.GetPaymentSetting().AmountBonus = map[int]float64{300: 0.03, 1000: 0.05, 5000: 0.07, 10000: 0.1}
+
+	quote := func(amount int64) *ChainDepositQuote {
+		q, err := chainDepositQuote(amount)
+		require.NoError(t, err)
+		return q
+	}
+	// 5000 / 6.8 = 735.294…: 735.29 credits 4999.97, below the 7% tier.
+	q := quote(5000)
+	assert.Equal(t, "735.30", q.USD)
+	assert.Equal(t, "735.30", q.BonusUSD)
+	assert.Equal(t, 0.07, q.BonusRate)
+	assert.Equal(t, 0.05, q.LowerRate)
+	// 2000 is in the 1000 tier: any transfer from 1000's price keeps 5%.
+	q = quote(2000)
+	assert.Equal(t, "294.12", q.USD)
+	assert.Equal(t, "147.06", q.BonusUSD)
+	assert.Equal(t, 0.05, q.BonusRate)
+	assert.Equal(t, 0.03, q.LowerRate)
+	q = quote(300)
+	assert.Equal(t, 0.03, q.BonusRate)
+	assert.Equal(t, 0.0, q.LowerRate)
+	q = quote(100)
+	assert.Equal(t, "14.71", q.USD)
+	assert.Zero(t, q.BonusRate)
+	assert.Empty(t, q.BonusUSD)
+
+	// The quote agrees with crediting: its transfer reaches the amount and
+	// its tier, and a cent less does not.
+	for _, amount := range []int64{10, 50, 300, 999, 1000, 5000, 10000, 123457} {
+		q := quote(amount)
+		usd := decimal.RequireFromString(q.USD)
+		price, err := chainDepositPrice(usd)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, price.Quota, int(amount)*500000-1, "amount %d", amount)
+		assert.Equal(t, int64(math.Floor(float64(price.Quota)*operation_setting.TopUpBonusRate(amount))), price.BonusQuota, "amount %d", amount)
+		centLess := usd.Sub(decimal.New(1, -2)).Mul(decimal.NewFromFloat(6.8))
+		assert.Less(t, chainDepositTierAmount(centLess).Floor().IntPart(), amount, "amount %d: a cent less still reaches it", amount)
+	}
+
+	call := func(user *model.User, body string) map[string]any {
+		gin.SetMode(gin.TestMode)
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodPost, "/api/user/chain-deposit/quote", strings.NewReader(body))
+		ctx.Request.Header.Set("Content-Type", "application/json")
+		ctx.Set("id", user.Id)
+		ctx.Set("role", user.Role)
+		RequestChainDepositQuote(ctx)
+		var out map[string]any
+		require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &out))
+		return out
+	}
+	body := call(admin, `{"amount":5000}`)
+	require.Equal(t, true, body["success"], "%v", body)
+	assert.Equal(t, "735.30", body["data"].(map[string]any)["usd"])
+	for _, bad := range []string{`{"amount":0}`, `{"amount":-5}`, `{"amount":1000000001}`, `{}`, `nope`} {
+		assert.NotEqual(t, true, call(admin, bad)["success"], bad)
+	}
+	assert.NotEqual(t, true, call(customer, `{"amount":5000}`)["success"], "admin only")
+	stub.mu.Lock()
+	assert.Empty(t, stub.requests, "a quote never calls the deposit service")
+	stub.mu.Unlock()
 }

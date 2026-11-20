@@ -22,10 +22,15 @@ import { useTranslation } from 'react-i18next'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 
-import type { PaymentWaitStatus } from '../hooks/use-payment-confirmation'
+import type {
+  PaymentWaitKind,
+  PaymentWaitStatus,
+} from '../hooks/use-payment-confirmation'
 
 interface PaymentPendingBannerProps {
   status: PaymentWaitStatus
+  /** Defaults to "tab", a payment page opened elsewhere */
+  kind?: PaymentWaitKind
   onOpenBilling: () => void
   onDismiss: () => void
 }
@@ -35,6 +40,21 @@ export function PaymentPendingBanner(props: PaymentPendingBannerProps) {
   const { t } = useTranslation()
   if (props.status === 'idle') return null
   const waiting = props.status === 'waiting'
+  let title = t('Still waiting for your payment?')
+  let description = t(
+    'Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.'
+  )
+  if (waiting && props.kind === 'chain') {
+    title = t('Waiting for your transfer')
+    description = t(
+      'Your balance updates here as soon as the transfer is credited, usually within a minute.'
+    )
+  } else if (waiting) {
+    title = t('Waiting for your payment')
+    description = t(
+      'Finish paying in the other tab. Your balance updates here as soon as the payment arrives.'
+    )
+  }
 
   return (
     <Alert role='status' aria-live='polite'>
@@ -43,21 +63,9 @@ export function PaymentPendingBanner(props: PaymentPendingBannerProps) {
       ) : (
         <Receipt aria-hidden />
       )}
-      <AlertTitle>
-        {waiting
-          ? t('Waiting for your payment')
-          : t('Still waiting for your payment?')}
-      </AlertTitle>
+      <AlertTitle>{title}</AlertTitle>
       <AlertDescription>
-        <p>
-          {waiting
-            ? t(
-                'Finish paying in the other tab. Your balance updates here as soon as the payment arrives.'
-              )
-            : t(
-                'Some payments take a few minutes to arrive. Check Order History for its status; your balance updates on its own once it is credited.'
-              )}
-        </p>
+        <p>{description}</p>
         <div className='mt-2 flex flex-wrap gap-2'>
           {!waiting && (
             <Button size='sm' variant='outline' onClick={props.onOpenBilling}>

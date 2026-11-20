@@ -65,6 +65,22 @@ export interface ChainDepositAddress {
 }
 
 export type ChainDepositAddressResponse = ApiResponse<ChainDepositAddress>
+
+/**
+ * What a top-up amount costs on chain: the least transfer that credits it,
+ * and, when it earns a bonus, the least transfer that keeps the bonus rate
+ */
+export interface ChainDepositQuote {
+  amount: number
+  /** Dollars, two decimals */
+  usd: string
+  bonus_rate: number
+  bonus_usd?: string
+  /** The rate a transfer below bonus_usd earns */
+  lower_rate: number
+}
+
+export type ChainDepositQuoteResponse = ApiResponse<ChainDepositQuote>
 export type StripePaymentResponse = ApiResponse<{ pay_link: string }>
 export type AffiliateCodeResponse = ApiResponse<string>
 export type AffiliateTransferResponse = ApiResponse
