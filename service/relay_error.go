@@ -1,6 +1,7 @@
 package service
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -54,6 +55,16 @@ func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) Po
 		return PolicyDecision{Action: "retry", Reason: "retry_status_matched", Source: "global"}
 	}
 	return PolicyDecision{Action: "stop", Reason: "status_not_retryable", Source: "global"}
+}
+
+// UpstreamHasNoChannel reports an upstream gateway that answered it has no
+// channel for the model: a 503 with code model_not_found, which new-api and
+// one-api send when the group they were asked for is empty. The answer does
+// not change within a request's retries; from 2026-11-14 to 11-21 none of the
+// 2,926 retries after it on the same channel succeeded. This gateway's own
+// "no available channel" is decided before the relay loop and never reaches it.
+func UpstreamHasNoChannel(err *types.NewAPIError) bool {
+	return err != nil && err.StatusCode == http.StatusServiceUnavailable && err.GetErrorCode() == types.ErrorCodeModelNotFound
 }
 
 func ShouldRetryRelayError(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {

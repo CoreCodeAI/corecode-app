@@ -220,7 +220,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		stopSelect()
 		if channelErr != nil {
 			logger.LogError(c, channelErr.Error())
-			newAPIError = channelErr
+			// A retry that finds no further channel keeps the failure that
+			// caused it: "no available channel" would hide why the request failed.
+			if relayInfo.LastError == nil {
+				newAPIError = channelErr
+			}
 			break
 		}
 		service.AppendUsedChannel(c, channel.Id)
@@ -272,6 +276,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		if decision.Action != "retry" {
 			break
+		}
+		if service.UpstreamHasNoChannel(newAPIError) {
+			// Asking the same upstream again gets the same answer, so the
+			// retry goes to another channel or the request stops here.
+			service.GetChannelConstraints(c).AddFilter(taskdto.ChannelFilter{Kind: taskdto.FilterExcludedChannel, ExcludedChannelID: channel.Id})
 		}
 	}
 
