@@ -1,0 +1,4 @@
+# The console formats with oxfmt: bun run format, or bunx oxfmt -c .oxfmtrc.json on
+# the changed directories. Prettier would restyle files a change never touched,
+# so it ignores everything here.
+*
