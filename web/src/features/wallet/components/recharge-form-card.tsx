@@ -53,7 +53,7 @@ import {
   calculatePresetPricing,
   concurrencyAfterPaying,
 } from '../lib'
-import { paymentMethodName } from '../lib/payment-names'
+import { paymentMethodHint, paymentMethodName } from '../lib/payment-names'
 import type {
   PaymentMethod,
   PresetAmount,
@@ -309,7 +309,7 @@ export function RechargeFormCard({
                   <Label className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
                     {t('Amount')}
                   </Label>
-                  <div className='grid grid-cols-2 gap-1.5 sm:gap-3 md:grid-cols-4'>
+                  <div className='grid grid-cols-3 gap-1.5 sm:gap-3 md:grid-cols-4'>
                     {presetAmounts.map((preset) => {
                       const discount =
                         preset.discount ||
@@ -364,7 +364,15 @@ export function RechargeFormCard({
                               </div>
                             )}
                           </div>
-                          <div className='text-muted-foreground mt-1.5 w-full text-xs sm:mt-2'>
+                          <div
+                            className={cn(
+                              'text-muted-foreground mt-1.5 w-full text-xs sm:mt-2',
+                              // A phone shows six amounts at once, so the price
+                              // line is dropped there when it only repeats the
+                              // amount.
+                              !hasDiscount && 'hidden sm:block'
+                            )}
+                          >
                             {hasDiscount && savedAmount > 0 ? (
                               <Trans
                                 t={t}
@@ -387,7 +395,7 @@ export function RechargeFormCard({
                             )}
                           </div>
                           {bonusTier && (
-                            <div className='text-success mt-0.5 w-full text-xs'>
+                            <div className='text-success mt-0.5 hidden w-full text-xs sm:block'>
                               {t('Bonus {{amount}}', {
                                 amount: formatCurrencyFromUSD(
                                   preset.value * bonusTier.rate
@@ -509,6 +517,12 @@ export function RechargeFormCard({
                       const disabledLabel = disabled
                         ? `${t('Minimum:')} ${minTopup}`
                         : undefined
+                      const hint = paymentMethodHint(
+                        method,
+                        t,
+                        // With no bonus on offer, nothing needs a warning.
+                        !bonusAvailable || isBonusEligiblePayment(method.type)
+                      )
 
                       const button = (
                         <Button
@@ -522,7 +536,7 @@ export function RechargeFormCard({
                               ? `${methodName}. ${disabledReason}`
                               : methodName
                           }
-                          className='min-h-14 min-w-0 justify-start gap-2 rounded-lg px-3 py-2 text-left'
+                          className='h-auto min-h-14 min-w-0 justify-start gap-2 rounded-lg px-3 py-2 text-left whitespace-normal'
                         >
                           {paymentLoading === method.type ? (
                             <Loader2 className='h-4 w-4 animate-spin' />
@@ -541,6 +555,11 @@ export function RechargeFormCard({
                             {disabledLabel && (
                               <span className='text-muted-foreground max-w-full truncate text-[11px] leading-4 font-normal'>
                                 {disabledLabel}
+                              </span>
+                            )}
+                            {hint && (
+                              <span className='text-muted-foreground max-w-full text-[11px] leading-4 font-normal'>
+                                {hint}
                               </span>
                             )}
                           </span>
@@ -620,7 +639,7 @@ export function RechargeFormCard({
                                 ? `${method.name}. ${disabledReason}`
                                 : method.name
                             }
-                            className='min-h-14 min-w-0 justify-start gap-2 rounded-lg px-3 py-2 text-left'
+                            className='h-auto min-h-14 min-w-0 justify-start gap-2 rounded-lg px-3 py-2 text-left whitespace-normal'
                           >
                             {methodIcon}
                             <span className='flex min-w-0 flex-col items-start gap-0.5'>
@@ -630,6 +649,11 @@ export function RechargeFormCard({
                               {disabledLabel && (
                                 <span className='text-muted-foreground max-w-full truncate text-[11px] leading-4 font-normal'>
                                   {disabledLabel}
+                                </span>
+                              )}
+                              {bonusAvailable && (
+                                <span className='text-muted-foreground max-w-full text-[11px] leading-4 font-normal'>
+                                  {t('No bonus on this method')}
                                 </span>
                               )}
                             </span>

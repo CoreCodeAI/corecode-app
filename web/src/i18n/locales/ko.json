@@ -9676,6 +9676,11 @@
     "12-hour cache": "12시간 캐시",
     "cybersecurity": "사이버 보안",
     "biology": "생물",
-    "reasoning extraction": "모델 추론 추출"
+    "reasoning extraction": "모델 추론 추출",
+    "Instant, recommended": "즉시 입금, 추천",
+    "International cards only. Some banks decline; if it fails, use Alipay or WeChat Pay.": "해외 결제 카드만 가능합니다. 일부 카드사는 거절하니 실패하면 Alipay나 WeChat Pay를 이용하세요",
+    "On-chain USDT/USDC, usually credited in about 5 minutes": "온체인 USDT/USDC, 보통 약 5분 안에 입금",
+    "No bonus on this method": "이 결제 수단은 보너스가 없습니다",
+    "This order expired. You can place a new one.": "만료된 주문입니다. 다시 주문할 수 있습니다"
   }
 }

@@ -9676,6 +9676,11 @@
     "12-hour cache": "12 小時快取",
     "cybersecurity": "網路安全",
     "biology": "生物",
-    "reasoning extraction": "提取模型推理"
+    "reasoning extraction": "提取模型推理",
+    "Instant, recommended": "即時到帳，推薦",
+    "International cards only. Some banks decline; if it fails, use Alipay or WeChat Pay.": "國際卡，部分發卡行會拒；失敗請改用支付寶或微信",
+    "On-chain USDT/USDC, usually credited in about 5 minutes": "鏈上 USDT/USDC，通常約 5 分鐘到帳",
+    "No bonus on this method": "此方式不送贈金",
+    "This order expired. You can place a new one.": "已過期，可重新下單"
   }
 }

@@ -43,3 +43,29 @@ export function paymentMethodName(
   const key = PAYMENT_METHOD_NAME_KEYS[method.type]
   return key ? t(key) : method.name || method.type
 }
+
+// One line under a method's name. The figures come from paid orders: Alipay
+// and WeChat Pay settle in under two minutes, a USDT or USDC order in about
+// five (nine in ten within eight).
+const PAYMENT_METHOD_HINT_KEYS: Readonly<Record<string, string>> = {
+  [PAYMENT_TYPES.ALIPAY]: 'Instant, recommended',
+  [PAYMENT_TYPES.STRIPE_ALIPAY]: 'Instant, recommended',
+  [PAYMENT_TYPES.WECHAT]: 'Instant, recommended',
+  [PAYMENT_TYPES.STRIPE_WECHAT_PAY]: 'Instant, recommended',
+  [PAYMENT_TYPES.STRIPE_CARD]:
+    'International cards only. Some banks decline; if it fails, use Alipay or WeChat Pay.',
+  [PAYMENT_TYPES.NOWPAYMENTS]:
+    'On-chain USDT/USDC, usually credited in about 5 minutes',
+}
+
+export function paymentMethodHint(
+  method: { type: string } | null | undefined,
+  t: TFunction,
+  earnsBonus: boolean
+): string | null {
+  if (!method) return null
+  const key = PAYMENT_METHOD_HINT_KEYS[method.type]
+  if (key) return t(key)
+  // Creem and Waffo orders never earn the top-up bonus.
+  return earnsBonus ? null : t('No bonus on this method')
+}
