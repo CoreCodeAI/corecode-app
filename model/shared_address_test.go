@@ -27,7 +27,7 @@ func TestNewcomerPlanOnePerAddressDatabaseMatrix(t *testing.T) {
 			useAffiliateTestDB(t, dialect)
 			now := common.GetTimestamp()
 			previous := *operation_setting.GetLimitedPlanAddressSetting()
-			*operation_setting.GetLimitedPlanAddressSetting() = operation_setting.LimitedPlanAddressSetting{Enabled: true, Threshold: 2}
+			*operation_setting.GetLimitedPlanAddressSetting() = operation_setting.LimitedPlanAddressSetting{Enabled: true, FarmEnabled: true, Threshold: 2}
 			t.Cleanup(func() { *operation_setting.GetLimitedPlanAddressSetting() = previous })
 			newcomer := &SubscriptionPlan{Title: "newcomer", PriceAmount: 29.9, DurationUnit: SubscriptionDurationDay, DurationValue: 7, Enabled: true, MaxPurchasePerUser: 1}
 			unlimited := &SubscriptionPlan{Title: "monthly", PriceAmount: 99, DurationUnit: SubscriptionDurationDay, DurationValue: 30, Enabled: true}
@@ -127,7 +127,7 @@ func TestLimitedPlanOnePerNetworkDatabaseMatrix(t *testing.T) {
 			useAffiliateTestDB(t, dialect)
 			now := common.GetTimestamp()
 			previous := *operation_setting.GetLimitedPlanAddressSetting()
-			*operation_setting.GetLimitedPlanAddressSetting() = operation_setting.LimitedPlanAddressSetting{Enabled: true, Threshold: 2}
+			*operation_setting.GetLimitedPlanAddressSetting() = operation_setting.LimitedPlanAddressSetting{Enabled: false, FarmEnabled: true, Threshold: 2}
 			t.Cleanup(func() { *operation_setting.GetLimitedPlanAddressSetting() = previous })
 			newcomer := &SubscriptionPlan{Title: "newcomer", PriceAmount: 29.9, DurationUnit: SubscriptionDurationDay, DurationValue: 7, Enabled: true, MaxPurchasePerUser: 1}
 			unlimited := &SubscriptionPlan{Title: "monthly", PriceAmount: 99, DurationUnit: SubscriptionDurationDay, DurationValue: 30, Enabled: true}
@@ -171,9 +171,9 @@ func TestLimitedPlanOnePerNetworkDatabaseMatrix(t *testing.T) {
 			require.NoError(t, SetSubscriptionAddressExemption(c.Id, false, 1))
 			assert.ErrorIs(t, CheckSubscriptionPurchaseFrom(c.Id, newcomer, "192.0.2.1"), ErrSubscriptionAddressShared)
 
-			operation_setting.GetLimitedPlanAddressSetting().Enabled = false
-			assert.NoError(t, CheckSubscriptionPurchaseFrom(c.Id, newcomer, "192.0.2.1"), "setting off")
-			operation_setting.GetLimitedPlanAddressSetting().Enabled = true
+			operation_setting.GetLimitedPlanAddressSetting().FarmEnabled = false
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(c.Id, newcomer, "192.0.2.1"), "farm switch off")
+			operation_setting.GetLimitedPlanAddressSetting().FarmEnabled = true
 			operation_setting.GetLimitedPlanAddressSetting().Threshold = 3
 			assert.NoError(t, CheckSubscriptionPurchaseFrom(c.Id, newcomer, "192.0.2.1"), "two holders, threshold three")
 			operation_setting.GetLimitedPlanAddressSetting().Threshold = 2
@@ -223,6 +223,88 @@ func TestLimitedPlanOnePerNetworkDatabaseMatrix(t *testing.T) {
 			assert.ErrorIs(t, CheckSubscriptionPurchaseFrom(fresh.Id, newcomer, farm), ErrSubscriptionAddressShared,
 				"no request yet, the purchase comes from an address already holding twenty buyers")
 			assert.NoError(t, CheckSubscriptionPurchaseFrom(fresh.Id, newcomer, "192.0.2.9"), "no request yet, an unshared address")
+		})
+	}
+}
+
+// The two address checks have a switch each: the strict one-buyer-per-address
+// check (enabled) and the per-network threshold (farm_enabled). Production
+// runs the second alone, so a customer who shares an order address with a
+// buyer is not refused, while accounts that send requests from one place are.
+func TestLimitedPlanAddressSwitchesAreIndependent(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useAffiliateTestDB(t, dialect)
+			now := common.GetTimestamp()
+			previous := *operation_setting.GetLimitedPlanAddressSetting()
+			t.Cleanup(func() { *operation_setting.GetLimitedPlanAddressSetting() = previous })
+			set := func(strict, farm bool, threshold int) {
+				*operation_setting.GetLimitedPlanAddressSetting() = operation_setting.LimitedPlanAddressSetting{Enabled: strict, FarmEnabled: farm, Threshold: threshold}
+			}
+			newcomer := &SubscriptionPlan{Title: "newcomer", PriceAmount: 29.9, DurationUnit: SubscriptionDurationDay, DurationValue: 7, Enabled: true, MaxPurchasePerUser: 1}
+			require.NoError(t, DB.Create(newcomer).Error)
+			InvalidateSubscriptionPlanCache(newcomer.Id)
+			t.Cleanup(func() { InvalidateSubscriptionPlanCache(newcomer.Id) })
+			hold := func(user *User) {
+				t.Helper()
+				require.NoError(t, DB.Create(&UserSubscription{UserId: user.Id, PlanId: newcomer.Id, Status: "active", Source: "order",
+					StartTime: now - 600, EndTime: now + 86400, CreatedAt: now - 600, UpdatedAt: now - 600}).Error)
+			}
+
+			// One holder signed in from the customer's address: the strict
+			// check refuses, the farm check (two holders) lets them through.
+			holder := registerAffiliateTestUser(t, "sw_holder", "")
+			hold(holder)
+			addressTestSession(t, holder.Id, "198.51.100.7", now-600)
+			customer := registerAffiliateTestUser(t, "sw_customer", "")
+			set(true, false, 2)
+			assert.ErrorIs(t, CheckSubscriptionPurchaseFrom(customer.Id, newcomer, "198.51.100.7"), ErrSubscriptionAddressTaken, "strict on, farm off")
+			set(false, true, 2)
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(customer.Id, newcomer, "198.51.100.7"), "strict off, farm on: a customer who shares an address with one buyer")
+			set(false, false, 2)
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(customer.Id, newcomer, "198.51.100.7"), "both off")
+			set(true, true, 2)
+			assert.ErrorIs(t, CheckSubscriptionPurchaseFrom(customer.Id, newcomer, "198.51.100.7"), ErrSubscriptionAddressTaken, "both on, the strict check answers first")
+
+			// A studio: two holders send requests from one address, the third
+			// account did too before buying and orders from another one.
+			studio := "203.0.113.50"
+			second := registerAffiliateTestUser(t, "sw_second", "")
+			for _, member := range []*User{holder, second} {
+				addressTestRequest(t, member.Id, studio, now-1200)
+			}
+			hold(second)
+			third := registerAffiliateTestUser(t, "sw_third", "")
+			addressTestRequest(t, third.Id, studio, now-300)
+			set(true, false, 2)
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(third.Id, newcomer, "192.0.2.77"), "strict on, farm off: the order address is unknown to the holders")
+			set(false, true, 2)
+			err := CheckSubscriptionPurchaseFrom(third.Id, newcomer, "192.0.2.77")
+			assert.ErrorIs(t, err, ErrSubscriptionAddressShared, "strict off, farm on")
+			assert.Contains(t, err.Error(), "contact support", "the refusal says what to do")
+			assert.Contains(t, err.Error(), "top-up", "and that regular top-up stays open")
+			set(false, true, 3)
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(third.Id, newcomer, "192.0.2.77"), "two holders, threshold three")
+			set(false, true, 0)
+			assert.ErrorIs(t, CheckSubscriptionPurchaseFrom(third.Id, newcomer, "192.0.2.77"), ErrSubscriptionAddressShared, "a threshold below one counts as one")
+			set(false, true, 2)
+			require.NoError(t, SetSubscriptionAddressExemption(third.Id, true, 1))
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(third.Id, newcomer, "192.0.2.77"), "an exempt account passes the farm check")
+			require.NoError(t, SetSubscriptionAddressExemption(third.Id, false, 1))
+			set(false, false, 2)
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(third.Id, newcomer, "192.0.2.77"), "both off")
+
+			// The farm check reads addresses the buyer used before buying. A
+			// brand-new account that has sent no request and orders from an
+			// address of its own has none the holders share, so it passes: this
+			// is the studio pattern of 2026-11-21, caught after the purchase by
+			// relay-watch, not here.
+			set(false, true, 2)
+			fresh := registerAffiliateTestUser(t, "sw_fresh", "")
+			assert.NoError(t, CheckSubscriptionPurchaseFrom(fresh.Id, newcomer, "192.0.2.88"), "no request yet and an address of its own")
+			// Its own account limit still holds.
+			hold(fresh)
+			assert.Error(t, CheckSubscriptionPurchaseFrom(fresh.Id, newcomer, "192.0.2.88"), "the per-account limit")
 		})
 	}
 }

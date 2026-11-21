@@ -4735,7 +4735,7 @@
     "Purchase limit cannot be negative": "購買上限不能為負數",
     "Purchase limit for this plan has been reached": "已達到該訂閱方案購買上限",
     "This plan has already been bought from your network. Contact support if you need it": "此網路已有帳號購買過該方案，如需購買請聯繫客服",
-    "This discounted plan is limited to one per person, and accounts on your network have already bought it. Regular top-up is available": "該優惠方案每人限購一次，偵測到同一網路下已有帳號購買過。可以正常儲值",
+    "This discounted plan is limited to one per person, and other accounts on your network have already bought it. If this is a mistake, contact support and we will unlock it for you; regular top-up is always available": "該優惠方案每人限購一次，偵測到同一網路下已有其他帳號購買過。如有誤判，請聯繫客服為你解除限制；也可以隨時正常儲值",
     "Purchase limit reached": "已達到購買上限",
     "Purchase Subscription": "購買訂閱套餐",
     "Pure Claude,": "純血 Claude，",
