@@ -22,9 +22,9 @@ For commercial licensing, please contact support@quantumnous.com
  * key's group (`useSetupClients`): Claude Code alone for a Claude Code only
  * group, and Codex or OpenAI-compatible tools where the group serves them.
  *
- * The snippet on screen shows a masked key; the copy button fetches the real
- * key and copies the snippet with it. That is why this does not use
- * `CodeBlockCopyButton` or `CopyButton`: both copy the text they display.
+ * The key bar and the snippet show a masked key; their copy buttons fetch the
+ * real key and copy it alone or inside the snippet. That is why this does not
+ * use `CodeBlockCopyButton` or `CopyButton`: both copy the text they display.
  */
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
@@ -105,7 +105,7 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
   const [target, setTarget] = useState<ClientSetupTarget>('settings')
   const [pickedKeyId, setPickedKeyId] = useState<number | null>(null)
   const [busy, setBusy] = useState<
-    'copy' | 'verify' | 'cc-switch' | 'magpie' | 'create' | null
+    'copy' | 'key' | 'cc-switch' | 'magpie' | 'create' | null
   >(null)
   // The key made here, until the keys list the parent passes includes it.
   const [createdKey, setCreatedKey] = useState<ApiKey | null>(null)
@@ -113,7 +113,7 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
   const [deepLinkOpened, setDeepLinkOpened] = useState<
     'cc-switch' | 'magpie' | null
   >(null)
-  const [copied, setCopied] = useState<'copy' | 'verify' | null>(null)
+  const [copied, setCopied] = useState<'copy' | 'key' | 'verify' | null>(null)
 
   const listedKeys = props.keys.filter((key) => key.status === 1)
   const usableKeys =
@@ -186,39 +186,50 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
     }
   }
 
-  const flashCopied = (which: 'copy' | 'verify') => {
+  const flashCopied = (which: 'copy' | 'key' | 'verify') => {
     setCopied(which)
     window.setTimeout(() => setCopied(null), 1800)
   }
 
-  const handleCopySnippet = async () => {
-    setBusy('copy')
+  /** Copies `build(full key)`; `which` names the button that shows progress. */
+  const copyWithKey = async (
+    which: 'copy' | 'key',
+    build: (apiKey: string) => string
+  ) => {
+    setBusy(which)
     try {
       const pendingKey = resolveKey()
       const text = pendingKey.then((apiKey) => {
         // No key to copy: the rejection makes the clipboard drop the write.
         if (!apiKey) throw new Error('no API key')
-        return buildClientSetupSnippet(activeTarget, {
-          baseUrl,
-          apiKey,
-          providerName,
-          models,
-        })
+        return build(apiKey)
       })
       // Hand over the promise before awaiting anything: Safari accepts a
       // clipboard write only during the click.
       const copied = await copyToClipboard(text)
       if (!(await pendingKey)) return
-      if (copied) {
-        flashCopied('copy')
-        toast.success(t('Copied with your full API key'))
-      } else {
+      if (!copied) {
         toast.error(t('Failed to copy to clipboard'))
+        return
       }
+      flashCopied(which)
+      if (which === 'copy') toast.success(t('Copied with your full API key'))
     } finally {
       setBusy(null)
     }
   }
+
+  const handleCopySnippet = () =>
+    copyWithKey('copy', (apiKey) =>
+      buildClientSetupSnippet(activeTarget, {
+        baseUrl,
+        apiKey,
+        providerName,
+        models,
+      })
+    )
+
+  const handleCopyKey = () => copyWithKey('key', (apiKey) => apiKey)
 
   const handleCopyVerify = async () => {
     if (await copyToClipboard(verifyCommand)) flashCopied('verify')
@@ -264,6 +275,64 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-3', props.className)}>
       {props.renderHeading?.(t(getSetupTitle(clients)))}
+      {selectedKey && (
+        <div className='flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2.5'>
+          <span
+            className='bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-lg'
+            aria-hidden
+          >
+            <KeyRound className='size-4' />
+          </span>
+          <div className='flex min-w-0 flex-1 flex-col items-start gap-0.5'>
+            {usableKeys.length > 1 ? (
+              <Select
+                value={String(selectedKey.id)}
+                onValueChange={(value) => setPickedKeyId(Number(value))}
+              >
+                <SelectTrigger
+                  size='sm'
+                  aria-label={t('API key')}
+                  className='max-w-full'
+                >
+                  <SelectValue>
+                    <span className='truncate font-medium'>
+                      {selectedKey.name}
+                    </span>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  <SelectGroup>
+                    {usableKeys.map((key) => (
+                      <SelectItem key={key.id} value={String(key.id)}>
+                        {key.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            ) : (
+              <span className='max-w-full truncate text-sm font-medium'>
+                {selectedKey.name}
+              </span>
+            )}
+            <span className='text-muted-foreground max-w-full truncate text-xs'>
+              <span className='font-mono'>{maskApiKey(selectedKey.key)}</span>
+              {' · '}
+              {t('Copying fills in the full key')}
+            </span>
+          </div>
+          <Button
+            variant='outline'
+            size='sm'
+            className='shrink-0'
+            onClick={handleCopyKey}
+            disabled={busy === 'key'}
+          >
+            <CopyIcon busy={busy === 'key'} copied={copied === 'key'} />
+            {t(copied === 'key' ? 'Copied' : 'Copy Key')}
+          </Button>
+        </div>
+      )}
       {clients.length > 1 && (
         <Tabs
           value={activeClient}
@@ -283,47 +352,22 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
           </TabsList>
         </Tabs>
       )}
-      <div className='flex flex-wrap items-center justify-between gap-2'>
-        <Tabs
-          value={activeTarget}
-          onValueChange={(value) => setTarget(value as ClientSetupTarget)}
-          className='max-w-full min-w-0'
+      <Tabs
+        value={activeTarget}
+        onValueChange={(value) => setTarget(value as ClientSetupTarget)}
+        className='max-w-full min-w-0'
+      >
+        <TabsList
+          aria-label={t('Setup method')}
+          className='no-scrollbar max-w-full justify-start overflow-x-auto'
         >
-          <TabsList
-            aria-label={t('Setup method')}
-            className='no-scrollbar max-w-full justify-start overflow-x-auto'
-          >
-            {targets.map((item) => (
-              <TabsTrigger key={item} value={item} className='flex-none px-2.5'>
-                {TARGET_LABELS[item]}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-
-        {usableKeys.length > 1 && selectedKey && (
-          <Select
-            value={String(selectedKey.id)}
-            onValueChange={(value) => setPickedKeyId(Number(value))}
-          >
-            <SelectTrigger size='sm' aria-label={t('API key')} className='w-44'>
-              <SelectValue>
-                <KeyRound className='text-muted-foreground' aria-hidden />
-                <span className='truncate'>{selectedKey.name}</span>
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
-              <SelectGroup>
-                {usableKeys.map((key) => (
-                  <SelectItem key={key.id} value={String(key.id)}>
-                    {key.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        )}
-      </div>
+          {targets.map((item) => (
+            <TabsTrigger key={item} value={item} className='flex-none px-2.5'>
+              {TARGET_LABELS[item]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       <p className='text-muted-foreground text-xs leading-relaxed text-pretty'>
         {getTargetHint(activeTarget, t)}
@@ -349,21 +393,12 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
             </Button>
           ) : (
             <Button
-              variant='ghost'
               size='sm'
               onClick={handleCopySnippet}
               disabled={busy === 'copy' || props.keysLoading}
             >
-              {busy === 'copy' && (
-                <Loader2 className='animate-spin' data-icon='inline-start' />
-              )}
-              {busy !== 'copy' && copied === 'copy' && (
-                <Check className='text-success' data-icon='inline-start' />
-              )}
-              {busy !== 'copy' && copied !== 'copy' && (
-                <Copy data-icon='inline-start' />
-              )}
-              {t('Copy')}
+              <CopyIcon busy={busy === 'copy'} copied={copied === 'copy'} />
+              {t(copied === 'copy' ? 'Copied' : 'Copy config')}
             </Button>
           )}
         </div>
@@ -373,11 +408,6 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
         >
           <code>{snippet}</code>
         </pre>
-        {selectedKey && (
-          <p className='text-muted-foreground border-t px-4 py-1.5 text-xs'>
-            {t('The key is masked here. The Copy button copies the full key.')}
-          </p>
-        )}
       </div>
 
       {(activeTarget === 'cc-switch' || activeTarget === 'codex-cc-switch') &&
@@ -483,4 +513,13 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
       </div>
     </div>
   )
+}
+
+/** A copy button's icon: a spinner while copying, a check once copied. */
+function CopyIcon(props: { busy: boolean; copied: boolean }) {
+  if (props.busy) {
+    return <Loader2 className='animate-spin' data-icon='inline-start' />
+  }
+  if (props.copied) return <Check data-icon='inline-start' />
+  return <Copy data-icon='inline-start' />
 }
