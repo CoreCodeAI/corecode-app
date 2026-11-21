@@ -19,7 +19,7 @@ Order IP was not empty for the paths that matter. Every payment controller alrea
 - **Others:** for each address, accounts that used it in 30 days (sign-in, order or request, `addressUsers`) and hold the plan with a source other than `admin`.
 - **Shared exit:** an address is skipped when at least `sharedExitBystanders` (5) of its accounts never took a plan limited per user and they are no fewer than the plan's holders there. `sharedExit`'s seven-day requester count is not used here, for the reason above.
 - **Refuse** with `ErrSubscriptionAddressShared` when the distinct holders over the remaining addresses number at least `threshold`.
-- **Setting:** options `limited_plan_address_setting.enabled` (default true) and `.threshold` (default 2; below 1 counts as 1), in `setting/operation_setting/limited_plan_setting.go`. Two lets one household or office through.
+- **Setting:** options `limited_plan_address_setting.enabled` (default true) and `.threshold` (default 2; below 1 counts as 1), in `setting/operation_setting/limited_plan_setting.go`. Two lets one household or office through. Since 2026-11-21 the switch turns off the 11-08 check as well ([why](2026-11-21-one-switch-for-the-plan-address-limit.md)).
 - **Exemption:** the existing per-account `subscription_address_exemptions` row lifts this check too.
 - **Message:** "This discounted plan is limited to one per person, and accounts on your network have already bought it. Regular top-up is available", in all seven console locales. It reaches the console through the same `ApiError` path as the other purchase refusals. Top-up has no gate.
 - **Audit:** each refusal logs `subscription: refused user U plan P, N other accounts holding it on M addresses` (Chinese text in `log_text.zh-CN.json`).

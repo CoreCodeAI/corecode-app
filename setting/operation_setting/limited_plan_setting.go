@@ -6,6 +6,9 @@ import "github.com/QuantumNous/new-api/setting/config"
 // network: a farm of accounts, each allowed one purchase, is one buyer. The
 // options are limited_plan_address_setting.enabled and .threshold.
 type LimitedPlanAddressSetting struct {
+	// Enabled turns on both address checks in model.CheckSubscriptionPurchaseFrom:
+	// one buyer per address, and the threshold below. Off, a plan is limited
+	// per account only.
 	Enabled bool `json:"enabled"`
 	// Threshold is how many other accounts that already hold the plan may
 	// share the buyer's addresses before a purchase is refused. Two lets one

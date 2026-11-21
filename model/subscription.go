@@ -270,8 +270,9 @@ type SubscriptionOrder struct {
 	CompleteTime    int64  `json:"complete_time"`
 
 	ProviderPayload string `json:"provider_payload" gorm:"type:text"`
-	// Ip is the address that opened the order; a plan limited per user is
-	// limited per address too, see CheckSubscriptionPurchaseFrom.
+	// Ip is the address that opened the order; while the address limit is on,
+	// a plan limited per user is limited per address too, see
+	// CheckSubscriptionPurchaseFrom.
 	Ip string `json:"-" gorm:"type:varchar(64);index"`
 }
 
