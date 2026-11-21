@@ -9639,6 +9639,11 @@
     "What arrives is counted: when withdrawing from an exchange, add its fee on top.": "按实际到账金额计算，从交易所提币请另加提币手续费。",
     "View the {{symbol}} contract on the block explorer": "在区块浏览器查看 {{symbol}} 合约",
     "No deposit address yet. Open the deposit address first.": "还没有充值地址，请先打开充值地址。",
-    "Checked a moment ago. Try again in a few seconds.": "刚刚已检查过，请几秒后再试。"
+    "Checked a moment ago. Try again in a few seconds.": "刚刚已检查过，请几秒后再试。",
+    "This key cannot use this model": "这把密钥用不了这个模型",
+    "This model needs a different endpoint": "这个模型要换一个接口调用",
+    "Create a key": "去创建密钥",
+    "View docs": "看文档",
+    "Video models such as Seedance cannot be called through the chat endpoints; submit them as tasks with POST /v1/videos.": "视频模型（如 Seedance）不能走聊天接口，要用 POST /v1/videos 提交任务。"
   }
 }

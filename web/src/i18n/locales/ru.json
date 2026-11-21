@@ -9639,6 +9639,11 @@
     "What arrives is counted: when withdrawing from an exchange, add its fee on top.": "Учитывается поступившая сумма: при выводе с биржи добавьте её комиссию.",
     "View the {{symbol}} contract on the block explorer": "Открыть контракт {{symbol}} в обозревателе блоков",
     "No deposit address yet. Open the deposit address first.": "Адреса для пополнения ещё нет. Сначала откройте адрес для пополнения.",
-    "Checked a moment ago. Try again in a few seconds.": "Только что проверено. Повторите через несколько секунд."
+    "Checked a moment ago. Try again in a few seconds.": "Только что проверено. Повторите через несколько секунд.",
+    "This key cannot use this model": "Этот ключ не может использовать эту модель",
+    "This model needs a different endpoint": "Эту модель нужно вызывать через другой эндпоинт",
+    "Create a key": "Создать ключ",
+    "View docs": "Открыть документацию",
+    "Video models such as Seedance cannot be called through the chat endpoints; submit them as tasks with POST /v1/videos.": "Видеомодели, такие как Seedance, нельзя вызывать через чат-эндпоинты: отправляйте их как задачи через POST /v1/videos."
   }
 }

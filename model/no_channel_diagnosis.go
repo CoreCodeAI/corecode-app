@@ -37,8 +37,9 @@ type NoChannelDiagnosis struct {
 	// Groups are, for NoChannelOtherGroups, the groups whose enabled channels
 	// serve the model, sorted. Callers show only those the user may use.
 	Groups []string
-	// TaskModel is set for NoChannelWrongEndpoint when a serving channel's
-	// plugin runs asynchronous tasks: the model is submitted as a task.
+	// TaskModel is set for NoChannelWrongEndpoint, and for NoChannelOtherGroups
+	// when a serving channel's plugin runs asynchronous tasks: the model is
+	// submitted as a task.
 	TaskModel bool
 }
 
@@ -56,10 +57,14 @@ func DiagnoseNoChannel(groups []string, modelName string, filters []dto.ChannelF
 
 	var inGroups []int
 	var otherGroups []string
+	var otherChannels []int
 	for _, ability := range abilities {
 		if slices.Contains(groups, ability.Group) {
 			inGroups = append(inGroups, ability.ChannelId)
-		} else if !slices.Contains(otherGroups, ability.Group) {
+			continue
+		}
+		otherChannels = append(otherChannels, ability.ChannelId)
+		if !slices.Contains(otherGroups, ability.Group) {
 			otherGroups = append(otherGroups, ability.Group)
 		}
 	}
@@ -87,7 +92,14 @@ func DiagnoseNoChannel(groups []string, modelName string, filters []dto.ChannelF
 	}
 	if len(otherGroups) > 0 {
 		slices.Sort(otherGroups)
-		return NoChannelDiagnosis{Cause: NoChannelOtherGroups, Groups: otherGroups}
+		diagnosis := NoChannelDiagnosis{Cause: NoChannelOtherGroups, Groups: otherGroups}
+		for _, id := range otherChannels {
+			if channel, err := CacheGetChannel(id); err == nil && servesAsTask(channel) {
+				diagnosis.TaskModel = true
+				break
+			}
+		}
+		return diagnosis
 	}
 	if IsModelListed(modelName) {
 		return NoChannelDiagnosis{Cause: NoChannelDown}

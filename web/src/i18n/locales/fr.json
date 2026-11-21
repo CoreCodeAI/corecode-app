@@ -9639,6 +9639,11 @@
     "What arrives is counted: when withdrawing from an exchange, add its fee on top.": "Seul le montant reçu compte : depuis une plateforme d'échange, ajoutez ses frais de retrait.",
     "View the {{symbol}} contract on the block explorer": "Voir le contrat {{symbol}} dans l'explorateur de blocs",
     "No deposit address yet. Open the deposit address first.": "Pas encore d'adresse de dépôt. Ouvrez d'abord l'adresse de dépôt.",
-    "Checked a moment ago. Try again in a few seconds.": "Vérifié à l'instant. Réessayez dans quelques secondes."
+    "Checked a moment ago. Try again in a few seconds.": "Vérifié à l'instant. Réessayez dans quelques secondes.",
+    "This key cannot use this model": "Cette clé ne peut pas utiliser ce modèle",
+    "This model needs a different endpoint": "Ce modèle s'appelle via un autre point d'accès",
+    "Create a key": "Créer une clé",
+    "View docs": "Voir la documentation",
+    "Video models such as Seedance cannot be called through the chat endpoints; submit them as tasks with POST /v1/videos.": "Les modèles vidéo comme Seedance ne s'appellent pas via les points d'accès de chat ; soumettez-les comme tâches avec POST /v1/videos."
   }
 }

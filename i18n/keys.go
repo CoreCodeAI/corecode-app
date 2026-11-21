@@ -58,6 +58,7 @@ const (
 	MsgDistributorModelNotServed               = "distributor.model_not_served"
 	MsgDistributorModelInOtherGroups           = "distributor.model_in_other_groups"
 	MsgDistributorModelWrongEndpoint           = "distributor.model_wrong_endpoint"
+	MsgDistributorTaskModelInOtherGroups       = "distributor.task_model_in_other_groups"
 	MsgDistributorTaskModelWrongEndpoint       = "distributor.task_model_wrong_endpoint"
 
 	MsgQuotaUserInsufficient                  = "quota.user_insufficient"

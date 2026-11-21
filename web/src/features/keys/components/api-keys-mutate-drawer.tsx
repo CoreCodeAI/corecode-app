@@ -527,6 +527,9 @@ export function ApiKeysMutateDrawer({
                       <FormDescription>
                         {t(
                           'Choose and order the groups this API key will try.'
+                        )}{' '}
+                        {t(
+                          'Video models such as Seedance cannot be called through the chat endpoints; submit them as tasks with POST /v1/videos.'
                         )}
                       </FormDescription>
                       <FormControl>

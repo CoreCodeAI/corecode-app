@@ -9639,6 +9639,11 @@
     "What arrives is counted: when withdrawing from an exchange, add its fee on top.": "Tính theo số tiền thực nhận: khi rút từ sàn, hãy cộng thêm phí rút.",
     "View the {{symbol}} contract on the block explorer": "Xem hợp đồng {{symbol}} trên trình khám phá khối",
     "No deposit address yet. Open the deposit address first.": "Chưa có địa chỉ nạp. Hãy mở địa chỉ nạp trước.",
-    "Checked a moment ago. Try again in a few seconds.": "Vừa kiểm tra xong. Hãy thử lại sau vài giây."
+    "Checked a moment ago. Try again in a few seconds.": "Vừa kiểm tra xong. Hãy thử lại sau vài giây.",
+    "This key cannot use this model": "Khóa này không dùng được mô hình này",
+    "This model needs a different endpoint": "Mô hình này cần gọi qua một endpoint khác",
+    "Create a key": "Tạo khóa",
+    "View docs": "Xem tài liệu",
+    "Video models such as Seedance cannot be called through the chat endpoints; submit them as tasks with POST /v1/videos.": "Các mô hình video như Seedance không gọi được qua endpoint chat; hãy gửi dưới dạng tác vụ bằng POST /v1/videos."
   }
 }

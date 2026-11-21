@@ -9639,6 +9639,11 @@
     "What arrives is counted: when withdrawing from an exchange, add its fee on top.": "着金額で計算します。取引所から出金する場合は、出金手数料を上乗せしてください。",
     "View the {{symbol}} contract on the block explorer": "ブロックエクスプローラーで {{symbol}} のコントラクトを見る",
     "No deposit address yet. Open the deposit address first.": "入金アドレスがまだありません。先に入金アドレスを開いてください。",
-    "Checked a moment ago. Try again in a few seconds.": "たった今確認しました。数秒後にもう一度お試しください。"
+    "Checked a moment ago. Try again in a few seconds.": "たった今確認しました。数秒後にもう一度お試しください。",
+    "This key cannot use this model": "このキーではこのモデルを使えません",
+    "This model needs a different endpoint": "このモデルは別のエンドポイントで呼び出します",
+    "Create a key": "キーを作成",
+    "View docs": "ドキュメントを見る",
+    "Video models such as Seedance cannot be called through the chat endpoints; submit them as tasks with POST /v1/videos.": "Seedance などの動画モデルはチャット用エンドポイントでは呼び出せません。POST /v1/videos でタスクとして送信してください。"
   }
 }

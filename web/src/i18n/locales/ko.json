@@ -9639,6 +9639,11 @@
     "What arrives is counted: when withdrawing from an exchange, add its fee on top.": "실제 도착 금액 기준입니다. 거래소에서 출금할 때는 출금 수수료를 더해 보내세요.",
     "View the {{symbol}} contract on the block explorer": "블록 탐색기에서 {{symbol}} 컨트랙트 보기",
     "No deposit address yet. Open the deposit address first.": "아직 입금 주소가 없습니다. 먼저 입금 주소를 여세요.",
-    "Checked a moment ago. Try again in a few seconds.": "방금 확인했습니다. 몇 초 후에 다시 시도하세요."
+    "Checked a moment ago. Try again in a few seconds.": "방금 확인했습니다. 몇 초 후에 다시 시도하세요.",
+    "This key cannot use this model": "이 키로는 이 모델을 쓸 수 없습니다",
+    "This model needs a different endpoint": "이 모델은 다른 엔드포인트로 호출해야 합니다",
+    "Create a key": "키 만들기",
+    "View docs": "문서 보기",
+    "Video models such as Seedance cannot be called through the chat endpoints; submit them as tasks with POST /v1/videos.": "Seedance 같은 영상 모델은 채팅 엔드포인트로 호출할 수 없습니다. POST /v1/videos 로 작업을 제출하세요."
   }
 }
