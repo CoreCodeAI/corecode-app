@@ -415,13 +415,13 @@ type paidOrder struct {
 	Subscription    bool
 }
 
-// backfilled is the quota an offline backfill pays for that administrators
-// had added by hand, and zero for any other order.
+// backfilled is the quota an offline backfill covers that administrators had
+// added by hand, Amount and BonusQuota both, and zero for any other order.
 func (order paidOrder) backfilled() int64 {
 	if order.PaymentProvider != PaymentProviderOfflineBackfill {
 		return 0
 	}
-	return order.Amount * int64(common.QuotaPerUnit)
+	return order.Amount*int64(common.QuotaPerUnit) + order.BonusQuota
 }
 
 func readPaidOrders(start, end int64) ([]paidOrder, error) {
