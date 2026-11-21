@@ -139,11 +139,13 @@ func chargeRefunded(ctx context.Context, event stripe.Event, callerIp string) {
 }
 
 // AdminRecordOfflineTopUpRequest is an offline payment to record; see
-// service.AdminTopUpOfflineContext. PaidAt defaults to now.
+// service.AdminTopUpOfflineContext. PaidAt defaults to now. Bonus is optional:
+// whole quota dollars credited on top of Amount, such as an enterprise's 10%.
 type AdminRecordOfflineTopUpRequest struct {
 	UserId   int     `json:"user_id"`
 	Money    float64 `json:"money"`
 	Amount   int64   `json:"amount"`
+	Bonus    int64   `json:"bonus"`
 	PaidAt   int64   `json:"paid_at"`
 	Backfill bool    `json:"backfill"`
 }
@@ -164,7 +166,7 @@ func AdminRecordOfflineTopUp(c *gin.Context) {
 		req.PaidAt = common.GetTimestamp()
 	}
 	payment, ok := service.NormalizeTopUpOffline(service.AdminTopUpOfflineContext{
-		UserID: req.UserId, Money: req.Money, Amount: req.Amount, PaidAt: req.PaidAt, Backfill: req.Backfill,
+		UserID: req.UserId, Money: req.Money, Amount: req.Amount, Bonus: req.Bonus, PaidAt: req.PaidAt, Backfill: req.Backfill,
 	})
 	if !ok {
 		common.ApiErrorT(c, "Invalid parameters")
@@ -175,7 +177,7 @@ func AdminRecordOfflineTopUp(c *gin.Context) {
 		return
 	}
 	topUp, err := model.RecordOfflineTopUp(model.OfflineTopUpInput{
-		UserId: payment.UserID, Money: payment.Money, Amount: payment.Amount, PaidAt: payment.PaidAt,
+		UserId: payment.UserID, Money: payment.Money, Amount: payment.Amount, Bonus: payment.Bonus, PaidAt: payment.PaidAt,
 		Backfill: payment.Backfill, CallerIp: c.ClientIP(),
 	})
 	if err != nil {
@@ -189,6 +191,7 @@ func AdminRecordOfflineTopUp(c *gin.Context) {
 		"trade_no":            topUp.TradeNo,
 		"money":               decimal.NewFromFloat(topUp.Money).StringFixed(2),
 		"amount":              topUp.Amount,
+		"bonus":               payment.Bonus,
 		"paid_at":             topUp.CreateTime,
 		"backfill":            payment.Backfill,
 		"verification_method": authorization.Method,

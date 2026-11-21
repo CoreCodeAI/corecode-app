@@ -108,11 +108,14 @@ type AdminTopUpRefundContext struct {
 
 // AdminTopUpOfflineContext is the offline payment an administrator records,
 // as NormalizeTopUpOffline returns it. Money is in the payment currency,
-// rounded to the cent, and Amount in whole quota dollars.
+// rounded to the cent, and Amount and Bonus in whole quota dollars. Bonus is
+// the quota credited on top of what Amount bought; it is bound too, so a proof
+// for a plain payment cannot be spent on a bonus.
 type AdminTopUpOfflineContext struct {
 	UserID   int     `json:"user_id"`
 	Money    float64 `json:"money"`
 	Amount   int64   `json:"amount"`
+	Bonus    int64   `json:"bonus"`
 	PaidAt   int64   `json:"paid_at"`
 	Backfill bool    `json:"backfill"`
 }
@@ -121,7 +124,7 @@ type AdminTopUpOfflineContext struct {
 // request whatever digits each sent, and reports false for an incomplete one.
 func NormalizeTopUpOffline(context AdminTopUpOfflineContext) (AdminTopUpOfflineContext, bool) {
 	context.Money = math.Round(context.Money*100) / 100
-	return context, context.UserID > 0 && context.Money > 0 && context.Amount > 0 && context.PaidAt > 0
+	return context, context.UserID > 0 && context.Money > 0 && context.Amount > 0 && context.Bonus >= 0 && context.PaidAt > 0
 }
 
 // MaxTopUpRefundBatch bounds one refund marking, which locks every order.
@@ -286,7 +289,8 @@ func BindVerificationOperation(operation VerificationOperation) (VerificationBin
 		normalized = AdminTopUpRefundContext{TradeNos: tradeNos}
 	case VerificationScopeAdminTopUpOffline:
 		var context AdminTopUpOfflineContext
-		if len(fields) != 5 || common.Unmarshal(operation.Context, &context) != nil {
+		// A context issued before bonus existed has five fields; bonus then is zero.
+		if (len(fields) != 5 && (len(fields) != 6 || fields["bonus"] == nil)) || common.Unmarshal(operation.Context, &context) != nil {
 			return VerificationBinding{}, ErrVerificationContextInvalid
 		}
 		offline, ok := NormalizeTopUpOffline(context)

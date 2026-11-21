@@ -219,3 +219,46 @@ func TestAdminRecordOfflineTopUpNeedsAProofForTheExactPayment(t *testing.T) {
 	assert.Contains(t, string(params), `"money":"700.00"`)
 	assert.Contains(t, string(params), `"backfill":false`)
 }
+
+func TestAdminRecordOfflineTopUpBindsTheBonusToTheProof(t *testing.T) {
+	_, identity, target := setupAdminUserTest(t)
+	require.NoError(t, model.DB.AutoMigrate(&model.TopUp{}))
+	record := func(body string, proof string) securityEnrollmentResponse {
+		response := adminUserRequest(http.MethodPost, "/api/user/topup/offline", body, proof, identity, common.RoleRootUser, nil, AdminRecordOfflineTopUp)
+		var result securityEnrollmentResponse
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		return result
+	}
+	proofFor := func(payment string) string {
+		return issueSecurityEnrollmentProof(t, identity, service.VerificationOperation{Scope: service.VerificationScopeAdminTopUpOffline, Context: []byte(payment)}, service.VerificationMethodPassword)
+	}
+	paidAt := time.Now().Unix() - 3600
+	plain := fmt.Sprintf(`{"user_id":%d,"money":5000,"amount":5000,"paid_at":%d,"backfill":false}`, target.Id, paidAt)
+	withBonus := fmt.Sprintf(`{"user_id":%d,"money":5000,"amount":5000,"bonus":500,"paid_at":%d,"backfill":false}`, target.Id, paidAt)
+
+	result := record(withBonus, proofFor(plain))
+	assert.Equal(t, "SECURITY_PROOF_CONTEXT_MISMATCH", result.Code, "a proof for the payment without a bonus cannot buy one")
+	result = record(plain, proofFor(withBonus))
+	assert.Equal(t, "SECURITY_PROOF_CONTEXT_MISMATCH", result.Code, "nor the other way round")
+	result = record(fmt.Sprintf(`{"user_id":%d,"money":5000,"amount":5000,"bonus":-1,"paid_at":%d}`, target.Id, paidAt), proofFor(withBonus))
+	assert.False(t, result.Success)
+	var count int64
+	require.NoError(t, model.DB.Model(&model.TopUp{}).Where("payment_method = ?", model.PaymentMethodOffline).Count(&count).Error)
+	assert.Zero(t, count)
+
+	result = record(withBonus, proofFor(withBonus))
+	require.True(t, result.Success, result.Message)
+	stored, err := model.GetUserById(target.Id, false)
+	require.NoError(t, err)
+	assert.Equal(t, target.Quota+5500*int(common.QuotaPerUnit), stored.Quota, "the wallet gets the amount and the bonus")
+	var order model.TopUp
+	require.NoError(t, model.DB.Where("payment_method = ?", model.PaymentMethodOffline).First(&order).Error)
+	assert.Equal(t, int64(500*common.QuotaPerUnit), order.BonusQuota)
+
+	var audits []model.AuditLog
+	require.NoError(t, model.LOG_DB.Where("action = ?", "user.topup_offline").Find(&audits).Error)
+	require.Len(t, audits, 1)
+	params, err := common.Marshal(audits[0].Other.Op.Params)
+	require.NoError(t, err)
+	assert.Contains(t, string(params), `"bonus":500`)
+}
