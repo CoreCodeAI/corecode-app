@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { TFunction } from 'i18next'
+
 import type { StatusBadgeProps } from '@/components/status-badge'
 import { formatTimestampToDate } from '@/lib/format'
 
@@ -64,27 +66,56 @@ export function getStatusConfig(status: TopupStatus): StatusConfig {
   return STATUS_CONFIG[status] || STATUS_CONFIG.pending
 }
 
-/**
- * Payment method display names
- */
-export const PAYMENT_METHOD_NAMES: Record<string, string> = {
+// The name a top-up record shows for the method that paid it: the records
+// table, its filter and summary, the wallet's billing history, the usage-log
+// audit and the site insights all print this one name. Same-named methods of
+// different gateways differ in the label, so an administrator filtering
+// Alipay (Stripe) never gets Alipay's orders. The gateway shows only where a
+// method name alone would be ambiguous. Plain string keys, not PAYMENT_TYPES:
+// the overview reaches this file, and importing the wallet constants would
+// carry them into its first load. The test checks the two stay in step.
+const PAYMENT_METHOD_BRANDS: Readonly<Record<string, string>> = {
   stripe: 'Stripe',
+  nowpayments: 'USDT/USDC (NOWPayments)',
+  dodopayments: 'Dodo Payments',
+  creem: 'Creem',
+  waffo: 'Waffo',
+  waffo_pancake: 'Waffo Pancake',
+}
+
+const PAYMENT_METHOD_LABEL_KEYS: Readonly<Record<string, string>> = {
   alipay: 'Alipay',
   wxpay: 'WeChat Pay',
-  waffo: 'Waffo',
-  balance: 'Balance',
   chain_deposit: 'On-chain deposit (USDT/USDC)',
+  balance: 'Balance',
+  offline: 'Offline transfer',
+}
+
+const STRIPE_METHOD_KEYS: Readonly<Record<string, string>> = {
+  stripe_alipay: 'Alipay',
+  stripe_wechat_pay: 'WeChat Pay',
+  stripe_card: 'Card',
 }
 
 /**
- * Get payment method display name
+ * A recorded payment method's name in the reader's language. A value the
+ * console does not know (an Epay method the operator added, a gateway added
+ * later) reads "Other (value)", so the raw value stays visible to an
+ * administrator and is never shown bare. An empty value returns ''.
  */
-export function getPaymentMethodName(
-  method: string,
-  t?: (key: string) => string
+export function paymentMethodLabel(
+  method: string | null | undefined,
+  t: TFunction
 ): string {
-  const name = PAYMENT_METHOD_NAMES[method] || method
-  return t ? t(name) : name
+  if (!method) return ''
+  if (PAYMENT_METHOD_BRANDS[method]) return PAYMENT_METHOD_BRANDS[method]
+  if (PAYMENT_METHOD_LABEL_KEYS[method]) {
+    return t(PAYMENT_METHOD_LABEL_KEYS[method])
+  }
+  if (STRIPE_METHOD_KEYS[method]) {
+    return t('{{method}} (Stripe)', { method: t(STRIPE_METHOD_KEYS[method]) })
+  }
+  return t('Other ({{method}})', { method })
 }
 
 /**

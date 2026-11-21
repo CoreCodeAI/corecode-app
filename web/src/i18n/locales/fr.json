@@ -9681,6 +9681,9 @@
     "International cards only. Some banks decline; if it fails, use Alipay or WeChat Pay.": "Cartes internationales uniquement. Certaines banques refusent ; en cas d'échec, utilisez Alipay ou WeChat Pay",
     "On-chain USDT/USDC, usually credited in about 5 minutes": "USDT/USDC sur la chaîne, généralement crédité en 5 minutes environ",
     "No bonus on this method": "Pas de bonus avec ce moyen de paiement",
-    "This order expired. You can place a new one.": "Cette commande a expiré. Vous pouvez en passer une nouvelle"
+    "This order expired. You can place a new one.": "Cette commande a expiré. Vous pouvez en passer une nouvelle",
+    "{{method}} (Stripe)": "{{method}} (Stripe)",
+    "Offline transfer": "Virement hors ligne",
+    "Other ({{method}})": "Autre ({{method}})"
   }
 }

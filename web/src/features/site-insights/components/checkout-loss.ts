@@ -18,9 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { TFunction } from 'i18next'
 
+import { paymentMethodLabel } from '@/features/wallet/lib/billing'
+
 import type { Finding } from '../analysis'
 import { orderFunnels, type OrderFunnelRow } from '../finance-analysis'
-import { MIN_CHECKOUTS, paymentMethodLabel, SECTIONS } from '../lib'
+import { MIN_CHECKOUTS, SECTIONS } from '../lib'
 import type { OrderMethodFunnel } from '../types'
 import type { InsightsFormat } from './overview-analysis'
 

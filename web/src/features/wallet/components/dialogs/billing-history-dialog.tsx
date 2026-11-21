@@ -66,7 +66,7 @@ import {
 } from '../../hooks/use-billing-history'
 import {
   getStatusConfig,
-  getPaymentMethodName,
+  paymentMethodLabel,
   formatTimestamp,
 } from '../../lib/billing'
 import { formatPaymentMoney } from '../../lib/format'
@@ -294,7 +294,7 @@ export function BillingHistoryDialog({
                             {t('Payment Method')}
                           </Label>
                           <div className='text-sm font-medium'>
-                            {getPaymentMethodName(record.payment_method, t)}
+                            {paymentMethodLabel(record.payment_method, t)}
                           </div>
                         </div>
                         <div className='space-y-1'>

@@ -32,8 +32,8 @@ import { Button } from '@/components/ui/button'
 import { completeOrder, isApiSuccess } from '@/features/wallet/api'
 import { formatPaymentMoney } from '@/features/wallet/lib'
 import {
-  getPaymentMethodName,
   getStatusConfig,
+  paymentMethodLabel,
 } from '@/features/wallet/lib/billing'
 import { formatCurrencyFromUSD } from '@/lib/currency'
 import dayjs from '@/lib/dayjs'
@@ -103,7 +103,7 @@ function useTopupColumns(
         header: t('Payment Method'),
         size: 120,
         cell: ({ row }) =>
-          getPaymentMethodName(row.original.payment_method, t) || '-',
+          paymentMethodLabel(row.original.payment_method, t) || '-',
         meta: { label: t('Payment Method') },
       },
       {
