@@ -76,7 +76,10 @@ export interface ChainDepositQuote {
   money: number
   /** Dollars, two decimals */
   usd: string
+  /** The whole bonus the amount earns: its tier's rate plus chain_rate */
   bonus_rate: number
+  /** The bonus every on-chain deposit earns on top of the tiers */
+  chain_rate?: number
   bonus_usd?: string
   /** The rate a transfer below bonus_usd earns */
   lower_rate: number
@@ -180,6 +183,8 @@ export interface PaymentMethod {
    * which an order goes through epay instead
    */
   epay_max_money?: number
+  /** CoreCode: on the on-chain deposit, its extra bonus as a fraction */
+  bonus_rate?: string
 }
 
 /**

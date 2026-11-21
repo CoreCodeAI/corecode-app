@@ -224,6 +224,13 @@ func UserCriticalRateLimit(scope string) func(c *gin.Context) {
 	)
 }
 
+// UserPollRateLimit limits one signed-in user to num requests per duration
+// seconds on a route the console polls. It holds whatever the critical switch
+// says, because each request reaches a service behind the app.
+func UserPollRateLimit(scope string, num int, duration int64) func(c *gin.Context) {
+	return userRateLimitFactory(num, duration, "PL:"+scope)
+}
+
 func DownloadRateLimit() func(c *gin.Context) {
 	return rateLimitFactory(common.DownloadRateLimitNum, common.DownloadRateLimitDuration, "DW")
 }

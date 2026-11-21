@@ -51,7 +51,7 @@ function transfer(
 it('shows a confirming transfer with its coins, link and current step', () => {
   render(
     <ChainDepositProgress
-      transfers={[transfer('confirming')]}
+      transfer={transfer('confirming')}
       networks={networks}
     />
   )
@@ -73,18 +73,14 @@ it('shows a confirming transfer with its coins, link and current step', () => {
   expect(screen.getByText('Usually takes a few seconds')).toBeTruthy()
 })
 
-it('announces only the newest transfer and shows what a credit added', () => {
+it('notes a transfer under 1 USD while it waits', () => {
   render(
     <ChainDepositProgress
-      transfers={[
-        transfer('waiting', { amount: '0.5', tx_hash: `0x${'cd'.repeat(32)}` }),
-        transfer('credited', { credited: 34, bonus: 0 }),
-      ]}
+      transfer={transfer('waiting', { amount: '0.5' })}
       networks={networks}
     />
   )
 
-  expect(screen.getAllByRole('status')).toHaveLength(1)
   expect(screen.getByRole('status').textContent).toBe(
     '0.5 USDT: Under 1 USD: credited once your deposits add up to 1 USD.'
   )
@@ -93,6 +89,16 @@ it('announces only the newest transfer and shows what a credit added', () => {
       'Under 1 USD: credited once your deposits add up to 1 USD.'
     )
   ).toBeTruthy()
+})
+
+it('shows what a credit added', () => {
+  render(
+    <ChainDepositProgress
+      transfer={transfer('credited', { credited: 34, bonus: 0 })}
+      networks={networks}
+    />
+  )
+
   expect(screen.getByText(/^Credited .*34/)).toBeTruthy()
   expect(screen.getByText('Credited to your wallet')).toBeTruthy()
 })

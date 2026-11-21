@@ -437,6 +437,11 @@ export function Wallet(props: WalletProps) {
             onOpenChange={setChainDepositOpen}
             amount={topupAmount}
             onChecked={() => void awaitPayment('chain')}
+            bonusRate={Number(
+              topupInfo?.pay_methods?.find((method) =>
+                isChainDepositPayment(method.type)
+              )?.bonus_rate ?? 0
+            )}
           />
         </Suspense>
       )}

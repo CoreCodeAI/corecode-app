@@ -76,7 +76,9 @@ func (chainDepositHandler) Interval() time.Duration { return 15 * time.Second }
 func (chainDepositHandler) NewPayload() any { return nil }
 
 func (chainDepositHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
-	if err := RunChainDepositPass(ctx); err != nil {
+	err := RunChainDepositPass(ctx)
+	noteChainDepositPass(err)
+	if err != nil {
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
 		return
 	}

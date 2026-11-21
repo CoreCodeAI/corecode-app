@@ -17,8 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 /**
- * CoreCode fork: each transfer the deposit service has seen, followed from
- * detected to confirmed to credited while the dialog is open.
+ * CoreCode fork: the newest transfer the deposit service has seen, followed
+ * from detected to confirmed to credited while the dialog is open.
  */
 import {
   CheckCircle2,
@@ -42,28 +42,25 @@ import type { ChainDepositNetwork, ChainDepositTransfer } from '../../types'
 const STEP_IDS = ['detected', 'confirmed', 'credited'] as const
 
 interface ChainDepositProgressProps {
-  transfers: ChainDepositTransfer[]
+  transfer: ChainDepositTransfer
   networks: ChainDepositNetwork[]
 }
 
 export function ChainDepositProgress({
-  transfers,
+  transfer,
   networks,
 }: ChainDepositProgressProps) {
   const { t } = useTranslation()
+  const chainId = networks.find(
+    (network) => network.network === transfer.network
+  )?.chain_id
   return (
-    <section aria-label={t('Deposit progress')} className='space-y-2'>
-      {transfers.map((transfer, index) => (
-        <TransferProgress
-          key={`${transfer.network}:${transfer.tx_hash}:${transfer.token}:${transfer.amount}`}
-          transfer={transfer}
-          chainId={
-            networks.find((network) => network.network === transfer.network)
-              ?.chain_id
-          }
-          announce={index === 0}
-        />
-      ))}
+    <section aria-label={t('Deposit progress')}>
+      <TransferProgress
+        key={`${transfer.network}:${transfer.tx_hash}:${transfer.token}:${transfer.amount}`}
+        transfer={transfer}
+        chainId={chainId}
+      />
     </section>
   )
 }
@@ -71,12 +68,9 @@ export function ChainDepositProgress({
 function TransferProgress({
   transfer,
   chainId,
-  announce,
 }: {
   transfer: ChainDepositTransfer
   chainId: number | undefined
-  /** The newest transfer's stage is read out as it changes */
-  announce: boolean
 }) {
   const { t } = useTranslation()
   const states = chainDepositSteps(transfer.stage)
@@ -168,11 +162,9 @@ function TransferProgress({
           {note}
         </div>
       )}
-      {announce && (
-        <p role='status' aria-atomic='true' className='sr-only'>
-          {`${transfer.amount} ${transfer.token}: ${current}`}
-        </p>
-      )}
+      <p role='status' aria-atomic='true' className='sr-only'>
+        {`${transfer.amount} ${transfer.token}: ${current}`}
+      </p>
     </div>
   )
 }

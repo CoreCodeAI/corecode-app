@@ -55,6 +55,23 @@ describe('the line under a payment method', () => {
     ).toBe('链上 USDT/USDC，通常约 5 分钟到账')
   })
 
+  test('the on-chain deposit names its extra bonus', () => {
+    expect(
+      paymentMethodHint(
+        { type: PAYMENT_TYPES.CHAIN_DEPOSIT, bonus_rate: '0.01' },
+        i18n.t,
+        true
+      )
+    ).toBe('额外赠送 1%，约 1 分钟到账')
+    expect(
+      paymentMethodHint(
+        { type: PAYMENT_TYPES.CHAIN_DEPOSIT, bonus_rate: '0' },
+        i18n.t,
+        true
+      )
+    ).toBeNull()
+  })
+
   test('a method that earns no bonus says so, one that does stays quiet', () => {
     expect(
       paymentMethodHint({ type: PAYMENT_TYPES.CREEM }, i18n.t, false)
