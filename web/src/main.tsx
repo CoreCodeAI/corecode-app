@@ -123,7 +123,7 @@ function matchCurrentRoutes() {
   if (pathname.replace(/\/$/, '') === '/dashboard') {
     pathname = `/dashboard/${DASHBOARD_DEFAULT_SECTION}`
   }
-  const { matchedRoutes } = router.getMatchedRoutes(pathname)
+  const [matchedRoutes] = router.getMatchedRoutes(pathname)
   if (matchedRoutes.some((route) => route.id === '/_authenticated')) {
     if (!hasSessionHint()) return null
   }

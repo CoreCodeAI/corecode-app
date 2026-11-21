@@ -114,6 +114,23 @@ commits (N1–N5 and the theme) above upstream `633b4c5b1`, which is
   `x`; the 200 ms interrupt itself was checked and still fires. After a sync,
   grep for the old module path and run the CoreCode-only tests, not only the
   conflicted packages.
+- **A shared page can read an upstream endpoint upstream made admin-only.**
+  The 2026-11-21 sync (upstream `main` at `8542c9d64`) moved the dashboard's
+  performance panels to `/api/data/perf-metrics/summary`, behind `AdminAuth`.
+  `PerformanceHealthPanel` is the customer overview, so it keeps
+  `/api/perf-metrics/summary`, which upstream now filters to the viewer's
+  usable groups; only the admin-only `PerformanceOverview` takes the new route.
+  When upstream retargets a request, check who renders the component.
+- **A lockfile conflict starts from upstream's lock, not ours.** Resolving
+  `web/bun.lock` from ours and running `bun install` re-resolved about 150
+  nested packages (rsbuild, rspack, `@types/react` 19.3). Starting from
+  upstream's `bun.lock` with CoreCode's `package.json` kept the diff to
+  CoreCode's own pins and overrides. Upstream's router bump (router-core
+  1.171.34) changed `router.getMatchedRoutes` to return a tuple, which only
+  `bun run typecheck` caught in `src/main.tsx`.
+- **A CoreCode page needs its prefix in `reservedRouteNamespaces`.**
+  `TestReservedRouteNamespacesCoverConsolePages` was already failing on main
+  for `/rival-prices`; the test is outside the packages CI runs.
 - Dependabot's open pull requests (`corecode-app-pre-fork` #1–#5) stayed in the
   archived repository. Vulnerability alerts were off on the fork and are now on,
   matching the archived repository. Whether Dependabot version updates open pull

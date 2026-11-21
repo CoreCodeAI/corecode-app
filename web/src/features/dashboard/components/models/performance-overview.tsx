@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next'
 
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { perfMetricsSummaryQueryOptions } from '@/features/performance-metrics/api'
+import { getDashboardPerfMetricsSummary } from '@/features/performance-metrics/api'
 import {
   formatLatency,
   formatThroughput,
@@ -32,6 +32,7 @@ import {
   getSuccessRateTextClass,
 } from '@/features/performance-metrics/lib/format'
 import type { PerfModelSummary } from '@/features/performance-metrics/types'
+import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
 const PERFORMANCE_WINDOW_HOURS = 24
@@ -39,9 +40,15 @@ const TOP_MODEL_LIMIT = 6
 
 export function PerformanceOverview() {
   const { t } = useTranslation()
-  const metricsQuery = useQuery(
-    perfMetricsSummaryQueryOptions(PERFORMANCE_WINDOW_HOURS)
-  )
+  const metricsQuery = useQuery({
+    queryKey: ['dashboard-perf-metrics-summary', PERFORMANCE_WINDOW_HOURS],
+    queryFn: async () =>
+      requireServerSuccess(
+        await getDashboardPerfMetricsSummary(PERFORMANCE_WINDOW_HOURS)
+      ),
+    staleTime: 60 * 1000,
+    retry: false,
+  })
 
   const models = useMemo(
     () => metricsQuery.data?.data.models ?? [],
