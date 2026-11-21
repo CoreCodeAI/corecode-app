@@ -34,3 +34,29 @@ func init() {
 func GetLimitedPlanAddressSetting() *LimitedPlanAddressSetting {
 	return &limitedPlanAddressSetting
 }
+
+// LimitedPlanUseSetting limits the use of a plan with a per-user purchase
+// limit per network. A studio opens many accounts, lets each buy the plan
+// from a different order address, and sends every account's requests from one
+// place, so the purchase checks never see the address that matters. The
+// options are limited_plan_use_setting.enabled and .threshold.
+type LimitedPlanUseSetting struct {
+	// Enabled turns on the check at billing time: a request whose client
+	// address already carries Threshold other accounts that used it and hold
+	// a plan limited per user is not charged to that plan. It is charged to
+	// the wallet, or refused when the wallet cannot pay.
+	Enabled bool `json:"enabled"`
+	// Threshold is how many other holders may use the request's address
+	// before the plan stops serving it. A value below 1 counts as 1.
+	Threshold int `json:"threshold"`
+}
+
+var limitedPlanUseSetting = LimitedPlanUseSetting{Enabled: true, Threshold: 3}
+
+func init() {
+	config.GlobalConfig.Register("limited_plan_use_setting", &limitedPlanUseSetting)
+}
+
+func GetLimitedPlanUseSetting() *LimitedPlanUseSetting {
+	return &limitedPlanUseSetting
+}

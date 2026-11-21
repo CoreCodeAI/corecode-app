@@ -66,6 +66,7 @@ const (
 	MsgQuotaShortfallAboveCap                 = "quota.shortfall_above_cap"
 	MsgQuotaSubscriptionInsufficient          = "quota.subscription_insufficient"
 	MsgQuotaSubscriptionAndWalletInsufficient = "quota.subscription_and_wallet_insufficient"
+	MsgQuotaLimitedPlanGate                   = "quota.limited_plan_gate"
 	MsgRelayModelPriceNotConfigured           = "relay.model_price_not_configured"
 	MsgRelayModelPriceNotConfiguredAdmin      = "relay.model_price_not_configured_admin"
 	MsgRelayTaskUsagePriceUnsupported         = "relay.task_usage_price_unsupported"

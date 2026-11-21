@@ -662,6 +662,17 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 	_, imageRequest := relayInfo.Request.(*dto.ImageRequest)
 	allowShortfall := !relayInfo.ForcePreConsume && !imageRequest && relayInfo.ImageRequestCount == 0
 
+	// A plan limited per user does not serve a request from an address that
+	// other holders of such plans already use (model.CheckLimitedPlanGate).
+	var gate *model.LimitedPlanGate
+	var except []int
+	if c != nil && c.Request != nil {
+		if gate = model.CheckLimitedPlanGate(relayInfo.UserId, c.ClientIP()); gate != nil {
+			except = gate.SubscriptionIds
+			relayInfo.LimitedPlanGateHolders = gate.Holders
+		}
+	}
+
 	newSubscriptionFunding := func(amount int64, upTo bool) *SubscriptionFunding {
 		return &SubscriptionFunding{
 			requestId: relayInfo.RequestId,
@@ -669,6 +680,7 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 			modelName: relayInfo.GetBillingModelName(),
 			amount:    amount,
 			upTo:      upTo,
+			except:    except,
 		}
 	}
 
@@ -699,7 +711,7 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 			allowShortfall: allowShortfall,
 		}
 		if subscriptionOverflow && allowShortfall && userQuota < preConsumedQuota {
-			hasSub, subCheckErr := model.HasActiveUserSubscription(relayInfo.UserId)
+			hasSub, subCheckErr := model.HasActiveUserSubscriptionExcept(relayInfo.UserId, except)
 			if subCheckErr != nil {
 				return nil, types.NewError(subCheckErr, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
 			}
@@ -766,6 +778,35 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 	}
 
+	// The gated plan sits out. When it was the customer's only one, the wallet
+	// pays whatever the billing preference says, and a wallet that cannot pay
+	// ends in a refusal that names the cause, not an empty subscription.
+	if gate != nil {
+		remaining, err := model.HasActiveUserSubscriptionExcept(relayInfo.UserId, except)
+		if err != nil {
+			return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+		}
+		if !remaining {
+			session, walletErr := tryWallet(false)
+			if walletErr == nil {
+				relayInfo.LimitedPlanGate = model.LimitedPlanGateWallet
+				logger.LogInfo(c, common.LogText("user %d charged to the wallet: %d other accounts holding a limited plan use this address", relayInfo.UserId, gate.Holders))
+				return session, nil
+			}
+			if walletErr.GetErrorCode() != types.ErrorCodeInsufficientUserQuota {
+				return nil, walletErr
+			}
+			relayInfo.LimitedPlanGate = model.LimitedPlanGateRefused
+			logger.LogInfo(c, common.LogText("user %d refused: %d other accounts holding a limited plan use this address and the wallet cannot pay", relayInfo.UserId, gate.Holders))
+			// Left recordable: the error log carries the marker that tells
+			// an administrator why a customer with a plan was turned away.
+			return nil, types.NewErrorWithStatusCode(
+				errors.New(i18n.T(c, i18n.MsgQuotaLimitedPlanGate, nil)),
+				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry())
+		}
+		relayInfo.LimitedPlanGate = model.LimitedPlanGateOtherPlan
+	}
+
 	switch pref {
 	case "subscription_only":
 		return trySubscription(false)
@@ -790,7 +831,7 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 	case "subscription_first":
 		fallthrough
 	default:
-		hasSub, subCheckErr := model.HasActiveUserSubscription(relayInfo.UserId)
+		hasSub, subCheckErr := model.HasActiveUserSubscriptionExcept(relayInfo.UserId, except)
 		if subCheckErr != nil {
 			return nil, types.NewError(subCheckErr, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
 		}
@@ -798,7 +839,7 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 			return tryWallet(false)
 		}
 		// 仅当用户的活跃订阅允许钱包回退时才动用钱包，否则返回订阅额度不足错误
-		allowOverflow, overflowErr := model.UserActiveSubscriptionsAllowWalletOverflow(relayInfo.UserId)
+		allowOverflow, overflowErr := model.UserActiveSubscriptionsAllowWalletOverflowExcept(relayInfo.UserId, except)
 		if overflowErr != nil {
 			return nil, types.NewError(overflowErr, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
 		}
