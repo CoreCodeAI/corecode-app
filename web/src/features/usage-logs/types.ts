@@ -341,6 +341,7 @@ export interface LogOtherData {
   po?: string[]
   request_plugins?: RequestPluginRecordItem[]
   billing_source?: string
+  limited_plan_gate?: string
   group?: string
   stream_status?: {
     status?: string

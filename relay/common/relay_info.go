@@ -159,6 +159,13 @@ type RelayInfo struct {
 	// SubscriptionGift is set when the paying plan was given rather than
 	// bought (model.IsGiftSubscriptionSource); log metadata only.
 	SubscriptionGift bool
+	// LimitedPlanGate is set when the request's address was gated off the
+	// plans limited per user the customer holds (model.LimitedPlanGate*):
+	// charged to the wallet, to another plan, or refused.
+	// LimitedPlanGateHolders counts the other holders using the address; log
+	// metadata only.
+	LimitedPlanGate        string
+	LimitedPlanGateHolders int
 	// RequestId is used for idempotent pre-consume/refund
 	RequestId string
 	// SubscriptionAmountTotal / SubscriptionAmountUsedAfterPreConsume are used to compute remaining in logs.

@@ -97,6 +97,10 @@ func AppendRelayLogAdminInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 		if len(relayInfo.RequestPluginSteps) > 0 {
 			other.SetAdmin("request_plugins", relayInfo.RequestPluginSteps)
 		}
+		if relayInfo.LimitedPlanGate != "" {
+			other.SetAdmin("limited_plan_ip_gate", relayInfo.LimitedPlanGate)
+			other.SetAdmin("limited_plan_ip_gate_holders", relayInfo.LimitedPlanGateHolders)
+		}
 	}
 	if common.GetContextKeyBool(ctx, constant.ContextKeyChannelIsMultiKey) {
 		other.SetAdmin("is_multi_key", true)
@@ -241,6 +245,11 @@ func appendBillingInfo(relayInfo *relaycommon.RelayInfo, other *model.LogOther) 
 	}
 	if relayInfo.UserSetting.BillingPreference != "" {
 		other.SetPublic("billing_preference", relayInfo.UserSetting.BillingPreference)
+	}
+	// The customer's log says why the plan did not pay; the other holders'
+	// count stays with the administrators.
+	if relayInfo.LimitedPlanGate == model.LimitedPlanGateWallet || relayInfo.LimitedPlanGate == model.LimitedPlanGateOtherPlan {
+		other.SetPublic("limited_plan_gate", relayInfo.LimitedPlanGate)
 	}
 	if relayInfo.BillingOverflowQuota > 0 {
 		other.SetPublic("billing_overflow_source", relayInfo.BillingOverflowSource)

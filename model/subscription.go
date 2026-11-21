@@ -973,14 +973,23 @@ func UsersSubscriptionRemaining(userIds []int) (map[int]int64, error) {
 // HasActiveUserSubscription returns whether the user has any active subscription.
 // This is a lightweight existence check to avoid heavy pre-consume transactions.
 func HasActiveUserSubscription(userId int) (bool, error) {
+	return HasActiveUserSubscriptionExcept(userId, nil)
+}
+
+// HasActiveUserSubscriptionExcept is HasActiveUserSubscription without the
+// subscriptions in except, which a request may not draw on.
+func HasActiveUserSubscriptionExcept(userId int, except []int) (bool, error) {
 	if userId <= 0 {
 		return false, errors.New("invalid userId")
 	}
 	now := common.GetTimestamp()
 	var count int64
-	if err := DB.Model(&UserSubscription{}).
-		Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
-		Count(&count).Error; err != nil {
+	query := DB.Model(&UserSubscription{}).
+		Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now)
+	if len(except) > 0 {
+		query = query.Where("id NOT IN ?", except)
+	}
+	if err := query.Count(&count).Error; err != nil {
 		return false, err
 	}
 	return count > 0, nil
@@ -990,14 +999,25 @@ func HasActiveUserSubscription(userId int) (bool, error) {
 // after the user's subscription quota is exhausted. A single active subscription that
 // disallows wallet overflow (allow_wallet_overflow = false) blocks the fallback.
 func UserActiveSubscriptionsAllowWalletOverflow(userId int) (bool, error) {
+	return UserActiveSubscriptionsAllowWalletOverflowExcept(userId, nil)
+}
+
+// UserActiveSubscriptionsAllowWalletOverflowExcept is
+// UserActiveSubscriptionsAllowWalletOverflow without the subscriptions in
+// except.
+func UserActiveSubscriptionsAllowWalletOverflowExcept(userId int, except []int) (bool, error) {
 	if userId <= 0 {
 		return false, errors.New("invalid userId")
 	}
 	now := common.GetTimestamp()
 	var strictCount int64
-	if err := DB.Model(&UserSubscription{}).
+	strict := DB.Model(&UserSubscription{}).
 		Where("user_id = ? AND status = ? AND end_time > ? AND allow_wallet_overflow = ?",
-			userId, "active", now, false).
+			userId, "active", now, false)
+	if len(except) > 0 {
+		strict = strict.Where("id NOT IN ?", except)
+	}
+	if err := strict.
 		Count(&strictCount).Error; err != nil {
 		return false, err
 	}
@@ -1418,17 +1438,24 @@ func (e *SubscriptionQuotaInsufficientError) Error() string {
 }
 
 func PreConsumeUserSubscription(requestId string, userId int, modelName string, quotaType int, amount int64) (*SubscriptionPreConsumeResult, error) {
-	return preConsumeUserSubscription(requestId, userId, amount, false)
+	return preConsumeUserSubscription(requestId, userId, amount, false, nil)
+}
+
+// PreConsumeUserSubscriptionExcept reserves like PreConsumeUserSubscription, or
+// like PreConsumeUserSubscriptionUpTo when partial is set, from the active
+// subscriptions that are not in except.
+func PreConsumeUserSubscriptionExcept(requestId string, userId int, amount int64, partial bool, except []int) (*SubscriptionPreConsumeResult, error) {
+	return preConsumeUserSubscription(requestId, userId, amount, partial, except)
 }
 
 // PreConsumeUserSubscriptionUpTo reserves amount from the first subscription
 // that holds it, or else everything left on the subscription holding the
 // most. It fails only when no active subscription has quota left.
 func PreConsumeUserSubscriptionUpTo(requestId string, userId int, amount int64) (*SubscriptionPreConsumeResult, error) {
-	return preConsumeUserSubscription(requestId, userId, amount, true)
+	return preConsumeUserSubscription(requestId, userId, amount, true, nil)
 }
 
-func preConsumeUserSubscription(requestId string, userId int, amount int64, partial bool) (*SubscriptionPreConsumeResult, error) {
+func preConsumeUserSubscription(requestId string, userId int, amount int64, partial bool, except []int) (*SubscriptionPreConsumeResult, error) {
 	if userId <= 0 {
 		return nil, errors.New("invalid userId")
 	}
@@ -1465,8 +1492,12 @@ func preConsumeUserSubscription(requestId string, userId int, amount int64, part
 		}
 
 		var subs []UserSubscription
-		if err := lockForUpdate(tx).
-			Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
+		active := lockForUpdate(tx).
+			Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now)
+		if len(except) > 0 {
+			active = active.Where("id NOT IN ?", except)
+		}
+		if err := active.
 			Order("end_time asc, id asc").
 			Find(&subs).Error; err != nil {
 			return errors.New("no active subscription")

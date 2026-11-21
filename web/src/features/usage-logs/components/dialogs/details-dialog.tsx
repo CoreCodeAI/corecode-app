@@ -1268,6 +1268,20 @@ export function DetailsDialog(props: DetailsDialogProps) {
           </DetailSection>
         )}
 
+        {/* Newcomer plan network limit */}
+        {other?.limited_plan_gate && (
+          <DetailSection label={t('Newcomer Plan Limit')}>
+            <DetailRow
+              label={t('Billing')}
+              value={
+                other.limited_plan_gate === 'wallet'
+                  ? t('Billed to balance (newcomer plan network limit)')
+                  : t('Billed to another plan (newcomer plan network limit)')
+              }
+            />
+          </DetailSection>
+        )}
+
         {/* Subscription billing details */}
         {isSubscription && other && (
           <DetailSection label={t('Subscription Billing')}>
