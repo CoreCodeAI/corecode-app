@@ -249,4 +249,56 @@ describe('log cost display', () => {
       screen.queryByRole('img', { name: 'Matches the listed prices' })
     ).not.toBeInTheDocument()
   })
+
+  test('tags a charge that had no output and explains it on hover', async () => {
+    const user = userEvent.setup()
+    renderCost({
+      quota: 5000,
+      other: null,
+      zeroOutput: { kind: 'general' },
+    })
+
+    const tag = screen.getByText('No output')
+    expect(tag).toBeVisible()
+    await user.hover(tag)
+    expect(
+      await screen.findByText(/no output means no output fee/)
+    ).toBeVisible()
+  })
+
+  test('names a refusal in the tag text instead of the general causes', async () => {
+    const user = userEvent.setup()
+    renderCost({
+      quota: 5000,
+      other: null,
+      zeroOutput: { kind: 'refusal', category: 'cybersecurity' },
+    })
+
+    await user.hover(screen.getByText('No output'))
+    const tip = await screen.findByText(/category: cybersecurity/)
+    expect(tip).toBeVisible()
+    expect(tip).not.toHaveTextContent('client disconnected')
+  })
+
+  test('shows the cache outcome beside the cost', () => {
+    const { rerender } = renderCost({
+      quota: 5000,
+      other: null,
+      cacheBadge: { kind: 'hit', percent: 98 },
+    })
+    expect(screen.getByText('Cache 98%')).toBeVisible()
+
+    rerender(
+      <LogCostDisplay quota={5000} other={null} cacheBadge={{ kind: 'miss' }} />
+    )
+    expect(screen.getByText('Cache miss · full price')).toBeVisible()
+    expect(screen.queryByText('Cache 98%')).not.toBeInTheDocument()
+  })
+
+  test('adds no tags to an ordinary charge', () => {
+    renderCost({ quota: 5000, other: null })
+
+    expect(screen.queryByText('No output')).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Cache /)).not.toBeInTheDocument()
+  })
 })

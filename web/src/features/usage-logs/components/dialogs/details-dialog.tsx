@@ -84,6 +84,7 @@ import { cn } from '@/lib/utils'
 
 import { AuditDetailFields } from '../../audit/components/audit-detail-fields'
 import type { UsageLog } from '../../data/schema'
+import { getZeroOutputReason } from '../../lib/bill-explain'
 import { buildCostCheck } from '../../lib/cost-check'
 import {
   parseLogOther,
@@ -113,9 +114,10 @@ import {
   RequestPluginAdminSteps,
   RequestPluginRecord,
 } from '../request-plugin-record'
+import { BillSummaryCard } from './bill-summary-card'
 import { CopyableDetailValue } from './copyable-detail-value'
 import { CostCheckSection } from './cost-check-section'
-import { DetailRow, DetailSection } from './log-detail-layout'
+import { DetailRow, DetailSection, TechnicalDetails } from './log-detail-layout'
 
 // Maps a channel-update changed-field token (as recorded by the backend audit)
 // to its i18n label key for display in the audit details.
@@ -191,9 +193,11 @@ function BillingBreakdown(props: {
   log: UsageLog
   other: LogOtherData
   isAdmin: boolean
+  /** The cost check already lists every unit price and the total. */
+  merged: boolean
 }) {
   const { t } = useTranslation()
-  const { log, other, isAdmin } = props
+  const { log, other, isAdmin, merged } = props
   const isPerCall = isPerCallBilling(other.model_price)
   const isClaude = other.claude === true
   // OpenAI 12-hour cache writes have their own price, listed like Claude's.
@@ -206,139 +210,141 @@ function BillingBreakdown(props: {
   const fmtPrice = (usd: number) => formatBillingCurrencyFromUSD(usd, priceOpts)
   const baseInputUSD = other.model_ratio != null ? other.model_ratio * 2.0 : 0
 
-  if (isTieredExpr) {
-    rows.push({
-      label: t('Billing Mode'),
-      value: t('Dynamic Pricing'),
-    })
-    if (tieredSummary) {
-      if (tieredSummary.tier.label) {
+  if (!merged) {
+    if (isTieredExpr) {
+      rows.push({
+        label: t('Billing Mode'),
+        value: t('Dynamic Pricing'),
+      })
+      if (tieredSummary) {
+        if (tieredSummary.tier.label) {
+          rows.push({
+            label: t('Matched Tier'),
+            value: tierDisplayLabel(tieredSummary.tier.label, t),
+          })
+        }
+        for (const entry of tieredSummary.priceEntries) {
+          rows.push({
+            label: t(entry.shortLabel),
+            value: `${fmtPrice(entry.price)}/${entry.unit ? t(entry.unit) : 'M'}`,
+          })
+        }
+      } else {
         rows.push({
           label: t('Matched Tier'),
-          value: tierDisplayLabel(tieredSummary.tier.label, t),
+          value:
+            tierDisplayLabel(other.matched_tier, t) || t('No matching results'),
         })
       }
-      for (const entry of tieredSummary.priceEntries) {
+    } else if (isPerCall) {
+      rows.push({ label: t('Billing Mode'), value: t('Per-call') })
+      if (other.model_price != null) {
         rows.push({
-          label: t(entry.shortLabel),
-          value: `${fmtPrice(entry.price)}/${entry.unit ? t(entry.unit) : 'M'}`,
+          label: t('Model Price'),
+          value: fmtPrice(other.model_price),
         })
       }
     } else {
-      rows.push({
-        label: t('Matched Tier'),
-        value:
-          tierDisplayLabel(other.matched_tier, t) || t('No matching results'),
-      })
+      rows.push({ label: t('Billing Mode'), value: t('Per-token') })
+      if (other.model_ratio != null) {
+        rows.push({
+          label: t('Input'),
+          value: `${fmtPrice(baseInputUSD)}/M`,
+        })
+      }
+      if (other.completion_ratio != null && other.model_ratio != null) {
+        rows.push({
+          label: t('Output'),
+          value: `${fmtPrice(baseInputUSD * other.completion_ratio)}/M`,
+        })
+      }
     }
-  } else if (isPerCall) {
-    rows.push({ label: t('Billing Mode'), value: t('Per-call') })
-    if (other.model_price != null) {
-      rows.push({
-        label: t('Model Price'),
-        value: fmtPrice(other.model_price),
-      })
-    }
-  } else {
-    rows.push({ label: t('Billing Mode'), value: t('Per-token') })
-    if (other.model_ratio != null) {
-      rows.push({
-        label: t('Input'),
-        value: `${fmtPrice(baseInputUSD)}/M`,
-      })
-    }
-    if (other.completion_ratio != null && other.model_ratio != null) {
-      rows.push({
-        label: t('Output'),
-        value: `${fmtPrice(baseInputUSD * other.completion_ratio)}/M`,
-      })
-    }
-  }
 
-  const userGR = other.user_group_ratio
-  const isUserGR = userGR != null && Number.isFinite(userGR) && userGR !== -1
-  const effectiveGR = isUserGR ? userGR : other.group_ratio
-  if (effectiveGR != null && Number.isFinite(effectiveGR)) {
-    rows.push({
-      label: isUserGR ? t('User Exclusive Ratio') : t('Group Ratio'),
-      value: `${formatRatio(effectiveGR)}x`,
-    })
-  }
-
-  if (
-    !isTieredExpr &&
-    (isClaude || hasCacheWrite12h) &&
-    hasAnyCacheTokens(other)
-  ) {
-    if (other.cache_ratio != null && other.cache_ratio !== 1) {
+    const userGR = other.user_group_ratio
+    const isUserGR = userGR != null && Number.isFinite(userGR) && userGR !== -1
+    const effectiveGR = isUserGR ? userGR : other.group_ratio
+    if (effectiveGR != null && Number.isFinite(effectiveGR)) {
       rows.push({
-        label: t('Cache Read'),
-        value: `${fmtPrice(baseInputUSD * other.cache_ratio)}/M`,
-      })
-    }
-    if (
-      other.cache_creation_ratio != null &&
-      other.cache_creation_ratio !== 1
-    ) {
-      rows.push({
-        label: hasCacheWrite12h
-          ? t('Cache Creation (30m)')
-          : t('Cache Creation'),
-        value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio)}/M`,
-      })
-    }
-    if (
-      other.cache_creation_ratio_5m != null &&
-      other.cache_creation_ratio_5m !== 0
-    ) {
-      rows.push({
-        label: t('Cache Creation (5m)'),
-        value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_5m)}/M`,
-      })
-    }
-    if (
-      other.cache_creation_ratio_1h != null &&
-      other.cache_creation_ratio_1h !== 0
-    ) {
-      rows.push({
-        label: t('Cache Creation (1h)'),
-        value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_1h)}/M`,
-      })
-    }
-    if (
-      other.cache_creation_ratio_12h != null &&
-      other.cache_creation_ratio_12h !== 0
-    ) {
-      rows.push({
-        label: t('Cache Creation (12h)'),
-        value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_12h)}/M`,
-      })
-    }
-  }
-
-  if (!isTieredExpr) {
-    if (other.audio_ratio != null && other.audio_ratio !== 1) {
-      rows.push({
-        label: t('Audio input'),
-        value: `${fmtPrice(baseInputUSD * other.audio_ratio)}/M`,
+        label: isUserGR ? t('User Exclusive Ratio') : t('Group Ratio'),
+        value: `${formatRatio(effectiveGR)}x`,
       })
     }
 
     if (
-      other.audio_completion_ratio != null &&
-      other.audio_completion_ratio !== 1
+      !isTieredExpr &&
+      (isClaude || hasCacheWrite12h) &&
+      hasAnyCacheTokens(other)
     ) {
-      rows.push({
-        label: t('Audio output'),
-        value: `${fmtPrice(baseInputUSD * other.audio_completion_ratio)}/M`,
-      })
+      if (other.cache_ratio != null && other.cache_ratio !== 1) {
+        rows.push({
+          label: t('Cache Read'),
+          value: `${fmtPrice(baseInputUSD * other.cache_ratio)}/M`,
+        })
+      }
+      if (
+        other.cache_creation_ratio != null &&
+        other.cache_creation_ratio !== 1
+      ) {
+        rows.push({
+          label: hasCacheWrite12h
+            ? t('Cache Creation (30m)')
+            : t('Cache Creation'),
+          value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio)}/M`,
+        })
+      }
+      if (
+        other.cache_creation_ratio_5m != null &&
+        other.cache_creation_ratio_5m !== 0
+      ) {
+        rows.push({
+          label: t('Cache Creation (5m)'),
+          value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_5m)}/M`,
+        })
+      }
+      if (
+        other.cache_creation_ratio_1h != null &&
+        other.cache_creation_ratio_1h !== 0
+      ) {
+        rows.push({
+          label: t('Cache Creation (1h)'),
+          value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_1h)}/M`,
+        })
+      }
+      if (
+        other.cache_creation_ratio_12h != null &&
+        other.cache_creation_ratio_12h !== 0
+      ) {
+        rows.push({
+          label: t('Cache Creation (12h)'),
+          value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_12h)}/M`,
+        })
+      }
     }
 
-    if (other.image_ratio != null && other.image_ratio !== 1) {
-      rows.push({
-        label: t('Image input'),
-        value: `${fmtPrice(baseInputUSD * other.image_ratio)}/M`,
-      })
+    if (!isTieredExpr) {
+      if (other.audio_ratio != null && other.audio_ratio !== 1) {
+        rows.push({
+          label: t('Audio input'),
+          value: `${fmtPrice(baseInputUSD * other.audio_ratio)}/M`,
+        })
+      }
+
+      if (
+        other.audio_completion_ratio != null &&
+        other.audio_completion_ratio !== 1
+      ) {
+        rows.push({
+          label: t('Audio output'),
+          value: `${fmtPrice(baseInputUSD * other.audio_completion_ratio)}/M`,
+        })
+      }
+
+      if (other.image_ratio != null && other.image_ratio !== 1) {
+        rows.push({
+          label: t('Image input'),
+          value: `${fmtPrice(baseInputUSD * other.image_ratio)}/M`,
+        })
+      }
     }
   }
 
@@ -384,6 +390,8 @@ function BillingBreakdown(props: {
       ? Object.entries(other.usage_facts)
       : []
 
+  if (rows.length === 0 && usageFacts.length === 0) return null
+
   return (
     <DetailSection label={t('Billing Details')}>
       {rows.map((row) => (
@@ -404,11 +412,13 @@ function BillingBreakdown(props: {
           ))}
         </>
       )}
-      <DetailRow
-        label={t('Total Cost')}
-        value={formatLogQuota(log.quota)}
-        mono
-      />
+      {!merged && (
+        <DetailRow
+          label={t('Total Cost')}
+          value={formatLogQuota(log.quota)}
+          mono
+        />
+      )}
     </DetailSection>
   )
 }
@@ -695,6 +705,19 @@ export function DetailsDialog(props: DetailsDialogProps) {
     other?.reasoning_effort
   )
 
+  const hasTechnicalDetails =
+    !!showConversion ||
+    (props.isAdmin &&
+      !!(
+        adminInfo?.request_policy?.length ||
+        adminInfo?.task_plugin ||
+        adminInfo?.request_plugins?.length
+      )) ||
+    (props.isRoot && !!other?.root_info) ||
+    (costCheck !== null && !!other) ||
+    !!other?.request_plugins?.length ||
+    (Array.isArray(other?.po) && other.po.length > 0)
+
   return (
     <Dialog
       open={props.open}
@@ -723,6 +746,41 @@ export function DetailsDialog(props: DetailsDialogProps) {
       bodyClassName='pr-2 sm:pr-4'
     >
       <div className='w-full max-w-full min-w-0 space-y-2.5 overflow-x-hidden py-1 sm:space-y-3'>
+        {/* CoreCode fork: why the charge is what it is comes first */}
+        {isConsume && !isViolation && costCheck && (
+          <BillSummaryCard
+            check={costCheck}
+            other={other}
+            zeroOutput={getZeroOutputReason(props.log, other)}
+          />
+        )}
+
+        {other?.response_model && (
+          <DetailSection label={t('Response Model')}>
+            <ResponseModelDetails observation={other.response_model} />
+          </DetailSection>
+        )}
+        {/* Model mapping for logs without response observations */}
+        {!other?.response_model &&
+          other?.is_model_mapped &&
+          other?.upstream_model_name && (
+            <DetailSection label={t('Model Mapping')}>
+              <DetailRow
+                label={t('Request Model')}
+                value={props.log.model_name}
+                mono
+              />
+              <DetailRow
+                label={t('Actual Model')}
+                value={other.upstream_model_name}
+                mono
+              />
+            </DetailSection>
+          )}
+
+        {/* CoreCode fork: the arithmetic behind a per-token charge */}
+        {costCheck && <CostCheckSection check={costCheck} />}
+
         {/* Overview section - key identifiers */}
         <div className='min-w-0 space-y-1'>
           {props.log.request_id && (
@@ -838,55 +896,6 @@ export function DetailsDialog(props: DetailsDialogProps) {
           )}
         </div>
 
-        {/* Request conversion (admin only, not for refund) */}
-        {showConversion && (
-          <DetailSection label={t('Request Conversion')}>
-            <div className='relative min-w-0'>
-              <Button
-                variant='ghost'
-                size='sm'
-                className='absolute top-0 right-0 h-5 w-5 p-0'
-                onClick={() => copyToClipboard(conversionLabel)}
-                title={t('Copy to clipboard')}
-                aria-label={t('Copy to clipboard')}
-              >
-                {copiedText === conversionLabel ? (
-                  <Check className='size-3 text-green-600' />
-                ) : (
-                  <Copy className='size-3' />
-                )}
-              </Button>
-              <div className='min-w-0 space-y-1 pr-6'>
-                {other?.request_path && (
-                  <DetailRow
-                    label={t('Path')}
-                    value={other.request_path}
-                    mono
-                  />
-                )}
-                <div className='flex min-w-0 items-center gap-1.5 text-xs'>
-                  <Route
-                    className='text-muted-foreground size-3'
-                    aria-hidden='true'
-                  />
-                  <span className='min-w-0 break-all sm:wrap-break-word'>
-                    {conversionLabel}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </DetailSection>
-        )}
-
-        {/* Quota saturation marker (admin only) */}
-        {props.isAdmin && adminInfo?.request_policy?.length ? (
-          <DetailSection
-            label={t('Request policy decisions')}
-            icon={<Route className='size-4' />}
-          >
-            <PolicyDecisionRecord events={adminInfo.request_policy} />
-          </DetailSection>
-        ) : null}
         {props.isAdmin && other?.admin_info?.quota_saturation && (
           <DetailSection
             icon={<AlertTriangle className='size-3.5' aria-hidden='true' />}
@@ -974,74 +983,6 @@ export function DetailsDialog(props: DetailsDialogProps) {
             )}
           </DetailSection>
         )}
-
-        {props.isAdmin && adminInfo?.task_plugin ? (
-          <DetailSection label={t('Task Plugin')}>
-            <DetailRow
-              label={t('Plugin key')}
-              value={adminInfo.task_plugin.key}
-              mono
-            />
-            <DetailRow label={t('Name')} value={adminInfo.task_plugin.name} />
-            {adminInfo.task_plugin.version ? (
-              <DetailRow
-                label={t('Version')}
-                value={adminInfo.task_plugin.version}
-                mono
-              />
-            ) : null}
-            {adminInfo.task_plugin.author ? (
-              <DetailRow
-                label={t('Plugin author')}
-                value={
-                  <PluginAuthorLink
-                    author={adminInfo.task_plugin.author}
-                    showUrl
-                  />
-                }
-              />
-            ) : null}
-          </DetailSection>
-        ) : null}
-
-        {props.isAdmin && adminInfo?.request_plugins?.length ? (
-          <DetailSection label={t('Request processing steps')}>
-            <RequestPluginAdminSteps steps={adminInfo.request_plugins} />
-          </DetailSection>
-        ) : null}
-
-        {props.isRoot && other?.root_info ? (
-          <DetailSection label={t('Root Diagnostics')}>
-            {other.root_info.task_plugin ? (
-              <>
-                <DetailRow
-                  label={t('API Version')}
-                  value={String(other.root_info.task_plugin.api_version)}
-                  mono
-                />
-                <DetailRow
-                  label={t('Plugin Generation')}
-                  value={String(other.root_info.task_plugin.generation)}
-                  mono
-                />
-              </>
-            ) : null}
-            {other.root_info.upstream_task_id ? (
-              <DetailRow
-                label={t('Upstream Task ID')}
-                value={other.root_info.upstream_task_id}
-                mono
-              />
-            ) : null}
-            {other.root_info.node_name ? (
-              <DetailRow
-                label={t('Node Name')}
-                value={other.root_info.node_name}
-                mono
-              />
-            ) : null}
-          </DetailSection>
-        ) : null}
 
         {/* Top-up audit info (type=1, admin only) */}
         {showTopupAuditSection && (
@@ -1226,36 +1167,10 @@ export function DetailsDialog(props: DetailsDialogProps) {
           />
         )}
 
-        {other?.response_model && (
-          <DetailSection label={t('Response Model')}>
-            <ResponseModelDetails observation={other.response_model} />
-          </DetailSection>
-        )}
-        {/* Model mapping for logs without response observations */}
-        {!other?.response_model &&
-          other?.is_model_mapped &&
-          other?.upstream_model_name && (
-            <DetailSection label={t('Model Mapping')}>
-              <DetailRow
-                label={t('Request Model')}
-                value={props.log.model_name}
-                mono
-              />
-              <DetailRow
-                label={t('Actual Model')}
-                value={other.upstream_model_name}
-                mono
-              />
-            </DetailSection>
-          )}
-
         {/* Token breakdown (for consume/error types with token data) */}
-        {isDisplayableType(props.log.type) && other && (
+        {!costCheck && isDisplayableType(props.log.type) && other && (
           <TokenBreakdown log={props.log} other={other} />
         )}
-
-        {/* CoreCode fork: the arithmetic behind a per-token charge */}
-        {costCheck && <CostCheckSection check={costCheck} />}
 
         {/* Billing breakdown (consume type) */}
         {isConsume && other && !isViolation && (
@@ -1263,6 +1178,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
             log={props.log}
             other={other}
             isAdmin={props.isAdmin}
+            merged={costCheck !== null}
           />
         )}
 
@@ -1400,49 +1316,6 @@ export function DetailsDialog(props: DetailsDialogProps) {
           </DetailSection>
         )}
 
-        {other?.request_plugins?.length ? (
-          <DetailSection
-            icon={<Workflow className='size-3.5' aria-hidden='true' />}
-            iconTone='chart-3'
-            label={t('Request processing')}
-          >
-            <RequestPluginRecord
-              items={other.request_plugins}
-              loadIcons={props.isRoot}
-            />
-          </DetailSection>
-        ) : null}
-
-        {/* Param override */}
-        {other?.po && Array.isArray(other.po) && other.po.length > 0 && (
-          <DetailSection
-            icon={<Settings2 className='size-3.5' aria-hidden='true' />}
-            iconTone='chart-3'
-            label={`${t('Param Override')} (${other.po.length})`}
-          >
-            {other.po.filter(Boolean).map((line) => {
-              const parsed = parseAuditLine(line)
-              if (!parsed) return null
-              return (
-                <div
-                  key={`${parsed.action}-${parsed.content}`}
-                  className='bg-background/60 flex min-w-0 flex-col gap-1.5 rounded border p-2 sm:flex-row sm:items-start sm:gap-2'
-                >
-                  <StatusBadge
-                    variant='neutral'
-                    label={getParamOverrideActionLabel(parsed.action, t)}
-                    className='shrink-0 font-medium'
-                    copyable={false}
-                  />
-                  <span className='min-w-0 font-mono text-[11px] leading-relaxed break-all sm:wrap-break-word'>
-                    {parsed.content}
-                  </span>
-                </div>
-              )
-            })}
-          </DetailSection>
-        )}
-
         {/* Content */}
         {details && (
           <div className='space-y-1.5'>
@@ -1467,6 +1340,176 @@ export function DetailsDialog(props: DetailsDialogProps) {
               </p>
             </div>
           </div>
+        )}
+
+        {hasTechnicalDetails && (
+          <TechnicalDetails label={t('Technical details')}>
+            {/* Request conversion (admin only, not for refund) */}
+            {showConversion && (
+              <DetailSection label={t('Request Conversion')}>
+                <div className='relative min-w-0'>
+                  <Button
+                    variant='ghost'
+                    size='sm'
+                    className='absolute top-0 right-0 h-5 w-5 p-0'
+                    onClick={() => copyToClipboard(conversionLabel)}
+                    title={t('Copy to clipboard')}
+                    aria-label={t('Copy to clipboard')}
+                  >
+                    {copiedText === conversionLabel ? (
+                      <Check className='size-3 text-green-600' />
+                    ) : (
+                      <Copy className='size-3' />
+                    )}
+                  </Button>
+                  <div className='min-w-0 space-y-1 pr-6'>
+                    {other?.request_path && (
+                      <DetailRow
+                        label={t('Path')}
+                        value={other.request_path}
+                        mono
+                      />
+                    )}
+                    <div className='flex min-w-0 items-center gap-1.5 text-xs'>
+                      <Route
+                        className='text-muted-foreground size-3'
+                        aria-hidden='true'
+                      />
+                      <span className='min-w-0 break-all sm:wrap-break-word'>
+                        {conversionLabel}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </DetailSection>
+            )}
+
+            {/* Quota saturation marker (admin only) */}
+            {props.isAdmin && adminInfo?.request_policy?.length ? (
+              <DetailSection
+                label={t('Request policy decisions')}
+                icon={<Route className='size-4' />}
+              >
+                <PolicyDecisionRecord events={adminInfo.request_policy} />
+              </DetailSection>
+            ) : null}
+            {props.isAdmin && adminInfo?.task_plugin ? (
+              <DetailSection label={t('Task Plugin')}>
+                <DetailRow
+                  label={t('Plugin key')}
+                  value={adminInfo.task_plugin.key}
+                  mono
+                />
+                <DetailRow
+                  label={t('Name')}
+                  value={adminInfo.task_plugin.name}
+                />
+                {adminInfo.task_plugin.version ? (
+                  <DetailRow
+                    label={t('Version')}
+                    value={adminInfo.task_plugin.version}
+                    mono
+                  />
+                ) : null}
+                {adminInfo.task_plugin.author ? (
+                  <DetailRow
+                    label={t('Plugin author')}
+                    value={
+                      <PluginAuthorLink
+                        author={adminInfo.task_plugin.author}
+                        showUrl
+                      />
+                    }
+                  />
+                ) : null}
+              </DetailSection>
+            ) : null}
+
+            {props.isAdmin && adminInfo?.request_plugins?.length ? (
+              <DetailSection label={t('Request processing steps')}>
+                <RequestPluginAdminSteps steps={adminInfo.request_plugins} />
+              </DetailSection>
+            ) : null}
+
+            {props.isRoot && other?.root_info ? (
+              <DetailSection label={t('Root Diagnostics')}>
+                {other.root_info.task_plugin ? (
+                  <>
+                    <DetailRow
+                      label={t('API Version')}
+                      value={String(other.root_info.task_plugin.api_version)}
+                      mono
+                    />
+                    <DetailRow
+                      label={t('Plugin Generation')}
+                      value={String(other.root_info.task_plugin.generation)}
+                      mono
+                    />
+                  </>
+                ) : null}
+                {other.root_info.upstream_task_id ? (
+                  <DetailRow
+                    label={t('Upstream Task ID')}
+                    value={other.root_info.upstream_task_id}
+                    mono
+                  />
+                ) : null}
+                {other.root_info.node_name ? (
+                  <DetailRow
+                    label={t('Node Name')}
+                    value={other.root_info.node_name}
+                    mono
+                  />
+                ) : null}
+              </DetailSection>
+            ) : null}
+
+            {costCheck && other && (
+              <TokenBreakdown log={props.log} other={other} />
+            )}
+            {other?.request_plugins?.length ? (
+              <DetailSection
+                icon={<Workflow className='size-3.5' aria-hidden='true' />}
+                iconTone='chart-3'
+                label={t('Request processing')}
+              >
+                <RequestPluginRecord
+                  items={other.request_plugins}
+                  loadIcons={props.isRoot}
+                />
+              </DetailSection>
+            ) : null}
+
+            {/* Param override */}
+            {other?.po && Array.isArray(other.po) && other.po.length > 0 && (
+              <DetailSection
+                icon={<Settings2 className='size-3.5' aria-hidden='true' />}
+                iconTone='chart-3'
+                label={`${t('Param Override')} (${other.po.length})`}
+              >
+                {other.po.filter(Boolean).map((line) => {
+                  const parsed = parseAuditLine(line)
+                  if (!parsed) return null
+                  return (
+                    <div
+                      key={`${parsed.action}-${parsed.content}`}
+                      className='bg-background/60 flex min-w-0 flex-col gap-1.5 rounded border p-2 sm:flex-row sm:items-start sm:gap-2'
+                    >
+                      <StatusBadge
+                        variant='neutral'
+                        label={getParamOverrideActionLabel(parsed.action, t)}
+                        className='shrink-0 font-medium'
+                        copyable={false}
+                      />
+                      <span className='min-w-0 font-mono text-[11px] leading-relaxed break-all sm:wrap-break-word'>
+                        {parsed.content}
+                      </span>
+                    </div>
+                  )
+                })}
+              </DetailSection>
+            )}
+          </TechnicalDetails>
         )}
       </div>
     </Dialog>

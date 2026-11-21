@@ -201,6 +201,10 @@ export type RequestPluginAdminStep = {
 }
 
 export interface LogOtherData {
+  // The upstream refused the request under its usage policy and still billed
+  // its input and cache writes. The category is the policy tag, e.g. cyber.
+  upstream_refusal?: boolean
+  upstream_refusal_category?: string
   admin_info?: {
     request_policy?: PolicyEvent[]
     request_plugins?: RequestPluginAdminStep[]

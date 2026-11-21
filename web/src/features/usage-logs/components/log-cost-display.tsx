@@ -35,8 +35,10 @@ import {
 } from '@/components/ui/tooltip'
 import { formatLogQuota } from '@/lib/format'
 
+import type { CacheBadge, ZeroOutputReason } from '../lib/bill-explain'
 import { hasToolSurcharge } from '../lib/format'
 import type { LogOtherData } from '../types'
+import { getZeroOutputText } from './zero-output-text'
 
 interface LogCostDisplayProps {
   quota: number
@@ -44,6 +46,49 @@ interface LogCostDisplayProps {
   showBillingSource?: boolean
   /** The charge equals what the listed prices give for this usage. */
   verified?: boolean
+  /** Set when the request charged for input and cache but produced no output. */
+  zeroOutput?: ZeroOutputReason | null
+  /** The cache outcome shown beside the cost to customers. */
+  cacheBadge?: CacheBadge | null
+}
+
+function ZeroOutputMarker(props: { reason: ZeroOutputReason }) {
+  const { t } = useTranslation()
+  const text = getZeroOutputText(t, props.reason)
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Badge
+            variant='outline'
+            className='h-5 cursor-help px-1.5 text-[11px] font-normal'
+            tabIndex={0}
+            aria-label={`${t('No output')}: ${text}`}
+          >
+            {t('No output')}
+          </Badge>
+        }
+      />
+      <TooltipContent className='max-w-64'>{text}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function CacheBadgeMarker(props: { badge: CacheBadge }) {
+  const { t } = useTranslation()
+  const hit = props.badge.kind === 'hit'
+
+  return (
+    <Badge
+      variant={hit ? 'secondary' : 'warning'}
+      className='h-5 px-1.5 text-[11px] font-normal whitespace-nowrap'
+    >
+      {props.badge.kind === 'hit'
+        ? t('Cache {{percent}}%', { percent: props.badge.percent })
+        : t('Cache miss · full price')}
+    </Badge>
+  )
 }
 
 function VerifiedMarker() {
@@ -162,6 +207,12 @@ export function LogCostDisplay(props: LogCostDisplayProps) {
         </StatusBadge>
         {showToolSurcharge ? <ToolSurchargeMarker /> : null}
         {props.verified ? <VerifiedMarker /> : null}
+        {props.zeroOutput ? (
+          <ZeroOutputMarker reason={props.zeroOutput} />
+        ) : null}
+        {props.cacheBadge ? (
+          <CacheBadgeMarker badge={props.cacheBadge} />
+        ) : null}
       </div>
     </TooltipProvider>
   )
