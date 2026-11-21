@@ -9676,6 +9676,11 @@
     "12-hour cache": "12 時間キャッシュ",
     "cybersecurity": "サイバーセキュリティ",
     "biology": "生物",
-    "reasoning extraction": "モデルの推論の抽出"
+    "reasoning extraction": "モデルの推論の抽出",
+    "Instant, recommended": "即時反映・おすすめ",
+    "International cards only. Some banks decline; if it fails, use Alipay or WeChat Pay.": "国際カードのみ。拒否される銀行もあります。失敗したら Alipay か WeChat Pay をお使いください",
+    "On-chain USDT/USDC, usually credited in about 5 minutes": "オンチェーン USDT/USDC、通常は約5分で反映",
+    "No bonus on this method": "この方法では特典は付きません",
+    "This order expired. You can place a new one.": "期限切れです。もう一度注文できます"
   }
 }

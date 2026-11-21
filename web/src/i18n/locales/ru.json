@@ -9676,6 +9676,11 @@
     "12-hour cache": "кеш на 12 часов",
     "cybersecurity": "кибербезопасность",
     "biology": "биология",
-    "reasoning extraction": "извлечение рассуждений модели"
+    "reasoning extraction": "извлечение рассуждений модели",
+    "Instant, recommended": "Зачисление мгновенно, рекомендуем",
+    "International cards only. Some banks decline; if it fails, use Alipay or WeChat Pay.": "Только международные карты. Некоторые банки отклоняют платёж; если не прошёл, оплатите через Alipay или WeChat Pay",
+    "On-chain USDT/USDC, usually credited in about 5 minutes": "USDT/USDC в блокчейне, обычно зачисляется минут за 5",
+    "No bonus on this method": "За этот способ бонус не начисляется",
+    "This order expired. You can place a new one.": "Заказ истёк. Можно оформить новый"
   }
 }

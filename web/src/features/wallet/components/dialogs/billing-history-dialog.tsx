@@ -330,6 +330,12 @@ export function BillingHistoryDialog({
                         </div>
                       )}
 
+                      {record.status === 'expired' && (
+                        <p className='text-muted-foreground mt-3 text-xs sm:mt-4'>
+                          {t('This order expired. You can place a new one.')}
+                        </p>
+                      )}
+
                       {/* Order Actions */}
                       {(hasStripeReceipt(record) ||
                         (isAdmin && record.status === 'pending')) && (
