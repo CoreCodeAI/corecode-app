@@ -75,11 +75,17 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Console'), href: '/dashboard' })
   }
 
-  // Pricing
+  // Pricing. /pricing/ is a static page like /status/ below, not a route in the
+  // console (the route there only hands a client-side visit over to it).
   const pricing = modules?.pricing
   if (pricing && typeof pricing === 'object' && pricing.enabled) {
     const requiresAuth = pricing.requireAuth && !isAuthed
-    links.push({ title: t('Model Pricing'), href: '/pricing', requiresAuth })
+    links.push({
+      title: t('Model Pricing'),
+      href: '/pricing/',
+      requiresAuth,
+      external: true,
+    })
   }
 
   // Service status. /status/ is a static page beside the console, not a route

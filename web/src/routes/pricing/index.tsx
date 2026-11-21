@@ -20,6 +20,8 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
 import z from 'zod'
 
 import { Pricing } from '@/features/pricing'
+import { StaticPricingHandOff } from '@/features/pricing/components/static-pricing-hand-off'
+import { staticPricingServes } from '@/features/pricing/lib/static-pricing'
 import { getModuleAccessForGuard } from '@/lib/nav-modules'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -57,5 +59,11 @@ export const Route = createFileRoute('/pricing/')({
       }
     }
   },
-  component: Pricing,
+  component: PricingRoute,
 })
+
+// The price list is a static page on corecode.live; see lib/static-pricing.ts.
+function PricingRoute() {
+  if (staticPricingServes()) return <StaticPricingHandOff />
+  return <Pricing />
+}
