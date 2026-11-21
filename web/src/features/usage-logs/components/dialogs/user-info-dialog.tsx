@@ -154,6 +154,16 @@ export function UserInfoDialog({
             )}
           </div>
 
+          {/* Remark: always shown, so an empty one reads as '-' */}
+          <div className='space-y-1.5'>
+            <Label className='text-muted-foreground text-xs'>
+              {t('Remark')}
+            </Label>
+            <div className='text-sm leading-relaxed font-semibold break-words whitespace-pre-wrap'>
+              {userInfo.remark?.trim() || '-'}
+            </div>
+          </div>
+
           {/* Balance Info */}
           <div className='grid grid-cols-2 gap-4'>
             <InfoItem
@@ -213,18 +223,6 @@ export function UserInfoDialog({
                 />
               )}
             </>
-          )}
-
-          {/* Remark */}
-          {userInfo.remark && (
-            <div className='space-y-1.5'>
-              <Label className='text-muted-foreground text-xs'>
-                {t('Remark')}
-              </Label>
-              <div className='text-sm leading-relaxed font-semibold break-words'>
-                {userInfo.remark}
-              </div>
-            </div>
           )}
 
           <InfoItem label={t('Inviter')} value={inviterName || '-'} />

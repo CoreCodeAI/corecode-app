@@ -78,9 +78,27 @@ async function renderGuide(keys: ApiKey[]) {
 }
 
 describe('ClientSetupGuide', () => {
-  it('shows the root base URL and a masked key, never the stored secret', async () => {
+  it('opens on Magpie and links to its site', async () => {
     await renderGuide([key({})])
 
+    expect(await screen.findByRole('tab', { name: 'Magpie' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    expect(screen.getByLabelText('Configuration snippet')).toHaveTextContent(
+      'magpie claude corecode/'
+    )
+    expect(screen.getByRole('link', { name: 'usemagpie.ai' })).toHaveAttribute(
+      'href',
+      'https://usemagpie.ai/'
+    )
+  })
+
+  it('shows the root base URL and a masked key, never the stored secret', async () => {
+    const user = userEvent.setup()
+    await renderGuide([key({})])
+
+    await user.click(await screen.findByRole('tab', { name: 'settings.json' }))
     const snippet = await screen.findByLabelText('Configuration snippet')
     expect(snippet).toHaveTextContent(
       '"ANTHROPIC_BASE_URL": "https://corecode.live"'
@@ -347,19 +365,22 @@ describe('ClientSetupGuide', () => {
       'aria-selected',
       'true'
     )
-    await user.click(screen.getByRole('tab', { name: 'config.toml' }))
-    expect(screen.getByLabelText('Configuration snippet')).toHaveTextContent(
-      'base_url = "https://corecode.live/v1"'
+    expect(screen.getByRole('tab', { name: 'Magpie' })).toHaveAttribute(
+      'aria-selected',
+      'true'
     )
-    expect(screen.getByText('codex exec "Reply with ok"')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('tab', { name: 'Magpie' }))
     expect(screen.getByLabelText('Configuration snippet')).toHaveTextContent(
       'magpie codex corecode/gpt-6.1-sol'
     )
     expect(
       screen.getByRole('button', { name: 'Add to Magpie' })
     ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'config.toml' }))
+    expect(screen.getByLabelText('Configuration snippet')).toHaveTextContent(
+      'base_url = "https://corecode.live/v1"'
+    )
+    expect(screen.getByText('codex exec "Reply with ok"')).toBeInTheDocument()
   })
 })
 

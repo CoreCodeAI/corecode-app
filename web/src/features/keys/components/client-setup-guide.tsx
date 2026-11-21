@@ -102,7 +102,7 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
   const { status } = useStatus()
   const { copyToClipboard } = useCopyToClipboard({ notify: false })
   const [client, setClient] = useState<SetupClient>('claude-code')
-  const [target, setTarget] = useState<ClientSetupTarget>('settings')
+  const [target, setTarget] = useState<ClientSetupTarget>('magpie')
   const [pickedKeyId, setPickedKeyId] = useState<number | null>(null)
   const [busy, setBusy] = useState<
     'copy' | 'key' | 'cc-switch' | 'magpie' | 'create' | null
@@ -371,6 +371,19 @@ export function ClientSetupGuide(props: ClientSetupGuideProps) {
 
       <p className='text-muted-foreground text-xs leading-relaxed text-pretty'>
         {getTargetHint(activeTarget, t)}
+        {activeTarget.endsWith('magpie') && (
+          <>
+            {' '}
+            <a
+              href='https://usemagpie.ai/'
+              target='_blank'
+              rel='noreferrer'
+              className='text-primary hover:underline'
+            >
+              usemagpie.ai
+            </a>
+          </>
+        )}
       </p>
 
       <div className='bg-muted/40 min-w-0 overflow-hidden rounded-xl border'>
