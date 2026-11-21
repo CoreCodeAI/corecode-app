@@ -56,7 +56,8 @@ function parseJsonArray(data: unknown): unknown[] {
   return []
 }
 
-function parsePaymentMethods(
+/** The wallet's methods from the server, with only the fields it reads */
+export function parsePaymentMethods(
   data: unknown,
   stripeMinTopup: number
 ): PaymentMethod[] {
@@ -84,6 +85,9 @@ function parsePaymentMethods(
           Number.isFinite(epayMaxMoney) && epayMaxMoney > 0
             ? epayMaxMoney
             : undefined,
+        // The on-chain deposit's extra bonus, read by its button and dialog.
+        bonus_rate:
+          typeof item.bonus_rate === 'string' ? item.bonus_rate : undefined,
       }
     })
     .filter((item) => item.name && item.type && item.type !== 'waffo')
