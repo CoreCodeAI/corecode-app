@@ -21,6 +21,12 @@ import { useTranslation } from 'react-i18next'
 
 import { Skeleton } from '@/components/ui/skeleton'
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
   getCacheGrade,
   type CacheGrade,
 } from '@/features/usage-logs/lib/cost-check'
@@ -136,14 +142,28 @@ export function UsageHighlights(props: {
         }
         badge={
           gradeStyle && (
-            <span
-              className={cn(
-                'rounded-full px-1.5 py-px text-[11px] font-medium',
-                gradeStyle.className
-              )}
-            >
-              {t(gradeStyle.labelKey)}
-            </span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      className={cn(
+                        'cursor-help rounded-full px-1.5 py-px text-[11px] font-medium',
+                        gradeStyle.className
+                      )}
+                      tabIndex={0}
+                    >
+                      {t(gradeStyle.labelKey)}
+                    </span>
+                  }
+                />
+                <TooltipContent className='max-w-64'>
+                  {t(
+                    'Grades by cache hit rate: 80% and above is good, 50% to 80% is fair, below 50% is low.'
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )
         }
         note={noRecent ? t('No requests yet') : sampleNote}

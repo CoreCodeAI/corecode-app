@@ -30,6 +30,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import {
   afterAll,
   afterEach,
@@ -138,6 +139,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  localStorage.clear()
   client.clear()
   vi.restoreAllMocks()
   useAuthStore.setState(useAuthStore.getInitialState(), true)
@@ -201,6 +203,56 @@ describe('customer overview', () => {
   })
 
   it('warns about a long request that missed the cache', async () => {
+    missedLog = consumeLog(3, { claude: true, cache_creation_tokens: 286_000 })
+    await renderOverview()
+
+    expect(
+      await screen.findByText(/long requests missed the cache/)
+    ).toBeVisible()
+  })
+
+  it('points the cache warning at the docs and at the requests behind it', async () => {
+    missedLog = {
+      ...consumeLog(3, { claude: true, cache_creation_tokens: 286_000 }),
+      is_stream: true,
+    } as ReturnType<typeof consumeLog>
+    await renderOverview()
+
+    await screen.findByText(/long requests missed the cache/)
+    expect(
+      screen.getByText(/pausing longer than the cache lasts/)
+    ).toBeVisible()
+    expect(screen.getByRole('link', { name: 'How to avoid' })).toHaveAttribute(
+      'href',
+      '/docs/cache/'
+    )
+    const view = screen.getByText(/View these 1/).closest('a')
+    expect(view).not.toBeNull()
+    expect(view?.getAttribute('href')).toContain('/usage-logs/common')
+    expect(view?.getAttribute('href')).toContain('cacheMiss=true')
+  })
+
+  it('hides the cache warning for a day after it is dismissed', async () => {
+    const user = userEvent.setup()
+    missedLog = consumeLog(3, { claude: true, cache_creation_tokens: 286_000 })
+    const first = await renderOverview()
+
+    await screen.findByText(/long requests missed the cache/)
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }))
+    expect(screen.queryByText(/long requests missed the cache/)).toBeNull()
+
+    first.unmount()
+    client.clear()
+    await renderOverview()
+    await screen.findByRole('heading', { name: 'Balance' })
+    expect(screen.queryByText(/long requests missed the cache/)).toBeNull()
+  })
+
+  it('shows the cache warning again once the dismissal is a day old', async () => {
+    localStorage.setItem(
+      'overview:cache-banner-dismissed-at',
+      String(Date.now() - 25 * 60 * 60 * 1000)
+    )
     missedLog = consumeLog(3, { claude: true, cache_creation_tokens: 286_000 })
     await renderOverview()
 

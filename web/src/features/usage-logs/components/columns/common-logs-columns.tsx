@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { ColumnDef } from '@tanstack/react-table'
-import { GitBranch, Sparkles, KeyRound } from 'lucide-react'
+import { ChevronRight, GitBranch, Sparkles, KeyRound } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -62,6 +62,7 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { LOG_TYPE_ALL_VALUE } from '../../constants'
 import type { UsageLog } from '../../data/schema'
+import { getCacheBadge, getZeroOutputReason } from '../../lib/bill-explain'
 import {
   buildCostCheck,
   getCacheGrade,
@@ -870,6 +871,8 @@ export function useCommonLogsColumns(
               other={other}
               showBillingSource={showBillingSource}
               verified={buildCostCheck(log, other)?.status === 'match'}
+              zeroOutput={getZeroOutputReason(log, other)}
+              cacheBadge={isAdmin ? null : getCacheBadge(log, other)}
             />
           )
         },
@@ -958,6 +961,17 @@ export function useCommonLogsColumns(
             detailPreview = (
               <span className='text-muted-foreground truncate group-hover:underline'>
                 {renderLogContent(other, t, planTextReader(t)) ?? log.content}
+              </span>
+            )
+          }
+
+          // A customer opens a charge to see how it was priced, so the entry
+          // says so instead of previewing the first detail.
+          if (!isAdmin && log.type === 2 && !isViolationFeeLog(other)) {
+            detailPreview = (
+              <span className='text-primary inline-flex items-center gap-0.5 group-hover:underline'>
+                {t('View billing details')}
+                <ChevronRight className='size-3.5 max-sm:hidden' aria-hidden />
               </span>
             )
           }

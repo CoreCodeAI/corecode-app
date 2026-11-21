@@ -494,6 +494,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if adminRejectReason != "" {
 		other.SetAdmin("reject_reason", adminRejectReason)
 	}
+	appendUpstreamRefusalForLog(ctx, other)
 	if summary.ImageTokens != 0 {
 		other.SetPublic("image", true)
 		other.SetPublic("image_ratio", summary.ImageRatio)
@@ -562,4 +563,18 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		PromptIncludesCache: promptIncludesCache,
 	})
 	relayInfo.PerformanceOutputTokens = int64(summary.CompletionTokens)
+}
+
+// appendUpstreamRefusalForLog tells the log owner the upstream refused this
+// request under its usage policy. The reject reason stays admin-only; this is
+// the customer-facing part, so the console can explain why a request that
+// produced no output was still charged for its input and cache writes.
+func appendUpstreamRefusalForLog(ctx *gin.Context, other *model.LogOther) {
+	if other == nil || !common.GetContextKeyBool(ctx, constant.ContextKeyUpstreamRefusal) {
+		return
+	}
+	other.SetPublic("upstream_refusal", true)
+	if category := common.GetContextKeyString(ctx, constant.ContextKeyUpstreamRefusalCategory); category != "" {
+		other.SetPublic("upstream_refusal_category", category[:min(len(category), 64)])
+	}
 }

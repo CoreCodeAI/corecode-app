@@ -22,7 +22,8 @@ For commercial licensing, please contact support@quantumnous.com
  * long requests that paid to rewrite their whole context into the cache.
  */
 import { Link } from '@tanstack/react-router'
-import { ArrowRight, DatabaseZap, WalletCards } from 'lucide-react'
+import { ArrowRight, DatabaseZap, WalletCards, X } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -31,7 +32,23 @@ import { formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import type { BalanceHealth } from '../../hooks/use-balance-status'
-import type { RecentUsageSummary } from '../../lib/customer-overview'
+import {
+  isDismissedWithin,
+  type RecentUsageSummary,
+} from '../../lib/customer-overview'
+
+const DISMISS_KEY = 'overview:cache-banner-dismissed-at'
+
+function readDismissed(): boolean {
+  try {
+    return isDismissedWithin(
+      Number(localStorage.getItem(DISMISS_KEY)) || null,
+      Date.now()
+    )
+  } catch {
+    return false
+  }
+}
 
 export function OverviewAlerts(props: {
   balanceHealth: BalanceHealth
@@ -44,7 +61,8 @@ export function OverviewAlerts(props: {
   const lowBalance =
     (props.balanceHealth === 'low' || props.balanceHealth === 'empty') &&
     !props.firstRun
-  const misses = props.recent.costlyMisses
+  const [dismissed, setDismissed] = useState(readDismissed)
+  const misses = dismissed ? 0 : props.recent.costlyMisses
   // Mostly non-streaming misses point at auto mode's classifier rather than
   // the session-level causes listed by default.
   const mostlyNonStream = props.recent.nonStreamMisses * 2 > misses
@@ -107,36 +125,58 @@ export function OverviewAlerts(props: {
                     { count: props.recent.requests }
                   )
                 : t(
-                    'Among the last {{count}} requests. A long context that misses the cache is written again at full price. Usual causes: a new session or switching models mid-session.',
+                    'Among the last {{count}} requests. A long context that misses the cache is written again at full price. Usual causes: a new session, switching models mid-session, or pausing longer than the cache lasts before continuing.',
                     { count: props.recent.requests }
-                  )}
-              {mostlyNonStream && (
-                <>
-                  {' '}
-                  <a
-                    href='/docs/cache/#auto-mode'
-                    target='_blank'
-                    rel='noopener noreferrer'
-                    className='underline underline-offset-2'
-                  >
-                    {t('Learn more')}
-                  </a>
-                </>
-              )}
+                  )}{' '}
+              <a
+                href={
+                  mostlyNonStream ? '/docs/cache/#auto-mode' : '/docs/cache/'
+                }
+                target='_blank'
+                rel='noopener noreferrer'
+                className='underline underline-offset-2'
+              >
+                {mostlyNonStream ? t('Learn more') : t('How to avoid')}
+              </a>
             </span>
-            <Button
-              variant='outline'
-              size='sm'
-              render={
-                <Link
-                  to='/usage-logs/$section'
-                  params={{ section: 'common' }}
-                />
-              }
-            >
-              {t('Usage Logs')}
-              <ArrowRight data-icon='inline-end' />
-            </Button>
+            <span className='flex items-center gap-2'>
+              <Button
+                variant='outline'
+                size='sm'
+                render={
+                  <Link
+                    to='/usage-logs/$section'
+                    params={{ section: 'common' }}
+                    search={{
+                      type: ['2'],
+                      pageSize: 100,
+                      cacheMiss: true,
+                      ...(props.recent.oldestAt
+                        ? { startTime: props.recent.oldestAt * 1000 }
+                        : {}),
+                    }}
+                  />
+                }
+              >
+                {t('View these {{count}}', { count: misses })}
+                <ArrowRight data-icon='inline-end' />
+              </Button>
+              <Button
+                variant='ghost'
+                size='icon-sm'
+                aria-label={t('Dismiss')}
+                onClick={() => {
+                  try {
+                    localStorage.setItem(DISMISS_KEY, String(Date.now()))
+                  } catch {
+                    // Storage is blocked: hide it for this visit only.
+                  }
+                  setDismissed(true)
+                }}
+              >
+                <X />
+              </Button>
+            </span>
           </AlertDescription>
         </Alert>
       )}

@@ -25,6 +25,7 @@ import {
   bucketDailySpend,
   estimateRunwayDays,
   getDailyCacheHitRate,
+  isDismissedWithin,
   summarizeRecentLogs,
 } from '../customer-overview'
 
@@ -123,7 +124,19 @@ describe('summarizeRecentLogs', () => {
       costlyMisses: 0,
       costlyMissQuota: 0,
       nonStreamMisses: 0,
+      oldestAt: null,
     })
+  })
+
+  test('reports when the oldest counted request was made', () => {
+    const summary = summarizeRecentLogs([
+      { ...log({ prompt_tokens: 10 }), created_at: 300 },
+      { ...log({ prompt_tokens: 10 }), created_at: 100 },
+      { ...log({ prompt_tokens: 10 }), created_at: 200 },
+      // Not a consume log: it does not move the start of the range.
+      { ...log({ prompt_tokens: 10 }), created_at: 50, type: 5 },
+    ])
+    expect(summary.oldestAt).toBe(100)
   })
 
   test('survives a malformed other field', () => {
@@ -253,5 +266,20 @@ describe('cache figures', () => {
       cacheReadTokens: 800,
       cacheWriteTokens: 200,
     })
+  })
+})
+
+describe('isDismissedWithin', () => {
+  const hour = 60 * 60 * 1000
+
+  test('hides for 24 hours after the stamp, then shows again', () => {
+    expect(isDismissedWithin(1_000_000, 1_000_000 + 23 * hour)).toBe(true)
+    expect(isDismissedWithin(1_000_000, 1_000_000 + 24 * hour)).toBe(false)
+  })
+
+  test('ignores a missing, invalid or future stamp', () => {
+    expect(isDismissedWithin(null, 5)).toBe(false)
+    expect(isDismissedWithin(Number.NaN, 5)).toBe(false)
+    expect(isDismissedWithin(10, 5)).toBe(false)
   })
 })

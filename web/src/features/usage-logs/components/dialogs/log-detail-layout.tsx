@@ -83,3 +83,24 @@ export function DetailSection(props: {
     </div>
   )
 }
+
+/**
+ * A fold for the records support and administrators read: request
+ * conversion, policy decisions and processing steps. A native details element
+ * keeps the content in the page and needs no state.
+ */
+export function TechnicalDetails(props: {
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <details className='min-w-0'>
+      <summary className='text-muted-foreground hover:text-foreground cursor-pointer text-xs font-semibold select-none'>
+        {props.label}
+      </summary>
+      <div className='min-w-0 space-y-2.5 pt-1.5 sm:space-y-3'>
+        {props.children}
+      </div>
+    </details>
+  )
+}

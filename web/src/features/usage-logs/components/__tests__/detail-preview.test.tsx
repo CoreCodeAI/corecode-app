@@ -48,7 +48,11 @@ vi.hoisted(() => {
 })
 afterAll(() => vi.unstubAllGlobals())
 
-function makeLog(other: LogOtherData, type = 2): UsageLog {
+function makeLog(
+  other: LogOtherData,
+  type = 2,
+  fields: Partial<UsageLog> = {}
+): UsageLog {
   return {
     id: 1,
     user_id: 1,
@@ -71,6 +75,7 @@ function makeLog(other: LogOtherData, type = 2): UsageLog {
     other: JSON.stringify(other),
     request_id: 'req-1',
     upstream_request_id: '',
+    ...fields,
   }
 }
 
@@ -78,9 +83,10 @@ function DetailPreview(props: {
   other: LogOtherData
   isAdmin: boolean
   type?: number
+  fields?: Partial<UsageLog>
 }) {
   const table = useReactTable({
-    data: [makeLog(props.other, props.type)],
+    data: [makeLog(props.other, props.type, props.fields)],
     columns: useCommonLogsColumns(props.isAdmin, false),
     getCoreRowModel: getCoreRowModel(),
   })
@@ -334,10 +340,16 @@ test.each([true, false])(
       { model_price: 0.25, admin_info: { task_plugin: plugin } },
       isAdmin
     )
-    expect(preview.textContent).toBe('Per-call · $0.25')
+    // A customer's entry says where it leads; an administrator's previews the
+    // first detail.
+    expect(preview.textContent).toBe(
+      isAdmin ? 'Per-call · $0.25' : 'View billing details'
+    )
     fireEvent.click(preview)
     const dialog = within(await screen.findByRole('dialog'))
     if (isAdmin) {
+      // Administrator records sit in the folded technical details.
+      fireEvent.click(dialog.getByText('Technical details'))
       expect(dialog.getByText('Incho')).toBeVisible()
       expect(dialog.getByText('1.0.1')).toBeVisible()
       expect(dialog.getByText('Plugin maintainer')).toBeVisible()
@@ -531,4 +543,80 @@ test('keeps a tier name the billing expression made up', () => {
     expr_b64: btoa('tier("night_rate", p * 0.1 + c * 0.5)'),
   })
   expect(preview.textContent).toMatch(/^night_rate · \$/)
+})
+
+const cachedClaude: LogOtherData = {
+  claude: true,
+  model_ratio: 2,
+  group_ratio: 1.5,
+  completion_ratio: 5,
+  cache_ratio: 0.1,
+  cache_creation_ratio: 2,
+  cache_creation_ratio_1h: 2,
+  cache_tokens: 80_000,
+  cache_creation_tokens: 5000,
+  cache_creation_tokens_1h: 5000,
+}
+
+function openBill(
+  other: LogOtherData,
+  fields: Partial<UsageLog>,
+  isAdmin = false
+) {
+  render(
+    <I18nextProvider i18n={i18n}>
+      <QueryClientProvider client={client}>
+        <DetailPreview other={other} isAdmin={isAdmin} fields={fields} />
+      </QueryClientProvider>
+    </I18nextProvider>
+  )
+  fireEvent.click(screen.getByRole('button', { name: /./ }))
+}
+
+test('a customer opens the bill with the explanation first and the diagnostics folded', async () => {
+  openBill(
+    { ...cachedClaude, admin_info: undefined, request_conversion: ['a', 'b'] },
+    {
+      model_name: 'claude-opus-5-5',
+      prompt_tokens: 100,
+      completion_tokens: 200,
+      quota: 1,
+    }
+  )
+
+  const dialog = await screen.findByRole('dialog')
+  const summary = within(dialog).getByText('Why this price')
+  const [check] = within(dialog).getAllByText('Cost check')
+  const [request] = within(dialog).getAllByText('Request ID')
+  expect(
+    summary.compareDocumentPosition(check) & Node.DOCUMENT_POSITION_FOLLOWING
+  ).toBeTruthy()
+  expect(
+    check.compareDocumentPosition(request) & Node.DOCUMENT_POSITION_FOLLOWING
+  ).toBeTruthy()
+  expect(
+    within(dialog).getByText('Technical details').closest('details')
+  ).not.toHaveAttribute('open')
+})
+
+test('the bill of a refused request names the refusal and not the general causes', async () => {
+  openBill(
+    {
+      claude: true,
+      model_ratio: 2,
+      group_ratio: 1,
+      completion_ratio: 5,
+      cache_creation_tokens: 4000,
+      upstream_refusal: true,
+      upstream_refusal_category: 'cyber',
+    },
+    { model_name: 'claude-opus-5-5', prompt_tokens: 100, quota: 1 }
+  )
+
+  const dialog = await screen.findByRole('dialog')
+  expect(
+    within(dialog).getByText(/Refused by Anthropic's safety policy/)
+  ).toHaveTextContent('category: cybersecurity')
+  expect(within(dialog).queryByText(/client disconnected/)).toBeNull()
+  expect(within(dialog).getAllByText('Output').length).toBeGreaterThan(0)
 })

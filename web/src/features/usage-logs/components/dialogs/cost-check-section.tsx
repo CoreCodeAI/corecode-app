@@ -49,6 +49,8 @@ export function CostCheckSection(props: { check: CostCheck }) {
   const groupRatio = Intl.NumberFormat(locale, {
     maximumFractionDigits: 4,
   }).format(check.groupRatio)
+  // A ratio of 1 leaves nothing to multiply: the base price is the price.
+  const hasRatio = check.groupRatio !== 1 && check.groupRatio > 0
 
   return (
     <DetailSection label={t('Cost check')}>
@@ -79,8 +81,17 @@ export function CostCheckSection(props: { check: CostCheck }) {
               <td className='text-right'>
                 {line.tokens.toLocaleString(locale)}
               </td>
-              <td className='text-muted-foreground text-right'>
+              <td className='text-right'>
                 {formatBillingCurrencyFromUSD(line.unitPriceUSD, PRICE_OPTIONS)}
+                {hasRatio && (
+                  <span className='text-muted-foreground block text-[11px]'>
+                    {formatBillingCurrencyFromUSD(
+                      line.unitPriceUSD / check.groupRatio,
+                      PRICE_OPTIONS
+                    )}{' '}
+                    × {groupRatio}
+                  </span>
+                )}
               </td>
               <td className='text-right'>{formatLogQuota(line.subtotal)}</td>
             </tr>
@@ -112,6 +123,13 @@ export function CostCheckSection(props: { check: CostCheck }) {
         </tfoot>
       </table>
 
+      {hasRatio && (
+        <p className='text-muted-foreground pt-1 text-xs'>
+          {t('Price = base price × group ratio ({{ratio}}×)', {
+            ratio: groupRatio,
+          })}
+        </p>
+      )}
       <p
         className={cn(
           'flex items-start gap-1.5 pt-1 text-xs',
@@ -125,12 +143,7 @@ export function CostCheckSection(props: { check: CostCheck }) {
         )}
         <span>
           {matched
-            ? t(
-                'Matches the listed prices. Unit prices include the {{ratio}}x group ratio.',
-                {
-                  ratio: groupRatio,
-                }
-              )
+            ? t('Matches the listed prices')
             : t(
                 'Differs by {{amount}}: the charge includes items this breakdown does not list, such as tool calls.',
                 {

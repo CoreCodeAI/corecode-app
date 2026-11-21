@@ -137,8 +137,15 @@ test('splits OpenAI cache writes into 30-minute and 12-hour rows with their pric
   expect(rowValue('Cache Write (30m)')).toBe('500')
   expect(rowValue('Cache Write (12h)')).toBe('1,000')
   expect(detailRow('Cache Write')).toBeNull()
-  expect(rowValue('Cache Creation (30m)')).toBe('$12.5/M')
-  expect(rowValue('Cache Creation (12h)')).toBe('$25/M')
+  // The merged cost check carries the unit prices: the cache write price
+  // after the group ratio, and the 12-hour write price.
+  expect(rowValue('Cache Creation (30m)')).toBeNull()
+  expect(
+    screen.getByRole('row', { name: /^Cache Write\s+500/ })
+  ).toHaveTextContent('$12.5')
+  expect(
+    screen.getByRole('row', { name: /^Cache Write \(12h\)/ })
+  ).toHaveTextContent('$25')
   queryClient.clear()
 })
 

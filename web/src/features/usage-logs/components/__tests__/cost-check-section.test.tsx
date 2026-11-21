@@ -53,12 +53,45 @@ describe('CostCheckSection', () => {
     )
   })
 
-  it('confirms a charge that matches and names the group ratio', () => {
+  it('confirms a charge that matches and shows the price as base × group ratio', () => {
     render(<CostCheckSection check={check({})} />)
 
-    expect(screen.getByText(/^Matches the listed prices/)).toHaveTextContent(
-      '1.5x group ratio'
+    expect(screen.getByText('Matches the listed prices')).toBeInTheDocument()
+    expect(
+      screen.getByText('Price = base price × group ratio (1.5×)')
+    ).toBeInTheDocument()
+    // The paid unit price and the base price it comes from share one cell.
+    const input = screen.getByRole('row', { name: /Input/ })
+    expect(input).toHaveTextContent('$6')
+    expect(input).toHaveTextContent('$4 × 1.5')
+  })
+
+  it('leaves out the ratio formula when the group ratio is 1', () => {
+    render(<CostCheckSection check={check({ groupRatio: 1 })} />)
+
+    expect(screen.queryByText(/^Price = base price/)).not.toBeInTheDocument()
+    expect(screen.getByRole('row', { name: /Input/ })).not.toHaveTextContent(
+      '×'
     )
+  })
+
+  it('shows an empty output as 0 tokens at $0', () => {
+    render(
+      <CostCheckSection
+        check={check({
+          lines: [
+            { kind: 'input', tokens: 1758, unitPriceUSD: 6, subtotal: 5274 },
+            { kind: 'output', tokens: 0, unitPriceUSD: 30, subtotal: 0 },
+          ],
+          expected: 5274,
+          actual: 5274,
+        })}
+      />
+    )
+
+    const output = screen.getByRole('row', { name: /Output/ })
+    expect(output).toHaveTextContent('0')
+    expect(output.querySelectorAll('td')[2]).toHaveTextContent('$0')
   })
 
   it('explains a charge that the lines do not add up to', () => {
@@ -68,7 +101,7 @@ describe('CostCheckSection', () => {
 
     expect(screen.getByText(/^Differs by/)).toBeInTheDocument()
     expect(
-      screen.queryByText(/^Matches the listed prices/)
+      screen.queryByText('Matches the listed prices')
     ).not.toBeInTheDocument()
   })
 })

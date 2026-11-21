@@ -31,6 +31,7 @@ import { getLobeIcon } from '@/lib/lobe-icon'
 import { resolveModelProvider } from '@/lib/model-provider'
 import { cn } from '@/lib/utils'
 
+import { getBilledModel, isClaudeFallback } from '../lib/bill-explain'
 import { isResponseModelMismatch } from '../lib/response-model'
 import type { LogOtherData } from '../types'
 import { DetailRow } from './dialogs/log-detail-layout'
@@ -93,12 +94,14 @@ function ModelBadgeContent(props: ModelBadgeProps & { copyable: boolean }) {
 export function ModelBadge(props: ModelBadgeProps) {
   const { t } = useTranslation()
   const mismatch = isResponseModelMismatch(props.responseModel)
-  const responseModelLabel =
-    mismatch && props.responseModel
-      ? t('Response model: {{model}}', {
-          model: props.responseModel.returned_model,
-        })
-      : ''
+  const fallback = isClaudeFallback(props.responseModel)
+  let responseModelLabel = ''
+  if (mismatch && props.responseModel) {
+    responseModelLabel = t(
+      fallback ? 'Fell back to {{model}}' : 'Response model: {{model}}',
+      { model: props.responseModel.returned_model }
+    )
+  }
   const modelLabel = `${t('Model')}: ${props.modelName}${responseModelLabel ? `, ${responseModelLabel}` : ''}`
   const hasDetails =
     !!props.actualModel ||
@@ -166,6 +169,8 @@ export function ModelBadge(props: ModelBadgeProps) {
   return (
     <Popover>
       <PopoverTrigger
+        openOnHover={mismatch}
+        delay={150}
         render={
           <Button
             variant='ghost'
@@ -209,34 +214,41 @@ export function ResponseModelDetails(props: {
 }) {
   const { t } = useTranslation()
   const mismatch = isResponseModelMismatch(props.observation)
+  const fallback = isClaudeFallback(props.observation)
+  const requested = props.observation.requested_model
+  const returned = props.observation.returned_model
 
   return (
     <div className='min-w-0 space-y-2'>
       {mismatch && (
         <StatusBadge
           icon={AlertTriangle}
-          label={t('Response model: {{model}}', {
-            model: props.observation.returned_model,
-          })}
+          label={t(
+            fallback ? 'Fell back to {{model}}' : 'Response model: {{model}}',
+            { model: returned }
+          )}
           variant='warning'
           copyable={false}
           className='h-auto whitespace-normal'
         />
       )}
+      <DetailRow
+        label={t('Request → response → billed')}
+        value={`${requested} → ${returned} → ${getBilledModel(props.observation)}`}
+        mono
+      />
       {[
         {
           label: t('Request Model'),
-          value: props.observation.requested_model,
+          value: requested,
         },
         {
           label: t('Upstream Model'),
-          value:
-            props.observation.upstream_model ||
-            props.observation.requested_model,
+          value: props.observation.upstream_model || requested,
         },
         {
           label: t('Response Model'),
-          value: props.observation.returned_model,
+          value: returned,
         },
       ].map((model) => (
         <DetailRow
@@ -258,7 +270,31 @@ export function ResponseModelDetails(props: {
           mono
         />
       ))}
-      {mismatch && (
+      {fallback && (
+        <div className='text-muted-foreground space-y-1 text-xs'>
+          <p>
+            {t(
+              "The answer came from {{returned}}, not the {{requested}} you asked for. Anthropic's safety check can send a request, and then the rest of that conversation for about an hour, to another model. CoreCode did not change the model.",
+              { returned, requested }
+            )}
+          </p>
+          <p>
+            {t(
+              'Billed as {{requested}}, the model you asked for, not {{returned}}.',
+              { returned, requested }
+            )}{' '}
+            <a
+              href='/docs/fallback/'
+              target='_blank'
+              rel='noopener noreferrer'
+              className='underline underline-offset-2'
+            >
+              {t('Why this happens')}
+            </a>
+          </p>
+        </div>
+      )}
+      {mismatch && !fallback && (
         <p className='text-muted-foreground text-xs'>
           {t(
             'The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.'

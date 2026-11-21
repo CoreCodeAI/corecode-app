@@ -749,6 +749,33 @@ func TestAppendUsageBillingPathForLogWritesAdminInfo(t *testing.T) {
 	require.Equal(t, usageBillingPathLocal, adminInfo["usage_billing_path"])
 }
 
+func TestAppendUpstreamRefusalForLogIsCustomerVisible(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("refused with a category", func(t *testing.T) {
+		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+		common.SetContextKey(ctx, constant.ContextKeyUpstreamRefusal, true)
+		common.SetContextKey(ctx, constant.ContextKeyUpstreamRefusalCategory, "cyber")
+		other := model.NewLogOther()
+
+		appendUpstreamRefusalForLog(ctx, other)
+
+		fields := other.Snapshot()
+		require.Equal(t, true, fields["upstream_refusal"])
+		require.Equal(t, "cyber", fields["upstream_refusal_category"])
+		require.NotContains(t, fields, "admin_info", "the admin-only reject reason is not part of this field")
+	})
+
+	t.Run("not refused", func(t *testing.T) {
+		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+		other := model.NewLogOther()
+
+		appendUpstreamRefusalForLog(ctx, other)
+
+		require.NotContains(t, other.Snapshot(), "upstream_refusal")
+	})
+}
+
 func TestCacheWriteTokensTotal(t *testing.T) {
 	t.Run("split cache creation", func(t *testing.T) {
 		summary := textQuotaSummary{

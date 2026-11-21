@@ -59,6 +59,9 @@ const usageLogsSearchSchema = z.object({
   upstreamRequestId: z.string().optional().catch(''),
   startTime: z.number().optional(),
   endTime: z.number().optional(),
+  // Set by the overview's cache banner: keep only long requests that missed
+  // the cache, the ones it counted.
+  cacheMiss: z.boolean().optional().catch(undefined),
 })
 
 export const Route = createFileRoute('/_authenticated/usage-logs/$section')({

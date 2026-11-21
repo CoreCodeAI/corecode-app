@@ -42,6 +42,8 @@ export interface RecentUsageSummary {
   costlyMissQuota: number
   /** Costly misses that did not stream; see isNonStreamCacheMiss. */
   nonStreamMisses: number
+  /** Unix seconds of the oldest request counted; null without requests. */
+  oldestAt: number | null
 }
 
 /** Cache hit rate and first-token time over a set of request logs. */
@@ -54,10 +56,17 @@ export function summarizeRecentLogs(logs: UsageLog[]): RecentUsageSummary {
   let costlyMisses = 0
   let costlyMissQuota = 0
   let nonStreamMisses = 0
+  let oldestAt: number | null = null
 
   for (const log of logs) {
     if (log.type !== LOG_TYPE_CONSUME) continue
     requests++
+    if (
+      log.created_at > 0 &&
+      (oldestAt === null || log.created_at < oldestAt)
+    ) {
+      oldestAt = log.created_at
+    }
     const other = parseLogOther(log.other)
     const tokens = getInputCacheTokens(log, other)
     cacheRead += tokens.cacheRead
@@ -82,6 +91,7 @@ export function summarizeRecentLogs(logs: UsageLog[]): RecentUsageSummary {
     costlyMisses,
     costlyMissQuota,
     nonStreamMisses,
+    oldestAt,
   }
 }
 
@@ -166,4 +176,15 @@ export function estimateRunwayDays(
   const average =
     active.reduce((sum, item) => sum + item.quota, 0) / active.length
   return average > 0 ? balance / average : null
+}
+
+const BANNER_DISMISS_MS = 24 * 60 * 60 * 1000
+
+/** Whether a dismissal stamped at `dismissedAt` still hides its banner. */
+export function isDismissedWithin(
+  dismissedAt: number | null,
+  now: number
+): boolean {
+  if (dismissedAt == null || !Number.isFinite(dismissedAt)) return false
+  return now >= dismissedAt && now - dismissedAt < BANNER_DISMISS_MS
 }

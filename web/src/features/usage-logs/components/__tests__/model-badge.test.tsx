@@ -430,3 +430,62 @@ it.each([
     ).not.toBeInTheDocument()
   }
 )
+
+it('says a Claude fell back, shows the chain and what is billed, and links the docs', async () => {
+  const user = userEvent.setup()
+  render(
+    <ModelBadge
+      modelName='claude-opus-5-5'
+      responseModel={{
+        requested_model: 'claude-opus-5-5',
+        upstream_model: 'claude-opus-5-5',
+        returned_model: 'claude-opus-4-8',
+      }}
+    />
+  )
+
+  expect(screen.getByText('Fell back to claude-opus-4-8')).toBeVisible()
+  expect(screen.queryByText(/^Response model:/)).not.toBeInTheDocument()
+
+  await user.tab()
+  await user.keyboard('{Enter}')
+  expect(
+    await screen.findByText(
+      'claude-opus-5-5 → claude-opus-4-8 → claude-opus-5-5'
+    )
+  ).toBeVisible()
+  expect(
+    screen.getByText(/Billed as claude-opus-5-5, the model you asked for/)
+  ).toBeVisible()
+  expect(screen.getByText(/CoreCode did not change the model/)).toBeVisible()
+  expect(
+    screen.getByRole('link', { name: 'Why this happens' })
+  ).toHaveAttribute('href', '/docs/fallback/')
+  expect(
+    screen.queryByText(/does not prove model substitution/)
+  ).not.toBeInTheDocument()
+})
+
+it('keeps the hedged wording for a mismatch that is not a Claude fallback', async () => {
+  const user = userEvent.setup()
+  render(
+    <ModelBadge
+      modelName='gpt-5'
+      responseModel={{
+        requested_model: 'gpt-5',
+        upstream_model: 'gpt-5',
+        returned_model: 'something-else',
+      }}
+    />
+  )
+
+  expect(screen.getByText('Response model: something-else')).toBeVisible()
+  await user.tab()
+  await user.keyboard('{Enter}')
+  expect(
+    await screen.findByText(/does not prove model substitution/)
+  ).toBeVisible()
+  expect(
+    screen.queryByRole('link', { name: 'Why this happens' })
+  ).not.toBeInTheDocument()
+})

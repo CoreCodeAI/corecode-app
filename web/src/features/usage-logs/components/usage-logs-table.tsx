@@ -29,6 +29,7 @@ import {
   type DataTablePinnedColumn,
 } from '@/components/data-table'
 import { getResolvedColumnClassName } from '@/components/data-table/core/column-pinning'
+import { Button } from '@/components/ui/button'
 import {
   getAdminPlans,
   getSelfSubscriptionFull,
@@ -44,6 +45,8 @@ import {
   LOG_TYPE_ALL_VALUE,
   LOG_TYPE_ENUM,
 } from '../constants'
+import type { UsageLog } from '../data/schema'
+import { keepCostlyCacheMisses } from '../lib/bill-explain'
 import { shouldShowBillingSource } from '../lib/billing-source'
 import { useColumnsByCategory } from '../lib/columns'
 import { parseLogOther } from '../lib/format'
@@ -216,7 +219,15 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     },
   })
 
-  const logs = data?.items || []
+  // The overview banner counts long requests that missed the cache; the
+  // server has no such filter, so the page it links to narrows its rows.
+  const cacheMissOnly =
+    logCategory === 'common' && searchParams.cacheMiss === true
+  const logs = useMemo(() => {
+    const items = data?.items || []
+    return cacheMissOnly ? keepCostlyCacheMisses(items as UsageLog[]) : items
+  }, [data?.items, cacheMissOnly])
+  const navigate = route.useNavigate()
   const columns = useColumnsByCategory(
     logCategory,
     isAdmin,
@@ -240,7 +251,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     onColumnFiltersChange,
     manualPagination: true,
     manualFiltering: true,
-    totalCount: data?.total || 0,
+    totalCount: cacheMissOnly ? logs.length : data?.total || 0,
     ensurePageInRange,
   })
 
@@ -275,7 +286,27 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
       }
       toolbar={
         isCommon ? (
-          <CommonLogsFilterBar table={table} />
+          <>
+            {cacheMissOnly && (
+              <div className='text-muted-foreground flex flex-wrap items-center gap-2 text-sm'>
+                <span>
+                  {t('Showing only long requests that missed the cache')}
+                </span>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={() =>
+                    void navigate({
+                      search: (prev) => ({ ...prev, cacheMiss: undefined }),
+                    })
+                  }
+                >
+                  {t('Show all')}
+                </Button>
+              </div>
+            )}
+            <CommonLogsFilterBar table={table} />
+          </>
         ) : (
           <TaskLogsFilterBar table={table} logCategory={logCategory} />
         )
