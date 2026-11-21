@@ -26,6 +26,9 @@ func TestNewcomerPlanOnePerAddressDatabaseMatrix(t *testing.T) {
 		t.Run(dialect, func(t *testing.T) {
 			useAffiliateTestDB(t, dialect)
 			now := common.GetTimestamp()
+			previous := *operation_setting.GetLimitedPlanAddressSetting()
+			*operation_setting.GetLimitedPlanAddressSetting() = operation_setting.LimitedPlanAddressSetting{Enabled: true, Threshold: 2}
+			t.Cleanup(func() { *operation_setting.GetLimitedPlanAddressSetting() = previous })
 			newcomer := &SubscriptionPlan{Title: "newcomer", PriceAmount: 29.9, DurationUnit: SubscriptionDurationDay, DurationValue: 7, Enabled: true, MaxPurchasePerUser: 1}
 			unlimited := &SubscriptionPlan{Title: "monthly", PriceAmount: 99, DurationUnit: SubscriptionDurationDay, DurationValue: 30, Enabled: true}
 			for _, plan := range []*SubscriptionPlan{newcomer, unlimited} {
@@ -52,6 +55,14 @@ func TestNewcomerPlanOnePerAddressDatabaseMatrix(t *testing.T) {
 					"a sign-in, a request or an order of the first buyer from %s counts", ip)
 			}
 			assert.NoError(t, CheckSubscriptionPurchaseFrom(second.Id, newcomer, "198.51.100.8"), "another address")
+
+			// With the address limit off, a plan is limited per account only.
+			operation_setting.GetLimitedPlanAddressSetting().Enabled = false
+			for _, ip := range []string{"198.51.100.7", "203.0.113.9", "192.0.2.44"} {
+				assert.NoError(t, CheckSubscriptionPurchaseFrom(second.Id, newcomer, ip), "address limit off, %s", ip)
+			}
+			assert.Error(t, CheckSubscriptionPurchaseFrom(first.Id, newcomer, "198.51.100.8"), "the per-user limit still holds")
+			operation_setting.GetLimitedPlanAddressSetting().Enabled = true
 			assert.NoError(t, CheckSubscriptionPurchaseFrom(second.Id, unlimited, "198.51.100.7"), "a plan without a per-user limit")
 			assert.NoError(t, CheckSubscriptionPurchaseFrom(first.Id, unlimited, "198.51.100.7"))
 			assert.NoError(t, CheckSubscriptionPurchaseFrom(second.Id, newcomer, ""), "no address, no address limit")

@@ -293,16 +293,19 @@ func SharesAddress(a int, b int, now int64) (bool, error) {
 }
 
 // CheckSubscriptionPurchaseFrom is CheckSubscriptionPurchase for a purchase
-// opened from ip. The refusal asks the customer to contact support, who can
-// bind the plan from the console when the address is a household or office. A plan limited per user is also limited per address: it is
-// refused when another account that bought it in the last 30 days signed in,
-// ordered or sent requests from the same address, unless the address is a
-// shared exit.
+// opened from ip. While limited_plan_address_setting.enabled is on, a plan
+// limited per user is also limited per address: it is refused when another
+// account that bought it in the last 30 days signed in, ordered or sent
+// requests from the same address, unless the address is a shared exit, and
+// when the buyer's addresses carry the threshold of other holders
+// (checkLimitedPlanAddressFarm). The refusal asks the customer to contact
+// support, who can exempt the account from the console. With the setting off
+// the plan is limited per account only.
 func CheckSubscriptionPurchaseFrom(userId int, plan *SubscriptionPlan, ip string) error {
 	if err := CheckSubscriptionPurchase(userId, plan); err != nil {
 		return err
 	}
-	if plan.MaxPurchasePerUser <= 0 {
+	if plan.MaxPurchasePerUser <= 0 || !operation_setting.GetLimitedPlanAddressSetting().Enabled {
 		return nil
 	}
 	if ip != "" {
@@ -350,9 +353,6 @@ func checkSharedAddressOfBuyer(userId int, plan *SubscriptionPlan, ip string) er
 // all send requests, and twenty of them would pass for a proxy node.
 func checkLimitedPlanAddressFarm(userId int, plan *SubscriptionPlan, ip string) error {
 	setting := operation_setting.GetLimitedPlanAddressSetting()
-	if !setting.Enabled {
-		return nil
-	}
 	exempt, err := subscriptionAddressExempt(userId)
 	if err != nil || exempt {
 		return err
