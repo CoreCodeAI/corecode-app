@@ -23,7 +23,7 @@ import {
   chainDepositSteps,
   chainDepositTokenUrl,
   chainDepositTxUrl,
-  shownChainDepositTransfers,
+  shownChainDepositTransfer,
   splitDepositAddress,
   usableChainDepositNetworks,
 } from './chain-deposit'
@@ -70,7 +70,7 @@ describe('chain deposit helpers', () => {
     expect(chainDepositSteps('credited')).toEqual(['done', 'done', 'done'])
   })
 
-  test('follows open transfers and credits of the last half hour', () => {
+  test('follows only the newest transfer, while open or credited in the last half hour', () => {
     const now = 1_800_000_000
     const transfer = (
       stage: ChainDepositTransfer['stage'],
@@ -87,11 +87,11 @@ describe('chain deposit helpers', () => {
     const recent = transfer('credited', 60)
     const old = transfer('credited', 31 * 60)
     const open = transfer('confirming', 2 * 3600)
-    expect(shownChainDepositTransfers([recent, old, open], now)).toEqual([
-      recent,
-      open,
-    ])
-    expect(shownChainDepositTransfers(undefined, now)).toEqual([])
+    expect(shownChainDepositTransfer([open, recent, old], now)).toBe(recent)
+    // An older open transfer does not come back once a newer one is done.
+    expect(shownChainDepositTransfer([old, open], now)).toBeNull()
+    expect(shownChainDepositTransfer([open], now)).toBe(open)
+    expect(shownChainDepositTransfer(undefined, now)).toBeNull()
   })
 
   test('splits an address into its first and last six characters', () => {

@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { TFunction } from 'i18next'
 
 import { PAYMENT_TYPES } from '../constants'
+import { bonusRateToPercent } from './bonus'
 
 // Kept out of ./index: the overview imports that barrel, and the locale split
 // would then ship these keys in the overview's first load.
@@ -59,11 +60,20 @@ const PAYMENT_METHOD_HINT_KEYS: Readonly<Record<string, string>> = {
 }
 
 export function paymentMethodHint(
-  method: { type: string } | null | undefined,
+  method: { type: string; bonus_rate?: string } | null | undefined,
   t: TFunction,
   earnsBonus: boolean
 ): string | null {
   if (!method) return null
+  // The on-chain deposit's own bonus is what sets it apart.
+  if (method.type === PAYMENT_TYPES.CHAIN_DEPOSIT) {
+    const rate = Number(method.bonus_rate)
+    return rate > 0
+      ? t('Extra {{percent}}% bonus, credited in about a minute', {
+          percent: bonusRateToPercent(rate),
+        })
+      : null
+  }
   const key = PAYMENT_METHOD_HINT_KEYS[method.type]
   if (key) return t(key)
   // Creem and Waffo orders never earn the top-up bonus.

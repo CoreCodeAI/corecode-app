@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"math"
 	"net/http"
@@ -106,13 +107,19 @@ func (s *chainDepositStub) handle(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/v1/feed":
 		after, _ := strconv.ParseInt(r.URL.Query().Get("after"), 10, 64)
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		// A "dropped" item is a total the service cannot describe: it
+		// fills its place on the page and moves next, but is not sent.
 		var page []map[string]any
 		next := after
+		read := 0
 		for _, item := range s.items {
 			seq := int64(item["seq"].(int))
-			if seq > after && len(page) < limit {
-				page = append(page, item)
+			if seq > after && read < limit {
+				read++
 				next = seq
+				if item["kind"] != "dropped" {
+					page = append(page, item)
+				}
 			}
 		}
 		if page == nil {
@@ -206,6 +213,10 @@ func setupChainDeposit(t *testing.T) (*chainDepositStub, *feishuRecorder, *gorm.
 	model.LOG_DB = db
 	common.SetLogDatabaseType(common.MainDatabaseType())
 
+	// Most tests read the tiers alone; the on-chain bonus has its own tests.
+	chainBonus := setting.ChainDepositBonusRate
+	setting.ChainDepositBonusRate = 0
+	t.Cleanup(func() { setting.ChainDepositBonusRate = chainBonus })
 	passAfterCheck := chainDepositPassAfterCheck
 	chainDepositPassAfterCheck = func() { _ = RunChainDepositPass(context.Background()) }
 	t.Cleanup(func() { chainDepositPassAfterCheck = passAfterCheck })
@@ -579,6 +590,148 @@ func TestChainDepositUnknownTokenAndUnknownUserAlertWithoutBlocking(t *testing.T
 	assert.Equal(t, 2*500000, chainDepositQuota(t, db, user.Id), "USDC.e is credited like USDC")
 }
 
+func TestChainDepositRefusesTotalsOutsideTheMainnetTokens(t *testing.T) {
+	stub, feishu, db := setupChainDeposit(t)
+	user := chainDepositTestUser(t, db, "chain_allow_list", common.RoleCommonUser)
+	stub.setItems(
+		// BSC's USDT has 18 decimals: read at 6 it would be a trillion times more.
+		chainTotal(1, user.Id, "bsc", "USDT", 6, "5000000"),
+		chainTotal(2, user.Id, "bsc-testnet", "USDT", 18, "5000000000000000000"),
+		chainTotal(3, user.Id, "arbitrum", "USDT", 6, "5000000"),
+		chainTotal(4, user.Id, "bsc", "USDT", 18, "2000000000000000000"),
+	)
+	require.NoError(t, RunChainDepositPass(context.Background()))
+	assert.Equal(t, 3, feishu.count("无法处理的累计数据"))
+	assert.Equal(t, 2*500000, chainDepositQuota(t, db, user.Id), "only the mainnet total is credited")
+}
+
+func TestChainDepositPassMovesPastAPageOfDroppedTotals(t *testing.T) {
+	stub, _, db := setupChainDeposit(t)
+	user := chainDepositTestUser(t, db, "chain_dropped", common.RoleCommonUser)
+	items := make([]map[string]any, 0, chainDepositFeedLimit+1)
+	for seq := 1; seq <= chainDepositFeedLimit; seq++ {
+		items = append(items, map[string]any{"seq": seq, "kind": "dropped"})
+	}
+	items = append(items, chainTotal(chainDepositFeedLimit+1, user.Id, "bsc", "USDT", 18, "5000000000000000000"))
+	stub.setItems(items...)
+
+	require.NoError(t, RunChainDepositPass(context.Background()))
+	assert.Equal(t, 5*500000, chainDepositQuota(t, db, user.Id), "the total after a full page of dropped ones is credited")
+	cursor, err := model.GetChainDepositCursor()
+	require.NoError(t, err)
+	assert.EqualValues(t, chainDepositFeedLimit+1, cursor)
+}
+
+func TestChainDepositRepeatedPassFailuresAlertOnceAndRecover(t *testing.T) {
+	_, feishu, _ := setupChainDeposit(t)
+	chainDepositPassFailures.Store(0)
+	t.Cleanup(func() { chainDepositPassFailures.Store(0) })
+
+	for range chainDepositPassAlertAfter - 1 {
+		noteChainDepositPass(errors.New("feed seq 7: database is locked"))
+	}
+	assert.Zero(t, feishu.count("入账连续"), "a short outage stays quiet")
+	for range 5 {
+		noteChainDepositPass(errors.New("feed seq 7: database is locked"))
+	}
+	assert.Equal(t, 1, feishu.count("入账连续"))
+	assert.Equal(t, 1, feishu.count("database is locked"))
+	noteChainDepositPass(nil)
+	noteChainDepositPass(nil)
+	assert.Equal(t, 1, feishu.count("已恢复"))
+
+	// A single failure that recovers sends nothing.
+	noteChainDepositPass(errors.New("timeout"))
+	noteChainDepositPass(nil)
+	assert.Equal(t, 1, feishu.count("已恢复"))
+}
+
+func TestChainDepositEarnsTheOnChainBonusOnTopOfTheTier(t *testing.T) {
+	stub, _, db := setupChainDeposit(t)
+	setting.ChainDepositBonusRate = 0.01
+	user := chainDepositTestUser(t, db, "chain_extra_bonus", common.RoleCommonUser)
+
+	// 5 dollars is under the tier at 10: the on-chain 1% alone, of 2,500,000.
+	stub.setItems(chainTotal(1, user.Id, "bsc", "USDT", 18, "5000000000000000000"))
+	require.NoError(t, RunChainDepositPass(context.Background()))
+	topUps := chainDepositTopUps(t, db, user.Id)
+	require.Len(t, topUps, 1)
+	assert.EqualValues(t, 25000, topUps[0].BonusQuota)
+
+	// 12.5 more reaches the tier: 20% and 1%, 21% of 6,250,000.
+	stub.setItems(chainTotal(1, user.Id, "bsc", "USDT", 18, "5000000000000000000"), chainTotal(2, user.Id, "bsc", "USDT", 18, "17500000000000000000"))
+	require.NoError(t, RunChainDepositPass(context.Background()))
+	topUps = chainDepositTopUps(t, db, user.Id)
+	require.Len(t, topUps, 2)
+	assert.EqualValues(t, 1312500, topUps[1].BonusQuota)
+	assert.Equal(t, 2500000+25000+6250000+1312500, chainDepositQuota(t, db, user.Id))
+
+	// The quote names the same rates.
+	q, err := chainDepositQuote(5)
+	require.NoError(t, err)
+	assert.Equal(t, 0.01, q.BonusRate)
+	assert.Equal(t, 0.01, q.ChainRate)
+	assert.Empty(t, q.BonusUSD)
+	q, err = chainDepositQuote(20)
+	require.NoError(t, err)
+	assert.Equal(t, 0.21, q.BonusRate)
+	assert.Equal(t, 0.01, q.LowerRate)
+	assert.Equal(t, "10.00", q.BonusUSD)
+}
+
+func TestChainDepositReplacesNowPaymentsInTheWallet(t *testing.T) {
+	_, _, db := setupChainDeposit(t)
+	setting.ChainDepositBonusRate = 0.01
+	admin := chainDepositTestUser(t, db, "chain_wallet_admin", common.RoleAdminUser)
+	customer := chainDepositTestUser(t, db, "chain_wallet_customer", common.RoleCommonUser)
+	previous := struct{ key, secret, currencies string }{setting.NowPaymentsApiKey, setting.NowPaymentsIpnSecret, setting.NowPaymentsPayCurrencies}
+	setting.NowPaymentsApiKey, setting.NowPaymentsIpnSecret = "np-key", "np-ipn"
+	setting.NowPaymentsPayCurrencies = "usdtbsc"
+	t.Cleanup(func() {
+		setting.NowPaymentsApiKey, setting.NowPaymentsIpnSecret, setting.NowPaymentsPayCurrencies = previous.key, previous.secret, previous.currencies
+	})
+
+	info := func(user *model.User) (methods map[string]map[string]any, currencies []any) {
+		gin.SetMode(gin.TestMode)
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "/api/user/topup/info", nil)
+		ctx.Set("id", user.Id)
+		ctx.Set("role", user.Role)
+		GetTopUpInfo(ctx)
+		var response struct {
+			Data struct {
+				PayMethods            []map[string]any `json:"pay_methods"`
+				NowPaymentsCurrencies []any            `json:"nowpayments_currencies"`
+			} `json:"data"`
+		}
+		require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+		methods = map[string]map[string]any{}
+		for _, method := range response.Data.PayMethods {
+			methods[method["type"].(string)] = method
+		}
+		return methods, response.Data.NowPaymentsCurrencies
+	}
+
+	// While the deposit address is for administrators, they get it in
+	// NOWPayments' place and customers keep NOWPayments.
+	methods, currencies := info(admin)
+	require.Contains(t, methods, model.PaymentMethodChainDeposit)
+	assert.Equal(t, "0.01", methods[model.PaymentMethodChainDeposit]["bonus_rate"])
+	assert.NotContains(t, methods, model.PaymentMethodNowPayments)
+	assert.Len(t, currencies, 1, "plans are still bought through NOWPayments")
+	methods, _ = info(customer)
+	assert.Contains(t, methods, model.PaymentMethodNowPayments)
+	assert.NotContains(t, methods, model.PaymentMethodChainDeposit)
+
+	// Opened to everyone, it replaces NOWPayments for customers too.
+	setting.ChainDepositAdminOnly = false
+	methods, currencies = info(customer)
+	assert.Contains(t, methods, model.PaymentMethodChainDeposit)
+	assert.NotContains(t, methods, model.PaymentMethodNowPayments)
+	assert.Len(t, currencies, 1)
+}
+
 func TestChainDepositAdminOnlyGating(t *testing.T) {
 	stub, _, db := setupChainDeposit(t)
 	customer := chainDepositTestUser(t, db, "chain_customer", common.RoleCommonUser)
@@ -720,7 +873,11 @@ func (s *chainDepositStub) setActivity(transfers []map[string]any, totals ...map
 }
 
 func chainTransfer(hash string, token string, decimals int, amount string, confirmed bool) map[string]any {
-	return map[string]any{"network": "bsc", "token": token, "decimals": decimals, "amount": amount,
+	network := "bsc"
+	if token == "USDT0" {
+		network = "arbitrum"
+	}
+	return map[string]any{"network": network, "token": token, "decimals": decimals, "amount": amount,
 		"tx_hash": hash, "seen_at": 1, "confirmed": confirmed}
 }
 
@@ -787,7 +944,7 @@ func TestChainDepositActivityShowsCreditingWhenThePassCannotCredit(t *testing.T)
 	t.Cleanup(func() { chainDepositActivityPass = pass })
 
 	stub.setActivity([]map[string]any{chainTransfer("0x"+strings.Repeat("ab", 32), "USDT0", 6, "3250000", true)},
-		chainTotal(1, user.Id, "bsc", "USDT0", 6, "3250000")["total"].(map[string]any))
+		chainTotal(1, user.Id, "arbitrum", "USDT0", 6, "3250000")["total"].(map[string]any))
 	stages := chainDepositStagesOf(t, user)
 	require.Len(t, stages, 1)
 	assert.Equal(t, "crediting", stages[0]["stage"])

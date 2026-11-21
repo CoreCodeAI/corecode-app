@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -46,9 +47,25 @@ const (
 	chainDepositMaxPages = 20
 )
 
-// chainDepositTokens are the symbols the service reports and the app credits,
-// each counted as one dollar. USDC.e is credited but never listed.
-var chainDepositTokens = map[string]bool{"USDT": true, "USDC": true, "USDT0": true, "USDC.e": true}
+// chainDepositDecimals are the mainnet tokens the app credits, each counted as
+// one dollar, with the decimals their contracts use. A total for any other
+// network, token or decimals is refused rather than priced: a service that
+// misreads a token, or runs on a testnet, cannot mint balance. USDC.e is
+// credited but never listed.
+var chainDepositDecimals = map[string]int{
+	"bsc/USDT":        18,
+	"bsc/USDC":        18,
+	"arbitrum/USDT0":  6,
+	"arbitrum/USDC":   6,
+	"arbitrum/USDC.e": 6,
+}
+
+// chainDepositKnownToken reports whether the app credits this network's token
+// at these decimals.
+func chainDepositKnownToken(network string, token string, decimals int) bool {
+	want, ok := chainDepositDecimals[model.ChainDepositKey(network, token)]
+	return ok && want == decimals
+}
 
 // chainDepositStatusError is a refusal from the deposit service.
 type chainDepositStatusError struct {
@@ -231,10 +248,12 @@ func RequestChainDepositAddress(c *gin.Context) {
 }
 
 // chainDepositPassAfterCheck runs one feed pass in the background once the
-// service has read the caller's address. Tests run it in line.
+// service has read the caller's address, through the same gate as the
+// activity's passes: at most one at a time and one per interval, however many
+// customers press the button. Tests run it in line.
 var chainDepositPassAfterCheck = func() {
 	gopool.Go(func() {
-		if err := RunChainDepositPass(context.Background()); err != nil {
+		if err := chainDepositActivityPass(context.Background()); err != nil {
 			common.SysError(common.LogText("chain deposit pass after check failed: %s", err.Error()))
 		}
 	})
@@ -266,10 +285,18 @@ func RequestChainDepositCheck(c *gin.Context) {
 	common.ApiSuccess(c, gin.H{"checked": true})
 }
 
+// chainDepositBonusRate is the bonus rate of a credit whose tier rate is
+// tierRate: the tier's rate plus ChainDepositBonusRate, summed in decimals so
+// 0.03 and 0.01 make exactly 0.04.
+func chainDepositBonusRate(tierRate float64) decimal.Decimal {
+	return decimal.NewFromFloat(tierRate).Add(decimal.NewFromFloat(setting.ChainDepositBonusRate))
+}
+
 // chainDepositPrice prices a credited difference like a NOWPayments order:
 // dollars become CNY money at USDExchangeRate, money becomes top-up units
-// through the epay price, and the bonus is the rate of that amount's tier. It
-// keeps the fraction of a unit, so a difference of 1.5 dollars credits 1.5.
+// through the epay price, and the bonus is the rate of that amount's tier plus
+// the on-chain bonus. It keeps the fraction of a unit, so a difference of 1.5
+// dollars credits 1.5.
 func chainDepositPrice(dollars decimal.Decimal) (model.ChainDepositPrice, error) {
 	exchangeRate := operation_setting.USDExchangeRate
 	price := operation_setting.Price
@@ -285,8 +312,8 @@ func chainDepositPrice(dollars decimal.Decimal) (model.ChainDepositPrice, error)
 	}
 	tierAmount := chainDepositTierAmount(units)
 	bonus := 0
-	if rate := operation_setting.TopUpBonusRate(tierAmount.Floor().IntPart()); rate > 0 {
-		bonus, err = common.WalletQuotaFromDecimalStrict(decimal.NewFromInt(int64(quota)).Mul(decimal.NewFromFloat(rate)).Floor())
+	if rate := chainDepositBonusRate(operation_setting.TopUpBonusRate(tierAmount.Floor().IntPart())); rate.IsPositive() {
+		bonus, err = common.WalletQuotaFromDecimalStrict(decimal.NewFromInt(int64(quota)).Mul(rate).Floor())
 		if err != nil {
 			return model.ChainDepositPrice{}, err
 		}
@@ -348,15 +375,17 @@ const chainDepositMaxQuoteAmount = 1_000_000_000
 
 // ChainDepositQuote is what a top-up amount costs on chain. Money is its
 // price in CNY, as the wallet's other methods name it before any group ratio
-// or discount; USD is the least transfer that credits Amount. When the amount earns a bonus, BonusUSD is
-// the least transfer that still earns BonusRate, the rate of the tier the
-// amount is in, and LowerRate is what a smaller transfer earns. A tier is
-// read per credited transfer.
+// or discount; USD is the least transfer that credits Amount. BonusRate is
+// the whole bonus the amount earns: its tier's rate plus ChainRate, the bonus
+// every on-chain deposit earns. When the amount is in a tier, BonusUSD is the
+// least transfer that still reaches it and LowerRate is what a smaller
+// transfer earns, ChainRate included. A tier is read per credited transfer.
 type ChainDepositQuote struct {
 	Amount    int64   `json:"amount"`
 	Money     float64 `json:"money"`
 	USD       string  `json:"usd"`
 	BonusRate float64 `json:"bonus_rate"`
+	ChainRate float64 `json:"chain_rate"`
 	BonusUSD  string  `json:"bonus_usd,omitempty"`
 	LowerRate float64 `json:"lower_rate"`
 }
@@ -367,16 +396,21 @@ func chainDepositQuote(amount int64) (*ChainDepositQuote, error) {
 		return nil, err
 	}
 	money := chainDepositUnitsFor(amount).Mul(decimal.NewFromFloat(operation_setting.Price)).Round(2)
-	quote := &ChainDepositQuote{Amount: amount, Money: money.InexactFloat64(), USD: dollars.StringFixed(2)}
 	tierMin, rate := operation_setting.TopUpBonusTier(amount)
+	quote := &ChainDepositQuote{
+		Amount:    amount,
+		Money:     money.InexactFloat64(),
+		USD:       dollars.StringFixed(2),
+		BonusRate: chainDepositBonusRate(rate).InexactFloat64(),
+		ChainRate: setting.ChainDepositBonusRate,
+	}
 	if rate > 0 {
 		tierDollars, err := chainDepositDollarsFor(tierMin)
 		if err != nil {
 			return nil, err
 		}
-		quote.BonusRate = rate
 		quote.BonusUSD = tierDollars.StringFixed(2)
-		quote.LowerRate = operation_setting.TopUpBonusRate(tierMin - 1)
+		quote.LowerRate = chainDepositBonusRate(operation_setting.TopUpBonusRate(tierMin - 1)).InexactFloat64()
 	}
 	return quote, nil
 }
@@ -408,7 +442,7 @@ func RequestChainDepositQuote(c *gin.Context) {
 // chainDepositTotalToModel validates a total from the feed.
 func chainDepositTotalToModel(item *chainDepositTotalItem) (model.ChainDepositTotal, error) {
 	received, ok := new(big.Int).SetString(item.Received, 10)
-	if !ok || received.Sign() < 0 || item.UserID <= 0 || item.Network == "" || !chainDepositTokens[item.Token] || item.Decimals < 0 || item.Decimals > 30 {
+	if !ok || received.Sign() < 0 || item.UserID <= 0 || !chainDepositKnownToken(item.Network, item.Token, item.Decimals) {
 		return model.ChainDepositTotal{}, model.ErrChainDepositInvalidTotal
 	}
 	return model.ChainDepositTotal{UserId: item.UserID, Network: item.Network, Token: item.Token, Decimals: item.Decimals, Received: received}, nil
@@ -492,7 +526,9 @@ func RunChainDepositPass(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if len(feed.Items) == 0 || feed.Next <= cursor {
+		// A page whose totals the service dropped comes back empty with a
+		// later next; the cursor still moves past it.
+		if feed.Next <= cursor {
 			return nil
 		}
 		var alerts []string
@@ -521,9 +557,33 @@ func RunChainDepositPass(ctx context.Context) error {
 				sendChainDepositFeishu(alert)
 			}
 		}
-		if len(feed.Items) < chainDepositFeedLimit {
+		// A short page is the end of the feed, unless the service dropped
+		// every total on it: then the next page is read at once.
+		if len(feed.Items) > 0 && len(feed.Items) < chainDepositFeedLimit {
 			return nil
 		}
 	}
 	return nil
+}
+
+// chainDepositPassAlertAfter is how many scheduled passes in a row may fail
+// before the operators hear of it: five minutes of 15-second passes. A total
+// that fails every time holds the cursor, and every credit after it waits.
+const chainDepositPassAlertAfter = 20
+
+var chainDepositPassFailures atomic.Int64
+
+// noteChainDepositPass counts failed scheduled passes, alerts once when they
+// reach chainDepositPassAlertAfter, and says so again when a pass succeeds.
+func noteChainDepositPass(err error) {
+	if err == nil {
+		if chainDepositPassFailures.Swap(0) >= chainDepositPassAlertAfter {
+			sendChainDepositFeishu("✅ 链上充值入账已恢复")
+		}
+		return
+	}
+	if chainDepositPassFailures.Add(1) == chainDepositPassAlertAfter {
+		sendChainDepositFeishu(fmt.Sprintf("🚨 链上充值严重告警: 入账连续 %d 次失败（约 5 分钟），之后的链上入账都在等待：%s",
+			chainDepositPassAlertAfter, truncateChainDepositText(err.Error())))
+	}
 }

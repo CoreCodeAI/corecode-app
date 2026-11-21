@@ -147,6 +147,7 @@ func InitOptionMap() {
 	common.OptionMap["DodoPaymentsAdminOnly"] = strconv.FormatBool(setting.DodoPaymentsAdminOnly)
 	common.OptionMap["ChainDepositEnabled"] = strconv.FormatBool(setting.ChainDepositEnabled)
 	common.OptionMap["ChainDepositAdminOnly"] = strconv.FormatBool(setting.ChainDepositAdminOnly)
+	common.OptionMap["ChainDepositBonusRate"] = strconv.FormatFloat(setting.ChainDepositBonusRate, 'f', -1, 64)
 	common.OptionMap["ChainDepositApiUrl"] = setting.ChainDepositApiUrl
 	common.OptionMap["ChainDepositHmacSecret"] = setting.ChainDepositHmacSecret
 	common.OptionMap["DodoPaymentsMethodTypes"] = setting.DodoPaymentsMethodTypes
@@ -306,6 +307,9 @@ func validateOptionValue(key string, value string) error {
 	}
 	if key == operation_setting.SystemTaskRetentionDaysOptionKey {
 		return operation_setting.ValidateSystemTaskRetentionDays(value)
+	}
+	if key == "ChainDepositBonusRate" {
+		return setting.ValidateChainDepositBonusRate(value)
 	}
 	if key == "MaxTokenAutoGroups" {
 		return setting.ValidateMaxTokenAutoGroups(value)
@@ -678,6 +682,10 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.ChainDepositEnabled = value == "true"
 	case "ChainDepositAdminOnly":
 		setting.ChainDepositAdminOnly = value == "true"
+	case "ChainDepositBonusRate":
+		if rate, err := strconv.ParseFloat(value, 64); err == nil && setting.ValidateChainDepositBonusRate(value) == nil {
+			setting.ChainDepositBonusRate = rate
+		}
 	case "ChainDepositApiUrl":
 		setting.ChainDepositApiUrl = value
 	case "ChainDepositHmacSecret":

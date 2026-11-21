@@ -95,7 +95,7 @@ func chainDepositStages(userId int, reply *chainDepositActivityReply, credited m
 	out := make([]ChainDepositTransfer, 0, len(reply.Transfers))
 	for _, item := range reply.Transfers {
 		units, ok := new(big.Int).SetString(item.Amount, 10)
-		if !ok || units.Sign() <= 0 || !chainDepositTokens[item.Token] || item.Decimals < 0 || item.Decimals > 30 {
+		if !ok || units.Sign() <= 0 || !chainDepositKnownToken(item.Network, item.Token, item.Decimals) {
 			continue
 		}
 		key := model.ChainDepositKey(item.Network, item.Token)

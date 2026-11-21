@@ -41,7 +41,7 @@ import {
 import { bonusRateToPercent } from '../../lib/bonus'
 import {
   chainDepositTokenUrl,
-  shownChainDepositTransfers,
+  shownChainDepositTransfer,
   splitDepositAddress,
   usableChainDepositNetworks,
 } from '../../lib/chain-deposit'
@@ -66,6 +66,8 @@ interface ChainDepositDialogProps {
   amount: number
   /** Called after the deposit service has read the address, to refresh the balance */
   onChecked?: () => void
+  /** The bonus every on-chain deposit earns on top of the tiers, as a fraction */
+  bonusRate?: number
 }
 
 /**
@@ -79,6 +81,7 @@ export function ChainDepositDialog({
   onOpenChange,
   amount,
   onChecked,
+  bonusRate = 0,
 }: ChainDepositDialogProps) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
@@ -158,7 +161,7 @@ export function ChainDepositDialog({
   useEffect(() => {
     if (activityQuery.dataUpdatedAt) setNow(activityQuery.dataUpdatedAt / 1000)
   }, [activityQuery.dataUpdatedAt])
-  const transfers = shownChainDepositTransfers(activityQuery.data, now)
+  const transfer = shownChainDepositTransfer(activityQuery.data, now)
 
   // A transfer turning credited refreshes the balance once.
   const credited = useRef<Set<string> | null>(null)
@@ -226,8 +229,17 @@ export function ChainDepositDialog({
 
       {address && (
         <div className='space-y-4 py-2'>
-          {transfers.length > 0 && (
-            <ChainDepositProgress transfers={transfers} networks={networks} />
+          {bonusRate > 0 && (
+            <div className='text-success flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium'>
+              <Gift className='h-4 w-4 shrink-0' aria-hidden />
+              {t(
+                'On-chain deposits get an extra {{percent}}% bonus, on top of the top-up bonus.',
+                { percent: bonusRateToPercent(bonusRate) }
+              )}
+            </div>
+          )}
+          {transfer && (
+            <ChainDepositProgress transfer={transfer} networks={networks} />
           )}
           {quote && (
             <div className='rounded-lg border p-4'>
@@ -397,7 +409,7 @@ export function ChainDepositDialog({
           <ul className='text-muted-foreground list-inside list-disc space-y-1 text-xs'>
             <li>
               {t(
-                'Any amount of at least 1 USD is credited at the wallet rate, with the usual top-up bonus. A smaller amount waits until your deposits add up to 1 USD.'
+                'Any amount of at least 1 USD is credited at the wallet rate, with the top-up bonus and the on-chain bonus. A smaller amount waits until your deposits add up to 1 USD.'
               )}
             </li>
             <li>

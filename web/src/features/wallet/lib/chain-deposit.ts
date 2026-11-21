@@ -105,16 +105,21 @@ export function chainDepositSteps(
 const SHOWN_AFTER_CREDIT = 30 * 60
 
 /**
- * The transfers the dialog follows: every one not yet credited, and the
- * credited ones seen in the last half hour before `now` (unix seconds).
+ * The one transfer the dialog follows: the newest the service has seen, while
+ * it is not yet credited or was seen in the last half hour before `now` (unix
+ * seconds). Older transfers stay in the wallet's records, not here.
  */
-export function shownChainDepositTransfers(
+export function shownChainDepositTransfer(
   transfers: ChainDepositTransfer[] | undefined,
   now: number
-): ChainDepositTransfer[] {
-  return (transfers ?? []).filter(
-    (transfer) =>
-      transfer.stage !== 'credited' ||
-      transfer.seen_at >= now - SHOWN_AFTER_CREDIT
-  )
+): ChainDepositTransfer | null {
+  let newest: ChainDepositTransfer | null = null
+  for (const transfer of transfers ?? []) {
+    if (!newest || transfer.seen_at > newest.seen_at) newest = transfer
+  }
+  if (!newest) return null
+  return newest.stage !== 'credited' ||
+    newest.seen_at >= now - SHOWN_AFTER_CREDIT
+    ? newest
+    : null
 }

@@ -558,7 +558,14 @@ export function RechargeFormCard({
                               </span>
                             )}
                             {hint && (
-                              <span className='text-muted-foreground max-w-full text-[11px] leading-4 font-normal'>
+                              <span
+                                className={cn(
+                                  'max-w-full text-[11px] leading-4',
+                                  isChainDepositPayment(method.type)
+                                    ? 'text-success font-medium'
+                                    : 'text-muted-foreground font-normal'
+                                )}
+                              >
                                 {hint}
                               </span>
                             )}

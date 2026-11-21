@@ -119,10 +119,24 @@ func GetTopUpInfo(c *gin.Context) {
 		}
 	}
 
-	// CoreCode addition: USDT and USDC through NOWPayments, one method whose
-	// network the customer picks in the payment dialog.
+	// CoreCode addition: USDT and USDC. A user who may use on-chain deposits
+	// gets their own deposit address, which replaces NOWPayments in the
+	// wallet: it costs less and earns ChainDepositBonusRate more. Everyone
+	// else keeps NOWPayments, one method whose network the customer picks in
+	// the payment dialog. NOWPayments' currencies stay in the reply either
+	// way, because plans that cannot be paid from the balance are bought
+	// through it, and its callback keeps crediting invoices already open.
 	enableNowPayments := isNowPaymentsTopUpEnabled()
-	if enableNowPayments {
+	chainDepositAvailable := canUseChainDeposit(c.GetInt("role"))
+	if chainDepositAvailable {
+		payMethods = append(payMethods, map[string]string{
+			"name":       "On-chain deposit (USDT/USDC)",
+			"type":       model.PaymentMethodChainDeposit,
+			"color":      "#26A17B",
+			"min_topup":  "0",
+			"bonus_rate": strconv.FormatFloat(setting.ChainDepositBonusRate, 'f', -1, 64),
+		})
+	} else if enableNowPayments {
 		payMethods = append(payMethods, map[string]string{
 			"name":      "USDT / USDC",
 			"type":      model.PaymentMethodNowPayments,
@@ -141,19 +155,6 @@ func GetTopUpInfo(c *gin.Context) {
 			"type":  model.PaymentMethodDodoPayments,
 			"color": "#0F172A",
 		}))
-	}
-
-	// CoreCode addition: on-chain deposits take no amount, so the wallet opens
-	// the customer's address instead of asking for one. The method appears only
-	// to users the server lets use it.
-	chainDepositAvailable := canUseChainDeposit(c.GetInt("role"))
-	if chainDepositAvailable {
-		payMethods = append(payMethods, map[string]string{
-			"name":      "On-chain deposit (USDT/USDC)",
-			"type":      model.PaymentMethodChainDeposit,
-			"color":     "#26A17B",
-			"min_topup": "0",
-		})
 	}
 
 	data := gin.H{
