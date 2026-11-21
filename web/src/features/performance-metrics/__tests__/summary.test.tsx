@@ -24,6 +24,7 @@ import { PerformanceOverview } from '@/features/dashboard/components/models/perf
 import { PerformanceHealthPanel } from '@/features/dashboard/components/overview/performance-health-panel'
 import { ModelDetailsPerformance } from '@/features/pricing/components/model-details-performance'
 import { UptimeSparkline } from '@/features/pricing/components/model-details-uptime-sparkline'
+import { api } from '@/lib/api'
 
 const chart = vi.hoisted(() =>
   vi.fn(
@@ -121,17 +122,35 @@ function renderModelDetails() {
 }
 
 describe('server performance summaries', () => {
-  it.each([PerformanceHealthPanel, PerformanceOverview])(
-    'uses the weighted server result across models',
-    (Component) => {
-      client.setQueryData(['perf-metrics-summary', 24], {
-        success: true,
+  it.each([
+    [
+      'the customer overview reads the viewer-scoped summary',
+      PerformanceHealthPanel,
+      '/api/perf-metrics/summary',
+      {
+        params: { hours: 24, recent_model: undefined },
+        paramsSerializer: { indexes: null },
+      },
+    ],
+    [
+      'the administrator dashboard reads the site-wide summary',
+      PerformanceOverview,
+      '/api/data/perf-metrics/summary',
+      { params: { hours: 24 } },
+    ],
+  ])(
+    'shows the weighted server result across models: %s',
+    async (_name, Component, url, config) => {
+      const request = vi.spyOn(api, 'get').mockResolvedValue({
         data: {
-          summary,
-          models: groups.map((group) => ({
-            ...group,
-            model_name: group.group,
-          })),
+          success: true,
+          data: {
+            summary,
+            models: groups.map((group) => ({
+              ...group,
+              model_name: group.group,
+            })),
+          },
         },
       })
       render(
@@ -139,7 +158,8 @@ describe('server performance summaries', () => {
           <Component />
         </QueryClientProvider>
       )
-      expect(screen.getByText('99.01%')).toBeVisible()
+      expect(await screen.findByText('99.01%')).toBeVisible()
+      expect(request).toHaveBeenCalledWith(url, config)
       expect(screen.queryByText('50.00%')).not.toBeInTheDocument()
       expect(screen.getByText('1.01s')).toBeVisible()
     }
