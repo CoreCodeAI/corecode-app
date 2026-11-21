@@ -53,13 +53,13 @@ export type SetupClient = (typeof SETUP_CLIENTS)[number]
 
 export const CLIENT_TARGETS: Record<SetupClient, readonly ClientSetupTarget[]> =
   {
-    'claude-code': ['settings', 'shell', 'powershell', 'cc-switch', 'magpie'],
+    'claude-code': ['magpie', 'settings', 'shell', 'powershell', 'cc-switch'],
     codex: [
+      'codex-magpie',
       'codex-config',
       'codex-shell',
       'codex-powershell',
       'codex-cc-switch',
-      'codex-magpie',
     ],
     openai: ['openai-shell', 'openai-powershell', 'openai-curl'],
   }

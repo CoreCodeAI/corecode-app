@@ -49,14 +49,15 @@ function subscription(fields: object) {
 
 function renderDialog(
   subscriptions: object[] | Error,
-  inviter = { inviter_id: 0, inviter_name: '' }
+  inviter = { inviter_id: 0, inviter_name: '' },
+  user: object = {}
 ) {
   vi.spyOn(api, 'get').mockImplementation(async (url: string) => {
     if (url === '/api/user/7') {
       return {
         data: {
           success: true,
-          data: { id: 7, username: 'alice', quota: 0, used_quota: 0 },
+          data: { id: 7, username: 'alice', quota: 0, used_quota: 0, ...user },
         },
       }
     }
@@ -136,5 +137,19 @@ it('shows a dash for a user nobody invited', async () => {
   renderDialog([])
 
   const label = await screen.findByText('Inviter')
+  expect(label.nextElementSibling).toHaveTextContent(/^-$/)
+})
+
+it('shows the remark an admin left on the user', async () => {
+  renderDialog([], undefined, { remark: 'VIP, refund once' })
+
+  const label = await screen.findByText('Remark')
+  expect(label.nextElementSibling).toHaveTextContent('VIP, refund once')
+})
+
+it('shows a dash for a user without a remark', async () => {
+  renderDialog([])
+
+  const label = await screen.findByText('Remark')
   expect(label.nextElementSibling).toHaveTextContent(/^-$/)
 })
