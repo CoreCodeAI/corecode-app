@@ -17,7 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import { AlertCircle, AlertTriangle, Settings, Wallet } from 'lucide-react'
+import {
+  AlertCircle,
+  AlertTriangle,
+  BookOpen,
+  KeyRound,
+  Settings,
+  Wallet,
+} from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -66,7 +73,7 @@ export function MessageError({
   className = '',
   actions,
 }: MessageErrorProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const user = useAuthStore((s) => s.auth.user)
   const errorState = getMessageErrorState(message, isAdminRole(user?.role))
 
@@ -96,6 +103,50 @@ export function MessageError({
               {t('Go to Settings')}
             </Button>
           )}
+          {actions}
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  if (
+    errorState.kind === 'model-not-in-group' ||
+    errorState.kind === 'model-wrong-endpoint'
+  ) {
+    // The server's text names the groups and the endpoint; the buttons are the
+    // way out. A video model's text points at /v1/videos, so link its page.
+    const prefix = (i18n.resolvedLanguage || i18n.language).startsWith('zh')
+      ? '/docs'
+      : '/docs/en'
+    const docsUrl = errorState.content.includes('/v1/videos')
+      ? `${prefix}/api/videos/`
+      : `${prefix}/groups/`
+    return (
+      <Alert variant='default' className={className}>
+        <AlertTriangle className='text-orange-500' />
+        <AlertTitle>
+          {errorState.kind === 'model-not-in-group'
+            ? t('This key cannot use this model')
+            : t('This model needs a different endpoint')}
+        </AlertTitle>
+        <AlertDescription className='space-y-2'>
+          <p>{errorState.content}</p>
+          <div className='flex flex-wrap gap-2'>
+            {errorState.kind === 'model-not-in-group' && (
+              <Button size='sm' render={<Link to='/keys' />}>
+                <KeyRound className='mr-1 h-3.5 w-3.5' />
+                {t('Create a key')}
+              </Button>
+            )}
+            <Button
+              variant='outline'
+              size='sm'
+              render={<a href={docsUrl} target='_blank' rel='noreferrer' />}
+            >
+              <BookOpen className='mr-1 h-3.5 w-3.5' />
+              {t('View docs')}
+            </Button>
+          </div>
           {actions}
         </AlertDescription>
       </Alert>

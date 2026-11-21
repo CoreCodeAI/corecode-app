@@ -103,6 +103,12 @@ const (
 	ErrorCodeModelNotFound          ErrorCode = "model_not_found"
 	ErrorCodePromptBlocked          ErrorCode = "prompt_blocked"
 
+	// ErrorCodeModelNotInGroup: the key's group does not offer a model other
+	// groups serve; the console offers to create a key of one of those groups.
+	ErrorCodeModelNotInGroup ErrorCode = "model_not_in_group"
+	// ErrorCodeModelWrongEndpoint: the model is served, but not on this path.
+	ErrorCodeModelWrongEndpoint ErrorCode = "model_wrong_endpoint"
+
 	// sql error
 	ErrorCodeQueryDataError  ErrorCode = "query_data_error"
 	ErrorCodeUpdateDataError ErrorCode = "update_data_error"

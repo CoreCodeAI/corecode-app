@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -57,9 +58,21 @@ func TestDistributeExplainsModelsTheRequestCannotReach(t *testing.T) {
 
 	// The user may use claude and gpt; welfare is usable too but is not in
 	// the auto list; staff is a group the user may not use.
-	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"claude":"","gpt":"","welfare":"","auto":""}`))
-	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`["claude","gpt"]`))
-	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"claude":1,"gpt":1,"welfare":0.5,"staff":1}`))
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"claude":"","gpt":"","video":"","welfare":"","auto":""}`))
+	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`["claude","gpt","video"]`))
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"claude":1,"gpt":1,"video":1,"welfare":0.5,"staff":1}`))
+
+	// A video model is served by a task plugin, in a group of its own.
+	videoPlugin, err := jsplugin.DefaultRegistry.Register(`export const meta = {apiVersion: 1, key: "unservable-video", name: "Video", version: "1.0.0", author: {name: "Test"}, models: ["video-model"], fetchMode: "per_task"};
+export function buildSubmitRequest(ctx) { return {url: ctx.baseUrl + "/submit"}; }
+export function parseSubmitResponse(ctx, resp) { return {taskId: "id"}; }
+export function buildQueryRequest(ctx) { return {url: ctx.baseUrl + "/query"}; }
+export function parseTaskResult() { return {status: "SUCCESS"}; }`, jsplugin.Options{})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = jsplugin.DefaultRegistry.Unregister(videoPlugin.Meta.Key) })
+	video := &model.Channel{Type: constant.ChannelTypeTaskPlugin, Status: common.ChannelStatusEnabled, Name: "video", Key: "video-key", Group: "video", Models: "video-model"}
+	video.SetSetting(dto.ChannelSettings{TaskPluginKey: "unservable-video"})
+	require.NoError(t, video.Insert())
 
 	chatOnly := &model.Channel{Type: constant.ChannelTypeAdvancedCustom, Status: common.ChannelStatusEnabled, Name: "chat-only", Key: "chat-only-key", Group: "gpt", Models: "chat-only-model"}
 	chatOnly.SetOtherSettings(dto.ChannelOtherSettings{AdvancedCustom: &dto.AdvancedCustomConfig{
@@ -86,21 +99,30 @@ func TestDistributeExplainsModelsTheRequestCannotReach(t *testing.T) {
 			// whether the refusal is written as a no_channel error log.
 			wantMessage string
 			recorded    bool
+			// inOtherGroups marks a refusal that names the groups serving the
+			// model, which carries its own error code.
+			inOtherGroups bool
 		}{
 			{name: "gpt model on a claude key, messages", group: "claude", path: "/v1/messages", model: "gpt-6.1-sol",
-				wantStatus: http.StatusNotFound, wantMessage: "model: gpt-6.1-sol. This key's group claude does not offer model gpt-6.1-sol. Groups that offer it: gpt.", recorded: true},
+				wantStatus: http.StatusNotFound, wantMessage: "model: gpt-6.1-sol. This key's group claude does not offer model gpt-6.1-sol. Groups that offer it: gpt.", recorded: true, inOtherGroups: true},
 			{name: "gpt model on a claude key, responses", group: "claude", path: "/v1/responses", model: "gpt-6.1-sol",
-				wantStatus: http.StatusNotFound, wantMessage: "Groups that offer it: gpt. Use a key of one of those groups, or change this key's group, on the API keys page of the console (https://corecode.live/keys)", recorded: true},
+				wantStatus: http.StatusNotFound, wantMessage: "Groups that offer it: gpt. Use a key of one of those groups, or change this key's group, on the API keys page of the console (https://corecode.live/keys)", recorded: true, inOtherGroups: true},
 			{name: "gpt model on a claude key, in Chinese", group: "claude", path: "/v1/responses", model: "gpt-6.1-sol", lang: "zh-CN",
-				wantStatus: http.StatusNotFound, wantMessage: "这个密钥的分组 claude 不提供模型 gpt-6.1-sol，提供它的分组：gpt。请在控制台密钥页（https://corecode.live/keys）换用其中一个分组的密钥，或把这个密钥的分组改成其中之一", recorded: true},
+				wantStatus: http.StatusNotFound, wantMessage: "这个密钥的分组 claude 不提供模型 gpt-6.1-sol，提供它的分组：gpt。请在控制台密钥页（https://corecode.live/keys）换用其中一个分组的密钥，或把这个密钥的分组改成其中之一", recorded: true, inOtherGroups: true},
 			{name: "model outside the auto list names its usable group", group: "auto", path: "/v1/responses", model: "gpt-5.6-sol",
-				wantStatus: http.StatusNotFound, wantMessage: "This key's group auto does not offer model gpt-5.6-sol. Groups that offer it: welfare.", recorded: true},
+				wantStatus: http.StatusNotFound, wantMessage: "This key's group auto does not offer model gpt-5.6-sol. Groups that offer it: welfare.", recorded: true, inOtherGroups: true},
 			{name: "model only a group the user may not use serves", group: "gpt", path: "/v1/responses", model: "internal-model",
 				wantStatus: http.StatusNotFound, wantMessage: "Model internal-model does not exist or has been retired", recorded: true},
 			{name: "unlisted model, in Traditional Chinese", group: "gpt", path: "/v1/responses", model: "gpt-9", lang: "zh-TW",
 				wantStatus: http.StatusNotFound, wantMessage: "模型 gpt-9 不存在或已下線，請檢查模型名稱；GET /v1/models 列出這個金鑰能用的模型。CoreCode 提供的全部模型：https://corecode.live/model/"},
 			{name: "model on an endpoint its channel does not serve", group: "auto", path: "/v1/messages", model: "chat-only-model",
 				wantStatus: http.StatusBadRequest, wantMessage: "Model chat-only-model is not served on /v1/messages", recorded: true},
+			{name: "video model on a gpt key names the endpoint and the group", group: "gpt", path: "/v1/chat/completions", model: "video-model",
+				wantStatus: http.StatusNotFound, wantMessage: "Model video-model is a video (asynchronous) model: submit it as a task with POST /v1/videos, not /v1/chat/completions (https://corecode.live/docs/api/videos/). This key's group gpt does not offer it. Groups that offer it: video.", recorded: true, inOtherGroups: true},
+			{name: "video model on a gpt key, in Chinese", group: "gpt", path: "/v1/chat/completions", model: "video-model", lang: "zh-CN",
+				wantStatus: http.StatusNotFound, wantMessage: "模型 video-model 是视频（异步生成）模型，要用 POST /v1/videos 提交任务，不能走 /v1/chat/completions", recorded: true, inOtherGroups: true},
+			{name: "video model on an auto key that includes the video group", group: "auto", path: "/v1/chat/completions", model: "video-model",
+				wantStatus: http.StatusBadRequest, wantMessage: "Model video-model generates asynchronously and is not served on /v1/chat/completions. Submit it as a task; a video model takes POST /v1/videos", recorded: true},
 			{name: "every channel of the model is down", group: "gpt", path: "/v1/responses", model: "gpt-6-astra",
 				wantStatus: http.StatusServiceUnavailable, wantMessage: "No available channel for model gpt-6-astra under group gpt", recorded: true},
 			{name: "unlisted model", group: "gpt", path: "/v1/responses", model: "gpt-9",
@@ -143,10 +165,12 @@ func TestDistributeExplainsModelsTheRequestCannotReach(t *testing.T) {
 				switch {
 				case tc.path == "/v1/messages" && tc.wantStatus == http.StatusNotFound:
 					assert.Equal(t, "not_found_error", answer.Error.Type)
+				case tc.wantStatus == http.StatusNotFound && tc.inOtherGroups:
+					assert.Equal(t, "model_not_in_group", answer.Error.Code)
 				case tc.wantStatus == http.StatusNotFound:
 					assert.Equal(t, "model_not_found", answer.Error.Code)
 				case tc.wantStatus == http.StatusBadRequest:
-					assert.Equal(t, "invalid_request", answer.Error.Code)
+					assert.Equal(t, "model_wrong_endpoint", answer.Error.Code)
 				}
 
 				var logs []model.Log

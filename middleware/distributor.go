@@ -186,15 +186,21 @@ func refuseUnservableModel(c *gin.Context, usingGroup, modelName string, filters
 			}
 		}
 		message := i18n.T(c, i18n.MsgDistributorModelNotServed, map[string]any{"Model": modelName})
+		code := types.ErrorCodeModelNotFound
 		if len(offered) > 0 {
-			message = i18n.T(c, i18n.MsgDistributorModelInOtherGroups, map[string]any{"Model": modelName, "Group": usingGroup, "Groups": strings.Join(offered, ", ")})
+			messageID := i18n.MsgDistributorModelInOtherGroups
+			if diagnosis.TaskModel {
+				messageID = i18n.MsgDistributorTaskModelInOtherGroups
+			}
+			message = i18n.T(c, messageID, map[string]any{"Model": modelName, "Group": usingGroup, "Groups": strings.Join(offered, ", "), "Path": c.Request.URL.Path})
+			code = types.ErrorCodeModelNotInGroup
 		}
 		service.RecordNoChannelErrorLog(c, modelName, usingGroup, http.StatusNotFound)
 		if isClaudeMessagesRequest(c) {
 			abortWithClaudeModelNotFound(c, modelName, message)
 			return true
 		}
-		abortWithOpenAiMessage(c, http.StatusNotFound, message, types.ErrorCodeModelNotFound)
+		abortWithOpenAiMessage(c, http.StatusNotFound, message, code)
 		return true
 	case model.NoChannelWrongEndpoint:
 		messageID := i18n.MsgDistributorModelWrongEndpoint
@@ -202,7 +208,7 @@ func refuseUnservableModel(c *gin.Context, usingGroup, modelName string, filters
 			messageID = i18n.MsgDistributorTaskModelWrongEndpoint
 		}
 		service.RecordNoChannelErrorLog(c, modelName, usingGroup, http.StatusBadRequest)
-		abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, messageID, map[string]any{"Model": modelName, "Path": c.Request.URL.Path}), types.ErrorCodeInvalidRequest)
+		abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, messageID, map[string]any{"Model": modelName, "Path": c.Request.URL.Path}), types.ErrorCodeModelWrongEndpoint)
 		return true
 	}
 	return false

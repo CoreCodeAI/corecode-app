@@ -78,3 +78,22 @@ it('ignores a message that is not an error', () => {
   expect(isInsufficientBalanceError(message)).toBe(false)
   expect(getMessageErrorState(message, false)).toBeNull()
 })
+
+it('gives a refused model its own kind, by the server code', () => {
+  expect(
+    getMessageErrorState(failed('wrong group', 'model_not_in_group'), false)
+      ?.kind
+  ).toBe('model-not-in-group')
+  expect(
+    getMessageErrorState(failed('wrong path', 'model_wrong_endpoint'), false)
+      ?.kind
+  ).toBe('model-wrong-endpoint')
+  // A temporary outage shares model_not_found with a retired model, and
+  // neither is something a new key fixes.
+  expect(
+    getMessageErrorState(
+      failed('No available channel', 'model_not_found'),
+      false
+    )?.kind
+  ).toBe('generic')
+})

@@ -51,7 +51,7 @@ export function parseTaskResult() { return {status: "SUCCESS"}; }`,
 		DiagnoseNoChannel([]string{"claude", "video"}, "video-model", filters))
 	assert.Equal(t, NoChannelDiagnosis{Cause: NoChannelWrongEndpoint},
 		DiagnoseNoChannel([]string{"relay"}, "relay-model", filters))
-	assert.Equal(t, NoChannelDiagnosis{Cause: NoChannelOtherGroups, Groups: []string{"video"}},
+	assert.Equal(t, NoChannelDiagnosis{Cause: NoChannelOtherGroups, Groups: []string{"video"}, TaskModel: true},
 		DiagnoseNoChannel([]string{"claude"}, "video-model", filters))
 	assert.Equal(t, NoChannelDiagnosis{Cause: NoChannelUnlisted},
 		DiagnoseNoChannel([]string{"video"}, "wan-3.0-480p", filters))

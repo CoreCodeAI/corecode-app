@@ -30,11 +30,20 @@ const INSUFFICIENT_QUOTA_ERROR_CODE = 'insufficient_user_quota'
 // An error that lost its code on the way, such as a non-JSON stream event,
 // still carries the server's wording, in Chinese or English.
 const INSUFFICIENT_QUOTA_TEXT = /额度不足|insufficient (user )?quota/i
+// relaykit/types/error.go: the gateway refused a model this key can never
+// reach. Its text already says what to change, in the request's language.
+const MODEL_NOT_IN_GROUP_ERROR_CODE = 'model_not_in_group'
+const MODEL_WRONG_ENDPOINT_ERROR_CODE = 'model_wrong_endpoint'
 export const FALLBACK_ERROR_CONTENT = 'An unknown error occurred'
 
 type MessageErrorState = {
   content: string
-  kind: 'generic' | 'model-price' | 'insufficient-balance'
+  kind:
+    | 'generic'
+    | 'model-price'
+    | 'insufficient-balance'
+    | 'model-not-in-group'
+    | 'model-wrong-endpoint'
   showSettingsLink: boolean
 }
 
@@ -56,6 +65,12 @@ export function isInsufficientBalanceError(message: Message): boolean {
 
 function getErrorKind(message: Message): MessageErrorState['kind'] {
   if (message.errorCode === MODEL_PRICE_ERROR_CODE) return 'model-price'
+  if (message.errorCode === MODEL_NOT_IN_GROUP_ERROR_CODE) {
+    return 'model-not-in-group'
+  }
+  if (message.errorCode === MODEL_WRONG_ENDPOINT_ERROR_CODE) {
+    return 'model-wrong-endpoint'
+  }
   if (isInsufficientBalanceError(message)) return 'insufficient-balance'
   return 'generic'
 }

@@ -9639,6 +9639,11 @@
     "What arrives is counted: when withdrawing from an exchange, add its fee on top.": "What arrives is counted: when withdrawing from an exchange, add its fee on top.",
     "View the {{symbol}} contract on the block explorer": "View the {{symbol}} contract on the block explorer",
     "No deposit address yet. Open the deposit address first.": "No deposit address yet. Open the deposit address first.",
-    "Checked a moment ago. Try again in a few seconds.": "Checked a moment ago. Try again in a few seconds."
+    "Checked a moment ago. Try again in a few seconds.": "Checked a moment ago. Try again in a few seconds.",
+    "This key cannot use this model": "This key cannot use this model",
+    "This model needs a different endpoint": "This model needs a different endpoint",
+    "Create a key": "Create a key",
+    "View docs": "View docs",
+    "Video models such as Seedance cannot be called through the chat endpoints; submit them as tasks with POST /v1/videos.": "Video models such as Seedance cannot be called through the chat endpoints; submit them as tasks with POST /v1/videos."
   }
 }
