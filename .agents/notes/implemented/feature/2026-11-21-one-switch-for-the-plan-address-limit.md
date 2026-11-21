@@ -1,6 +1,6 @@
 # Agent Note: One switch turns off the plan address limit
 
-Status: implemented
+Status: implemented; the farm check has its own switch since [the split](2026-11-21-split-the-plan-address-switches.md)
 
 ## Problem
 

@@ -36,7 +36,7 @@ const (
 // read for the addresses they used.
 const limitedPlanRecentRequests = 200
 
-var ErrSubscriptionAddressShared error = common.NewMessage("This discounted plan is limited to one per person, and accounts on your network have already bought it. Regular top-up is available")
+var ErrSubscriptionAddressShared error = common.NewMessage("This discounted plan is limited to one per person, and other accounts on your network have already bought it. If this is a mistake, contact support and we will unlock it for you; regular top-up is always available")
 
 var ErrSubscriptionAddressTaken error = common.NewMessage("This plan has already been bought from your network. Contact support if you need it")
 
@@ -293,25 +293,32 @@ func SharesAddress(a int, b int, now int64) (bool, error) {
 }
 
 // CheckSubscriptionPurchaseFrom is CheckSubscriptionPurchase for a purchase
-// opened from ip. While limited_plan_address_setting.enabled is on, a plan
-// limited per user is also limited per address: it is refused when another
-// account that bought it in the last 30 days signed in, ordered or sent
-// requests from the same address, unless the address is a shared exit, and
-// when the buyer's addresses carry the threshold of other holders
-// (checkLimitedPlanAddressFarm). The refusal asks the customer to contact
-// support, who can exempt the account from the console. With the setting off
-// the plan is limited per account only.
+// opened from ip. A plan limited per user can be limited per address too, by
+// two checks with a switch each in limited_plan_address_setting:
+//   - enabled: it is refused when another account that bought it in the last
+//     30 days signed in, ordered or sent requests from the same address,
+//     unless the address is a shared exit (checkSharedAddressOfBuyer);
+//   - farm_enabled: it is refused when the buyer's addresses carry the
+//     threshold of other holders (checkLimitedPlanAddressFarm).
+//
+// The refusals ask the customer to contact support, who can exempt the
+// account from the console. With both switches off the plan is limited per
+// account only.
 func CheckSubscriptionPurchaseFrom(userId int, plan *SubscriptionPlan, ip string) error {
 	if err := CheckSubscriptionPurchase(userId, plan); err != nil {
 		return err
 	}
-	if plan.MaxPurchasePerUser <= 0 || !operation_setting.GetLimitedPlanAddressSetting().Enabled {
+	if plan.MaxPurchasePerUser <= 0 {
 		return nil
 	}
-	if ip != "" {
+	setting := operation_setting.GetLimitedPlanAddressSetting()
+	if setting.Enabled && ip != "" {
 		if err := checkSharedAddressOfBuyer(userId, plan, ip); err != nil {
 			return err
 		}
+	}
+	if !setting.FarmEnabled {
+		return nil
 	}
 	return checkLimitedPlanAddressFarm(userId, plan, ip)
 }

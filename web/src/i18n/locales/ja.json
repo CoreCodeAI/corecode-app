@@ -4735,7 +4735,7 @@
     "Purchase limit cannot be negative": "購入上限を負の値にすることはできません",
     "Purchase limit for this plan has been reached": "このプランの購入上限に達しました",
     "This plan has already been bought from your network. Contact support if you need it": "このプランはお使いのネットワークで既に購入されています。必要な場合はサポートにお問い合わせください",
-    "This discounted plan is limited to one per person, and accounts on your network have already bought it. Regular top-up is available": "この特典プランは1人1回限りで、同じネットワークの別アカウントがすでに購入しています。通常のチャージはご利用いただけます",
+    "This discounted plan is limited to one per person, and other accounts on your network have already bought it. If this is a mistake, contact support and we will unlock it for you; regular top-up is always available": "この特典プランは1人1回限りで、同じネットワークの別アカウントがすでに購入しています。誤判定の場合はサポートにお問い合わせください。制限を解除いたします。通常のチャージはいつでもご利用いただけます",
     "Purchase limit reached": "購入上限に達しました",
     "Purchase Subscription": "サブスクリプションを購入",
     "Pure Claude,": "純正の Claude、",
