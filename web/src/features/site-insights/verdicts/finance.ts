@@ -18,6 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { paymentMethodLabel } from '@/features/wallet/lib/billing'
+
 import type { Tone } from '../components/shared'
 import {
   financeDrivers,
@@ -28,12 +30,7 @@ import {
   ordersComparable,
   signed,
 } from '../finance-analysis'
-import {
-  useChargeFormat,
-  useInsightsFormat,
-  useVendorName,
-  paymentMethodLabel,
-} from '../lib'
+import { useChargeFormat, useInsightsFormat, useVendorName } from '../lib'
 import type { FinanceInsights } from '../types'
 import { sentences, useChange, worse, type TabVerdict } from './shared'
 

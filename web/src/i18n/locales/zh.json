@@ -9681,6 +9681,9 @@
     "International cards only. Some banks decline; if it fails, use Alipay or WeChat Pay.": "国际卡，部分发卡行会拒；失败请改用支付宝或微信",
     "On-chain USDT/USDC, usually credited in about 5 minutes": "链上 USDT/USDC，通常约 5 分钟到账",
     "No bonus on this method": "此方式不送赠金",
-    "This order expired. You can place a new one.": "已过期，可重新下单"
+    "This order expired. You can place a new one.": "已过期，可重新下单",
+    "{{method}} (Stripe)": "{{method}}（Stripe）",
+    "Offline transfer": "线下转账",
+    "Other ({{method}})": "其他（{{method}}）"
   }
 }

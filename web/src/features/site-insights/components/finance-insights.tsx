@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { paymentMethodLabel } from '@/features/wallet/lib/billing'
 import { cn } from '@/lib/utils'
 
 import type { Finding } from '../analysis'
@@ -55,7 +56,6 @@ import {
   type InsightsSources,
   type InsightsTab,
   type SourceState,
-  paymentMethodLabel,
 } from '../lib'
 import type { FinanceInsights, PlanBookRow } from '../types'
 import { checkoutLossFindings, refundedCheckoutFindings } from './checkout-loss'

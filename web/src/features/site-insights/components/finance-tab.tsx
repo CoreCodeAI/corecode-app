@@ -18,6 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { paymentMethodLabel } from '@/features/wallet/lib/billing'
+
 import {
   bestWholeDay,
   bucketBeforeLogs,
@@ -38,7 +40,6 @@ import {
   type InsightsRangeInfo,
   type InsightsSources,
   type InsightsTab,
-  paymentMethodLabel,
 } from '../lib'
 import { previousDayPartial, usePartialDays } from '../partial-days'
 import type { BusinessInsights, FinanceInsights } from '../types'

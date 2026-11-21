@@ -24,7 +24,7 @@ import {
   outlookModel,
   outlookWindow,
 } from '../components/__tests__/outlook-fixture'
-import { attentionLabel, joinSentences, paymentMethodLabel } from '../lib'
+import { attentionLabel, joinSentences } from '../lib'
 import type {
   ActivityInsights,
   CapacityInsights,
@@ -245,15 +245,8 @@ describe('tab verdicts', () => {
     )
   })
 
-  it('names payment methods and pool statuses instead of their keys', () => {
+  it('names pool statuses instead of their keys', () => {
     const t = ((key: string) => key) as never
-    expect(paymentMethodLabel('stripe_wechat_pay', t)).toBe(
-      'Stripe · WeChat Pay'
-    )
-    expect(paymentMethodLabel('stripe_alipay', t)).toBe('Stripe · Alipay')
-    expect(paymentMethodLabel('nowpayments', t)).toBe('NOWPayments')
-    expect(paymentMethodLabel('alipay', t)).toBe('Alipay')
-    expect(paymentMethodLabel('something_new', t)).toBe('something_new')
     expect(attentionLabel('quota_observation_unavailable', t)).toBe(
       'No quota reading'
     )

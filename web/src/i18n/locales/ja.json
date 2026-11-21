@@ -9681,6 +9681,9 @@
     "International cards only. Some banks decline; if it fails, use Alipay or WeChat Pay.": "国際カードのみ。拒否される銀行もあります。失敗したら Alipay か WeChat Pay をお使いください",
     "On-chain USDT/USDC, usually credited in about 5 minutes": "オンチェーン USDT/USDC、通常は約5分で反映",
     "No bonus on this method": "この方法では特典は付きません",
-    "This order expired. You can place a new one.": "期限切れです。もう一度注文できます"
+    "This order expired. You can place a new one.": "期限切れです。もう一度注文できます",
+    "{{method}} (Stripe)": "{{method}}（Stripe）",
+    "Offline transfer": "オフライン振込",
+    "Other ({{method}})": "その他（{{method}}）"
   }
 }

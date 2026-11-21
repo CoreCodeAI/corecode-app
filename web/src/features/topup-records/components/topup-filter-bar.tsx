@@ -35,7 +35,7 @@ import {
   LogsFilterToolbar,
 } from '@/features/usage-logs/components/logs-filter-toolbar'
 import {
-  getPaymentMethodName,
+  paymentMethodLabel,
   STATUS_CONFIG,
 } from '@/features/wallet/lib/billing'
 
@@ -78,7 +78,7 @@ export function TopupFilterBar<TData>(props: TopupFilterBarProps<TData>) {
     { value: ALL, label: t('All payment methods') },
     ...props.paymentMethods.map((method) => ({
       value: method,
-      label: getPaymentMethodName(method, t),
+      label: paymentMethodLabel(method, t),
     })),
   ]
 

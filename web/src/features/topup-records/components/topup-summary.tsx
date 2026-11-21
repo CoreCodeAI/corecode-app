@@ -23,7 +23,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { formatPaymentMoney } from '@/features/wallet/lib'
-import { getPaymentMethodName } from '@/features/wallet/lib/billing'
+import { paymentMethodLabel } from '@/features/wallet/lib/billing'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -82,7 +82,7 @@ export function TopupSummary(props: TopupSummaryProps) {
                     className='flex items-center justify-between gap-2'
                   >
                     <span className='truncate'>
-                      {getPaymentMethodName(method.payment_method, t) ||
+                      {paymentMethodLabel(method.payment_method, t) ||
                         t('Unknown')}
                     </span>
                     <span className='text-muted-foreground shrink-0 tabular-nums'>

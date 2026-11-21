@@ -18,10 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { paymentMethodLabel } from '@/features/wallet/lib/billing'
+
 import { dominant, type Contribution } from '../analysis'
 import {
   joinSentences,
-  paymentMethodLabel,
   useInsightsFormat,
   useVendorName,
   type InsightsRangeInfo,

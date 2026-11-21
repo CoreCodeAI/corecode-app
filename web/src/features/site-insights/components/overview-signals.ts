@@ -22,6 +22,8 @@ For commercial licensing, please contact support@quantumnous.com
 
 import type { TFunction } from 'i18next'
 
+import { paymentMethodLabel } from '@/features/wallet/lib/billing'
+
 import type { Finding } from '../analysis'
 import {
   countsRequestsOnce,
@@ -31,7 +33,6 @@ import {
   MIN_ORDERS,
   MIN_TASKS,
   SMALL_SAMPLE,
-  paymentMethodLabel,
 } from '../lib'
 import { serviceFailureRate, unservedOf } from '../quality-analysis'
 import type {

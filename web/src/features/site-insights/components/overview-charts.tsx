@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { paymentMethodLabel } from '@/features/wallet/lib/billing'
 import { cn } from '@/lib/utils'
 
 import {
@@ -33,7 +34,6 @@ import {
   VENDOR_ORDER,
   joinSentences,
   type SourceState,
-  paymentMethodLabel,
 } from '../lib'
 import {
   POOL_PROVIDERS,
