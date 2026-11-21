@@ -100,6 +100,7 @@ func AppendRelayLogAdminInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 		if relayInfo.LimitedPlanGate != "" {
 			other.SetAdmin("limited_plan_ip_gate", relayInfo.LimitedPlanGate)
 			other.SetAdmin("limited_plan_ip_gate_holders", relayInfo.LimitedPlanGateHolders)
+			other.SetAdmin("limited_plan_ip_gate_scope", relayInfo.LimitedPlanGateScope)
 		}
 	}
 	if common.GetContextKeyBool(ctx, constant.ContextKeyChannelIsMultiKey) {

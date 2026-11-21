@@ -38,20 +38,42 @@ func GetLimitedPlanAddressSetting() *LimitedPlanAddressSetting {
 // LimitedPlanUseSetting limits the use of a plan with a per-user purchase
 // limit per network. A studio opens many accounts, lets each buy the plan
 // from a different order address, and sends every account's requests from one
-// place, so the purchase checks never see the address that matters. The
-// options are limited_plan_use_setting.enabled and .threshold.
+// place, so the purchase checks never see the address that matters. A bigger
+// studio rotates through a block of addresses, one account on each at a
+// time, so the check also counts holders per network, and an account that
+// used a gated network stays gated from any address for a while. The options
+// are limited_plan_use_setting.enabled, .threshold, .exclude_free_plans,
+// .network_enabled, .network_threshold and .sticky_days.
 type LimitedPlanUseSetting struct {
 	// Enabled turns on the check at billing time: a request whose client
-	// address already carries Threshold other accounts that used it and hold
-	// a plan limited per user is not charged to that plan. It is charged to
-	// the wallet, or refused when the wallet cannot pay.
+	// address, or network, already carries other accounts that used it and
+	// hold a plan limited per user is not charged to that plan. It is charged
+	// to the wallet, or refused when the wallet cannot pay.
 	Enabled bool `json:"enabled"`
 	// Threshold is how many other holders may use the request's address
 	// before the plan stops serving it. A value below 1 counts as 1.
 	Threshold int `json:"threshold"`
+	// ExcludeFreePlans leaves free plans out: a plan that costs nothing, and
+	// a plan an inviter gave away, neither counts its holder nor is gated.
+	// The check guards what is bought at a discount, and a gift costs nothing
+	// to farm.
+	ExcludeFreePlans bool `json:"exclude_free_plans"`
+	// NetworkEnabled counts holders per network as well as per address: an
+	// IPv4 /24 or an IPv6 /64. The address or the network may trigger.
+	NetworkEnabled bool `json:"network_enabled"`
+	// NetworkThreshold is how many other holders may use the request's
+	// network before the plan stops serving it. A value below 1 counts as 1.
+	// It is higher than Threshold: a /24 holds more than one household.
+	NetworkThreshold int `json:"network_threshold"`
+	// StickyDays is how long an account that used a gated address or network
+	// stays gated from every address, so that moving to a new address does
+	// not end the gate. Zero turns the memory off.
+	StickyDays int `json:"sticky_days"`
 }
 
-var limitedPlanUseSetting = LimitedPlanUseSetting{Enabled: true, Threshold: 3}
+var limitedPlanUseSetting = LimitedPlanUseSetting{
+	Enabled: true, Threshold: 3, ExcludeFreePlans: true, NetworkEnabled: true, NetworkThreshold: 4, StickyDays: 7,
+}
 
 func init() {
 	config.GlobalConfig.Register("limited_plan_use_setting", &limitedPlanUseSetting)

@@ -255,8 +255,44 @@ func TestNewcomerPlanGateMarksTheLogs(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "wallet", adminInfo["limited_plan_ip_gate"])
 	assert.EqualValues(t, 3, adminInfo["limited_plan_ip_gate_holders"])
+	assert.Equal(t, model.LimitedPlanScopeAddress, adminInfo["limited_plan_ip_gate_scope"])
 	assert.Equal(t, "wallet", logged["limited_plan_gate"], "the customer's log says why the plan did not pay")
 	assert.NotContains(t, logged, "limited_plan_ip_gate_holders", "the count is for administrators")
+	assert.NotContains(t, logged, "limited_plan_ip_gate_scope", "the scope is for administrators")
+}
+
+// A studio that rotates through a block of addresses is gated by the network,
+// and the account that moved to a clean address stays gated.
+func TestNewcomerPlanGateFollowsTheNetworkAndTheAccount(t *testing.T) {
+	w := newGateWorld(t)
+	setting := operation_setting.GetLimitedPlanUseSetting()
+	setting.NetworkEnabled, setting.NetworkThreshold, setting.StickyDays = true, 4, 7
+	users := []*model.User{}
+	for i := 0; i < 5; i++ {
+		user := w.user(t, 0)
+		w.hold(t, user, w.newcomer, "order", 1_000_000)
+		w.request(t, user, fmt.Sprintf("103.135.100.%d", 180+i))
+		users = append(users, user)
+	}
+
+	// Each used its own address of the block, which carries four others.
+	_, apiErr, info := gateBill(t, users[0], "103.135.100.185", 10_000, "subscription_first")
+	require.NotNil(t, apiErr, "no wallet to pay with")
+	assert.Equal(t, model.LimitedPlanGateRefused, info.LimitedPlanGate)
+	assert.Equal(t, model.LimitedPlanScopeNetwork, info.LimitedPlanGateScope)
+
+	// The account moved to an address nobody used and is still gated.
+	_, apiErr, info = gateBill(t, users[0], "119.246.95.21", 10_000, "subscription_first")
+	require.NotNil(t, apiErr)
+	assert.Equal(t, model.LimitedPlanScopeSticky, info.LimitedPlanGateScope)
+
+	// A customer with the plan and no history in the block is served.
+	clean := w.user(t, 0)
+	sub := w.hold(t, clean, w.newcomer, "order", 1_000_000)
+	_, apiErr, info = gateBill(t, clean, "119.246.95.21", 10_000, "subscription_first")
+	require.Nil(t, apiErr)
+	assert.Empty(t, info.LimitedPlanGate)
+	assert.Equal(t, int64(10_000), subscriptionUsed(t, sub.Id))
 }
 
 func TestNewcomerPlanGateRefusalIsTranslated(t *testing.T) {

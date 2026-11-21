@@ -164,8 +164,10 @@ type RelayInfo struct {
 	// charged to the wallet, to another plan, or refused.
 	// LimitedPlanGateHolders counts the other holders using the address; log
 	// metadata only.
+	// LimitedPlanGateScope is what triggered it (model.LimitedPlanScope*).
 	LimitedPlanGate        string
 	LimitedPlanGateHolders int
+	LimitedPlanGateScope   string
 	// RequestId is used for idempotent pre-consume/refund
 	RequestId string
 	// SubscriptionAmountTotal / SubscriptionAmountUsedAfterPreConsume are used to compute remaining in logs.
