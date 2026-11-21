@@ -98,7 +98,7 @@ describe('ClientSetupGuide', () => {
     await renderGuide([key({})])
 
     await user.click(screen.getByRole('tab', { name: 'macOS / Linux' }))
-    await user.click(screen.getByRole('button', { name: 'Copy' }))
+    await user.click(screen.getByRole('button', { name: 'Copy config' }))
 
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
     expect(post).toHaveBeenCalledWith('/api/token/7/key')
@@ -134,7 +134,7 @@ describe('ClientSetupGuide', () => {
     await renderGuide([key({})])
 
     await user.click(screen.getByRole('tab', { name: 'macOS / Linux' }))
-    await user.click(screen.getByRole('button', { name: 'Copy' }))
+    await user.click(screen.getByRole('button', { name: 'Copy config' }))
 
     expect(write).toHaveBeenCalledTimes(1)
     answerKeyRequest({
@@ -155,10 +155,10 @@ describe('ClientSetupGuide', () => {
     const writeText = vi.spyOn(navigator.clipboard, 'writeText')
     await renderGuide([key({})])
 
-    await user.click(screen.getByRole('button', { name: 'Copy' }))
+    await user.click(screen.getByRole('button', { name: 'Copy config' }))
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Copy' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Copy config' })).toBeEnabled()
     )
     expect(writeText).not.toHaveBeenCalled()
   })
@@ -175,7 +175,7 @@ describe('ClientSetupGuide', () => {
       'sk-your-key'
     )
     expect(
-      screen.queryByRole('button', { name: 'Copy' })
+      screen.queryByRole('button', { name: 'Copy config' })
     ).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Import to CC Switch' })
@@ -234,20 +234,51 @@ describe('ClientSetupGuide', () => {
       })
     )
 
-    await user.click(screen.getByRole('button', { name: 'Copy' }))
+    await user.click(screen.getByRole('button', { name: 'Copy config' }))
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
     expect(writeText.mock.calls[0][0]).toContain('sk-real-new-secret')
     expect(writeText.mock.calls[0][0]).not.toContain('sk-your-key')
   })
 
-  it('says the snippet shows a masked key and Copy copies the full one', async () => {
+  it('shows the key masked and says copying fills in the full one', async () => {
     await renderGuide([key({})])
 
+    expect(await screen.findByText('sk-abcd…wxyz')).toBeVisible()
+    expect(screen.getByText(/Copying fills in the full key/)).toBeVisible()
+  })
+
+  it('copies the full key alone from the key bar', async () => {
+    const user = userEvent.setup()
+    const post = vi.spyOn(api, 'post').mockResolvedValue({
+      data: { success: true, data: { key: 'full-secret-value' } },
+    })
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText')
+    await renderGuide([key({})])
+
+    await user.click(screen.getByRole('button', { name: 'Copy Key' }))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+    expect(post).toHaveBeenCalledWith('/api/token/7/key')
+    expect(writeText.mock.calls[0][0]).toBe('sk-full-secret-value')
     expect(
-      await screen.findByText(
-        'The key is masked here. The Copy button copies the full key.'
-      )
-    ).toBeVisible()
+      await screen.findByRole('button', { name: 'Copied' })
+    ).toBeInTheDocument()
+  })
+
+  it('copies no key when the full key cannot be fetched', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(api, 'post').mockResolvedValue({
+      data: { success: false, message: 'denied' },
+    })
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText')
+    await renderGuide([key({})])
+
+    await user.click(screen.getByRole('button', { name: 'Copy Key' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Copy Key' })).toBeEnabled()
+    )
+    expect(writeText).not.toHaveBeenCalled()
   })
 
   it('opens CC Switch through an anchor, not a new tab, and hints at installing it', async () => {
@@ -292,6 +323,7 @@ describe('ClientSetupGuide', () => {
     expect(screen.getByLabelText('Configuration snippet')).toHaveTextContent(
       'sk-bbbb…2222'
     )
+    expect(screen.getByText('sk-bbbb…2222')).toBeVisible()
   })
 
   it('offers only Claude Code for a Claude Code only group', async () => {

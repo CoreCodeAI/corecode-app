@@ -66,7 +66,6 @@ export function ApiKeysDialogs() {
         open={open === 'setup' && currentRow !== null}
         onOpenChange={(isOpen) => !isOpen && setOpen(null)}
         title={<SetupDialogTitle apiKey={currentRow} />}
-        description={currentRow?.name}
         contentClassName='sm:max-w-2xl'
         contentHeight='auto'
       >
