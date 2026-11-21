@@ -27,7 +27,6 @@ For commercial licensing, please contact support@quantumnous.com
  * the overview's wizard host before the customer saw the green state.
  */
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import { ArrowRight, BookOpen, Check, Copy, Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -113,7 +112,7 @@ export function OnboardingWaitStep(props: {
           )}
         </p>
         <div className='flex flex-wrap gap-2'>
-          <Button size='sm' render={<Link to='/pricing' />}>
+          <Button size='sm' render={<a href='/pricing/' />}>
             {t('See pricing')}
             <ArrowRight data-icon='inline-end' />
           </Button>

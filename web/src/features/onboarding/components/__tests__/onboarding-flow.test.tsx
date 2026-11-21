@@ -271,7 +271,7 @@ describe('OnboardingWaitStep', () => {
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /See pricing/ })).toHaveAttribute(
       'href',
-      '/pricing'
+      '/pricing/'
     )
   })
 

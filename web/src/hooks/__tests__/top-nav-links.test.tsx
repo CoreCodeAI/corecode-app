@@ -40,7 +40,7 @@ afterEach(() => {
   useAuthStore.getState().auth.reset()
 })
 
-function linkHrefsFor(role?: number, headerNavModules = '') {
+function linksFor(role?: number, headerNavModules = '') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -56,7 +56,11 @@ function linkHrefsFor(role?: number, headerNavModules = '') {
     )
   }
   const { result } = renderHook(() => useTopNavLinks(), { wrapper: Wrapper })
-  return result.current.map((link) => link.href)
+  return result.current
+}
+
+function linkHrefsFor(role?: number, headerNavModules = '') {
+  return linksFor(role, headerNavModules).map((link) => link.href)
 }
 
 describe('rankings nav link', () => {
@@ -74,6 +78,19 @@ describe('rankings nav link', () => {
     expect(
       linkHrefsFor(ROLE.ADMIN, JSON.stringify({ rankings: false }))
     ).not.toContain('/rankings')
+  })
+})
+
+describe('pricing nav link', () => {
+  it('opens the static price list with a document load, not the router', () => {
+    const link = linksFor().find((entry) => entry.href.startsWith('/pricing'))
+    expect(link).toMatchObject({ href: '/pricing/', external: true })
+  })
+
+  it('is hidden when the module is disabled', () => {
+    expect(
+      linkHrefsFor(undefined, JSON.stringify({ pricing: { enabled: false } }))
+    ).not.toContain('/pricing/')
   })
 })
 

@@ -20,6 +20,8 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
 import z from 'zod'
 
 import { ModelDetails } from '@/features/pricing/components/model-details'
+import { StaticPricingHandOff } from '@/features/pricing/components/static-pricing-hand-off'
+import { staticPricingServes } from '@/features/pricing/lib/static-pricing'
 import { getModuleAccessForGuard } from '@/lib/nav-modules'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -53,5 +55,13 @@ export const Route = createFileRoute('/pricing/$modelId/')({
       }
     }
   },
-  component: ModelDetails,
+  component: ModelDetailsRoute,
 })
+
+// A model's price lives on the static site too: the proxy sends
+// /pricing/<modelId> to /model/<modelId>/, or to the list when it has no page.
+function ModelDetailsRoute() {
+  const { modelId } = Route.useParams()
+  if (staticPricingServes()) return <StaticPricingHandOff modelId={modelId} />
+  return <ModelDetails />
+}
