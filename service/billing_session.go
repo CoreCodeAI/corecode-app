@@ -667,7 +667,10 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 	var gate *model.LimitedPlanGate
 	var except []int
 	if c != nil && c.Request != nil {
-		if gate = model.CheckLimitedPlanGate(relayInfo.UserId, c.ClientIP()); gate != nil {
+		var exit string
+		gate, exit = model.CheckLimitedPlanVerdict(relayInfo.UserId, c.ClientIP())
+		relayInfo.LimitedPlanGateExit = exit
+		if gate != nil {
 			except = gate.SubscriptionIds
 			relayInfo.LimitedPlanGateHolders = gate.Holders
 			relayInfo.LimitedPlanGateScope = gate.Scope

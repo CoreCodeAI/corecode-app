@@ -286,6 +286,48 @@ func TestNewcomerPlanGateMarksTheLogs(t *testing.T) {
 	assert.Equal(t, "wallet", logged["limited_plan_gate"], "the customer's log says why the plan did not pay")
 	assert.NotContains(t, logged, "limited_plan_ip_gate_holders", "the count is for administrators")
 	assert.NotContains(t, logged, "limited_plan_ip_gate_scope", "the scope is for administrators")
+	assert.NotContains(t, adminInfo, "limited_plan_ip_gate_exit", "a gated address is no exit")
+}
+
+// A holder behind a listed proxy block keeps the plan, and the log says the
+// block, not the customer, was spared.
+func TestNewcomerPlanGateSparesAListedExit(t *testing.T) {
+	w := newGateWorld(t)
+	setting := operation_setting.GetLimitedPlanUseSetting()
+	setting.NetworkEnabled, setting.NetworkThreshold = true, 4
+	user := w.user(t, 500_000)
+	sub := w.hold(t, user, w.newcomer, "order", 1_000_000)
+	w.request(t, user, "185.220.236.155")
+	for i := 0; i < 5; i++ {
+		other := w.user(t, 0)
+		w.hold(t, other, w.newcomer, "order", 1_000_000)
+		w.request(t, other, fmt.Sprintf("185.220.236.%d", 160+i))
+	}
+
+	gated, apiErr, info := gateBill(t, user, "185.220.236.155", 10_000, "subscription_first")
+	require.Nil(t, apiErr)
+	assert.Equal(t, BillingSourceWallet, gated.funding.Source(), "unlisted, the studio's block gates the newcomer")
+	assert.Equal(t, model.LimitedPlanScopeNetwork, info.LimitedPlanGateScope)
+
+	setting.SharedExitNetworks = "185.220.236.0/24"
+	model.ResetLimitedPlanGateCache()
+	session, apiErr, info := gateBill(t, user, "185.220.236.155", 10_000, "subscription_first")
+	require.Nil(t, apiErr)
+	assert.Equal(t, BillingSourceSubscription, session.funding.Source())
+	assert.Equal(t, int64(10_000), subscriptionUsed(t, sub.Id))
+	assert.Empty(t, info.LimitedPlanGate)
+	assert.Equal(t, model.LimitedPlanExitListed, info.LimitedPlanGateExit)
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	other := model.NewLogOther()
+	AppendRelayLogAdminInfo(c, info, other)
+	logged := other.Snapshot()
+	adminInfo, ok := logged["admin_info"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "listed", adminInfo["limited_plan_ip_gate_exit"])
+	assert.NotContains(t, adminInfo, "limited_plan_ip_gate")
+	assert.NotContains(t, logged, "limited_plan_ip_gate_exit", "the reason is for administrators")
 }
 
 // A studio that rotates through a block of addresses is gated by the network,

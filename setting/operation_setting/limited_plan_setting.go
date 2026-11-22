@@ -43,7 +43,7 @@ func GetLimitedPlanAddressSetting() *LimitedPlanAddressSetting {
 // time, so the check also counts holders per network, and an account that
 // used a gated network stays gated from any address for a while. The options
 // are limited_plan_use_setting.enabled, .threshold, .exclude_free_plans,
-// .network_enabled, .network_threshold and .sticky_days.
+// .network_enabled, .network_threshold, .sticky_days and .shared_exit_networks.
 type LimitedPlanUseSetting struct {
 	// Enabled turns on the check at billing time: a request whose client
 	// address, or network, already carries other accounts that used it and
@@ -69,10 +69,18 @@ type LimitedPlanUseSetting struct {
 	// stays gated from every address, so that moving to a new address does
 	// not end the gate. Zero turns the memory off.
 	StickyDays int `json:"sticky_days"`
+	// SharedExitNetworks lists address blocks of commercial proxies, VPN
+	// airports and data centres, one CIDR per entry, separated by commas,
+	// spaces or newlines. Many unrelated customers leave through such a block,
+	// so a request from it is not counted per network: the plan is gated only
+	// when its own address carries enough holders. An invalid entry is
+	// ignored. A listed block does not exempt a customer; an exemption does.
+	SharedExitNetworks string `json:"shared_exit_networks"`
 }
 
 var limitedPlanUseSetting = LimitedPlanUseSetting{
 	Enabled: true, Threshold: 3, ExcludeFreePlans: true, NetworkEnabled: true, NetworkThreshold: 4, StickyDays: 7,
+	SharedExitNetworks: "185.220.236.0/24",
 }
 
 func init() {

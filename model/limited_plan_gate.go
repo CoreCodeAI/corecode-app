@@ -30,6 +30,36 @@ const (
 	LimitedPlanGateOtherPlan = "other_plan"
 )
 
+// Values of the limited_plan_ip_gate_exit marker: why a scope that carries
+// enough holders did not gate a request, because it is a shared exit.
+const (
+	// LimitedPlanExitListed is a block an administrator listed in
+	// SharedExitNetworks; its network is not counted.
+	LimitedPlanExitListed = "listed"
+	// LimitedPlanExitCrowd is a scope used by many accounts that hold no plan
+	// limited per user.
+	LimitedPlanExitCrowd = "crowd"
+	// LimitedPlanExitTraffic is a scope where accounts that hold no such plan
+	// spent real money, comparable to what the holders spent.
+	LimitedPlanExitTraffic = "traffic"
+	// LimitedPlanExitUnread is a scope that could not be read; the request is
+	// let through.
+	LimitedPlanExitUnread = "unread"
+)
+
+// A proxy exit that sells to the public carries customers who pay for what
+// they use. A studio's address carries the accounts it opened and nothing
+// else: on 2026-11-22 the holders of 185.220.236.0/24, a proxy block, had
+// spent $286 in 30 days and the accounts without a plan $249, while the
+// blocks of the two studios of 11-21 had $6 against $564, and $0 against
+// $3,501. A scope whose accounts without a plan spent at least
+// limitedPlanTrafficMinUSD dollars, and at least limitedPlanTrafficShare of what
+// its holders spent, is a shared exit.
+const (
+	limitedPlanTrafficMinUSD = 20
+	limitedPlanTrafficShare  = 0.5
+)
+
 // The newcomer plan is bought one per account, so a studio opens accounts, and
 // the purchase checks (CheckSubscriptionPurchaseFrom) cannot see the address
 // that gives it away: every order comes from a different proxy, and the
@@ -93,7 +123,8 @@ type limitedPlanScope struct {
 	ips    []string
 	prefix string
 	exit   sync.Once
-	isExit bool
+	// exitReason is why the scope is a shared exit, or "".
+	exitReason string
 }
 
 type limitedPlanSticky struct {
@@ -150,9 +181,12 @@ func LimitedPlanNetworkOf(ip string) string {
 //   - the address was used by at least the threshold of other accounts that
 //     hold such a plan, in the last 30 days (a request in the logs), or its
 //     network was used by at least the network threshold;
-//   - it is not a shared exit: five or more accounts used it that hold no such
-//     plan and they are no fewer than the holders, the test the purchase check
-//     uses (checkLimitedPlanAddressFarm);
+//   - it is not a shared exit (limitedPlanScope.sharedExit): five or more
+//     accounts used it that hold no such plan and they are no fewer than the
+//     holders, the test the purchase check uses (checkLimitedPlanAddressFarm),
+//     or the accounts without such a plan spent real money there; and its
+//     network is not listed in SharedExitNetworks, which only drops the
+//     network count, never the address's;
 //   - or the customer used a gated address or network in the last sticky days,
 //     which gates them from every address;
 //   - the customer is not exempt (subscriptionAddressExempt).
@@ -165,39 +199,51 @@ func CheckLimitedPlanGate(userId int, ip string) *LimitedPlanGate {
 }
 
 func checkLimitedPlanGateAt(userId int, ip string, now int64) *LimitedPlanGate {
+	gate, _ := checkLimitedPlanVerdictAt(userId, ip, now)
+	return gate
+}
+
+// CheckLimitedPlanVerdict is CheckLimitedPlanGate that also returns why the
+// address was spared as a shared exit (LimitedPlanExit*), or "". The reason is
+// set whether or not the request ends up gated, for the log.
+func CheckLimitedPlanVerdict(userId int, ip string) (*LimitedPlanGate, string) {
+	return checkLimitedPlanVerdictAt(userId, ip, common.GetTimestamp())
+}
+
+func checkLimitedPlanVerdictAt(userId int, ip string, now int64) (*LimitedPlanGate, string) {
 	setting := operation_setting.GetLimitedPlanUseSetting()
 	if !setting.Enabled || ip == "" || userId <= 0 {
-		return nil
+		return nil, ""
 	}
 	owned, err := limitedPlanOwned(userId, now)
 	if err != nil {
 		common.SysLog(common.LogText("limited plan gate: reading the subscriptions of user %d: %s", userId, err.Error()))
-		return nil
+		return nil, ""
 	}
 	if len(owned) == 0 {
-		return nil
+		return nil, ""
 	}
-	scope, holders, err := limitedPlanTrigger(userId, ip, now)
+	scope, holders, exit, err := limitedPlanTrigger(userId, ip, now)
 	if err != nil {
 		common.SysLog(common.LogText("limited plan gate: reading address %s: %s", ip, err.Error()))
-		return nil
+		return nil, ""
 	}
 	if scope == "" {
 		scope, err = limitedPlanStickyScope(userId, now)
 		if err != nil {
 			common.SysLog(common.LogText("limited plan gate: reading the addresses of user %d: %s", userId, err.Error()))
-			return nil
+			return nil, exit
 		}
 	} else {
 		limitedPlanMarkSticky(userId, now)
 	}
 	if scope == "" {
-		return nil
+		return nil, exit
 	}
 	if exempt, err := subscriptionAddressExempt(userId); err != nil || exempt {
-		return nil
+		return nil, exit
 	}
-	return &LimitedPlanGate{SubscriptionIds: owned, Holders: holders, Scope: scope}
+	return &LimitedPlanGate{SubscriptionIds: owned, Holders: holders, Scope: scope}, exit
 }
 
 // limitedPlanOwned returns the customer's active subscriptions of plans the
@@ -223,44 +269,123 @@ func limitedPlanNotFree(query *gorm.DB) *gorm.DB {
 }
 
 // limitedPlanTrigger reports which of the request's address and network
-// carries enough other holders to gate it, and how many.
-func limitedPlanTrigger(userId int, ip string, now int64) (scope string, holders int, err error) {
+// carries enough other holders to gate it, and how many. exit says why a scope
+// that carried enough holders was spared as a shared exit, or "".
+func limitedPlanTrigger(userId int, ip string, now int64) (scope string, holders int, exit string, err error) {
 	setting := operation_setting.GetLimitedPlanUseSetting()
 	address, err := limitedPlanScopeOf(ip, now)
 	if err != nil {
-		return "", 0, err
+		return "", 0, "", err
 	}
-	if triggered, count := address.triggers(userId, setting.Threshold, now); triggered {
-		return LimitedPlanScopeAddress, count, nil
+	triggered, count, spared := address.triggers(userId, setting.Threshold, now)
+	if triggered {
+		return LimitedPlanScopeAddress, count, "", nil
 	}
+	exit = spared
 	if !setting.NetworkEnabled {
-		return "", 0, nil
+		return "", 0, exit, nil
 	}
 	net := LimitedPlanNetworkOf(ip)
 	if net == "" {
-		return "", 0, nil
+		return "", 0, exit, nil
 	}
 	network, err := limitedPlanScopeOf(net, now)
 	if err != nil {
-		return "", 0, err
+		return "", 0, "", err
 	}
-	if triggered, count := network.triggers(userId, setting.NetworkThreshold, now); triggered {
-		return LimitedPlanScopeNetwork, count, nil
+	if limitedPlanListedExit(ip) {
+		// The administrator's list decides first: the block is a proxy, so its
+		// holders are not one studio however many they are. The address was
+		// counted above.
+		if network.otherHolders(userId) >= max(setting.NetworkThreshold, 1) && exit == "" {
+			exit = LimitedPlanExitListed
+		}
+		return "", 0, exit, nil
 	}
-	return "", 0, nil
+	triggered, count, spared = network.triggers(userId, setting.NetworkThreshold, now)
+	if triggered {
+		return LimitedPlanScopeNetwork, count, exit, nil
+	}
+	if exit == "" {
+		exit = spared
+	}
+	return "", 0, exit, nil
 }
 
-// triggers reports whether the holders of the scope other than userId reach
-// the threshold and the scope is not a shared exit.
-func (s *limitedPlanScope) triggers(userId int, threshold int, now int64) (bool, int) {
+// limitedPlanListedExit reports whether ip is inside a block listed in
+// SharedExitNetworks.
+func limitedPlanListedExit(ip string) bool {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return false
+	}
+	addr = addr.Unmap()
+	for _, prefix := range limitedPlanListedNetworks(operation_setting.GetLimitedPlanUseSetting().SharedExitNetworks) {
+		if prefix.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
+var (
+	limitedPlanListedMu    sync.Mutex
+	limitedPlanListedText  string
+	limitedPlanListedCache []netip.Prefix
+)
+
+// limitedPlanListedNetworks parses the SharedExitNetworks option, keeping the
+// result until the text changes. An entry that is not a CIDR is skipped; a bare
+// address counts as its own /32 or /128.
+func limitedPlanListedNetworks(text string) []netip.Prefix {
+	limitedPlanListedMu.Lock()
+	defer limitedPlanListedMu.Unlock()
+	if text == limitedPlanListedText && limitedPlanListedCache != nil {
+		return limitedPlanListedCache
+	}
+	parsed := []netip.Prefix{}
+	for _, entry := range strings.FieldsFunc(text, func(r rune) bool { return r == ',' || r == ';' || r == ' ' || r == '\n' || r == '\r' || r == '\t' }) {
+		prefix, err := netip.ParsePrefix(entry)
+		if err != nil {
+			addr, addrErr := netip.ParseAddr(entry)
+			if addrErr != nil {
+				continue
+			}
+			prefix = netip.PrefixFrom(addr, addr.BitLen())
+		}
+		addr, bits := prefix.Addr(), prefix.Bits()
+		if addr.Is4In6() && bits >= 96 {
+			addr, bits = addr.Unmap(), bits-96
+		}
+		parsed = append(parsed, netip.PrefixFrom(addr, bits).Masked())
+	}
+	limitedPlanListedText = text
+	limitedPlanListedCache = parsed
+	return parsed
+}
+
+// otherHolders counts the holders of the scope other than userId.
+func (s *limitedPlanScope) otherHolders(userId int) int {
 	holders := len(s.holders)
 	if s.holders[userId] {
 		holders--
 	}
-	if holders < max(threshold, 1) || s.isSharedExit(now) {
-		return false, holders
+	return holders
+}
+
+// triggers reports whether the holders of the scope other than userId reach
+// the threshold and the scope is not a shared exit, and how many holders there
+// are. When the holders reach the threshold but the scope is a shared exit,
+// spared says why (LimitedPlanExit*).
+func (s *limitedPlanScope) triggers(userId int, threshold int, now int64) (triggered bool, holders int, spared string) {
+	holders = s.otherHolders(userId)
+	if holders < max(threshold, 1) {
+		return false, holders, ""
 	}
-	return true, holders
+	if reason := s.sharedExit(now); reason != "" {
+		return false, holders, reason
+	}
+	return true, holders, ""
 }
 
 // limitedPlanScopeOf returns the holders of an address, or of a network when
@@ -357,26 +482,31 @@ func limitedPlanHoldersAmong(userIds []int, now int64) (map[int]bool, error) {
 	return holders, nil
 }
 
-// isSharedExit reports whether the scope is a proxy or NAT exit rather than
-// one person's: at least sharedExitBystanders accounts used it, by request,
-// sign-in or order, that hold no plan limited per user, and they are no
-// fewer than the accounts that do. The farm's own accounts all send requests,
-// so sharedExit's other test, many requesters in a week, is not used: forty
-// accounts of one studio would pass for a proxy node. A failed lookup counts
-// as a shared exit, which lets the request through. The answer is kept with
-// the scope.
-func (s *limitedPlanScope) isSharedExit(now int64) bool {
+// sharedExit reports why the scope is a proxy or NAT exit rather than one
+// person's, or "" when it is not (LimitedPlanExit*):
+//   - crowd: at least sharedExitBystanders accounts used it, by request,
+//     sign-in or order, that hold no plan limited per user, and they are no
+//     fewer than the accounts that do;
+//   - traffic: the accounts that hold no such plan spent at least
+//     limitedPlanTrafficMinUSD in the window and limitedPlanTrafficShare of
+//     what the holders spent.
+//
+// The farm's own accounts all send requests, so sharedExit's other test, many
+// requesters in a week, is not used: forty accounts of one studio would pass
+// for a proxy node. A failed lookup counts as a shared exit, which lets the
+// request through. The answer is kept with the scope.
+func (s *limitedPlanScope) sharedExit(now int64) string {
 	s.exit.Do(func() {
 		users, err := scopeUsers(s, now-sharedAddressWindowSeconds, now)
 		if err != nil {
 			common.SysLog(common.LogText("limited plan gate: reading users of %s: %s", s.key, err.Error()))
-			s.isExit = true
+			s.exitReason = LimitedPlanExitUnread
 			return
 		}
 		held, err := limitedPlanHoldersAmong(users, now)
 		if err != nil {
 			common.SysLog(common.LogText("limited plan gate: reading holders among users of %s: %s", s.key, err.Error()))
-			s.isExit = true
+			s.exitReason = LimitedPlanExitUnread
 			return
 		}
 		for id := range s.holders {
@@ -388,9 +518,50 @@ func (s *limitedPlanScope) isSharedExit(now int64) bool {
 				bystanders++
 			}
 		}
-		s.isExit = bystanders >= sharedExitBystanders && bystanders >= len(held)
+		if bystanders >= sharedExitBystanders && bystanders >= len(held) {
+			s.exitReason = LimitedPlanExitCrowd
+			return
+		}
+		if bystanders == 0 {
+			return
+		}
+		spent, err := scopeSpend(s, now-sharedAddressWindowSeconds, now)
+		if err != nil {
+			common.SysLog(common.LogText("limited plan gate: reading spending of %s: %s", s.key, err.Error()))
+			s.exitReason = LimitedPlanExitUnread
+			return
+		}
+		var holdersSpent, othersSpent int64
+		for id, quota := range spent {
+			if held[id] {
+				holdersSpent += quota
+			} else {
+				othersSpent += quota
+			}
+		}
+		if float64(othersSpent) >= limitedPlanTrafficMinUSD*common.QuotaPerUnit && float64(othersSpent) >= limitedPlanTrafficShare*float64(holdersSpent) {
+			s.exitReason = LimitedPlanExitTraffic
+		}
 	})
-	return s.isExit
+	return s.exitReason
+}
+
+// scopeSpend returns the quota each account consumed through the scope in
+// (since, until].
+func scopeSpend(scope *limitedPlanScope, since int64, until int64) (map[int]int64, error) {
+	var rows []struct {
+		UserId int
+		Quota  int64
+	}
+	if err := scope.whereIn(LOG_DB.Model(&Log{}), "ip").Where("created_at > ? AND created_at <= ? AND type = ?", since, until, LogTypeConsume).
+		Select("user_id, SUM(quota) AS quota").Group("user_id").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	spent := make(map[int]int64, len(rows))
+	for _, row := range rows {
+		spent[row.UserId] = row.Quota
+	}
+	return spent, nil
 }
 
 // scopeUsers returns the users that signed in, ordered or sent requests from
@@ -543,7 +714,7 @@ func limitedPlanUsedGatedAddress(userId int, now int64) (bool, error) {
 			continue
 		}
 		seen[ip] = true
-		scope, _, err := limitedPlanTrigger(userId, ip, now)
+		scope, _, _, err := limitedPlanTrigger(userId, ip, now)
 		if err != nil {
 			return false, err
 		}
