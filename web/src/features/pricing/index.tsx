@@ -25,12 +25,7 @@ import { PageTransition } from '@/components/page-transition'
 import { useDocumentTitle } from '@/hooks/use-document-title'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
-import {
-  LoadingSkeleton,
-  ClaudeCodeEstimator,
-  ModelCheckBanner,
-  PriceBoard,
-} from './components'
+import { LoadingSkeleton, ModelCheckBanner, PriceBoard } from './components'
 import { VIEW_MODES } from './constants'
 import { usePricingData } from './hooks/use-pricing-data'
 import { usePricingUrlState } from './hooks/use-pricing-url-state'
@@ -147,12 +142,6 @@ export function Pricing() {
               sort={url.sort}
               onSortChange={url.setSort}
               onModelClick={url.openModel}
-            />
-
-            <ClaudeCodeEstimator
-              models={models || []}
-              priceRate={priceRate}
-              money={money}
             />
           </main>
 

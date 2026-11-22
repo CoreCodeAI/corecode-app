@@ -118,7 +118,6 @@ import type {
   PricingModel,
   TokenUnit,
 } from '../types'
-import { ClaudeCodeEstimator } from './claude-code-estimator'
 import { DiscountBadge } from './discount-badge'
 import { DynamicPricingBreakdown } from './dynamic-pricing-breakdown'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
@@ -1624,14 +1623,6 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
               showRechargePrice={showRechargePrice}
             />
           </section>
-
-          {!isDynamic && (
-            <ClaudeCodeEstimator
-              models={[props.model]}
-              priceRate={props.priceRate}
-              money={props.money}
-            />
-          )}
 
           <ModelBackendDetailsSection model={props.model} />
         </TabsContent>
