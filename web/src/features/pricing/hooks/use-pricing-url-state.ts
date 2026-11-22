@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { getRouteApi, useRouter } from '@tanstack/react-router'
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -53,12 +53,40 @@ export function usePricingUrlState(rates: Pick<PriceRates, 'hkdPerCny'> = {}) {
   const navigate = route.useNavigate()
   const router = useRouter()
   const openedHere = useRef(false)
+  const savedScrollY = useRef<number | null>(null)
+  const prevModel = useRef<string | undefined>(search.model)
+
+  useEffect(() => {
+    const previous = prevModel.current
+    const current = search.model
+    prevModel.current = current
+
+    if (typeof window === 'undefined') return
+
+    const targetY = savedScrollY.current
+    if (targetY === null) return
+
+    if (previous && !current) {
+      openedHere.current = false
+      savedScrollY.current = null
+      window.scrollTo(window.scrollX, targetY)
+      const frame = window.requestAnimationFrame(() => {
+        window.scrollTo(window.scrollX, targetY)
+      })
+      return () => window.cancelAnimationFrame(frame)
+    }
+
+    if (!previous && current && window.scrollY !== targetY) {
+      window.scrollTo(window.scrollX, targetY)
+    }
+  }, [search.model])
 
   const setSearch = useCallback(
     (value: string) => {
       void navigate({
         search: (prev) => ({ ...prev, search: value || undefined }),
         replace: true,
+        resetScroll: false,
       })
     },
     [navigate]
@@ -72,6 +100,7 @@ export function usePricingUrlState(rates: Pick<PriceRates, 'hkdPerCny'> = {}) {
           sort: value === DEFAULT_BOARD_SORT ? undefined : value,
         }),
         replace: true,
+        resetScroll: false,
       })
     },
     [navigate]
@@ -86,6 +115,7 @@ export function usePricingUrlState(rates: Pick<PriceRates, 'hkdPerCny'> = {}) {
           currency: value,
         }),
         replace: true,
+        resetScroll: false,
       })
     },
     [navigate]
@@ -93,13 +123,22 @@ export function usePricingUrlState(rates: Pick<PriceRates, 'hkdPerCny'> = {}) {
 
   const openModel = useCallback(
     (name: string) => {
+      if (typeof window !== 'undefined' && savedScrollY.current === null) {
+        savedScrollY.current = window.scrollY
+      }
       openedHere.current = true
-      void navigate({ search: (prev) => ({ ...prev, model: name }) })
+      void navigate({
+        search: (prev) => ({ ...prev, model: name }),
+        resetScroll: false,
+      })
     },
     [navigate]
   )
 
   const closeModel = useCallback(() => {
+    if (typeof window !== 'undefined' && savedScrollY.current === null) {
+      savedScrollY.current = window.scrollY
+    }
     if (openedHere.current) {
       openedHere.current = false
       router.history.back()
@@ -108,6 +147,7 @@ export function usePricingUrlState(rates: Pick<PriceRates, 'hkdPerCny'> = {}) {
     void navigate({
       search: (prev) => ({ ...prev, model: undefined }),
       replace: true,
+      resetScroll: false,
     })
   }, [navigate, router])
 

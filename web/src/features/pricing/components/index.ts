@@ -19,7 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 export { ModelCard } from './model-card'
 export { LoadingSkeleton } from './loading-skeleton'
 export { EmptyState } from './empty-state'
-export { ClaudeCodeEstimator } from './claude-code-estimator'
 export { BillingExplainer } from './billing-explainer'
 export { PriceBoard } from './price-board'
 export { ModelCheckBanner } from './model-check-banner'

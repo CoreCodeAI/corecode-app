@@ -26,7 +26,7 @@ import {
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18next from 'i18next'
-import { afterEach, beforeAll, expect, it } from 'vitest'
+import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import z from 'zod'
 
 import { PriceBoard } from '../../components/price-board'
@@ -260,4 +260,82 @@ it('lets a ?currency= link, then a stored pick, override the language default', 
 it('does not store a language default, only a pick', async () => {
   await renderIn('en', '/pricing/')
   expect(localStorage.getItem('corecode:pricing-currency')).toBeNull()
+})
+
+it('preserves document scroll when opening and closing a model drawer', async () => {
+  let scrollY = 0
+  const scrollToSpy = vi
+    .spyOn(window, 'scrollTo')
+    .mockImplementation((arg1?: number | ScrollToOptions, arg2?: number) => {
+      if (typeof arg1 === 'number' && typeof arg2 === 'number') {
+        scrollY = arg2
+      } else if (arg1 && typeof arg1 === 'object' && arg1.top !== undefined) {
+        scrollY = arg1.top
+      }
+    })
+  Object.defineProperty(window, 'scrollY', {
+    configurable: true,
+    get: () => scrollY,
+  })
+
+  try {
+    const router = await renderAt('/pricing/')
+    const user = userEvent.setup()
+
+    scrollY = 640
+    scrollToSpy.mockClear()
+
+    await user.click(
+      screen.getAllByRole('button', { name: 'claude-opus-5-5' })[0]
+    )
+    await waitFor(() => expect(search(router).model).toBe('claude-opus-5-5'))
+    expect(scrollY).toBe(640)
+    expect(scrollToSpy).not.toHaveBeenCalledWith(0, 0)
+    expect(scrollToSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ top: 0 })
+    )
+
+    // Closing via button triggers history.back(); even if the router resets
+    // scroll to top during popstate, the saved position is restored.
+    await user.click(screen.getByRole('button', { name: 'Close details' }))
+    await waitFor(() => expect(search(router).model).toBeUndefined())
+    await waitFor(() => expect(scrollY).toBe(640))
+  } finally {
+    scrollToSpy.mockRestore()
+  }
+})
+
+it('preserves document scroll when closing a shared model link or updating filters', async () => {
+  let scrollY = 0
+  const scrollToSpy = vi
+    .spyOn(window, 'scrollTo')
+    .mockImplementation((arg1?: number | ScrollToOptions, arg2?: number) => {
+      if (typeof arg1 === 'number' && typeof arg2 === 'number') {
+        scrollY = arg2
+      } else if (arg1 && typeof arg1 === 'object' && arg1.top !== undefined) {
+        scrollY = arg1.top
+      }
+    })
+  Object.defineProperty(window, 'scrollY', {
+    configurable: true,
+    get: () => scrollY,
+  })
+
+  try {
+    const router = await renderAt('/pricing/?model=claude-sonnet-5')
+    const user = userEvent.setup()
+
+    scrollY = 420
+    scrollToSpy.mockClear()
+
+    await user.click(screen.getByRole('button', { name: 'Close details' }))
+    await waitFor(() => expect(search(router).model).toBeUndefined())
+    expect(scrollY).toBe(420)
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search models' }), 'opus')
+    await waitFor(() => expect(search(router).search).toBe('opus'))
+    expect(scrollY).toBe(420)
+  } finally {
+    scrollToSpy.mockRestore()
+  }
 })
