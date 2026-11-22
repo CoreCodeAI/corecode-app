@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -684,12 +686,45 @@ func TestChainDepositReplacesNowPaymentsInTheWallet(t *testing.T) {
 	setting.ChainDepositBonusRate = 0.01
 	admin := chainDepositTestUser(t, db, "chain_wallet_admin", common.RoleAdminUser)
 	customer := chainDepositTestUser(t, db, "chain_wallet_customer", common.RoleCommonUser)
-	previous := struct{ key, secret, currencies string }{setting.NowPaymentsApiKey, setting.NowPaymentsIpnSecret, setting.NowPaymentsPayCurrencies}
+	previous := struct{ key, secret, currencies, apiBase string }{setting.NowPaymentsApiKey, setting.NowPaymentsIpnSecret, setting.NowPaymentsPayCurrencies, nowPaymentsAPIBase}
 	setting.NowPaymentsApiKey, setting.NowPaymentsIpnSecret = "np-key", "np-ipn"
 	setting.NowPaymentsPayCurrencies = "usdtbsc"
+	var invoices atomic.Int32
+	nowPayments := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		invoices.Add(1)
+		_, _ = w.Write([]byte(`{"invoice_url":"https://nowpayments.io/payment/?iid=1"}`))
+	}))
+	nowPaymentsAPIBase = nowPayments.URL
 	t.Cleanup(func() {
+		nowPayments.Close()
 		setting.NowPaymentsApiKey, setting.NowPaymentsIpnSecret, setting.NowPaymentsPayCurrencies = previous.key, previous.secret, previous.currencies
+		nowPaymentsAPIBase = previous.apiBase
 	})
+	require.NoError(t, db.AutoMigrate(&model.SubscriptionPlan{}, &model.SubscriptionOrder{}, &model.UserSubscription{}, &model.SubscriptionAddressExemption{}, &model.UserSession{}))
+	plan := &model.SubscriptionPlan{Id: 7302, Title: "新人福利包", PriceAmount: 29.9, TotalAmount: 50 * 500000,
+		DurationUnit: "day", DurationValue: 7, QuotaResetPeriod: "never", Enabled: true, MaxPurchasePerUser: 1}
+	require.NoError(t, db.Create(plan).Error)
+	// pay opens a NOWPayments invoice for a plan and for a top-up, and
+	// returns how many reached NOWPayments.
+	pay := func(user *model.User) int32 {
+		before := invoices.Load()
+		for _, call := range []struct {
+			path, body string
+			handler    gin.HandlerFunc
+		}{
+			{"/api/subscription/nowpayments/pay", fmt.Sprintf(`{"plan_id":%d,"pay_currency":"usdtbsc"}`, plan.Id), SubscriptionRequestNowPaymentsPay},
+			{"/api/user/nowpayments/pay", `{"amount":100,"pay_currency":"usdtbsc"}`, RequestNowPaymentsPay},
+		} {
+			recorder := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(recorder)
+			ctx.Request = httptest.NewRequest(http.MethodPost, call.path, strings.NewReader(call.body))
+			ctx.Request.Header.Set("Content-Type", "application/json")
+			ctx.Set("id", user.Id)
+			ctx.Set("role", user.Role)
+			call.handler(ctx)
+		}
+		return invoices.Load() - before
+	}
 
 	info := func(user *model.User) (methods map[string]map[string]any, currencies []any) {
 		gin.SetMode(gin.TestMode)
@@ -714,22 +749,27 @@ func TestChainDepositReplacesNowPaymentsInTheWallet(t *testing.T) {
 	}
 
 	// While the deposit address is for administrators, they get it in
-	// NOWPayments' place and customers keep NOWPayments.
+	// NOWPayments' place, for top-ups and plans alike, and customers keep
+	// NOWPayments.
 	methods, currencies := info(admin)
 	require.Contains(t, methods, model.PaymentMethodChainDeposit)
 	assert.Equal(t, "0.01", methods[model.PaymentMethodChainDeposit]["bonus_rate"])
 	assert.NotContains(t, methods, model.PaymentMethodNowPayments)
-	assert.Len(t, currencies, 1, "plans are still bought through NOWPayments")
-	methods, _ = info(customer)
+	assert.Empty(t, currencies, "plans are paid from the balance, not through NOWPayments")
+	assert.Zero(t, pay(admin), "a stale console opens no NOWPayments invoice")
+	methods, currencies = info(customer)
 	assert.Contains(t, methods, model.PaymentMethodNowPayments)
 	assert.NotContains(t, methods, model.PaymentMethodChainDeposit)
+	assert.Len(t, currencies, 1)
+	assert.EqualValues(t, 2, pay(customer), "a plan and a top-up invoice")
 
 	// Opened to everyone, it replaces NOWPayments for customers too.
 	setting.ChainDepositAdminOnly = false
 	methods, currencies = info(customer)
 	assert.Contains(t, methods, model.PaymentMethodChainDeposit)
 	assert.NotContains(t, methods, model.PaymentMethodNowPayments)
-	assert.Len(t, currencies, 1)
+	assert.Empty(t, currencies)
+	assert.Zero(t, pay(customer))
 }
 
 func TestChainDepositAdminOnlyGating(t *testing.T) {

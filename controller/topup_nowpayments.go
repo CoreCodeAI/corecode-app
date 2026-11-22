@@ -104,6 +104,12 @@ func RequestNowPaymentsAmount(c *gin.Context) {
 }
 
 func RequestNowPaymentsPay(c *gin.Context) {
+	// A user with a deposit address tops up through it; a stale console
+	// must not open a NOWPayments invoice in its place.
+	if canUseChainDeposit(c.GetInt("role")) {
+		paymentError(c, common.NewMessage("Payment method does not exist"))
+		return
+	}
 	var req NowPaymentsPayRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		paymentError(c, common.NewMessage("Invalid parameters"))

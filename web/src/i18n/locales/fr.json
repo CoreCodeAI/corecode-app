@@ -9632,6 +9632,7 @@
     "Any amount of at least 1 USD is credited at the wallet rate, with the top-up bonus and the on-chain bonus. A smaller amount waits until your deposits add up to 1 USD.": "Tout montant d'au moins 1 USD est crédité au taux du portefeuille, avec le bonus de recharge et le bonus des dépôts on-chain. Un montant inférieur attend que vos dépôts atteignent 1 USD.",
     "On-chain deposits get an extra {{percent}}% bonus, on top of the top-up bonus.": "Les dépôts on-chain reçoivent un bonus supplémentaire de {{percent}} %, en plus du bonus de recharge.",
     "Extra {{percent}}% bonus, credited in about a minute": "Bonus supplémentaire de {{percent}} %, crédité en une minute environ",
+    "To pay in USDT or USDC, top up with an on-chain deposit first (extra {{percent}}% bonus), then pay with your balance.": "Pour payer en USDT ou USDC, rechargez d'abord par dépôt on-chain (bonus supplémentaire de {{percent}} %), puis payez avec votre solde.",
     "Deposit progress": "Suivi du dépôt",
     "Transfer detected": "Transfert détecté",
     "Confirming on chain": "Confirmation sur la chaîne",

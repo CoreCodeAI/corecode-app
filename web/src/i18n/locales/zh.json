@@ -9632,6 +9632,7 @@
     "Any amount of at least 1 USD is credited at the wallet rate, with the top-up bonus and the on-chain bonus. A smaller amount waits until your deposits add up to 1 USD.": "任意金额只要不低于 1 美元，就按钱包汇率入账，并享受充值赠送和链上充值额外赠送。不足 1 美元的部分会等累计满 1 美元后再入账。",
     "On-chain deposits get an extra {{percent}}% bonus, on top of the top-up bonus.": "链上充值额外赠送 {{percent}}%，可与充值赠送叠加。",
     "Extra {{percent}}% bonus, credited in about a minute": "额外赠送 {{percent}}%，约 1 分钟到账",
+    "To pay in USDT or USDC, top up with an on-chain deposit first (extra {{percent}}% bonus), then pay with your balance.": "想用 USDT/USDC 支付？先在钱包用「链上充值」充到余额（额外赠送 {{percent}}%），再用余额支付。",
     "Deposit progress": "入金进度",
     "Transfer detected": "检测到转账",
     "Confirming on chain": "区块确认中",

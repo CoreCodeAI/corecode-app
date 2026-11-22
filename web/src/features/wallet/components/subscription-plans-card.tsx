@@ -70,7 +70,11 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
 import { PAYMENT_TYPES } from '../constants'
-import { formatPaymentMoney, isStripePayment } from '../lib'
+import {
+  formatPaymentMoney,
+  isChainDepositPayment,
+  isStripePayment,
+} from '../lib'
 import type { PaymentMethod, TopupInfo } from '../types'
 
 interface SubscriptionPlansCardProps {
@@ -724,6 +728,15 @@ export function SubscriptionPlansCard({
         enableWaffoPancake={enableWaffoPancake}
         checkoutMethods={checkoutMethods}
         nowPaymentsCurrencies={topupInfo?.nowpayments_currencies}
+        chainDepositBonusRate={
+          topupInfo?.chain_deposit_available
+            ? Number(
+                topupInfo.pay_methods?.find((method) =>
+                  isChainDepositPayment(method.type)
+                )?.bonus_rate ?? 0
+              )
+            : undefined
+        }
         userQuota={userQuota}
         onPurchaseSuccess={onPurchaseSuccess}
         purchaseLimit={

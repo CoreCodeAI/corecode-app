@@ -9632,6 +9632,7 @@
     "Any amount of at least 1 USD is credited at the wallet rate, with the top-up bonus and the on-chain bonus. A smaller amount waits until your deposits add up to 1 USD.": "Any amount of at least 1 USD is credited at the wallet rate, with the top-up bonus and the on-chain bonus. A smaller amount waits until your deposits add up to 1 USD.",
     "On-chain deposits get an extra {{percent}}% bonus, on top of the top-up bonus.": "On-chain deposits get an extra {{percent}}% bonus, on top of the top-up bonus.",
     "Extra {{percent}}% bonus, credited in about a minute": "Extra {{percent}}% bonus, credited in about a minute",
+    "To pay in USDT or USDC, top up with an on-chain deposit first (extra {{percent}}% bonus), then pay with your balance.": "To pay in USDT or USDC, top up with an on-chain deposit first (extra {{percent}}% bonus), then pay with your balance.",
     "Deposit progress": "Deposit progress",
     "Transfer detected": "Transfer detected",
     "Confirming on chain": "Confirming on chain",
