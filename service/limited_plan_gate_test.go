@@ -164,12 +164,39 @@ func TestNewcomerPlanAboveTheThresholdWithAnEmptyWalletIsRefused(t *testing.T) {
 		assert.Nil(t, session)
 		assert.Equal(t, http.StatusForbidden, apiErr.StatusCode, "the status of any other lack of balance, not a 5xx")
 		assert.Equal(t, types.ErrorCodeInsufficientUserQuota, apiErr.GetErrorCode())
-		assert.Equal(t, "新人包每人限一份；你所在网络已有多个账号使用过，本次请求无法使用新人包额度。请正常充值，或联系客服。", apiErr.Error())
+		assert.Equal(t, "新人包每人限一份；你所在网络已有多个账号使用过，新人福利包已暂停，本次请求无法使用其额度。请正常充值；如果你是正常使用，请到 问题反馈 联系我们恢复：https://corecode.live/feedback", apiErr.Error())
 		assert.True(t, types.IsSkipRetryError(apiErr), "another channel would not help")
 		assert.True(t, types.IsRecordErrorLog(apiErr), "an administrator can see why")
 		assert.Equal(t, model.LimitedPlanGateRefused, info.LimitedPlanGate)
 	}
 	assert.Zero(t, subscriptionUsed(t, sub.Id))
+}
+
+// The customer whose request the gate turned away sees why in the error log.
+func TestNewcomerPlanRefusalMarksTheErrorLogForTheCustomer(t *testing.T) {
+	w := newGateWorld(t)
+	user := w.user(t, 0)
+	w.hold(t, user, w.newcomer, "order", 1_000_000)
+	w.request(t, user, gateFarmAddress)
+	w.farm(t, 3, gateFarmAddress)
+	_, apiErr, info := gateBill(t, user, gateFarmAddress, 10_000, "subscription_first")
+	require.NotNil(t, apiErr)
+
+	previous := constant.ErrorLogEnabled
+	constant.ErrorLogEnabled = true
+	t.Cleanup(func() { constant.ErrorLogEnabled = previous })
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	c.Set("id", user.Id)
+	RecordRelayErrorLog(c, 0, apiErr, info)
+
+	logs, _, err := model.GetUserLogs(user.Id, model.LogFilter{Type: model.LogTypeError}, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, logs, 1)
+	logged, err := common.StrToMap(logs[0].Other)
+	require.NoError(t, err)
+	assert.Equal(t, "refused", logged["limited_plan_gate"])
+	assert.NotContains(t, logged, "admin_info", "the holders' count stays with the administrators")
 }
 
 func TestNewcomerPlanGateLeavesOtherSubscriptionsAlone(t *testing.T) {
