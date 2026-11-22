@@ -165,9 +165,13 @@ type RelayInfo struct {
 	// LimitedPlanGateHolders counts the other holders using the address; log
 	// metadata only.
 	// LimitedPlanGateScope is what triggered it (model.LimitedPlanScope*).
+	// LimitedPlanGateExit says why an address that carried enough holders was
+	// spared as a shared exit (model.LimitedPlanExit*); set with or without a
+	// gate, log metadata only.
 	LimitedPlanGate        string
 	LimitedPlanGateHolders int
 	LimitedPlanGateScope   string
+	LimitedPlanGateExit    string
 	// RequestId is used for idempotent pre-consume/refund
 	RequestId string
 	// SubscriptionAmountTotal / SubscriptionAmountUsedAfterPreConsume are used to compute remaining in logs.

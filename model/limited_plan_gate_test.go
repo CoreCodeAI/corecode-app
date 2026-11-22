@@ -368,6 +368,202 @@ func TestLimitedPlanGateNetworkDatabaseMatrix(t *testing.T) {
 	}
 }
 
+// spend adds a consumed request of quota from ip to the account.
+func (w *limitedPlanWorld) spend(userId int, ip string, dollars float64) {
+	w.t.Helper()
+	require.NoError(w.t, LOG_DB.Create(&Log{UserId: userId, CreatedAt: w.now - 300, Type: LogTypeConsume, Ip: ip,
+		Quota: int(dollars * common.QuotaPerUnit)}).Error)
+}
+
+// payer opens an account without a plan that spent dollars through ip.
+func (w *limitedPlanWorld) payer(ip string, dollars float64) int {
+	w.t.Helper()
+	w.seq++
+	user := registerAffiliateTestUser(w.t, fmt.Sprintf("lp_%d", w.seq), "")
+	w.spend(user.Id, ip, dollars)
+	return user.Id
+}
+
+func (w *limitedPlanWorld) verdict(userId int, ip string) (string, string) {
+	gate, exit := checkLimitedPlanVerdictAt(userId, ip, w.now)
+	if gate == nil {
+		return "", exit
+	}
+	return gate.Scope, exit
+}
+
+// A block an administrator lists is not counted per network; its addresses are.
+func TestLimitedPlanGateListedExitDatabaseMatrix(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			w := newLimitedPlanWorld(t, dialect, gateSetting())
+
+			// Five accounts, each on an address of its own in 203.0.113.0/24 and
+			// each rotating through a second one: the shape of a studio behind
+			// a proxy pool, and of a newcomer that bought the plan behind one.
+			pool := []int{}
+			for i := 0; i < 5; i++ {
+				pool = append(pool, w.holder(w.newcomer, "order", fmt.Sprintf("203.0.113.%d", 10+i), fmt.Sprintf("203.0.113.%d", 110+i)))
+			}
+			ResetLimitedPlanGateCache()
+			scope, exit := w.verdict(pool[0], "203.0.113.10")
+			assert.Equal(t, LimitedPlanScopeNetwork, scope, "unlisted, the block is a farm")
+			assert.Empty(t, exit)
+
+			operation_setting.GetLimitedPlanUseSetting().SharedExitNetworks = "198.51.100.0/24, 203.0.113.0/24"
+			ResetLimitedPlanGateCache()
+			ResetLimitedPlanGateCache()
+			fresh := w.holder(w.newcomer, "order", "203.0.113.77")
+			scope, exit = w.verdict(fresh, "203.0.113.77")
+			assert.Empty(t, scope, "listed, the block is not counted per network")
+			assert.Equal(t, LimitedPlanExitListed, exit, "and the log says why")
+			scope, exit = w.verdict(pool[0], "203.0.113.200")
+			assert.Empty(t, scope, "nor from an address nobody used")
+			assert.Equal(t, LimitedPlanExitListed, exit)
+			assert.Empty(t, w.scopeOf(pool[1], "203.0.113.11"))
+			scope, exit = w.verdict(pool[0], "203.0.114.5")
+			assert.Empty(t, scope)
+			assert.Empty(t, exit, "a neighbouring block is not listed and carries nobody")
+
+			// An address of the listed block that three others hold is a farm of its own.
+			farm := []int{}
+			for i := 0; i < 4; i++ {
+				farm = append(farm, w.holder(w.newcomer, "order", "203.0.113.50"))
+			}
+			scope, _ = w.verdict(farm[0], "203.0.113.50")
+			assert.Equal(t, LimitedPlanScopeAddress, scope, "a listed block still counts its addresses")
+
+			// The log reads "listed" only when the network would have gated.
+			quiet := w.holder(w.newcomer, "order", "198.51.100.9")
+			scope, exit = w.verdict(quiet, "198.51.100.9")
+			assert.Empty(t, scope)
+			assert.Empty(t, exit, "a listed block with no other holders spared nothing")
+
+			// Removing the entry brings the network back.
+			operation_setting.GetLimitedPlanUseSetting().SharedExitNetworks = ""
+			ResetLimitedPlanGateCache()
+			assert.Equal(t, LimitedPlanScopeNetwork, w.scopeOf(pool[0], "203.0.113.10"))
+		})
+	}
+}
+
+// A block where customers without a plan paid is a proxy exit, however its holders move.
+func TestLimitedPlanGateTrafficExitDatabaseMatrix(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			w := newLimitedPlanWorld(t, dialect, gateSetting())
+
+			// A rotating studio: five holders spent $10 each and nobody else did.
+			studio := []int{}
+			for i := 0; i < 5; i++ {
+				id := w.holder(w.newcomer, "order", fmt.Sprintf("203.0.113.%d", 10+i))
+				w.spend(id, fmt.Sprintf("203.0.113.%d", 10+i), 10)
+				studio = append(studio, id)
+			}
+			scope, exit := w.verdict(studio[0], "203.0.113.10")
+			assert.Equal(t, LimitedPlanScopeNetwork, scope)
+			assert.Empty(t, exit)
+
+			// Two customers without a plan spent $10: under the $20 floor.
+			w.payer("203.0.113.130", 5)
+			w.payer("203.0.113.131", 5)
+			ResetLimitedPlanGateCache()
+			scope, _ = w.verdict(studio[0], "203.0.113.10")
+			assert.Equal(t, LimitedPlanScopeNetwork, scope, "$10 of $50 is not a proxy's traffic")
+
+			// $20 of $50 reaches the floor but not half of what the holders spent.
+			w.payer("203.0.113.132", 10)
+			ResetLimitedPlanGateCache()
+			scope, _ = w.verdict(studio[0], "203.0.113.10")
+			assert.Equal(t, LimitedPlanScopeNetwork, scope, "$20 of $50 is under half")
+
+			// $25 is half of $50: a proxy exit, at the network and for each holder.
+			w.payer("203.0.113.133", 5)
+			ResetLimitedPlanGateCache()
+			scope, exit = w.verdict(studio[0], "203.0.113.10")
+			assert.Empty(t, scope)
+			assert.Equal(t, LimitedPlanExitTraffic, exit)
+			scope, exit = w.verdict(studio[4], "203.0.113.14")
+			assert.Empty(t, scope)
+			assert.Equal(t, LimitedPlanExitTraffic, exit)
+
+			// The same traffic on one address spares that address.
+			one := []int{}
+			for i := 0; i < 4; i++ {
+				id := w.holder(w.newcomer, "order", "192.0.2.7")
+				w.spend(id, "192.0.2.7", 10)
+				one = append(one, id)
+			}
+			scope, _ = w.verdict(one[0], "192.0.2.7")
+			assert.Equal(t, LimitedPlanScopeAddress, scope, "a single address with no other traffic is a farm")
+			w.payer("192.0.2.7", 20)
+			ResetLimitedPlanGateCache()
+			scope, exit = w.verdict(one[0], "192.0.2.7")
+			assert.Empty(t, scope)
+			assert.Equal(t, LimitedPlanExitTraffic, exit)
+
+			// A customer's plan spending counts towards the holders' side,
+			// and the customer who asks is one of the holders.
+			assert.Empty(t, w.scopeOf(one[1], "192.0.2.7"))
+
+			// An error log carries no spending; failed requests do not make a proxy.
+			e := []int{}
+			for i := 0; i < 4; i++ {
+				id := w.holder(w.newcomer, "order", "192.0.2.9")
+				w.spend(id, "192.0.2.9", 10)
+				e = append(e, id)
+			}
+			w.seq++
+			victim := registerAffiliateTestUser(t, fmt.Sprintf("lp_%d", w.seq), "")
+			require.NoError(t, LOG_DB.Create(&Log{UserId: victim.Id, CreatedAt: w.now - 30, Type: LogTypeError, Ip: "192.0.2.9", Quota: int(100 * common.QuotaPerUnit)}).Error)
+			ResetLimitedPlanGateCache()
+			scope, _ = w.verdict(e[0], "192.0.2.9")
+			assert.Equal(t, LimitedPlanScopeAddress, scope)
+		})
+	}
+}
+
+// The log marker also names the older test, many accounts without a plan.
+func TestLimitedPlanGateCrowdExitMarker(t *testing.T) {
+	w := newLimitedPlanWorld(t, "sqlite", gateSetting())
+	holders := []int{}
+	for i := 0; i < 4; i++ {
+		holders = append(holders, w.holder(w.newcomer, "order", "198.51.100.1"))
+	}
+	for i := 0; i < 5; i++ {
+		w.bystander("198.51.100.1")
+	}
+	ResetLimitedPlanGateCache()
+	scope, exit := w.verdict(holders[0], "198.51.100.1")
+	assert.Empty(t, scope)
+	assert.Equal(t, LimitedPlanExitCrowd, exit)
+	scope, exit = w.verdict(w.holder(w.newcomer, "order", "203.0.113.5"), "203.0.113.5")
+	assert.Empty(t, scope)
+	assert.Empty(t, exit, "an address nobody shares spared nothing")
+}
+
+func TestLimitedPlanListedNetworks(t *testing.T) {
+	assert.Empty(t, limitedPlanListedNetworks(""))
+	got := limitedPlanListedNetworks("185.220.236.0/24, 203.0.113.9\n2001:db8:1:2::/64;not-a-network ::ffff:198.51.100.0/120 10.0.0.1/99")
+	var texts []string
+	for _, prefix := range got {
+		texts = append(texts, prefix.String())
+	}
+	assert.Equal(t, []string{"185.220.236.0/24", "203.0.113.9/32", "2001:db8:1:2::/64", "198.51.100.0/24"}, texts)
+
+	setting := operation_setting.GetLimitedPlanUseSetting()
+	previous := setting.SharedExitNetworks
+	t.Cleanup(func() { setting.SharedExitNetworks = previous })
+	setting.SharedExitNetworks = "185.220.236.0/24"
+	assert.True(t, limitedPlanListedExit("185.220.236.155"))
+	assert.True(t, limitedPlanListedExit("::ffff:185.220.236.9"))
+	assert.False(t, limitedPlanListedExit("185.220.237.1"))
+	assert.False(t, limitedPlanListedExit("not an address"))
+	setting.SharedExitNetworks = "2001:db8:1:2::/64"
+	assert.False(t, limitedPlanListedExit("185.220.236.155"), "a changed option is read again")
+	assert.True(t, limitedPlanListedExit("2001:db8:1:2:aaaa::1"))
+}
+
 func TestLimitedPlanNetworkOf(t *testing.T) {
 	assert.Equal(t, "103.135.100.", LimitedPlanNetworkOf("103.135.100.181"))
 	assert.Equal(t, "103.135.100.", LimitedPlanNetworkOf("::ffff:103.135.100.7"))
