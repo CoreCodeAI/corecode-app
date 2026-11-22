@@ -99,6 +99,7 @@ func DecompressRequestMiddleware() gin.HandlerFunc {
 
 		if decompressed {
 			c.Request.Header.Del("Content-Encoding")
+			c.Set(contextKeyRequestBodyDecompressed, true)
 		}
 
 		// Continue processing the request

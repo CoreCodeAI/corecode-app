@@ -87,9 +87,8 @@ func (u *containerUsage) memoryUsage() (float64, bool) {
 		inactiveFileKey = "total_inactive_file"
 	}
 
-	// cgroup v2 未限制时 memory.max 为 "max"，解析失败即视为不可用。
-	limit, ok := readCgroupUint(limitPath)
-	if !ok || limit == 0 || limit >= unlimitedMemoryBytes {
+	limit, ok := readCgroupMemoryLimit(limitPath)
+	if !ok {
 		return 0, false
 	}
 	usage, ok := readCgroupUint(usagePath)
@@ -103,6 +102,27 @@ func (u *containerUsage) memoryUsage() (float64, bool) {
 	// 用量与 memory.stat 不是同一时刻的快照，缓存可能短暂大于用量，按 0 处理防止下溢。
 	workingSet := usage - min(inactiveFile, usage)
 	return float64(workingSet) / float64(limit) * 100, true
+}
+
+// ContainerMemoryLimitBytes returns this process's cgroup memory limit.
+// ok=false means there is no limit or it cannot be read.
+func ContainerMemoryLimitBytes() (uint64, bool) {
+	limitPath := filepath.Join(defaultCgroupRoot, "memory.max")
+	if _, err := os.Stat(limitPath); err != nil {
+		limitPath = filepath.Join(defaultCgroupRoot, "memory", "memory.limit_in_bytes")
+	}
+	return readCgroupMemoryLimit(limitPath)
+}
+
+// readCgroupMemoryLimit reads memory.max (v2) or memory.limit_in_bytes (v1).
+// v2 writes "max" when unlimited, which fails to parse; v1 writes a value
+// near the int64 maximum.
+func readCgroupMemoryLimit(path string) (uint64, bool) {
+	limit, ok := readCgroupUint(path)
+	if !ok || limit == 0 || limit >= unlimitedMemoryBytes {
+		return 0, false
+	}
+	return limit, true
 }
 
 // readCgroupCPUQuotaCores 返回 cgroup CPU 配额（核）。ok=false 表示未限制或不可读。

@@ -33,6 +33,7 @@ violation.resend_blocked: "上游模型刚以违反使用政策为由拒绝了�
 rate_limit.user_concurrency_reached: "你的账号同时进行的请求过多：所有 API 密钥合计最多同时 {{.Max}} 个，请等已有请求完成后再试"
 rate_limit.user_concurrency_next_tier: "你的账号同时进行的请求过多：所有 API 密钥合计最多同时 {{.Max}} 个，请等已有请求完成后再试。累计充值再满 {{.Remaining}} 元，并发上限可提升到 {{.Next}}"
 rate_limit.token_concurrency_reached: "这个 API 密钥同时进行的请求过多：最多同时 {{.Max}} 个，请等已有请求完成后再试"
+rate_limit.large_request_body_busy: "服务器正在处理其他大请求，本请求有 {{.SizeMB}} MB，请一分钟后重试"
 distributor.invalid_request: "无效的请求，{{.Error}}"
 distributor.invalid_channel_id: "无效的渠道 Id"
 distributor.channel_disabled: "该渠道已被禁用"

@@ -33,6 +33,7 @@ violation.resend_blocked: "上游模型剛以違反使用政策為由拒絕了�
 rate_limit.user_concurrency_reached: "你的帳號同時進行的請求過多：所有 API 金鑰合計最多同時 {{.Max}} 個，請等現有請求完成後再試"
 rate_limit.user_concurrency_next_tier: "你的帳號同時進行的請求過多：所有 API 金鑰合計最多同時 {{.Max}} 個，請等現有請求完成後再試。累計儲值再滿 {{.Remaining}} 元，並發上限可提升到 {{.Next}}"
 rate_limit.token_concurrency_reached: "這個 API 金鑰同時進行的請求過多：最多同時 {{.Max}} 個，請等現有請求完成後再試"
+rate_limit.large_request_body_busy: "伺服器正在處理其他大型請求，本請求有 {{.SizeMB}} MB，請一分鐘後再試"
 distributor.invalid_request: "無效的請求，{{.Error}}"
 distributor.invalid_channel_id: "無效的管道 Id"
 distributor.channel_disabled: "該管道已被禁用"
