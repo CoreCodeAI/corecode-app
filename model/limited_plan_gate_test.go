@@ -223,8 +223,12 @@ func (w *limitedPlanWorld) holder(plan *SubscriptionPlan, source string, ips ...
 	w.t.Helper()
 	w.seq++
 	user := registerAffiliateTestUser(w.t, fmt.Sprintf("lp_%d", w.seq), "")
-	require.NoError(w.t, DB.Create(&UserSubscription{UserId: user.Id, PlanId: plan.Id, Status: "active", Source: source,
-		AmountTotal: 1000, StartTime: w.now - 3600, EndTime: w.now + 86400, CreatedAt: w.now - 3600, UpdatedAt: w.now - 3600}).Error)
+	sub := &UserSubscription{UserId: user.Id, PlanId: plan.Id, Status: "active", Source: source,
+		AmountTotal: 1000, StartTime: w.now - 3600, EndTime: w.now + 86400}
+	require.NoError(w.t, DB.Create(sub).Error)
+	// BeforeCreate stamps the real clock; the gate reads the holders as of w.now, so a
+	// subscription made after the second w.now was read in would not count yet.
+	require.NoError(w.t, DB.Model(&UserSubscription{}).Where("id = ?", sub.Id).UpdateColumns(map[string]any{"created_at": w.now - 3600, "updated_at": w.now - 3600}).Error)
 	for _, ip := range ips {
 		addressTestRequest(w.t, user.Id, ip, w.now-600)
 	}
