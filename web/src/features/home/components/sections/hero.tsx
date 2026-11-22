@@ -158,7 +158,7 @@ export function Hero(props: HeroProps) {
                 <Button
                   variant='outline'
                   className='border-border/50 hover:border-border hover:bg-muted/50 h-11 rounded-lg px-5 text-sm font-medium'
-                  render={<a href='/pricing/' />}
+                  render={<Link to='/pricing' />}
                 >
                   {t('View Pricing')}
                 </Button>
