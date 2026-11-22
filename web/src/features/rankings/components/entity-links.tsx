@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Link } from '@tanstack/react-router'
+
 import { cn } from '@/lib/utils'
 
 type EntityLinkBaseProps = {
@@ -29,8 +31,8 @@ type ModelLinkProps = EntityLinkBaseProps & {
 }
 
 /**
- * Link wrapping a model name. Opens the static price pages, where the proxy
- * sends `/pricing/{modelName}` to the model's own page. Renders the model name itself by
+ * Link wrapping a model name. Navigates to the existing model details
+ * page (`/pricing/{modelName}`). Renders the model name itself by
  * default; pass `children` to wrap arbitrary content.
  *
  * A subtle persistent underline acts as the link affordance (so
@@ -39,15 +41,16 @@ type ModelLinkProps = EntityLinkBaseProps & {
  */
 export function ModelLink(props: ModelLinkProps) {
   return (
-    <a
-      href={`/pricing/${encodeURIComponent(props.modelName)}`}
+    <Link
+      to='/pricing/$modelId'
+      params={{ modelId: props.modelName }}
       className={cn(
         'decoration-foreground/30 hover:decoration-foreground underline decoration-1 underline-offset-4 transition-colors',
         props.className
       )}
     >
       {props.children ?? props.modelName}
-    </a>
+    </Link>
   )
 }
 
@@ -57,22 +60,23 @@ type VendorLinkProps = EntityLinkBaseProps & {
 }
 
 /**
- * Link wrapping a vendor name. Opens the static price list, which has no
- * vendor filter. Renders the vendor name
+ * Link wrapping a vendor name. Navigates to the pricing page filtered by
+ * that vendor (`/pricing?vendor={vendor}`). Renders the vendor name
  * itself by default. Uses the same subtle persistent underline as
  * {@link ModelLink}, scaled for the smaller secondary text it usually
  * wraps.
  */
 export function VendorLink(props: VendorLinkProps) {
   return (
-    <a
-      href='/pricing/'
+    <Link
+      to='/pricing'
+      search={{ vendor: props.vendor }}
       className={cn(
         'hover:text-foreground underline decoration-current/40 decoration-1 underline-offset-2 transition-colors hover:decoration-current',
         props.className
       )}
     >
       {props.children ?? props.vendor}
-    </a>
+    </Link>
   )
 }
