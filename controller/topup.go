@@ -123,9 +123,10 @@ func GetTopUpInfo(c *gin.Context) {
 	// gets their own deposit address, which replaces NOWPayments in the
 	// wallet: it costs less and earns ChainDepositBonusRate more. Everyone
 	// else keeps NOWPayments, one method whose network the customer picks in
-	// the payment dialog. NOWPayments' currencies stay in the reply either
-	// way, because plans that cannot be paid from the balance are bought
-	// through it, and its callback keeps crediting invoices already open.
+	// the payment dialog. Its currencies are left out for a user with an
+	// address too, so the plan dialog offers no NOWPayments either: they top
+	// up on-chain and pay the plan from the balance. Its callback keeps
+	// crediting invoices already open.
 	enableNowPayments := isNowPaymentsTopUpEnabled()
 	chainDepositAvailable := canUseChainDeposit(c.GetInt("role"))
 	if chainDepositAvailable {
@@ -180,7 +181,7 @@ func GetTopUpInfo(c *gin.Context) {
 		"waffo_min_topup":         setting.WaffoMinTopUp,
 		"waffo_pancake_min_topup": setting.WaffoPancakeMinTopUp,
 		"nowpayments_currencies": func() any {
-			if enableNowPayments {
+			if enableNowPayments && !chainDepositAvailable {
 				return setting.GetNowPaymentsPayCurrencies()
 			}
 			return []setting.NowPaymentsCurrency{}

@@ -33,6 +33,7 @@ import {
   openPaymentPage,
   paysThroughEpay,
 } from '@/features/wallet/lib'
+import { bonusRateToPercent } from '@/features/wallet/lib/bonus'
 import { paymentMethodName } from '@/features/wallet/lib/payment-names'
 import type { NowPaymentsCurrency } from '@/features/wallet/types'
 import { useSystemConfig } from '@/hooks/use-system-config'
@@ -68,6 +69,12 @@ interface Props {
   checkoutMethods?: PaymentMethod[]
   /** USDT and USDC networks offered through NOWPayments; empty when it is off */
   nowPaymentsCurrencies?: NowPaymentsCurrency[]
+  /**
+   * The on-chain deposit's extra bonus rate when the user has a deposit
+   * address, which replaces NOWPayments: they pay a plan in USDT or USDC by
+   * topping up first and paying from the balance.
+   */
+  chainDepositBonusRate?: number
   purchaseLimit?: number
   purchaseCount?: number
   userQuota?: number
@@ -417,6 +424,14 @@ export function SubscriptionPurchaseDialog(props: Props) {
             >
               {t('Pay with Balance')}
             </Button>
+            {props.chainDepositBonusRate !== undefined && (
+              <p className='text-success text-xs'>
+                {t(
+                  'To pay in USDT or USDC, top up with an on-chain deposit first (extra {{percent}}% bonus), then pay with your balance.',
+                  { percent: bonusRateToPercent(props.chainDepositBonusRate) }
+                )}
+              </p>
+            )}
           </div>
         )}
 

@@ -9632,6 +9632,7 @@
     "Any amount of at least 1 USD is credited at the wallet rate, with the top-up bonus and the on-chain bonus. A smaller amount waits until your deposits add up to 1 USD.": "1 USD 이상이면 금액에 관계없이 지갑 환율로 충전되며 충전 보너스와 온체인 입금 추가 보너스가 적용됩니다. 1 USD 미만의 금액은 입금 합계가 1 USD가 될 때까지 대기합니다.",
     "On-chain deposits get an extra {{percent}}% bonus, on top of the top-up bonus.": "온체인 입금은 충전 보너스에 더해 {{percent}}% 추가 보너스를 받습니다.",
     "Extra {{percent}}% bonus, credited in about a minute": "{{percent}}% 추가 보너스, 약 1분 내 충전",
+    "To pay in USDT or USDC, top up with an on-chain deposit first (extra {{percent}}% bonus), then pay with your balance.": "USDT/USDC로 결제하려면 먼저 지갑에서 온체인 입금으로 잔액을 충전한 뒤(추가 {{percent}}% 보너스) 잔액으로 결제하세요.",
     "Deposit progress": "입금 진행 상황",
     "Transfer detected": "송금 감지됨",
     "Confirming on chain": "블록 확인 중",

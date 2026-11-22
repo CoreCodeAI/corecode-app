@@ -9632,6 +9632,7 @@
     "Any amount of at least 1 USD is credited at the wallet rate, with the top-up bonus and the on-chain bonus. A smaller amount waits until your deposits add up to 1 USD.": "Mọi số tiền từ 1 USD trở lên đều được ghi có theo tỷ giá ví, kèm thưởng nạp và thưởng thêm cho nạp on-chain. Số tiền nhỏ hơn sẽ chờ đến khi tổng các khoản nạp đạt 1 USD.",
     "On-chain deposits get an extra {{percent}}% bonus, on top of the top-up bonus.": "Nạp on-chain được thưởng thêm {{percent}}%, cộng dồn với thưởng nạp.",
     "Extra {{percent}}% bonus, credited in about a minute": "Thưởng thêm {{percent}}%, ghi có trong khoảng một phút",
+    "To pay in USDT or USDC, top up with an on-chain deposit first (extra {{percent}}% bonus), then pay with your balance.": "Để thanh toán bằng USDT hoặc USDC, hãy nạp on-chain vào số dư trước (thưởng thêm {{percent}}%), rồi thanh toán bằng số dư.",
     "Deposit progress": "Tiến trình nạp",
     "Transfer detected": "Đã phát hiện giao dịch",
     "Confirming on chain": "Đang xác nhận trên chuỗi",

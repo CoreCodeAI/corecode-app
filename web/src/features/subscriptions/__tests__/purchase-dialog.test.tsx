@@ -66,7 +66,8 @@ const networks: NowPaymentsCurrency[] = [
 function renderDialog(
   record: PlanRecord,
   nowPaymentsCurrencies?: NowPaymentsCurrency[],
-  checkoutMethods: PaymentMethod[] = [{ type: 'alipay', name: 'Alipay' }]
+  checkoutMethods: PaymentMethod[] = [{ type: 'alipay', name: 'Alipay' }],
+  chainDepositBonusRate?: number
 ) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
@@ -76,6 +77,7 @@ function renderDialog(
         plan={record}
         checkoutMethods={checkoutMethods}
         nowPaymentsCurrencies={nowPaymentsCurrencies}
+        chainDepositBonusRate={chainDepositBonusRate}
       />
     </QueryClientProvider>
   )
@@ -108,6 +110,32 @@ describe('subscription purchase dialog', () => {
     expect(
       screen.getByRole('button', { name: 'Pay with Balance' })
     ).toBeVisible()
+  })
+
+  // A user with a deposit address gets no NOWPayments currencies from the
+  // server; the balance box tells them how to pay in USDT or USDC instead.
+  it('sends a user with a deposit address to top up on-chain first', () => {
+    renderDialog(
+      { plan: { ...plan.plan, allow_balance_pay: true } },
+      [],
+      undefined,
+      0.01
+    )
+
+    expect(
+      screen.getByText(
+        /top up with an on-chain deposit first \(extra 1% bonus\)/
+      )
+    ).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: 'Pay with USDT / USDC' })
+    ).toBeNull()
+  })
+
+  it('keeps the on-chain hint away from users without an address', () => {
+    renderDialog({ plan: { ...plan.plan, allow_balance_pay: true } }, networks)
+
+    expect(screen.queryByText(/on-chain deposit/)).toBeNull()
   })
 
   it('offers no USDT / USDC payment when NOWPayments is off', () => {

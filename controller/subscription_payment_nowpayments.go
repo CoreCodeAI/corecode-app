@@ -17,7 +17,7 @@ import (
 )
 
 // CoreCode addition: subscription plans paid in USDT or USDC through
-// NOWPayments. The plan price is CNY, like an epay order; the invoice asks for
+// NOWPayments, for users without an on-chain deposit address. The plan price is CNY, like an epay order; the invoice asks for
 // it in US dollars at USDExchangeRate. Plan orders share the top-up IPN
 // endpoint and are told apart by their trade number.
 
@@ -43,6 +43,12 @@ func SubscriptionRequestNowPaymentsPay(c *gin.Context) {
 	}
 	if !isNowPaymentsTopUpEnabled() {
 		common.ApiErrorT(c, "Payment information has not been configured by administrator")
+		return
+	}
+	// A user with a deposit address tops up on-chain and pays the plan from
+	// the balance; a stale console must not open a NOWPayments invoice.
+	if canUseChainDeposit(c.GetInt("role")) {
+		common.ApiErrorT(c, "Payment method does not exist")
 		return
 	}
 	payCurrency := strings.ToLower(strings.TrimSpace(req.PayCurrency))

@@ -9632,6 +9632,7 @@
     "Any amount of at least 1 USD is credited at the wallet rate, with the top-up bonus and the on-chain bonus. A smaller amount waits until your deposits add up to 1 USD.": "Любая сумма от 1 USD зачисляется по курсу кошелька с бонусом за пополнение и дополнительным бонусом за пополнение в блокчейне. Меньшая сумма ждёт, пока ваши пополнения не составят 1 USD.",
     "On-chain deposits get an extra {{percent}}% bonus, on top of the top-up bonus.": "Пополнения в блокчейне получают дополнительный бонус {{percent}}% сверх бонуса за пополнение.",
     "Extra {{percent}}% bonus, credited in about a minute": "Дополнительный бонус {{percent}}%, зачисление примерно за минуту",
+    "To pay in USDT or USDC, top up with an on-chain deposit first (extra {{percent}}% bonus), then pay with your balance.": "Чтобы оплатить в USDT или USDC, сначала сделайте ончейн-пополнение баланса (дополнительный бонус {{percent}}%), затем оплатите с баланса.",
     "Deposit progress": "Ход пополнения",
     "Transfer detected": "Перевод обнаружен",
     "Confirming on chain": "Подтверждение в блокчейне",
