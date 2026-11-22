@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 /**
  * CoreCode fork: the overview is built for a Claude Code customer. It leads
@@ -34,12 +35,19 @@ import {
 } from '@/components/page-transition'
 import { Button } from '@/components/ui/button'
 import { ClientSetupGuide } from '@/features/keys/components/client-setup-guide'
+import {
+  holdsActivePlan,
+  readPlanGateDismissed,
+} from '@/features/plan-gate/lib/mount'
 import { useStatus } from '@/hooks/use-status'
 import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { useBalanceStatus } from '../../hooks/use-balance-status'
+import {
+  selfSubscriptionsQueryOptions,
+  useBalanceStatus,
+} from '../../hooks/use-balance-status'
 import { useCustomerOverview } from '../../hooks/use-customer-overview'
 import {
   useAnnouncements,
@@ -73,6 +81,16 @@ const OnboardingLauncher = lazy(
     )
 )
 
+// The newcomer plan limit's banner, loaded only for a customer with an active
+// plan who has not dismissed it today. The comment before the path keeps the
+// locale loader from following the import, as for the wizard above.
+const PlanGateBanner = lazy(
+  () =>
+    import(
+      /* webpackChunkName: "plan-gate-banner" */ '@/features/plan-gate/components/plan-gate-banner'
+    )
+)
+
 export function OverviewDashboard() {
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.auth.user)
@@ -80,6 +98,9 @@ export function OverviewDashboard() {
   const firstRun = user ? isFirstRun(user) : false
   // Fixed at mount: the first request must not unmount the wizard that reports it.
   const [hostsOnboarding] = useState(firstRun)
+  const subscriptions = useQuery(selfSubscriptionsQueryOptions)
+  const hostsPlanGate =
+    holdsActivePlan(subscriptions.data) && !readPlanGateDismissed(user?.id)
   const { status } = useStatus()
   const overview = useCustomerOverview()
   const balanceStatus = useBalanceStatus(
@@ -123,6 +144,11 @@ export function OverviewDashboard() {
             recent={overview.recent}
             firstRun={firstRun}
           />
+          {hostsPlanGate && (
+            <Suspense fallback={null}>
+              <PlanGateBanner />
+            </Suspense>
+          )}
           {hostsOnboarding && (
             <Suspense fallback={null}>
               <OnboardingLauncher />

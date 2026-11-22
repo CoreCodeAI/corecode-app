@@ -96,6 +96,19 @@ func GetSubscriptionSelf(c *gin.Context) {
 	})
 }
 
+// GetSubscriptionPlanGate tells a customer whether the newcomer plan they hold
+// was paused for the network they send requests from, and what that did to the
+// last day's requests. The data is null for a customer with no such plan.
+func GetSubscriptionPlanGate(c *gin.Context) {
+	notice, err := model.GetLimitedPlanNotice(c.GetInt("id"), common.GetTimestamp())
+	if err != nil {
+		common.SysError(common.LogText("plan gate notice for user %d: %s", c.GetInt("id"), err.Error()))
+		common.ApiErrorT(c, "Failed to query logs")
+		return
+	}
+	common.ApiSuccess(c, notice)
+}
+
 func UpdateSubscriptionPreference(c *gin.Context) {
 	userId := c.GetInt("id")
 	var req BillingPreferenceRequest

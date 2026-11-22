@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Link } from '@tanstack/react-router'
 import { Crown, RefreshCw, Sparkles, Check } from 'lucide-react'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -45,6 +46,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { usePlanGateNotice } from '@/features/plan-gate/hooks/use-plan-gate-notice'
+import { isPlanPaused } from '@/features/plan-gate/lib/notice'
 import {
   getPublicPlans,
   getSelfSubscriptionFull,
@@ -125,6 +128,7 @@ export function SubscriptionPlansCard({
   onPurchaseSuccess,
 }: SubscriptionPlansCardProps) {
   const { t } = useTranslation()
+  const planGate = usePlanGateNotice().data
 
   const [plans, setPlans] = useState<PlanRecord[]>([])
   const [activeSubscriptions, setActiveSubscriptions] = useState<
@@ -461,7 +465,19 @@ export function SubscriptionPlansCard({
                       copyable={false}
                     />
                   )
-                  if (isActive) {
+                  // The newcomer plan limit paused it: requests are charged
+                  // elsewhere, so it must not read as a working plan.
+                  const isPaused =
+                    isActive && isPlanPaused(planGate, subscription?.id)
+                  if (isPaused) {
+                    statusBadge = (
+                      <StatusBadge
+                        label={t('Paused (shared network)')}
+                        variant='warning'
+                        copyable={false}
+                      />
+                    )
+                  } else if (isActive) {
                     statusBadge = (
                       <StatusBadge
                         label={t('Active')}
@@ -508,6 +524,19 @@ export function SubscriptionPlansCard({
                           </span>
                         )}
                       </div>
+                      {isPaused && (
+                        <div className='text-warning mt-1.5'>
+                          {t(
+                            'Paused because your network is shared with several newcomer plan accounts. Requests are charged to your balance instead of this plan. If you are a normal user, contact us in Feedback to restore it.'
+                          )}{' '}
+                          <Link
+                            to='/feedback'
+                            className='underline underline-offset-2'
+                          >
+                            {t('Go to Feedback')}
+                          </Link>
+                        </div>
+                      )}
                       <div className='text-muted-foreground mt-1.5'>
                         {endTimeLabel}{' '}
                         {new Date(

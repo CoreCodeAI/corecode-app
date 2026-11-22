@@ -112,6 +112,10 @@ func RecordRelayErrorLog(c *gin.Context, channelId int, err *types.NewAPIError, 
 	other.SetPublic("error_code", err.GetErrorCode())
 	other.SetPublic("status_code", err.StatusCode)
 	AppendRelayLogAdminInfo(c, relayInfo, other)
+	// The customer's row says why the newcomer plan did not serve the request.
+	if relayInfo != nil && relayInfo.LimitedPlanGate == model.LimitedPlanGateRefused {
+		other.SetPublic("limited_plan_gate", relayInfo.LimitedPlanGate)
+	}
 	appendRequestPluginRecord(relayInfo, other)
 	AppendResponseModelLogInfo(relayInfo, other)
 	AppendTaskPluginContextAuditInfo(c, other)
