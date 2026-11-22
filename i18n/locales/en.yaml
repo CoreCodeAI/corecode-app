@@ -32,6 +32,7 @@ violation.resend_blocked: "The upstream model just refused this request under it
 rate_limit.user_concurrency_reached: "Too many requests in progress on your account: at most {{.Max}} at a time across all of your API keys. Wait for one to finish and try again"
 rate_limit.user_concurrency_next_tier: "Too many requests in progress on your account: at most {{.Max}} at a time across all of your API keys. Wait for one to finish and try again. Top up {{.Remaining}} more in total to raise the limit to {{.Next}}"
 rate_limit.token_concurrency_reached: "Too many requests in progress on this API key: at most {{.Max}} at a time. Wait for one to finish and try again"
+rate_limit.large_request_body_busy: "The server is busy with other large requests, and this one is {{.SizeMB}} MB. Try again in a minute"
 distributor.invalid_request: "Invalid request: {{.Error}}"
 distributor.invalid_channel_id: "Invalid channel ID"
 distributor.channel_disabled: "This channel has been disabled"

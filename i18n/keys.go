@@ -32,6 +32,7 @@ const (
 	MsgUserConcurrencyLimitReached  = "rate_limit.user_concurrency_reached"
 	MsgUserConcurrencyLimitNextTier = "rate_limit.user_concurrency_next_tier"
 	MsgTokenConcurrencyLimitReached = "rate_limit.token_concurrency_reached"
+	MsgLargeRequestBodyBusy         = "rate_limit.large_request_body_busy"
 
 	MsgViolationSuspended                 = "violation.suspended"
 	MsgViolationConversationBlocked       = "violation.conversation_blocked"

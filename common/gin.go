@@ -25,6 +25,10 @@ const KeyBodyStorage = "key_body_storage"
 const keyBodyReadError = "key_body_read_error"
 const keyRequestBodyRead = "key_request_body_read"
 
+// KeyRequestBodyQueueMs holds how long a large body waited for the
+// middleware.LargeRequestBodyLimit budget, in milliseconds.
+const KeyRequestBodyQueueMs = "key_request_body_queue_ms"
+
 // RequestBodyRead describes how GetRequestBody read the client's body: its
 // declared and received sizes, how long the read took, and why it failed.
 // It never holds body content. Bytes counts what the handler received, which

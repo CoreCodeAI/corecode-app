@@ -75,6 +75,9 @@ func AppendRelayLogAdminInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 	if read, ok := common.GetRequestBodyRead(ctx); ok {
 		other.SetAdmin("request_body", read)
 	}
+	if waited, ok := ctx.Get(common.KeyRequestBodyQueueMs); ok {
+		other.SetAdmin("request_body_queue_ms", waited)
+	}
 	if timing := preChannelMilliseconds(ctx); timing != nil {
 		other.SetAdmin("pre_channel_ms", timing)
 	}
