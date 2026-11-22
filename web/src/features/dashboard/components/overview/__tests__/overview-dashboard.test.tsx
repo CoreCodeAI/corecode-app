@@ -76,6 +76,8 @@ afterAll(() => {
 let client: QueryClient
 let missedLog: ReturnType<typeof consumeLog> | null
 let status: Record<string, unknown>
+let subscriptions: object[]
+let planGate: object | null
 
 const consumeLog = (id: number, other: object) => ({
   id,
@@ -102,6 +104,8 @@ beforeEach(() => {
   })
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   missedLog = null
+  subscriptions = []
+  planGate = null
   status = {
     announcements_enabled: true,
     announcements: [],
@@ -129,6 +133,12 @@ beforeEach(() => {
     }
     if (url === '/api/data/self') {
       return { data: { success: true, data: [] } }
+    }
+    if (url === '/api/subscription/self') {
+      return { data: { success: true, data: { subscriptions } } }
+    }
+    if (url === '/api/subscription/self/plan-gate') {
+      return { data: { success: true, data: planGate } }
     }
     if (url === '/api/perf-metrics/summary') {
       return { data: { success: true, data: { summary: null, models: [] } } }
@@ -275,6 +285,65 @@ describe('customer overview', () => {
     const title = await screen.findByText('Your balance has run out')
     expect(title).toBeVisible()
     expect(screen.queryByText(/long requests missed the cache/)).toBeNull()
+  })
+
+  describe('the newcomer plan limit banner', () => {
+    const holder = () => {
+      subscriptions = [
+        {
+          subscription: {
+            id: 5,
+            status: 'active',
+            end_time: Math.floor(Date.now() / 1000) + 86400,
+            amount_total: 1_000_000,
+            amount_used: 0,
+          },
+        },
+      ]
+      planGate = {
+        window_seconds: 86400,
+        wallet: 3,
+        other_plan: 0,
+        refused: 0,
+        last_at: Math.floor(Date.now() / 1000),
+        subscription_ids: [5],
+      }
+    }
+    const askedForPlanGate = () =>
+      vi
+        .mocked(api.get)
+        .mock.calls.some(([url]) => url === '/api/subscription/self/plan-gate')
+
+    it('shows for a holder whose requests were charged to the balance', async () => {
+      holder()
+      await renderOverview()
+
+      expect(await screen.findByText('Newcomer plan paused')).toBeVisible()
+      expect(screen.getByText(/3 requests in the last 24 hours/)).toBeVisible()
+    })
+
+    it('neither loads nor asks for anything without an active plan', async () => {
+      holder()
+      subscriptions = []
+      await renderOverview()
+      await screen.findByText('90%')
+
+      expect(screen.queryByText('Newcomer plan paused')).toBeNull()
+      expect(askedForPlanGate()).toBe(false)
+    })
+
+    it('stays away for a day once dismissed', async () => {
+      holder()
+      localStorage.setItem(
+        'plan-gate:banner-dismissed-at:1',
+        String(Date.now() - 60 * 60 * 1000)
+      )
+      await renderOverview()
+      await screen.findByText('90%')
+
+      expect(screen.queryByText('Newcomer plan paused')).toBeNull()
+      expect(askedForPlanGate()).toBe(false)
+    })
   })
 
   describe('first run', () => {

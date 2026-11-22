@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Link } from '@tanstack/react-router'
 import type { TFunction } from 'i18next'
 /*
 Copyright (C) 2023-2026 QuantumNous
@@ -57,6 +58,11 @@ import { Dialog } from '@/components/dialog'
 import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { planGateKindOf } from '@/features/plan-gate/lib/notice'
+import {
+  planGateBilling,
+  planGateExplanation,
+} from '@/features/plan-gate/lib/text'
 import { DynamicPricingBreakdown } from '@/features/pricing/components/dynamic-pricing-breakdown'
 import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 import {
@@ -577,6 +583,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const isTopup = props.log.type === 1
   const isManage = props.log.type === 3
   const isSubscription = other?.billing_source === 'subscription'
+  const planGateKind = planGateKindOf(other)
   const costCheck = isViolation ? null : buildCostCheck(props.log, other)
   const isTieredBilling =
     isConsume &&
@@ -1280,16 +1287,21 @@ export function DetailsDialog(props: DetailsDialogProps) {
         )}
 
         {/* Newcomer plan network limit */}
-        {other?.limited_plan_gate && (
+        {planGateKind && (
           <DetailSection label={t('Newcomer Plan Limit')}>
             <DetailRow
               label={t('Billing')}
-              value={
-                other.limited_plan_gate === 'wallet'
-                  ? t('Billed to balance (newcomer plan network limit)')
-                  : t('Billed to another plan (newcomer plan network limit)')
-              }
+              value={planGateBilling(t, planGateKind)}
             />
+            <p className='text-muted-foreground text-xs leading-relaxed'>
+              {planGateExplanation(t, planGateKind)}{' '}
+              <Link
+                to='/feedback'
+                className='text-foreground underline underline-offset-2'
+              >
+                {t('Go to Feedback')}
+              </Link>
+            </p>
           </DetailSection>
         )}
 

@@ -28,6 +28,7 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
+import { PlanGateBanner } from '@/features/plan-gate/components/plan-gate-banner'
 import { useRefreshSelf, useSelf } from '@/hooks/use-self'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
@@ -339,6 +340,7 @@ export function Wallet(props: WalletProps) {
               onOpenBilling={() => setBillingDialogOpen(true)}
               onDismiss={paymentWait.dismiss}
             />
+            <PlanGateBanner />
             <ConcurrencyTierCard info={topupInfo?.concurrency} />
 
             <div

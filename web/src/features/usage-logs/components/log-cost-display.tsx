@@ -33,6 +33,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { planGateKindOf } from '@/features/plan-gate/lib/notice'
+import {
+  planGateExplanation,
+  planGateLabel,
+} from '@/features/plan-gate/lib/text'
+import type { PlanGateKind } from '@/features/plan-gate/types'
 import { formatLogQuota } from '@/lib/format'
 
 import type { CacheBadge, ZeroOutputReason } from '../lib/bill-explain'
@@ -71,6 +77,32 @@ function ZeroOutputMarker(props: { reason: ZeroOutputReason }) {
         }
       />
       <TooltipContent className='max-w-64'>{text}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function PlanGateMarker(props: { kind: PlanGateKind }) {
+  const { t } = useTranslation()
+  const label = planGateLabel(t, props.kind)
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Badge
+            variant='warning'
+            className='h-5 cursor-help px-1.5 text-[11px] font-normal whitespace-nowrap'
+            tabIndex={0}
+            aria-label={label}
+            data-plan-gate={props.kind}
+          >
+            {label}
+          </Badge>
+        }
+      />
+      <TooltipContent className='max-w-72'>
+        {planGateExplanation(t, props.kind)}
+      </TooltipContent>
     </Tooltip>
   )
 }
@@ -153,6 +185,7 @@ export function LogCostDisplay(props: LogCostDisplayProps) {
   const { t } = useTranslation()
   const isSubscription = props.other?.billing_source === 'subscription'
   const showToolSurcharge = hasToolSurcharge(props.other)
+  const planGate = planGateKindOf(props.other)
   const quota = isSubscription
     ? (props.other?.subscription_consumed ?? props.quota)
     : props.quota
@@ -205,6 +238,7 @@ export function LogCostDisplay(props: LogCostDisplayProps) {
           ) : null}
           <span className='whitespace-nowrap'>{formatLogQuota(quota)}</span>
         </StatusBadge>
+        {planGate ? <PlanGateMarker kind={planGate} /> : null}
         {showToolSurcharge ? <ToolSurchargeMarker /> : null}
         {props.verified ? <VerifiedMarker /> : null}
         {props.zeroOutput ? (

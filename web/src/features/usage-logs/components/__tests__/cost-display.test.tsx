@@ -94,6 +94,29 @@ describe('log cost display', () => {
     expect(screen.queryByText('Subscription')).not.toBeInTheDocument()
   })
 
+  test.each([
+    ['wallet', 'Newcomer plan paused · charged to balance'],
+    ['other_plan', 'Newcomer plan paused · charged to another plan'],
+  ])('marks a request the newcomer plan limit moved (%s)', (kind, label) => {
+    renderCost({
+      quota: 5000,
+      other: { billing_source: 'wallet', limited_plan_gate: kind },
+      showBillingSource: true,
+    })
+
+    expect(screen.getByText(label)).toHaveAttribute('data-plan-gate', kind)
+  })
+
+  test('marks nothing on a wallet charge the limit did not cause', () => {
+    renderCost({
+      quota: 5000,
+      other: { billing_source: 'wallet', limited_plan_gate: 'banana' },
+      showBillingSource: true,
+    })
+
+    expect(screen.queryByText(/Newcomer plan paused/)).not.toBeInTheDocument()
+  })
+
   test('hides the wallet icon when subscriptions are unavailable', () => {
     renderCost({
       quota: 5000,
