@@ -241,6 +241,37 @@ func TestGapsUpdateChannelBalanceOfAPluginChannel(t *testing.T) {
 		assert.Equal(t, "The plugin of this channel does not report a balance", response.Message)
 		assert.Nil(t, storedGapsChannel(t, channel.Id).GetBalanceDetail())
 	})
+
+	t.Run("a plugin without balance hooks on a sub2api balance source", func(t *testing.T) {
+		usage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if r.URL.Path != "/v1/usage" || r.Header.Get("Authorization") != "Bearer sk-usage" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			_, _ = io.WriteString(w, `{"balance":537.759,"remaining":537.759,"isValid":true,"unit":"USD"}`)
+		}))
+		t.Cleanup(usage.Close)
+		channel := insertPluginChannel(t, "gaps-no-balance", usage.URL, "sk-usage", false)
+		channel.OtherSettings = `{"balance_source":"sub2api"}`
+		require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channel.Id).Update("settings", channel.OtherSettings).Error)
+
+		response, raw := callChannelAPI(t, UpdateChannelBalance, http.MethodGet, "/api/channel/update_balance", "", idParam(channel.Id))
+		require.True(t, response.Success, raw)
+		assert.InDelta(t, 537.759, storedGapsChannel(t, channel.Id).Balance, 1e-9)
+
+		// The scheduled run reads the same source, and a query that fails
+		// leaves the balance and the status as they were.
+		require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channel.Id).Update("balance", 9).Error)
+		updateBalanceInRun(storedGapsChannel(t, channel.Id))
+		assert.InDelta(t, 537.759, storedGapsChannel(t, channel.Id).Balance, 1e-9)
+
+		require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", channel.Id).Updates(map[string]any{"key": "sk-wrong", "balance": 9, "auto_ban": 1}).Error)
+		updateBalanceInRun(storedGapsChannel(t, channel.Id))
+		stored := storedGapsChannel(t, channel.Id)
+		assert.InDelta(t, 9.0, stored.Balance, 1e-9)
+		assert.Equal(t, common.ChannelStatusEnabled, stored.Status)
+	})
 }
 
 func TestGapsBalanceRunDisablesOnlyWhatIsUsedUp(t *testing.T) {

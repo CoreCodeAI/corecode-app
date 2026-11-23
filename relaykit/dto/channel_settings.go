@@ -147,6 +147,28 @@ type ChannelOtherSettings struct {
 	// PluginConfig is the config a type-61 channel gives its plugin, checked
 	// against the plugin's meta.channelConfig when the channel is saved.
 	PluginConfig json.RawMessage `json:"plugin_config,omitempty"`
+	// BalanceSource names the balance endpoint of an upstream whose channel type
+	// has no balance query of its own: an OpenAI custom channel, or a task plugin
+	// channel whose plugin exports no balance hooks. Empty keeps the channel
+	// type's own query. Accepted values: "", "sub2api".
+	BalanceSource string `json:"balance_source,omitempty"`
+}
+
+// BalanceSourceSub2API reads the balance from the upstream's GET /v1/usage, as
+// a Sub2API channel does.
+const BalanceSourceSub2API = "sub2api"
+
+// ValidateBalanceSource validates the channel's balance source.
+func (s *ChannelOtherSettings) ValidateBalanceSource() error {
+	if s == nil {
+		return nil
+	}
+	switch s.BalanceSource {
+	case "", BalanceSourceSub2API:
+		return nil
+	default:
+		return fmt.Errorf("invalid balance_source: %s", s.BalanceSource)
+	}
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {

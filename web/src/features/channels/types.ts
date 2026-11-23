@@ -151,6 +151,8 @@ export interface ChannelOtherSettings {
   advanced_custom?: AdvancedCustomConfig
   /** The values of the bound plugin's channel settings (type 61). */
   plugin_config?: Record<string, unknown>
+  /** The upstream endpoint the balance is read from: '' or 'sub2api'. */
+  balance_source?: string
 }
 
 export interface AdvancedCustomConfig {

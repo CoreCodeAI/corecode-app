@@ -157,3 +157,43 @@ func TestUpdateStandardChannelBalanceRoutesSub2API(t *testing.T) {
 	require.NoError(t, err)
 	assert.InDelta(t, 77.7, result.Balance, 1e-9)
 }
+
+func TestUpdateChannelBalanceSub2APISourceOnOpenAIChannel(t *testing.T) {
+	setupSub2APIBalanceTest(t)
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if r.URL.Path != "/v1/usage" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"balance": 537.759, "remaining": 537.759, "isValid": true, "unit": "USD"}`))
+	}))
+	defer server.Close()
+
+	channel := &model.Channel{Type: constant.ChannelTypeOpenAI, BaseURL: &server.URL, Key: "sk-test", Name: "openai-custom", Status: 1}
+	require.NoError(t, model.DB.Create(channel).Error)
+
+	// Without a balance source the OpenAI query keeps asking the billing
+	// subscription endpoint, which this upstream does not have.
+	_, err := updateChannelBalance(channel)
+	require.Error(t, err)
+	assert.Equal(t, []string{"/v1/dashboard/billing/subscription"}, paths)
+
+	channel.OtherSettings = `{"balance_source":"sub2api"}`
+	paths = nil
+	result, err := updateChannelBalance(channel)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"/v1/usage"}, paths)
+	assert.InDelta(t, 537.759, result.Balance, 1e-9)
+	assert.InDelta(t, 537.759, channel.Balance, 1e-9)
+}
+
+func TestValidateSettingsRejectsUnknownBalanceSource(t *testing.T) {
+	channel := &model.Channel{Type: constant.ChannelTypeOpenAI, OtherSettings: `{"balance_source":"sub2api"}`}
+	require.NoError(t, channel.ValidateSettings())
+	channel.OtherSettings = `{"balance_source":"newapi"}`
+	require.EqualError(t, channel.ValidateSettings(), "invalid balance_source: newapi")
+}
