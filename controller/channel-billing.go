@@ -671,15 +671,19 @@ func updateChannelBalance(channel *model.Channel) (channelBalanceResult, error) 
 	return result, err
 }
 
-// usesSub2APIBalance reports whether the channel's balance is read from the
-// upstream's /v1/usage although its type is not Sub2API.
-func usesSub2APIBalance(channel *model.Channel) bool {
-	return channel.GetOtherSettings().BalanceSource == dto.BalanceSourceSub2API
+// namesBalanceSource reports whether the channel names a balance endpoint of
+// its own, which a channel type without a balance query is then queried
+// through.
+func namesBalanceSource(channel *model.Channel) bool {
+	return channel.GetOtherSettings().BalanceSource != ""
 }
 
 func updateStandardChannelBalance(channel *model.Channel) (float64, error) {
-	if usesSub2APIBalance(channel) {
+	switch channel.GetOtherSettings().BalanceSource {
+	case dto.BalanceSourceSub2API:
 		return updateChannelSub2APIBalance(channel)
+	case dto.BalanceSourceNewAPI:
+		return updateChannelNewAPIBalance(channel)
 	}
 	baseURL := constant.GetChannelBaseURL(channel.Type)
 	if channel.GetBaseURL() == "" {
@@ -782,7 +786,7 @@ func UpdateChannelBalance(c *gin.Context) {
 		})
 		return
 	}
-	if channel.Type == constant.ChannelTypeTaskPlugin && !usesSub2APIBalance(channel) {
+	if channel.Type == constant.ChannelTypeTaskPlugin && !namesBalanceSource(channel) {
 		common.ApiErrorT(c, "The plugin of this channel does not report a balance")
 		return
 	}

@@ -150,7 +150,7 @@ type ChannelOtherSettings struct {
 	// BalanceSource names the balance endpoint of an upstream whose channel type
 	// has no balance query of its own: an OpenAI custom channel, or a task plugin
 	// channel whose plugin exports no balance hooks. Empty keeps the channel
-	// type's own query. Accepted values: "", "sub2api".
+	// type's own query. Accepted values: "", "sub2api", "newapi".
 	BalanceSource string `json:"balance_source,omitempty"`
 }
 
@@ -158,13 +158,19 @@ type ChannelOtherSettings struct {
 // a Sub2API channel does.
 const BalanceSourceSub2API = "sub2api"
 
+// BalanceSourceNewAPI reads the balance of the upstream account behind the
+// key from the upstream new-api's GET /api/usage/token/, as a New API channel
+// does: the smaller of the key's remaining quota and its owner's. A key with no
+// limit of its own reports its owner's quota, the account balance.
+const BalanceSourceNewAPI = "newapi"
+
 // ValidateBalanceSource validates the channel's balance source.
 func (s *ChannelOtherSettings) ValidateBalanceSource() error {
 	if s == nil {
 		return nil
 	}
 	switch s.BalanceSource {
-	case "", BalanceSourceSub2API:
+	case "", BalanceSourceSub2API, BalanceSourceNewAPI:
 		return nil
 	default:
 		return fmt.Errorf("invalid balance_source: %s", s.BalanceSource)
