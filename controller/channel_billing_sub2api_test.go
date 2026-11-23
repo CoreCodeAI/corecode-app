@@ -195,5 +195,7 @@ func TestValidateSettingsRejectsUnknownBalanceSource(t *testing.T) {
 	channel := &model.Channel{Type: constant.ChannelTypeOpenAI, OtherSettings: `{"balance_source":"sub2api"}`}
 	require.NoError(t, channel.ValidateSettings())
 	channel.OtherSettings = `{"balance_source":"newapi"}`
-	require.EqualError(t, channel.ValidateSettings(), "invalid balance_source: newapi")
+	require.NoError(t, channel.ValidateSettings())
+	channel.OtherSettings = `{"balance_source":"openai"}`
+	require.EqualError(t, channel.ValidateSettings(), "invalid balance_source: openai")
 }

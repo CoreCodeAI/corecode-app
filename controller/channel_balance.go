@@ -213,7 +213,7 @@ func updateBalanceInRun(channel *model.Channel) {
 		}
 		// A plugin without balance hooks is queried as a built-in channel only
 		// when the channel names a balance source.
-		if !usesSub2APIBalance(channel) {
+		if !namesBalanceSource(channel) {
 			return
 		}
 	}
