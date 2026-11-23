@@ -28,7 +28,10 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { getTaskPluginOptions } from '../api'
 import { CHANNEL_TYPE_TASK_PLUGIN, MODEL_FETCHABLE_TYPES } from '../constants'
-import { parseChannelSettings } from '../lib/channel-utils'
+import {
+  parseChannelOtherSettings,
+  parseChannelSettings,
+} from '../lib/channel-utils'
 import type { Channel } from '../types'
 
 /** Whether the user may read the plugin options, which only binding needs. */
@@ -79,11 +82,12 @@ export function useChannelModelFetchable(
 /**
  * Whether a channel's balance can be queried: always for a built-in channel
  * type, which the server answers for, and for a plugin channel only when its
- * plugin can query one. Without the bind permission the plugin's abilities
- * are unknown, so the action stays and the server answers.
+ * plugin can query one or the channel names a balance source. Without the
+ * bind permission the plugin's abilities are unknown, so the action stays and
+ * the server answers.
  */
 export function useChannelBalanceQueryable(
-  channel: Pick<Channel, 'type' | 'setting'>
+  channel: Pick<Channel, 'type' | 'setting' | 'settings'>
 ) {
   const canBind = useCanBindTaskPlugins()
   const pluginKey =
@@ -94,6 +98,7 @@ export function useChannelBalanceQueryable(
   return (
     channel.type !== CHANNEL_TYPE_TASK_PLUGIN ||
     !canBind ||
-    plugin?.balance === true
+    plugin?.balance === true ||
+    Boolean(parseChannelOtherSettings(channel.settings).balance_source)
   )
 }

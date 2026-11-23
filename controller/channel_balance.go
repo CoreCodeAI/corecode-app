@@ -197,21 +197,25 @@ func balanceErrorText(err error, key string) string {
 func updateBalanceInRun(channel *model.Channel) {
 	if channel.Type == constant.ChannelTypeTaskPlugin {
 		plugin, ok := service.PluginOfChannel(channel)
-		if !ok || !pluginReportsBalance(plugin) {
+		if ok && pluginReportsBalance(plugin) {
+			balances, _, _ := updatePluginChannelBalance(channel, plugin, true)
+			for _, balance := range balances {
+				if balance.err != nil || !emptyBalance(balance.result) {
+					continue
+				}
+				usingKey := ""
+				if channel.ChannelInfo.IsMultiKey {
+					usingKey = balance.key
+				}
+				service.DisableChannel(*types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, usingKey, channel.GetAutoBan()), "Insufficient balance")
+			}
 			return
 		}
-		balances, _, _ := updatePluginChannelBalance(channel, plugin, true)
-		for _, balance := range balances {
-			if balance.err != nil || !emptyBalance(balance.result) {
-				continue
-			}
-			usingKey := ""
-			if channel.ChannelInfo.IsMultiKey {
-				usingKey = balance.key
-			}
-			service.DisableChannel(*types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, usingKey, channel.GetAutoBan()), "Insufficient balance")
+		// A plugin without balance hooks is queried as a built-in channel only
+		// when the channel names a balance source.
+		if !usesSub2APIBalance(channel) {
+			return
 		}
-		return
 	}
 	if channel.ChannelInfo.IsMultiKey {
 		return // built-in multi-key channels have no balance query

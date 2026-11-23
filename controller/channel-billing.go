@@ -671,7 +671,16 @@ func updateChannelBalance(channel *model.Channel) (channelBalanceResult, error) 
 	return result, err
 }
 
+// usesSub2APIBalance reports whether the channel's balance is read from the
+// upstream's /v1/usage although its type is not Sub2API.
+func usesSub2APIBalance(channel *model.Channel) bool {
+	return channel.GetOtherSettings().BalanceSource == dto.BalanceSourceSub2API
+}
+
 func updateStandardChannelBalance(channel *model.Channel) (float64, error) {
+	if usesSub2APIBalance(channel) {
+		return updateChannelSub2APIBalance(channel)
+	}
 	baseURL := constant.GetChannelBaseURL(channel.Type)
 	if channel.GetBaseURL() == "" {
 		channel.BaseURL = &baseURL
@@ -753,12 +762,7 @@ func UpdateChannelBalance(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if channel.Type == constant.ChannelTypeTaskPlugin {
-		plugin, ok := service.PluginOfChannel(channel)
-		if !ok || !pluginReportsBalance(plugin) {
-			common.ApiErrorT(c, "The plugin of this channel does not report a balance")
-			return
-		}
+	if plugin, ok := service.PluginOfChannel(channel); ok && pluginReportsBalance(plugin) {
 		_, detail, err := updatePluginChannelBalance(channel, plugin, false)
 		if err != nil {
 			common.ApiError(c, err)
@@ -776,6 +780,10 @@ func UpdateChannelBalance(c *gin.Context) {
 			"balance":        balance,
 			"balance_detail": detail,
 		})
+		return
+	}
+	if channel.Type == constant.ChannelTypeTaskPlugin && !usesSub2APIBalance(channel) {
+		common.ApiErrorT(c, "The plugin of this channel does not report a balance")
 		return
 	}
 	if channel.ChannelInfo.IsMultiKey {
