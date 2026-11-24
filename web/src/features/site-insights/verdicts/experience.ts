@@ -179,11 +179,8 @@ export function useExperienceVerdict(
         }),
       unread != null &&
         t(
-          'Waste figures cover only from {{time}}: the logs read reach back {{days}} days.',
-          {
-            time: fmt.time(unread),
-            days: 30,
-          }
+          'Waste figures cover only from {{time}}: reading further back would be too slow.',
+          { time: fmt.time(unread) }
         ),
       waste.total_usd > 0 &&
         t(

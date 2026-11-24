@@ -17,38 +17,33 @@ func fillExperienceRefunds(r InsightsRange, staff map[int]bool, point func(int64
 	models := newExperienceBreakdown()
 	users := make(map[int]bool)
 	refunds := ExperienceKind{Kind: "refund"}
-	var last int
-	for {
-		var page []experienceLog
-		if err := LOG_DB.Model(&Log{}).
-			Select("id, user_id, token_id, created_at, model_name, quota, request_id, other").
-			Where("type = ? AND created_at >= ? AND created_at < ? AND id > ?", LogTypeRefund, waste.LogStart, r.End, last).
-			Order("id asc").Limit(experienceLogPage).Find(&page).Error; err != nil {
-			return err
+	// Refunds are rare, so one read by the created_at index; paging by id
+	// would send the planner down the primary key of the whole table.
+	var page []experienceLog
+	if err := LOG_DB.Model(&Log{}).
+		Select("id, user_id, token_id, created_at, model_name, quota, request_id, other").
+		Where("type = ? AND created_at >= ? AND created_at < ?", LogTypeRefund, waste.LogStart, r.End).
+		Find(&page).Error; err != nil {
+		return err
+	}
+	for _, row := range page {
+		if staff[row.UserId] || row.Quota <= 0 {
+			continue
 		}
-		for _, row := range page {
-			last = row.Id
-			if staff[row.UserId] || row.Quota <= 0 {
-				continue
-			}
-			var other experienceOther
-			if err := common.UnmarshalJsonStr(row.Other, &other); err != nil {
-				continue
-			}
-			if other.PreConsumedQuota != nil || (!other.IsTask && other.TaskId == "") {
-				continue
-			}
-			usd := quotaUSD(int64(row.Quota))
-			refunds.Requests++
-			refunds.USD += usd
-			users[row.UserId] = true
-			models.add(row.ModelName, row.UserId, usd)
-			if p := point(row.CreatedAt); p != nil {
-				p.RefundUSD += usd
-			}
+		var other experienceOther
+		if err := common.UnmarshalJsonStr(row.Other, &other); err != nil {
+			continue
 		}
-		if len(page) < experienceLogPage {
-			break
+		if other.PreConsumedQuota != nil || (!other.IsTask && other.TaskId == "") {
+			continue
+		}
+		usd := quotaUSD(int64(row.Quota))
+		refunds.Requests++
+		refunds.USD += usd
+		users[row.UserId] = true
+		models.add(row.ModelName, row.UserId, usd)
+		if p := point(row.CreatedAt); p != nil {
+			p.RefundUSD += usd
 		}
 	}
 	refunds.Users = int64(len(users))
