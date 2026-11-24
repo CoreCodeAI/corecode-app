@@ -1,6 +1,6 @@
 # Agent Note: Keep the shortfall-cap refusal instead of falling back
 
-Status: implemented
+Status: implemented; the refusal is HTTP 402 with code `insufficient_quota` in an OpenAI-shaped body since [2026-11-24](../feature/2026-11-24-answer-a-balance-refusal-with-402.md)
 
 ## Problem
 

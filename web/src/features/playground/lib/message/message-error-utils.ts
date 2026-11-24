@@ -24,9 +24,14 @@ export const MODEL_PRICING_SETTINGS_PATH =
   '/system-settings/billing/model-pricing'
 
 const MODEL_PRICE_ERROR_CODE = 'model_price_error'
-// relaykit/types/error.go ErrorCodeInsufficientUserQuota: the wallet and any
-// subscription cannot cover the request (billing_session.go).
-const INSUFFICIENT_QUOTA_ERROR_CODE = 'insufficient_user_quota'
+// The wallet and any subscription cannot cover the request
+// (billing_session.go). The gateway answers HTTP 402 with the code
+// insufficient_quota; the console that predates it knew ErrorCodeInsufficientUserQuota
+// in relaykit/types/error.go, which an older server still sends.
+const INSUFFICIENT_QUOTA_ERROR_CODES = new Set([
+  'insufficient_quota',
+  'insufficient_user_quota',
+])
 // An error that lost its code on the way, such as a non-JSON stream event,
 // still carries the server's wording, in Chinese or English.
 const INSUFFICIENT_QUOTA_TEXT = /额度不足|insufficient (user )?quota/i
@@ -58,7 +63,7 @@ export function isErrorMessage(message: Message): boolean {
 export function isInsufficientBalanceError(message: Message): boolean {
   if (!isErrorMessage(message)) return false
   if (message.errorCode) {
-    return message.errorCode === INSUFFICIENT_QUOTA_ERROR_CODE
+    return INSUFFICIENT_QUOTA_ERROR_CODES.has(message.errorCode)
   }
   return INSUFFICIENT_QUOTA_TEXT.test(getMessageContent(message))
 }

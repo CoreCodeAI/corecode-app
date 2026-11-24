@@ -80,8 +80,8 @@ func TestBackendMessageLanguage(t *testing.T) {
 	require.NoError(t, Init())
 	t.Cleanup(func() { common.DefaultLanguage = "" })
 	quota := map[string]any{"Remaining": "$0.10"}
-	const english = "Insufficient user quota, remaining quota: $0.10"
-	const chinese = "用户额度不足, 剩余额度: $0.10"
+	const english = "Insufficient quota: wallet $0.10. Top up: https://corecode.live/wallet"
+	const chinese = "额度不足：钱包 $0.10。请充值：https://corecode.live/wallet"
 	for _, tc := range []struct {
 		name            string
 		defaultLanguage string
@@ -95,7 +95,7 @@ func TestBackendMessageLanguage(t *testing.T) {
 		{"nothing stated with an English default", "en", "", "", english},
 		{"header wins over the default", "zh-CN", "", "en-US,en;q=0.9", english},
 		{"header in a language without a locale", "zh-CN", "", "fr-FR", english},
-		{"saved language wins over the header", "", "zhTW", "en-US", "使用者額度不足，剩餘額度：$0.10"},
+		{"saved language wins over the header", "", "zhTW", "en-US", "額度不足：錢包 $0.10。請儲值：https://corecode.live/wallet"},
 		{"saved language", "zh-CN", "en", "", english},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -204,4 +204,52 @@ func TestServerLogLanguage(t *testing.T) {
 	assert.Equal(t, "任务进度轮询开始", common.LogText("task progress polling started"))
 	common.SetLogLanguage("en")
 	assert.Equal(t, "channel #7 has 2 unfinished tasks", common.LogText(line, 7, 2))
+}
+
+// A saved language wins, then the language the console browser asked for, then
+// the request's own Accept-Language. A reader with none of them gets a quota
+// refusal in Chinese with an English gloss, unless DEFAULT_LANGUAGE says
+// which language such readers read.
+func TestQuotaRefusalLanguagePriority(t *testing.T) {
+	require.NoError(t, Init())
+	t.Cleanup(func() { common.DefaultLanguage = "" })
+	args := map[string]any{"Required": "$1.76", "Subscription": "$1.52", "Wallet": "$0"}
+	const chinese = "额度不足：本次需预扣 $1.76，订阅剩 $1.52、钱包 $0。请充值：https://corecode.live/wallet"
+	const english = "Insufficient quota: this request needs $1.76 reserved; subscription $1.52, wallet $0. Top up: https://corecode.live/wallet"
+	const traditional = "額度不足：本次需預扣 $1.76，訂閱剩 $1.52、錢包 $0。請儲值：https://corecode.live/wallet"
+	for _, tc := range []struct {
+		name            string
+		defaultLanguage string
+		setting         *dto.UserSetting
+		acceptLanguage  string
+		want            string
+	}{
+		{"saved language wins over hint and header", "", &dto.UserSetting{Language: "en", LanguageHint: "zh-CN"}, "zh-TW", english},
+		{"hint wins over the header", "", &dto.UserSetting{LanguageHint: "zh-CN"}, "en-US", chinese},
+		{"hint stands in for an unsaved language", "", &dto.UserSetting{LanguageHint: "zh-TW"}, "", traditional},
+		{"header without a saved language or hint", "", &dto.UserSetting{}, "en-US", english},
+		{"header without any setting", "", nil, "zh-TW", traditional},
+		{"nothing stated is bilingual", "", &dto.UserSetting{}, "", chinese + "（Insufficient quota: needs $1.76, subscription $1.52, wallet $0）"},
+		{"a wildcard header states nothing", "", nil, "*", chinese + "（Insufficient quota: needs $1.76, subscription $1.52, wallet $0）"},
+		{"DEFAULT_LANGUAGE replaces the bilingual line", "en", nil, "", english},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			common.DefaultLanguage = tc.defaultLanguage
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest("POST", "/v1/messages", nil)
+			if tc.acceptLanguage != "" {
+				c.Request.Header.Set("Accept-Language", tc.acceptLanguage)
+			}
+			if tc.setting != nil {
+				c.Set(string(constant.ContextKeyUserSetting), *tc.setting)
+			}
+			assert.Equal(t, tc.want, TBilingual(c, MsgQuotaSubscriptionAndWalletInsufficient, args))
+		})
+	}
+	t.Run("other messages keep their fallback", func(t *testing.T) {
+		common.DefaultLanguage = ""
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		c.Request = httptest.NewRequest("POST", "/v1/messages", nil)
+		assert.Equal(t, "unable to parse model", T(c, MsgDistributorInvalidParseModel))
+	})
 }

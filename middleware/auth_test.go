@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/gin-gonic/gin"
@@ -678,4 +679,47 @@ func TestSplitTokenKeyKeepsStoredKeysWithHyphens(t *testing.T) {
 	assert.Equal(t, []string{"plainkey", "7"}, splitTokenKey("plainkey-7"))
 	assert.Equal(t, []string{"plainkey"}, splitTokenKey("plainkey"))
 	assert.Equal(t, []string{"unknown", "key"}, splitTokenKey("unknown-key"))
+}
+
+// A console browser's Accept-Language is remembered as the language hint of a
+// user who saved none, written only when it changes and never over a saved
+// language; an API key request or a personal access token records nothing.
+func TestRememberLanguageHint(t *testing.T) {
+	setupDashboardAuthMiddlewareTest(t)
+	languageHintAttempts.Clear()
+	user := createMiddlewarePATUser(t, "hint-user", "hint-user-pat")
+	var writes int
+	require.NoError(t, model.DB.Callback().Update().Before("gorm:update").Register("test:count_hint_writes", func(*gorm.DB) { writes++ }))
+	t.Cleanup(func() { model.DB.Callback().Update().Remove("test:count_hint_writes") })
+	remember := func(acceptLanguage string) dto.UserSetting {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/user/self", nil)
+		if acceptLanguage != "" {
+			c.Request.Header.Set("Accept-Language", acceptLanguage)
+		}
+		base, err := model.GetUserCache(user.Id)
+		require.NoError(t, err)
+		rememberLanguageHint(c, base)
+		stored, err := model.GetUserById(user.Id, false)
+		require.NoError(t, err)
+		return stored.GetSetting()
+	}
+
+	assert.Equal(t, "", remember("").LanguageHint, "no header states nothing")
+	assert.Equal(t, "", remember("*").LanguageHint, "a wildcard states nothing")
+	assert.Equal(t, i18n.LangZhCN, remember("zh-CN,zh;q=0.9,en;q=0.8").LanguageHint)
+	assert.Equal(t, i18n.LangZhTW, remember("zh-HK").LanguageHint, "a changed language is rewritten")
+	assert.Equal(t, i18n.LangEn, remember("fr-FR").LanguageHint, "a language without a locale reads as English")
+
+	assert.Equal(t, 3, writes)
+	assert.Equal(t, i18n.LangEn, remember("en-US").LanguageHint)
+	assert.Equal(t, i18n.LangEn, remember("en-GB").LanguageHint)
+	assert.Equal(t, 3, writes, "the same language is not written again")
+
+	saved := user.GetSetting()
+	saved.Language = "zhTW"
+	saved.LanguageHint = i18n.LangEn
+	require.NoError(t, model.UpdateUserSetting(user.Id, saved))
+	assert.Equal(t, "zhTW", remember("zh-CN").Language, "a saved language is never overwritten")
+	assert.Equal(t, i18n.LangEn, remember("zh-CN").LanguageHint)
 }

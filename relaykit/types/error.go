@@ -221,6 +221,24 @@ func (e *NewAPIError) SetMessage(message string) {
 	e.Err = errors.New(message)
 }
 
+const (
+	// OpenAIInsufficientQuota is the type and code OpenAI-shaped clients
+	// recognise as "out of credit".
+	OpenAIInsufficientQuota = "insufficient_quota"
+	// ClaudeBillingError is Anthropic's error type for a billing refusal,
+	// sent with HTTP 402; Claude Code reads it as a balance problem, where a
+	// 403 reads as a failed login.
+	ClaudeBillingError = "billing_error"
+)
+
+// isBalanceRefusal reports whether the gateway itself refused the request for
+// want of balance (HTTP 402). A 403 with the same code is a risk refusal, and
+// an error an upstream sent keeps its own type.
+func (e *NewAPIError) isBalanceRefusal() bool {
+	return e.errorType == ErrorTypeNewAPIError && e.errorCode == ErrorCodeInsufficientUserQuota &&
+		e.StatusCode == http.StatusPaymentRequired
+}
+
 // ToOpenAIError masks the upstream addresses in the message; pass those of the
 // channel that produced the error, or none when no channel did.
 func (e *NewAPIError) ToOpenAIError(upstreamURLs ...string) OpenAIError {
@@ -246,6 +264,10 @@ func (e *NewAPIError) ToOpenAIError(upstreamURLs ...string) OpenAIError {
 			Param:   "",
 			Code:    e.errorCode,
 		}
+	}
+	if e.isBalanceRefusal() {
+		result.Type = OpenAIInsufficientQuota
+		result.Code = OpenAIInsufficientQuota
 	}
 	if e.errorCode != ErrorCodeCountTokenFailed {
 		result.Message = kitutil.MaskSensitiveInfo(result.Message, upstreamURLs...)
@@ -276,6 +298,9 @@ func (e *NewAPIError) ToClaudeError(upstreamURLs ...string) ClaudeError {
 			Message: e.Error(),
 			Type:    string(e.errorType),
 		}
+	}
+	if e.isBalanceRefusal() {
+		result.Type = ClaudeBillingError
 	}
 	if e.errorCode != ErrorCodeCountTokenFailed {
 		result.Message = kitutil.MaskSensitiveInfo(result.Message, upstreamURLs...)

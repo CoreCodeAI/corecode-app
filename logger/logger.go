@@ -149,6 +149,40 @@ func LogQuota(quota int) string {
 	}
 }
 
+// FormatQuotaBrief is FormatQuota for a sentence a customer reads: two
+// decimals, a nonzero amount under one cent as "<$0.01", and no decimals for
+// zero.
+func FormatQuotaBrief(quota int) string {
+	symbol, value := "$", float64(quota)/common.QuotaPerUnit
+	switch operation_setting.GetQuotaDisplayType() {
+	case operation_setting.QuotaDisplayTypeCNY:
+		symbol, value = "¥", value*operation_setting.USDExchangeRate
+	case operation_setting.QuotaDisplayTypeCustom:
+		setting := operation_setting.GetGeneralSetting()
+		symbol = setting.CustomCurrencySymbol
+		if symbol == "" {
+			symbol = "¤"
+		}
+		if setting.CustomCurrencyExchangeRate > 0 {
+			value *= setting.CustomCurrencyExchangeRate
+		}
+	case operation_setting.QuotaDisplayTypeTokens:
+		return fmt.Sprintf("%d", quota)
+	}
+	sign := ""
+	if value < 0 {
+		sign, value = "-", -value
+	}
+	switch {
+	case value == 0 || (sign != "" && value < 0.005):
+		return symbol + "0"
+	case value < 0.005:
+		return "<" + symbol + "0.01"
+	default:
+		return fmt.Sprintf("%s%s%.2f", sign, symbol, value)
+	}
+}
+
 func FormatQuota(quota int) string {
 	q := float64(quota)
 	switch operation_setting.GetQuotaDisplayType() {

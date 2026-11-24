@@ -226,5 +226,9 @@ func GetUserLanguage(userId int) string {
 	if err != nil {
 		return ""
 	}
-	return userCache.GetSetting().Language
+	setting := userCache.GetSetting()
+	if setting.Language == "" {
+		return setting.LanguageHint
+	}
+	return setting.Language
 }
