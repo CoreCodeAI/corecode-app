@@ -78,10 +78,10 @@ fields are additive; the pool tab is untouched.
   settlement delta, the series adding up to the totals, the top order, the silent list,
   reply p50 / p90, open and unanswered counts, retention before / after and the lapsed list.
   `TestExperienceInsightsReadByTheHourOverADay` covers the hour series.
-- Web: `bun run typecheck`, `bun run lint:check` (no new findings), `bun run test` (430
-  files, 4,515 tests, including 19 in `experience-tab.test.tsx`) pass; `bun run i18n:sync`
+- Web: `bun run typecheck`, `bun run lint:check` (no new findings), `bun run test` (431
+  files, 4,531 tests, including 19 in `experience-tab.test.tsx`) pass; `bun run i18n:sync`
   ran and the 8 locales carry the 96 new keys; `bun run first-load:check` passes (`/sign-in`
-  1,225 B, `/dashboard/overview` 837 B, `/keys` 1,076 B left).
+  1,200 B, `/dashboard/overview` 772 B, `/keys` 1,011 B left).
   `bun run format:check` fails on files this change does not touch (other lines' format
   debt); the files of this change are clean.
 - Screenshots: synthetic data. A stub server serves the built bundle and answers `/api` from
