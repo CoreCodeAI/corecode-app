@@ -43,8 +43,14 @@ import {
   type InsightsSources,
   type InsightsTab,
 } from '../lib'
-import type { ChannelCost, ChannelInsights, ChannelRow } from '../types'
+import type {
+  CampaignInsights,
+  ChannelCost,
+  ChannelInsights,
+  ChannelRow,
+} from '../types'
 import { useChannelsVerdict } from '../verdicts/channels'
+import { CampaignRoiPanel } from './campaign-roi'
 import {
   MIN_NEW_PAYERS,
   addFeeEntry,
@@ -107,6 +113,7 @@ function useSegmentLabel() {
 export function ChannelsTab(props: {
   data: ChannelInsights | undefined
   previous?: ChannelInsights
+  campaigns?: CampaignInsights
   range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
   sources?: InsightsSources
@@ -262,6 +269,10 @@ export function ChannelsTab(props: {
         points={verdict?.points}
         chips={verdict?.chips}
         loading={!data && !failed}
+      />
+      <CampaignRoiPanel
+        data={props.campaigns}
+        source={props.sources?.campaigns}
       />
       <MetricGrid
         loading={!data && !failed}

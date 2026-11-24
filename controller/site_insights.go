@@ -312,6 +312,20 @@ func GetExperienceInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxLogDays, settledRead("experience", model.GetExperienceInsights))
 }
 
+// GetCampaignInsights answers the campaigns view: what each way of winning a
+// customer cost, and what the people it reached paid afterwards. It reads
+// accounts, plans, orders and the audit log, like the channels view.
+func GetCampaignInsights(c *gin.Context) {
+	serveInsights(c, model.InsightsMaxDays, settledRead("campaigns", model.GetCampaignInsights))
+}
+
+// GetGateInsights answers the gate view: what the newcomer-plan address gate did.
+// It scans request logs for the gate's marker, so its range is bounded to
+// model.InsightsMaxGateDays.
+func GetGateInsights(c *gin.Context) {
+	serveInsights(c, model.InsightsMaxGateDays, settledRead("gate", model.GetGateInsights))
+}
+
 func GetGrowthInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxDays, settledRead("growth", model.GetGrowthInsights))
 }

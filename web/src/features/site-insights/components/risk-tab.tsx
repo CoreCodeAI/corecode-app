@@ -34,7 +34,7 @@ import {
 } from '../lib'
 import { previousDayPartial, usePartialDays } from '../partial-days'
 import { blocksAt } from '../risk-gate-stages'
-import type { RiskInsights } from '../types'
+import type { GateInsights, RiskInsights } from '../types'
 import { useRiskVerdict } from '../verdicts'
 import { largestSurge, useSurgeText } from '../verdicts/risk'
 import {
@@ -56,6 +56,7 @@ import {
   usesGiftPart,
 } from './risk-analysis'
 import { GateBlocksPanel } from './risk-blocks'
+import { GateEffectPanel } from './risk-gate-effect'
 import {
   AliasClusterPanel,
   DebtPanel,
@@ -79,6 +80,7 @@ import {
 export function RiskTab(props: {
   data: RiskInsights | undefined
   previous?: RiskInsights
+  gate?: GateInsights
   range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
   sources?: InsightsSources
@@ -511,6 +513,11 @@ export function RiskTab(props: {
           state={listState}
         />
       </div>
+      <GateEffectPanel
+        data={props.gate}
+        range={props.range}
+        source={props.sources?.gate}
+      />
     </div>
   )
 }

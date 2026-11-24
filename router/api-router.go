@@ -496,6 +496,8 @@ func SetApiRouter(router *gin.Engine) {
 			siteInsightsRoute.GET("/activity", controller.GetActivityInsights)
 			siteInsightsRoute.GET("/customers", controller.GetCustomerInsights)
 			siteInsightsRoute.GET("/experience", controller.GetExperienceInsights)
+			siteInsightsRoute.GET("/campaigns", controller.GetCampaignInsights)
+			siteInsightsRoute.GET("/gate", controller.GetGateInsights)
 			siteInsightsRoute.GET("/keys", controller.GetKeyInsights)
 			siteInsightsRoute.GET("/quality", controller.GetQualityInsights)
 			siteInsightsRoute.GET("/model-behavior", controller.GetModelBehavior)

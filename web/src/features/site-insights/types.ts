@@ -1883,3 +1883,91 @@ export type ExperienceInsights = {
   waste: ExperienceWaste
   feedback: ExperienceFeedback
 }
+
+/**
+ * One way of winning customers over the range (GET /api/site-insights/campaigns).
+ * Quota figures (cost_usd to lapsed_usd) are quota dollars, which customers buy at
+ * ¥1 each, so they read as yuan next to paid_money and pack_money, which are in the
+ * payment currency. cost_usd is what the campaign cost: the quota given, except a
+ * newcomer plan (sold, so the quota its buyers used) and a paid channel (its fee
+ * over the range). given_usd is handed out, used_usd spent, lying_usd still
+ * spendable and lapsed_usd a plan that ended unspent. Recipients received in the
+ * range and payers paid afterwards, up to now: paid_money is what they paid, and
+ * pack_money the newcomer plan's own price.
+ */
+export type CampaignRow = {
+  kind: string
+  cost_usd: number
+  given_usd: number
+  used_usd: number
+  lying_usd: number
+  lapsed_usd: number
+  recipients: number
+  payers: number
+  paid_money: number
+  pack_money: number
+}
+
+/** The newcomer plan's buyers in the range: bought it, used it up, paid again. */
+export type NewcomerFunnel = {
+  bought: number
+  used_up: number
+  repaid: number
+  repaid_after_used_up: number
+  pack_money: number
+  repaid_money: number
+  given_usd: number
+  used_usd: number
+  price_money: number
+}
+
+export type CampaignInsights = {
+  rows: CampaignRow[]
+  /** The promotion rows together, an account once; compensation is left out. */
+  total: CampaignRow
+  newcomer?: NewcomerFunnel
+}
+
+/** One day of the newcomer-plan address gate (GET /api/site-insights/gate). */
+export type GateDay = {
+  day: number
+  wallet: number
+  other_plan: number
+  refused: number
+  /** Quota dollars the wallet paid for the wallet rows. */
+  wallet_usd: number
+  users: number
+  exits: number
+}
+
+export type GateExit = { kind: string; requests: number; users: number }
+
+/** Accounts an administrator marked as one studio's, as of now. */
+export type GateCrowd = {
+  accounts: number
+  gated: number
+  granted_usd: number
+  used_usd: number
+  unused_usd: number
+}
+
+/** Accounts exempted by hand, the gate's known mistakes. */
+export type GateExemptions = {
+  accounts: number
+  in_range: number
+  gated: number
+  wallet_before_usd: number
+  refunded_usd: number
+}
+
+export type GateInsights = {
+  days: GateDay[]
+  exits: GateExit[]
+  wallet: number
+  other_plan: number
+  refused: number
+  wallet_usd: number
+  users: number
+  crowd: GateCrowd
+  exemptions: GateExemptions
+}
