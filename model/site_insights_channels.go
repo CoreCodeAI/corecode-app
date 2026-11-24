@@ -210,6 +210,24 @@ type ChannelInsights struct {
 	// Truncated says an hour of the range was cut by its row cap, so the
 	// consumption of that hour is short.
 	Truncated bool `json:"truncated"`
+	// SignupsByDay is each day of the range's sign-ups by the source that
+	// brought them: the same attribution as the rows' Registered. A day with
+	// no sign-up is listed with none.
+	SignupsByDay []ChannelSignupDay `json:"signups_by_day"`
+}
+
+// ChannelSignupDay is one day's sign-ups by source.
+type ChannelSignupDay struct {
+	Day     int64          `json:"day"`
+	Sources []ChannelCount `json:"sources"`
+}
+
+// ChannelCount is the sign-ups of one source in a day. ChannelID is the
+// channel's affiliate account, 0 for the invited and organic rows.
+type ChannelCount struct {
+	Segment    string `json:"segment"`
+	ChannelID  int    `json:"channel_id"`
+	Registered int64  `json:"registered"`
 }
 
 // walletCredit is one credit to a wallet: paid quota with the money paid for
@@ -406,12 +424,18 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 			row.NewPayers++
 		}
 	}
+	signupDays := make(map[int64]map[*ChannelRow]int64)
 	for _, user := range users {
 		if !inRange(user.CreatedAt) {
 			continue
 		}
 		row := rowOf[user.Id]
 		row.Registered++
+		day := r.DayStart(user.CreatedAt)
+		if signupDays[day] == nil {
+			signupDays[day] = make(map[*ChannelRow]int64)
+		}
+		signupDays[day][row]++
 		if user.RequestCount > 0 {
 			row.Activated++
 		}
@@ -565,6 +589,16 @@ func GetChannelInsights(r InsightsRange) (*ChannelInsights, error) {
 		return nil, err
 	}
 	result := &ChannelInsights{Costs: stored, StaleHours: stale, Truncated: truncated}
+	for _, day := range r.days() {
+		entry := ChannelSignupDay{Day: day, Sources: []ChannelCount{}}
+		for row, count := range signupDays[day] {
+			entry.Sources = append(entry.Sources, ChannelCount{Segment: row.Segment, ChannelID: row.Channel.UserID, Registered: count})
+		}
+		slices.SortFunc(entry.Sources, func(a, b ChannelCount) int {
+			return cmp.Or(cmp.Compare(b.Registered, a.Registered), cmp.Compare(a.Segment, b.Segment), cmp.Compare(a.ChannelID, b.ChannelID))
+		})
+		result.SignupsByDay = append(result.SignupsByDay, entry)
+	}
 	for id, row := range rows {
 		row.Channel.Username = names[id]
 		result.Channels = append(result.Channels, *row)

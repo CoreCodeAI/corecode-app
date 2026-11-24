@@ -51,6 +51,7 @@ import { previousDayPartial, usePartialDays } from '../partial-days'
 import type {
   ActivityInsights,
   BusinessInsights,
+  CustomerInsights,
   FunnelRow,
   GrowthInsights,
   KeyInsights,
@@ -66,12 +67,24 @@ import { FunnelChart } from './advanced-charts'
 import { GroupsPanel, ReferralPanel } from './business-panels'
 import { FailingCustomersPanel } from './failing-customers-panel'
 import {
+  SignupMoneyPanel,
+  SilentPayersPanel,
+  StackedFunnel,
+  WeeklySignupsPanel,
+} from './growth-charts'
+import {
+  ChurnWatchPanel,
+  CustomersPanel,
+  SpendTiersPanel,
+} from './growth-customers'
+import {
   PayerActivityPanel,
   PaymentTimingPanel,
   SignupDriversPanel,
 } from './growth-insights'
 import { ApiKeysPanel } from './key-insights'
 import { RetentionPanel } from './retention-panel'
+import { WeeklyRetentionPanel } from './retention-weeks'
 import {
   BarSeries,
   type BarPoint,
@@ -299,6 +312,44 @@ export function GrowthTab(props: {
             help: joinSentences(cohortHelp, youngSentence),
           },
           {
+            label: t('Payment conversion'),
+            missing: failed,
+            value: cohort.registered
+              ? fmt.pct(cohort.paid / cohort.registered)
+              : '-',
+            hint: young
+              ? t('{{paid}} of {{registered}} sign-ups so far', {
+                  paid: fmt.num(cohort.paid),
+                  registered: fmt.num(cohort.registered),
+                })
+              : t('{{paid}} of {{registered}} aged sign-ups', {
+                  paid: fmt.num(cohort.paid),
+                  registered: fmt.num(cohort.registered),
+                }),
+            help: joinSentences(
+              t(
+                'Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.'
+              ),
+              cohortHelp,
+              youngSentence
+            ),
+            delta: previous
+              ? (() => {
+                  const before = previous.funnel
+                  return before.registered > 0
+                    ? {
+                        current: cohort.registered
+                          ? cohort.paid / cohort.registered
+                          : 0,
+                        previous: before.paid / before.registered,
+                        better: 'up' as const,
+                        points: true,
+                      }
+                    : undefined
+                })()
+              : undefined,
+          },
+          {
             label: t('Paid again'),
             missing: failed,
             value: fmt.num(funnel?.repeat ?? 0),
@@ -320,6 +371,9 @@ export function GrowthTab(props: {
           },
         ]}
       />
+      {!hourly && (data?.daily.length ?? 0) >= 4 && (
+        <SignupMoneyPanel data={data} error={viewError} />
+      )}
       {hourly && range ? (
         <Panel
           title={t('Sign-ups by hour and what they did')}
@@ -384,6 +438,7 @@ export function GrowthTab(props: {
           )}
         </Panel>
       )}
+      {!hourly && <WeeklySignupsPanel daily={data?.daily} error={viewError} />}
       <SignupDriversPanel
         data={data}
         previous={previous}
@@ -416,7 +471,14 @@ export function GrowthTab(props: {
         </div>
       )}
       <div className='grid gap-4 lg:grid-cols-2'>
-        <Panel title={t('Funnel by sign-up method')}>
+        <Panel title={t('Funnel by sign-up method')} error={viewError}>
+          <StackedFunnel
+            rows={data?.by_source}
+            label={label}
+            empty={t('No sign-ups in this range')}
+            loading={!data && !failed}
+          />
+          <div className='mt-4' />
           <SimpleTable
             rows={data?.by_source}
             rowKey={(row) => row.segment}
@@ -426,7 +488,14 @@ export function GrowthTab(props: {
             state={tableState(props.sources?.view, data?.by_source)}
           />
         </Panel>
-        <Panel title={t('Funnel by referral')}>
+        <Panel title={t('Funnel by referral')} error={viewError}>
+          <StackedFunnel
+            rows={data?.by_invite}
+            label={label}
+            empty={t('No sign-ups in this range')}
+            loading={!data && !failed}
+          />
+          <div className='mt-4' />
           <SimpleTable
             rows={data?.by_invite}
             rowKey={(row) => row.segment}
@@ -457,6 +526,8 @@ export function ActivityTab(props: {
   previous?: ActivityInsights
   /** The keys view; absent on a server that does not send it. */
   keys?: KeyInsights
+  /** The customers view; absent on a server that does not send it. */
+  customers?: CustomerInsights
   range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
   sources?: InsightsSources
@@ -898,6 +969,21 @@ export function ActivityTab(props: {
           </Panel>
         </div>
       )}
+      <SpendTiersPanel groups={data?.spend_tiers} error={viewError} />
+      <WeeklyRetentionPanel
+        weeks={data?.retention_weeks}
+        state={state}
+        error={viewError}
+      />
+      <SilentPayersPanel silent={data?.silent_payers} error={viewError} />
+      <CustomersPanel
+        data={props.customers}
+        source={props.sources?.customers}
+      />
+      <ChurnWatchPanel
+        data={props.customers}
+        source={props.sources?.customers}
+      />
       <Panel
         title={t('Daily Claude cost at official prices')}
         help={engineHelp}

@@ -40,7 +40,7 @@ import type {
 /** A tab of the page: one view, or the overview that reads several. */
 export type InsightsTab =
   | 'overview'
-  | Exclude<InsightsView, 'business' | 'keys'>
+  | Exclude<InsightsView, 'business' | 'keys' | 'customers'>
 
 /** Tabs in the order shown, grouped by what they answer. */
 export const INSIGHTS_TAB_GROUPS: { key: string; tabs: InsightsTab[] }[] = [
@@ -271,6 +271,8 @@ export type InsightsSources = {
   businessPrevious?: SourceState
   /** The activity tab's keys view; absent on other tabs. */
   keys?: SourceState
+  /** The activity tab's customers view; absent on other tabs. */
+  customers?: SourceState
 }
 
 /** A query's state as a SourceState; a disabled query reads as pending. */

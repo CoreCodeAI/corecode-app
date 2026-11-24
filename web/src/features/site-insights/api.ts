@@ -26,6 +26,7 @@ import type {
   CapacityInsights,
   ChannelCost,
   ChannelInsights,
+  CustomerInsights,
   EngineOutlook,
   EnginePool,
   EngineResetResult,
@@ -54,6 +55,7 @@ export type InsightsView =
   | 'pool'
   | 'channels'
   | 'upstream'
+  | 'customers'
 
 export type InsightsByView = {
   capacity: CapacityInsights
@@ -67,6 +69,7 @@ export type InsightsByView = {
   pool: EnginePool
   channels: ChannelInsights
   upstream: UpstreamInsights
+  customers: CustomerInsights
 }
 
 /** The longest range, in days, each view's endpoint accepts. */
@@ -83,6 +86,7 @@ export const VIEW_MAX_DAYS: Record<InsightsView, number> = {
   pool: 1,
   channels: 366,
   upstream: 92,
+  customers: 366,
 }
 
 export async function getInsights<V extends InsightsView>(

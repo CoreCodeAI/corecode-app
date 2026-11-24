@@ -297,6 +297,13 @@ func GetKeyInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxLogDays, settledRead("keys", model.GetKeyInsights))
 }
 
+// GetCustomerInsights answers the customers view: the range's biggest customers
+// with their history, the concentration of spending, and the churn watch list.
+// It reads up to a year, like the activity view whose tab shows it.
+func GetCustomerInsights(c *gin.Context) {
+	serveInsights(c, model.InsightsMaxDays, settledRead("customers", model.GetCustomerInsights))
+}
+
 func GetGrowthInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxDays, settledRead("growth", model.GetGrowthInsights))
 }
