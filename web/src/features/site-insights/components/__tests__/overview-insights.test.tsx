@@ -71,6 +71,7 @@ function channel(fields: Partial<UpstreamChannel>): UpstreamChannel {
     cost_usd: 0,
     cost_source: 'none',
     latest_cost_at: 0,
+    latest_revenue_at: 0,
     ...fields,
   } as UpstreamChannel
 }
@@ -226,37 +227,49 @@ describe('overview analysis', () => {
     ])
   })
 
-  it('finds an upstream bill read too long before the range ends', () => {
-    const end = 10_000
+  it('finds an upstream bill that fell behind its charged requests', () => {
+    const last = 10_000
     const data = {
       channels: [
         channel({
           id: 1,
           cost_source: 'upstream',
           revenue_usd: 1,
-          latest_cost_at: end - 1801,
+          latest_cost_at: last - 1801,
+          latest_revenue_at: last,
         }),
         channel({
           id: 2,
           cost_source: 'upstream',
           revenue_usd: 1,
-          latest_cost_at: end - 1800,
+          latest_cost_at: last - 1800,
+          latest_revenue_at: last,
         }),
         channel({
           id: 3,
           cost_source: 'upstream',
           revenue_usd: 0,
           latest_cost_at: 1,
+          latest_revenue_at: last,
         }),
         channel({
           id: 4,
           cost_source: 'fee',
           revenue_usd: 1,
           latest_cost_at: 1,
+          latest_revenue_at: last,
+        }),
+        // Quiet since its last bill, however long ago that was.
+        channel({
+          id: 5,
+          cost_source: 'upstream',
+          revenue_usd: 1,
+          latest_cost_at: 1,
+          latest_revenue_at: 0,
         }),
       ],
     } as UpstreamInsights
-    expect(staleCostChannels(data, end).map((row) => row.id)).toEqual([1])
+    expect(staleCostChannels(data).map((row) => row.id)).toEqual([1])
   })
 
   it('names a customer past the concentration share', () => {

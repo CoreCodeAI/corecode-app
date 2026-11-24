@@ -379,6 +379,38 @@ func TestStreamScannerHandler_ClientCancelAbortsUpstreamAndReturns(t *testing.T)
 	assert.NotContains(t, body, "second")
 }
 
+// cancelingReader stands for an upstream body read under the client's
+// context: the client hangs up during the read, which fails with the
+// context's error.
+type cancelingReader struct{ cancel context.CancelFunc }
+
+func (r cancelingReader) Read([]byte) (int, error) {
+	r.cancel()
+	return 0, context.Canceled
+}
+
+// TestStreamScannerHandler_ClientCancelDuringReadIsClientGone: the read the
+// client's hang-up fails is the client leaving, not an upstream failure. It
+// was recorded as scanner_error, which the end reason keeps first, so the
+// request looked like a failed upstream stream that was still billed.
+func TestStreamScannerHandler_ClientCancelDuringReadIsClientGone(t *testing.T) {
+	for range 20 {
+		ctx, cancel := context.WithCancel(context.Background())
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil).WithContext(ctx)
+		resp := &http.Response{Body: io.NopCloser(cancelingReader{cancel})}
+		info := &relaycommon.RelayInfo{DisablePing: true, ChannelMeta: &relaycommon.ChannelMeta{}}
+
+		StreamScannerHandler(c, resp, info, func(string, *StreamResult) {})
+		cancel()
+
+		require.NotNil(t, info.StreamStatus)
+		require.Equal(t, relaycommon.StreamEndReasonClientGone, info.StreamStatus.EndReason)
+		require.ErrorIs(t, info.StreamStatus.EndError, context.Canceled)
+	}
+}
+
 // ---------- Ping tests ----------
 
 func TestStreamScannerHandler_PingSentDuringSlowUpstream(t *testing.T) {

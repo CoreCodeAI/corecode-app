@@ -348,6 +348,7 @@ describe('overview depth', () => {
           cost_usd: 0,
           cost_source: 'none',
           latest_cost_at: 0,
+          latest_revenue_at: 0,
         },
       ],
       models: [],

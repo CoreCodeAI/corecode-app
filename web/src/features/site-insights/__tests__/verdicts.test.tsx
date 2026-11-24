@@ -1012,6 +1012,7 @@ describe('upstream verdict', () => {
       cost_usd: 0,
       cost_source: 'none',
       latest_cost_at: 0,
+      latest_revenue_at: 0,
       reasons: [],
       ...overrides,
     }) as UpstreamChannel
@@ -1078,6 +1079,7 @@ describe('upstream verdict', () => {
           revenue_usd: 100,
           cost_usd: 11,
           latest_cost_at: hour - 7200,
+          latest_revenue_at: hour,
         }),
       ],
       {

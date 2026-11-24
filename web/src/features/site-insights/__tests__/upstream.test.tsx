@@ -67,6 +67,7 @@ function channel(overrides: Partial<UpstreamChannel>): UpstreamChannel {
     cost_source: 'none',
     monthly_fee_usd: 0,
     latest_cost_at: 0,
+    latest_revenue_at: 0,
     upstream_group: '',
     upstream_group_ratio: 0,
     ttft_p50_ms: 0,
@@ -125,6 +126,7 @@ const relay = channel({
   upstream_group: 'GPT特惠',
   upstream_group_ratio: 0.09,
   latest_cost_at: 1794212726,
+  latest_revenue_at: 0,
   ttft_p50_ms: 2500,
 })
 const idle = channel({ id: 9, name: 'idle' })
@@ -385,23 +387,37 @@ describe('upstream hours', () => {
     expect(upstreamIncidents([hour(1, 2, 100, 100)], [], range)).toEqual([])
   })
 
-  it('flags an upstream bill read long before the range ended while revenue kept coming', () => {
+  it('flags an upstream bill that fell behind the requests it charged', () => {
     const read = H0 + HOUR + 60
-    const billed = { ...relay, latest_cost_at: read }
+    const billed = {
+      ...relay,
+      latest_cost_at: read,
+      latest_revenue_at: H0 + 2 * HOUR + 30,
+    }
     const hourly = [
       hour(0, 7, 10, 0, 20),
       hour(1, 7, 10, 0, 10),
       hour(2, 7, 10, 0, 5),
     ]
     const view = { ...data, channels: [billed], hourly }
-    expect(staleCosts(view, H0 + 3 * HOUR)).toEqual([
-      { channel: billed, revenue: 15 },
-    ])
-    expect(staleCosts(view, read + 1000)).toEqual([])
-    expect(staleCosts(view, undefined)).toEqual([])
-    expect(staleCosts({ ...view, hourly: undefined }, H0 + 3 * HOUR)).toEqual([
+    expect(staleCosts(view)).toEqual([{ channel: billed, revenue: 15 }])
+    expect(staleCosts({ ...view, hourly: undefined })).toEqual([
       { channel: billed, revenue: null },
     ])
+    expect(staleCosts(undefined)).toEqual([])
+  })
+
+  it('leaves a bill alone when the channel went quiet after it', () => {
+    const read = H0 + HOUR + 60
+    const quiet = { ...relay, latest_cost_at: read, latest_revenue_at: 0 }
+    const slack = {
+      ...relay,
+      latest_cost_at: read,
+      latest_revenue_at: read + 1800,
+    }
+    const hourly = [hour(1, 7, 10, 0, 10)]
+    expect(staleCosts({ ...data, channels: [quiet], hourly })).toEqual([])
+    expect(staleCosts({ ...data, channels: [slack], hourly })).toEqual([])
   })
 })
 
@@ -429,7 +445,15 @@ describe('UpstreamTab', () => {
     ]
     const view = {
       ...data,
-      channels: [engine, { ...relay, latest_cost_at: H0 + 600 }, idle],
+      channels: [
+        engine,
+        {
+          ...relay,
+          latest_cost_at: H0 + 600,
+          latest_revenue_at: H0 + 2 * HOUR,
+        },
+        idle,
+      ],
       hourly,
     }
     render(

@@ -261,9 +261,7 @@ function ChannelTable(props: {
   const listed = (row: UpstreamChannel) =>
     props.previous ? before.has(row.id) : undefined
   const rescued = rescuedFrom(props.data?.rescues)
-  const stale = new Set(
-    staleCosts(props.data, props.range?.end).map((item) => item.channel.id)
-  )
+  const stale = new Set(staleCosts(props.data).map((item) => item.channel.id))
   const served = channels.reduce((sum, row) => sum + row.requests, 0)
   const margin = (row: UpstreamChannel) => {
     const value = upstreamMargin(row)
@@ -974,7 +972,7 @@ export function UpstreamTab(props: {
   const verdict = useUpstreamVerdict(props.data, props.previous, props.range)
   const totals = upstreamTotals(props.data)
   const before = props.previous ? upstreamTotals(props.previous) : undefined
-  const stale = staleCosts(props.data, props.range?.end)
+  const stale = staleCosts(props.data)
   const short = shortBills(props.data)
   const splits = splitsClientErrors(props.data)
   const viewError =

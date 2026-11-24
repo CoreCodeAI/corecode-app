@@ -53,6 +53,8 @@ import {
   WaitingReports,
 } from './experience-feedback'
 import {
+  CacheTrade,
+  FailureCauses,
   RefundsPanel,
   RefusalDetails,
   WasteKinds,
@@ -134,12 +136,11 @@ export function ExperienceTab(props: {
     }))
   }
   const wastePoints = barPoints(
-    (point) => [
-      point.refusal_usd,
-      point.failed_usd,
-      point.gate_usd,
-      point.cache_usd,
-    ],
+    (point) => [point.refusal_usd, point.failed_usd, point.gate_usd],
+    true
+  )
+  const cachePoints = barPoints(
+    (point) => [point.cache_paid_usd, point.cache_saved_usd],
     true
   )
   const reportPoints = barPoints(reportValues, false)
@@ -157,7 +158,7 @@ export function ExperienceTab(props: {
   }
   if (cacheLater != null) {
     notes.push(
-      t('The one-hour cache estimate reads only from {{time}}.', {
+      t('The one-hour cache reads only from {{time}}.', {
         time: fmt.time(cacheLater),
       })
     )
@@ -169,13 +170,11 @@ export function ExperienceTab(props: {
       )
     )
   }
-  if (waste && waste.unpriced > 0) {
+  if (waste && waste.stale_hours > 0) {
     notes.push(
       t(
-        '{{count}} one-hour cache writes lacked the prices to be valued and are left out.',
-        {
-          count: fmt.num(waste.unpriced),
-        }
+        '{{count}} hours are still stored the old way and are being rebuilt: until then they lack cancels, failure causes and the cache trade.',
+        { count: fmt.num(waste.stale_hours) }
       )
     )
   }
@@ -192,7 +191,7 @@ export function ExperienceTab(props: {
           ? t('{{share}} of what customers consumed', { share: fmt.pct(share) })
           : undefined,
       help: t(
-        'Refused, failed and wallet-charged requests, plus one-hour cache writes nothing read, in quota dollars. Staff are left out.'
+        'Refused, failed and wallet-charged requests, in quota dollars. Requests the customer hung up on and the one-hour cache are shown apart. Staff are left out.'
       ),
       delta: comparable
         ? {
@@ -359,6 +358,16 @@ export function ExperienceTab(props: {
 
       <div className='grid gap-4 lg:grid-cols-2'>
         <WasteKinds data={data} state={listState} />
+        <FailureCauses data={data} state={listState} />
+      </div>
+
+      <div className='grid gap-4 lg:grid-cols-2'>
+        <CacheTrade
+          data={data}
+          state={listState}
+          failed={failed}
+          points={cachePoints}
+        />
         <RefundsPanel data={data} state={listState} />
       </div>
 

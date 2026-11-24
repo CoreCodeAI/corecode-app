@@ -31,7 +31,7 @@ import {
   type Finding,
 } from '../analysis'
 import {
-  COST_STALE_SECONDS,
+  costBehind,
   CONCENTRATION_SHARE,
   DROP_SHARE,
   MIN_ORDERS,
@@ -264,20 +264,14 @@ export function losingChannels(
 }
 
 /**
- * Channels costed by an upstream bill last read more than
- * COST_STALE_SECONDS before the range's end while they earned in it: their
- * latest revenue has no cost against it yet.
+ * Channels whose upstream bill fell behind their charged requests while they
+ * earned in the range: their latest revenue has no cost against it yet.
  */
 export function staleCostChannels(
-  data: UpstreamInsights | undefined,
-  end: number
+  data: UpstreamInsights | undefined
 ): UpstreamChannel[] {
   return (data?.channels ?? []).filter(
-    (row) =>
-      row.cost_source === 'upstream' &&
-      row.revenue_usd > 0 &&
-      row.latest_cost_at > 0 &&
-      end - row.latest_cost_at > COST_STALE_SECONDS
+    (row) => row.revenue_usd > 0 && costBehind(row)
   )
 }
 
@@ -443,7 +437,7 @@ export function overviewExtraSignals(
     })
   }
   if (range) {
-    const stale = staleCostChannels(props.upstream, range.end)
+    const stale = staleCostChannels(props.upstream)
     if (stale.length > 0) {
       signals.push({
         key: 'upstream-stale',

@@ -355,7 +355,62 @@ var (
 	// An index in a field path: messages.3.content and tools[0].
 	reasonDotIndexPattern     = regexp.MustCompile(`([A-Za-z_])\.\d+\.`)
 	reasonBracketIndexPattern = regexp.MustCompile(`\[\d+\]`)
+	// An amount: a decimal standing alone or after a currency sign, such as a
+	// balance (🪙10.675000). A version is not one: gpt-image-2.5 has a hyphen.
+	reasonAmountPattern = regexp.MustCompile(`(^|[\s(=:,🪙$¥])\d+\.\d+\b`)
 )
+
+// reasonJSONDepth bounds how many error bodies nested in a message are opened.
+const reasonJSONDepth = 4
+
+// unwrapJSONReason reads an error body that is JSON, such as a task
+// failure that carries the upstream's body as its message, down to the
+// innermost message, with the outermost code before it. Capped at
+// insightReasonRunes, the raw body kept its noise and lost the message.
+// Text that is not a JSON error body is returned as it is.
+func unwrapJSONReason(text string) string {
+	code, message := "", text
+	for range reasonJSONDepth {
+		trimmed := strings.TrimSpace(message)
+		if !strings.HasPrefix(trimmed, "{") {
+			break
+		}
+		var body map[string]any
+		if common.UnmarshalJsonStr(trimmed, &body) != nil {
+			break
+		}
+		if inner, ok := body["error"].(map[string]any); ok {
+			body = inner
+		}
+		next := ""
+		for _, key := range []string{"message", "error", "detail", "msg"} {
+			if value, ok := body[key].(string); ok && strings.TrimSpace(value) != "" {
+				next = value
+				break
+			}
+		}
+		if code == "" {
+			for _, key := range []string{"code", "type"} {
+				if value, ok := body[key].(string); ok && value != "" {
+					code = value
+					break
+				}
+			}
+		}
+		if next == "" {
+			break
+		}
+		message = next
+	}
+	message = strings.TrimSpace(message)
+	if message == strings.TrimSpace(text) {
+		return text
+	}
+	if code != "" && !strings.Contains(message, code) {
+		return code + ": " + message
+	}
+	return message
+}
 
 // errorReason shortens an error log to the sentence that names the failure,
 // for grouping. The status prefix goes. The cut is at a sentence end, a period
@@ -369,7 +424,7 @@ func errorReason(content string) string {
 	if _, rest, ok := strings.Cut(reason, ", "); ok && strings.HasPrefix(reason, "status_code=") {
 		reason = rest
 	}
-	reason = strings.TrimSpace(capReason(normalizeReason(cutSentence(strings.TrimSpace(reason)))))
+	reason = strings.TrimSpace(capReason(normalizeReason(cutSentence(unwrapJSONReason(strings.TrimSpace(reason))))))
 	if reason == "" {
 		return "unknown"
 	}
@@ -398,6 +453,7 @@ func normalizeReason(reason string) string {
 		return id
 	})
 	reason = reasonTimePattern.ReplaceAllString(reason, "<time>")
+	reason = reasonAmountPattern.ReplaceAllString(reason, "${1}<n>")
 	// Two passes, so that two numbers separated by one space both go.
 	for range 2 {
 		reason = reasonNumberPattern.ReplaceAllString(reason, "${1}<n>${2}")

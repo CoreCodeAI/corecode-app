@@ -330,6 +330,13 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			return
 		}
 		if err := scanner.Err(); err != nil {
+			// The upstream request carries the client's context, so a client that
+			// hangs up fails the read with "context canceled" before the select
+			// below sees it go. That is the client leaving, not the upstream failing.
+			if clientErr := c.Request.Context().Err(); clientErr != nil {
+				info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonClientGone, clientErr)
+				return
+			}
 			if err != io.EOF {
 				logger.LogError(c, common.LogText("scanner error: %s", err.Error()))
 				info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonScannerErr, err)

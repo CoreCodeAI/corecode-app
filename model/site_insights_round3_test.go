@@ -78,6 +78,13 @@ func TestErrorReasonKeepsTheSubject(t *testing.T) {
 		"no_channel: no available channel in group vip":                                                                 "no_channel: no available channel in group vip",
 		"status_code=500, the last clause ends the text.":                                                               "the last clause ends the text",
 		"status_code=400, " + cjk: strings.Repeat("渠道", 59) + "渠…",
+		// A task failure carries the upstream's body in its message: the innermost
+		// message names the failure, the outer code says where it came from.
+		`{"code":"fail_to_fetch_task","message":"{\"error\": {\"type\": \"proxy_error\", \"code\": \"upstream_error\", \"message\": \"号池无号 (request id: 202611191029032507069048268d9d66r75Xo7a)\"}}","data":null}`: "fail_to_fetch_task: 号池无号 (request id: <id>)",
+		`status_code=429, {"error":{"message":"insufficient balance","type":"billing_error"}}`:                                                                                                                      "billing_error: insufficient balance",
+		`{"code":"insufficient_user_quota","message":"Not enough quota to pre-consume for this request: 🪙10.675000 remaining, 🪙23.750000 required","data":null}`:                                                    "insufficient_user_quota: Not enough quota to pre-consume for this request: 🪙<n> remaining, 🪙<n> required",
+		`{"code":"x","data":null}`:                       `{"code":"x","data":null}`,
+		"status_code=400, price 1.25 is gpt-image-2.5's": "price <n> is gpt-image-2.5's",
 	} {
 		assert.Equal(t, want, errorReason(content), content)
 	}

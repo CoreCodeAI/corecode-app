@@ -334,7 +334,10 @@ const (
 // monthly fee spread over the range ("fee"). UnmatchedCostUSD is the part of
 // the bill whose model no model row of the channel takes, so it is in CostUSD
 // but in no UpstreamModel. LatestCostAt is the newest upstream cost stored for
-// the channel, at any time. CostGranularity is "request" for a bill read per
+// the channel, at any time; LatestRevenueAt is the newest charged request of
+// the channel in the range after it, 0 when none followed, so a bill that only
+// looks old because the channel went quiet is told from one that fell behind.
+// CostGranularity is "request" for a bill read per
 // request, "day" for one read per day and model and spread over the hours by
 // revenue, and empty when the cost is not a bill.
 //
@@ -370,6 +373,7 @@ type UpstreamChannel struct {
 	CostGranularity  string       `json:"cost_granularity,omitempty"`
 	MonthlyFeeUSD    float64      `json:"monthly_fee_usd"`
 	LatestCostAt     int64        `json:"latest_cost_at"`
+	LatestRevenueAt  int64        `json:"latest_revenue_at"`
 	UpstreamGroup    string       `json:"upstream_group"`
 	UpstreamRatio    float64      `json:"upstream_group_ratio"`
 	TTFTP50          int64        `json:"ttft_p50_ms"`
@@ -776,6 +780,11 @@ func upstreamInsightsFromHours(r InsightsRange, hours []*insightHour, stale int)
 				hourOf(hour, channel.Id).CostUSD += fee * float64(min(r.End, hour+3600)-max(r.Start, hour)) / 86400 / 30
 			}
 		}
+		if row.CostSource == UpstreamCostSourceUpstream && row.LatestCostAt > 0 && row.RevenueUSD > 0 {
+			if row.LatestRevenueAt, err = latestRevenueAfter(channel.Id, max(r.Start, row.LatestCostAt), r.End); err != nil {
+				return nil, err
+			}
+		}
 		result.Channels = append(result.Channels, row)
 		for id, count := range total.rescuedFrom {
 			from, err := strconv.Atoi(id)
@@ -1016,4 +1025,27 @@ func topNamedCounts(counts map[string]int64, n int) []NamedCount {
 		list = list[:n]
 	}
 	return list
+}
+
+// latestRevenueAfter is the newest charged request of a channel in (from, to),
+// or 0. from is the channel's newest bill, so the read stays short.
+func latestRevenueAfter(channelId int, from, to int64) (int64, error) {
+	var latest []int64
+	err := LOG_DB.Model(&Log{}).Where("type = ? AND channel_id = ? AND quota > 0 AND created_at > ? AND created_at < ?",
+		LogTypeConsume, channelId, from, to).Order("created_at DESC").Limit(1).Pluck("created_at", &latest).Error
+	if err != nil || len(latest) == 0 {
+		return 0, err
+	}
+	return latest[0], nil
+}
+
+// UpstreamCostStaleSeconds: a bill behind the channel's newest charged
+// request by more than this leaves revenue without its cost.
+const UpstreamCostStaleSeconds = 1800
+
+// UpstreamCostBehind says the channel's newest bill is older than its newest
+// charged request by more than UpstreamCostStaleSeconds.
+func UpstreamCostBehind(channel UpstreamChannel) bool {
+	return channel.CostSource == UpstreamCostSourceUpstream && channel.LatestCostAt > 0 &&
+		channel.LatestRevenueAt-channel.LatestCostAt > UpstreamCostStaleSeconds
 }

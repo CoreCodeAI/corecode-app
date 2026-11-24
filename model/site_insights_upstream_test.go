@@ -117,6 +117,16 @@ func TestUpstreamInsightsDatabaseMatrix(t *testing.T) {
 			assert.InDelta(t, 0.21, relayRow.CostUSD, 1e-9)
 			assert.InDelta(t, 0.01, relayRow.UnmatchedCostUSD, 1e-9, "the bill no model row takes")
 			assert.Equal(t, hour1+301, relayRow.LatestCostAt)
+			assert.Zero(t, relayRow.LatestRevenueAt, "nothing was charged after the newest bill: the channel went quiet")
+			assert.False(t, UpstreamCostBehind(relayRow))
+			latest, err := latestRevenueAfter(7, hour1, hour1+86400)
+			require.NoError(t, err)
+			assert.Equal(t, hour1+300, latest, "the newest charged request after from")
+			behind := relayRow
+			behind.LatestRevenueAt = behind.LatestCostAt + UpstreamCostStaleSeconds
+			assert.False(t, UpstreamCostBehind(behind), "within the slack")
+			behind.LatestRevenueAt++
+			assert.True(t, UpstreamCostBehind(behind), "charged requests ran past the bill")
 			assert.Equal(t, "GPT特惠", relayRow.UpstreamGroup)
 			assert.InDelta(t, 12.5, relayRow.Balance, 1e-9, "the balance last read from the upstream")
 			assert.Equal(t, int64(1759247000), relayRow.BalanceUpdatedAt)

@@ -37,10 +37,17 @@ import type {
   ExperienceUser,
   WasteKind,
 } from '../types'
-import { useWasteKindLabel } from '../verdicts/experience'
-import { KIND_DOTS, WASTE_KINDS } from './experience-analysis'
+import { useFailureCauseLabel, useWasteKindLabel } from '../verdicts/experience'
+import { cacheVerdict, KIND_DOTS, WASTE_KINDS } from './experience-analysis'
 import { UserActions } from './risk-insights'
-import { Panel, SimpleTable, UserLabel, type TableState } from './shared'
+import {
+  BarSeries,
+  Panel,
+  SimpleTable,
+  UserLabel,
+  type BarPoint,
+  type TableState,
+} from './shared'
 
 /** Money wasted per kind, with the requests and customers behind each and its share of the whole. */
 export function WasteKinds(props: {
@@ -66,7 +73,7 @@ export function WasteKinds(props: {
     <Panel
       title={t('Waste by kind')}
       help={t(
-        'Money charged to customers for requests that gave them nothing: refused by the model, failed mid-stream, charged to the wallet by the plan gate, or a one-hour cache write nothing read.'
+        'Money charged to customers for requests that gave them nothing: refused by the model, failed mid-stream upstream, or charged to the wallet by the plan gate. A request the customer hung up on is not counted.'
       )}
     >
       <SimpleTable<ExperienceKind>
@@ -101,7 +108,7 @@ export function WasteKinds(props: {
             key: 'share',
             label: t('Share'),
             align: 'right',
-            hint: t('Of the money wasted in all four kinds.'),
+            hint: t('Of the money wasted in all kinds.'),
             render: (row) =>
               waste && waste.total_usd > 0
                 ? fmt.pct(row.usd / waste.total_usd)
@@ -111,7 +118,6 @@ export function WasteKinds(props: {
             key: 'requests',
             label: t('Requests'),
             align: 'right',
-            hint: t('For the cache, one-hour writes.'),
             render: (row) => fmt.num(row.requests),
           },
           {
@@ -168,6 +174,178 @@ function GroupList(props: {
           label: t('Customers'),
           align: 'right',
           render: (row) => fmt.num(row.users),
+        },
+      ]}
+    />
+  )
+}
+
+/**
+ * What broke the failed streams, and beside them the requests the customer
+ * hung up on: billed too, but their own doing.
+ */
+export function FailureCauses(props: {
+  data: ExperienceInsights | undefined
+  state?: TableState
+}) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const cause = useFailureCauseLabel()
+  const waste = props.data?.waste
+  return (
+    <Panel
+      title={t('Why streams failed')}
+      description={
+        waste
+          ? t(
+              '{{count}} failed requests returned no output at all ({{amount}}). Customers hung up on {{cancelled}} more ({{cancelledAmount}}), not counted as waste.',
+              {
+                count: fmt.num(waste.failed_no_output),
+                amount: fmt.usd(waste.failed_no_output_usd),
+                cancelled: fmt.num(waste.cancelled.requests),
+                cancelledAmount: fmt.usd(waste.cancelled.usd),
+              }
+            )
+          : undefined
+      }
+      help={t(
+        'Failed-but-charged requests by what broke. A failed request is charged for what the upstream reported, so one that returned no output was charged for its input alone. Requests the customer cancelled were once recorded as read errors; they are now kept apart.'
+      )}
+    >
+      <GroupList
+        rows={waste?.failed_causes ?? []}
+        state={props.state}
+        label={t('Cause')}
+        name={cause}
+        empty={t('No failed requests in this range')}
+      />
+    </Panel>
+  )
+}
+
+/** The one-hour cache's trade: what its writes cost over five minutes, against what its reads saved. */
+export function CacheTrade(props: {
+  data: ExperienceInsights | undefined
+  state?: TableState
+  failed?: boolean
+  points: BarPoint[]
+}) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const cache = props.data?.waste.cache
+  const verdict = cache ? cacheVerdict(cache) : null
+  const rows: { key: string; label: string; usd: number; count: string }[] =
+    cache
+      ? [
+          {
+            key: 'paid',
+            label: t('Extra paid for 1h writes'),
+            usd: cache.paid_usd,
+            count: t('{{count}} writes', { count: fmt.num(cache.writes) }),
+          },
+          {
+            key: 'unread',
+            label: t('of which nothing read'),
+            usd: cache.unread_usd,
+            count: t('{{count}} writes', {
+              count: fmt.num(cache.unread_writes),
+            }),
+          },
+          {
+            key: 'saved',
+            label: t('Saved by reads after a pause'),
+            usd: cache.saved_usd,
+            count: t('{{count}} reads', { count: fmt.num(cache.reads) }),
+          },
+        ]
+      : []
+  return (
+    <Panel
+      title={t('One-hour cache: cost against saving')}
+      description={
+        cache && verdict
+          ? t('Net for customers: {{amount}} over {{users}} customers.', {
+              amount:
+                (cache.net_usd >= 0 ? '+' : '-') +
+                fmt.usd(Math.abs(cache.net_usd)),
+              users: fmt.num(cache.users),
+            })
+          : undefined
+      }
+      help={t(
+        "A one-hour cache write costs more than a five-minute one; a read more than five minutes and at most an hour after the key's last request would have been a fresh write under five minutes. Both are estimates by API key, which may carry several conversations. It is a trade, not waste, and is not in the money wasted."
+      )}
+    >
+      {props.failed ? (
+        <p className='text-muted-foreground text-xs'>
+          {t('Could not be read')}
+        </p>
+      ) : (
+        <div className='grid gap-3'>
+          <BarSeries
+            grouped
+            ariaLabel={t('One-hour cache: cost against saving')}
+            series={[
+              {
+                label: t('Extra paid for 1h writes'),
+                format: fmt.usd,
+                compact: fmt.usdCompact,
+              },
+              {
+                label: t('Saved by reads after a pause'),
+                format: fmt.usd,
+                compact: fmt.usdCompact,
+              },
+            ]}
+            points={props.points}
+          />
+          <CacheRows rows={rows} state={props.state} />
+          {verdict === 'behind' && (
+            <p className='text-xs text-amber-600 dark:text-amber-400'>
+              {t(
+                'The one-hour writes cost customers more than their reads saved over this range.'
+              )}
+            </p>
+          )}
+          {cache && cache.unpriced > 0 && (
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                '{{count}} requests lacked the prices to be valued and are left out.',
+                { count: fmt.num(cache.unpriced) }
+              )}
+            </p>
+          )}
+        </div>
+      )}
+    </Panel>
+  )
+}
+
+function CacheRows(props: {
+  rows: { key: string; label: string; usd: number; count: string }[]
+  state?: TableState
+}) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  return (
+    <SimpleTable<(typeof props.rows)[number]>
+      rows={props.rows}
+      rowKey={(row) => row.key}
+      state={props.state}
+      empty={t('No one-hour cache in this range')}
+      columns={[
+        { key: 'label', label: t('Item'), render: (row) => row.label },
+        {
+          key: 'usd',
+          label: t('Amount'),
+          align: 'right',
+          render: (row) => fmt.usd(row.usd),
+        },
+        {
+          key: 'count',
+          label: t('Requests'),
+          align: 'right',
+          render: (row) => row.count,
         },
       ]}
     />
@@ -336,8 +514,6 @@ function kindOfUser(user: ExperienceUser, kind: WasteKind): number {
       return user.failed_usd
     case 'gate_wallet':
       return user.gate_usd
-    case 'cache_1h':
-      return user.cache_usd
   }
 }
 
