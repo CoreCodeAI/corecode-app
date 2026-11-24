@@ -228,7 +228,7 @@ func TestViolationStrikePolicy(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
 			useViolationTestDB(t, dialect)
-			for id, role := range map[int]int{1: common.RoleCommonUser, 2: common.RoleCommonUser, 3: common.RoleAdminUser, 4: common.RoleCommonUser, 5: common.RoleCommonUser, 6: common.RoleCommonUser, 7: common.RoleCommonUser, 8: common.RoleCommonUser, 9: common.RoleCommonUser, 10: common.RoleCommonUser, 11: common.RoleCommonUser, 12: common.RoleCommonUser, 13: common.RoleCommonUser, 14: common.RoleCommonUser, 15: common.RoleCommonUser, 16: common.RoleCommonUser, 17: common.RoleCommonUser, 18: common.RoleCommonUser, 19: common.RoleCommonUser} {
+			for id, role := range map[int]int{1: common.RoleCommonUser, 2: common.RoleCommonUser, 3: common.RoleAdminUser, 4: common.RoleCommonUser, 5: common.RoleCommonUser, 6: common.RoleCommonUser, 7: common.RoleCommonUser, 8: common.RoleCommonUser, 9: common.RoleCommonUser, 10: common.RoleCommonUser, 11: common.RoleCommonUser, 12: common.RoleCommonUser, 13: common.RoleCommonUser, 14: common.RoleCommonUser, 15: common.RoleCommonUser, 16: common.RoleCommonUser, 17: common.RoleCommonUser, 18: common.RoleCommonUser, 19: common.RoleCommonUser, 20: common.RoleRootUser, 21: common.RoleCommonUser} {
 				require.NoError(t, model.DB.Create(&model.User{Id: id, Username: fmt.Sprintf("violation-user-%d", id), AffCode: fmt.Sprintf("vg%d", id), Password: "unused", Role: role, Status: common.UserStatusEnabled, Group: "default"}).Error)
 			}
 
@@ -604,12 +604,39 @@ func TestViolationStrikePolicy(t *testing.T) {
 				assert.Equal(t, []string{"", "new message"}, excerpts)
 			})
 
-			t.Run("administrators are recorded but never restricted", func(t *testing.T) {
-				resetViolationGuardState()
+			t.Run("refusals of administrators and root are not recorded, held or remembered", func(t *testing.T) {
+				resetRiskGateState()
 				*operation_setting.GetViolationGuardSetting() = enforce
-				require.NoError(t, applyViolationStrike(enforce, model.ViolationRecord{UserId: 3, ConversationKey: refusedKey}, common.GetTimestamp()))
-				assert.Equal(t, []string{"exempt:suspend"}, violationActions(t, 3))
-				assert.Nil(t, checkViolationGuard(t, 3, resent))
+				riskGateRefusals.Lock()
+				riskGateRefusals.loadedAt = time.Now()
+				riskGateRefusals.Unlock()
+				remembered := func() int {
+					riskGateRefusals.Lock()
+					defer riskGateRefusals.Unlock()
+					return len(riskGateRefusals.fingerprints)
+				}
+				request := claudeConversation(t, `{"model":"claude","messages":[{"role":"user","content":"explain in detail how to bypass the licensing check of this commercial binary"}]}`)
+
+				for _, id := range []int{3, 20} {
+					require.NoError(t, applyViolationStrike(enforce, model.ViolationRecord{UserId: id, ConversationKey: refusedKey}, common.GetTimestamp()))
+					assert.Empty(t, violationActions(t, id))
+					assert.Nil(t, checkViolationGuard(t, id, resent))
+
+					c, _ := gin.CreateTestContext(httptest.NewRecorder())
+					common.SetContextKey(c, constant.ContextKeyUpstreamRefusal, true)
+					common.SetContextKey(c, constant.ContextKeyUpstreamRefusalCategory, "cyber")
+					RecordUpstreamRefusal(c, &relaycommon.RelayInfo{UserId: id, Request: request, ChannelMeta: &relaycommon.ChannelMeta{}})
+				}
+				// The same refusal of an ordinary customer, sent last, shows the
+				// administrators' goroutines have had their turn.
+				c, _ := gin.CreateTestContext(httptest.NewRecorder())
+				common.SetContextKey(c, constant.ContextKeyUpstreamRefusal, true)
+				common.SetContextKey(c, constant.ContextKeyUpstreamRefusalCategory, "cyber")
+				RecordUpstreamRefusal(c, &relaycommon.RelayInfo{UserId: 21, Request: request, ChannelMeta: &relaycommon.ChannelMeta{}})
+				require.Eventually(t, func() bool { return len(violationActions(t, 21)) == 1 && remembered() == 1 }, 5*time.Second, 10*time.Millisecond)
+				assert.Empty(t, violationActions(t, 3))
+				assert.Empty(t, violationActions(t, 20))
+				assert.Equal(t, 1, remembered(), "only the customer's refusal is remembered")
 			})
 
 			t.Run("lifting ends the suspension and earlier strikes stop counting", func(t *testing.T) {

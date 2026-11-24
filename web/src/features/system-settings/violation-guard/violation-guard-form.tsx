@@ -197,7 +197,7 @@ export function ViolationGuardForm(props: ViolationGuardFormProps) {
                 <FormLabel>{t('Enable violation handling')}</FormLabel>
                 <FormDescription>
                   {t(
-                    'When the upstream model refuses a request under its usage policy, record a violation against the customer who sent it. Administrators are never restricted.'
+                    'When the upstream model refuses a request under its usage policy, record a violation against the customer who sent it. Requests from administrators and root skip risk control and are not recorded.'
                   )}
                 </FormDescription>
               </SettingsSwitchContent>

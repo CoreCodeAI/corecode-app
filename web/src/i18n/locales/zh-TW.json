@@ -6900,7 +6900,7 @@
     "When performance monitoring is enabled and system resource usage exceeds the set threshold, new Relay requests will be rejected.": "啟用效能監控後，當系統資源使用率超過設定閾值時，將拒絕新的 Relay 請求。",
     "When running in containers or ephemeral environments, ensure the SQLite file is mapped to persistent storage to avoid data loss on restart.": "在容器或臨時環境中執行時，請確保 SQLite 檔案映射到持久儲存，以避免重新啟動時數據遺失。",
     "When the primary domain changes, the previous domain is automatically kept in the compatible domains list.": "變更主要網域時，原網域會自動保留在相容網域清單中。",
-    "When the upstream model refuses a request under its usage policy, record a violation against the customer who sent it. Administrators are never restricted.": "當上游模型依據使用政策拒絕請求時，對發送該請求的客戶記錄一次違規。管理員永遠不會被限制。",
+    "When the upstream model refuses a request under its usage policy, record a violation against the customer who sent it. Requests from administrators and root skip risk control and are not recorded.": "當上游模型依據使用政策拒絕請求時，對發送該請求的客戶記錄一次違規。管理員和 root 的請求不經過風控，也不記錄。",
     "Whitelist": "白名單",
     "Whitelist (Only allow listed domains)": "白名單（僅允許列出的域）",
     "Whitelist (Only allow listed IPs)": "白名單（僅允許列出的 IP）",

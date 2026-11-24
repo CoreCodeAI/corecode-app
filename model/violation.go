@@ -23,8 +23,9 @@ const (
 	ViolationActionModelRefusal = "model_refusal"
 )
 
-// ViolationModeExempt marks a refusal by an administrator, which is recorded
-// but never restricts the account.
+// ViolationModeExempt marks a refusal by an administrator, as recorded before
+// administrators were left out of risk control. Such rows stay in the table
+// and are still kept out of the strike and refusal queries.
 const ViolationModeExempt = "exempt"
 
 var violationStrikeActions = []string{ViolationActionStrike, ViolationActionSuspend, ViolationActionBan}
@@ -276,9 +277,10 @@ type ViolationRecordView struct {
 }
 
 // ListViolationRecords returns the newest records first, optionally for one
-// user, with each user's name and current suspension.
+// user, with each user's name and current suspension. Records of
+// administrators and root are left out.
 func ListViolationRecords(pageInfo *common.PageInfo, userId int) ([]ViolationRecordView, int64, error) {
-	query := DB.Model(&ViolationRecord{})
+	query := withoutStaffRows(DB.Model(&ViolationRecord{}), "user_id")
 	if userId > 0 {
 		query = query.Where("user_id = ?", userId)
 	}

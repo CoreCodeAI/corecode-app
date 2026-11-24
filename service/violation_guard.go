@@ -337,9 +337,9 @@ func recentUncountedRefusals(action string, userId int, since int64) int {
 	return refused
 }
 
-// violationExempt reports whether refusals of a user with this role are
-// recorded as exempt: administrators are never struck, and their refusals do
-// not feed the risk gate's similarity check.
+// violationExempt reports whether a user with this role is outside risk
+// control: administrators and root are neither checked nor recorded, and their
+// refusals do not feed the risk gate's similarity check.
 func violationExempt(role int) bool {
 	return role >= common.RoleAdminUser
 }
@@ -355,12 +355,14 @@ func violationExempt(role int) bool {
 // Each category has its own warnings. A lenient refusal only holds its
 // conversation, so the customer can continue it; a second refusal of a held
 // conversation merges into the first and blocks it. A refusal of any other
-// category blocks its conversation at once. Administrators are recorded as
-// exempt.
+// category blocks its conversation at once. Administrators are not recorded.
 func applyViolationStrike(setting operation_setting.ViolationGuardSetting, record model.ViolationRecord, now int64) error {
 	user, err := model.GetUserCache(record.UserId)
 	if err != nil {
 		return err
+	}
+	if violationExempt(user.Role) {
+		return nil
 	}
 	state, err := model.GetUserViolationState(record.UserId)
 	if err != nil {
@@ -369,9 +371,6 @@ func applyViolationStrike(setting operation_setting.ViolationGuardSetting, recor
 	windowStart := max(now-int64(setting.StrikeWindowDays)*86400, state.ForgivenAt)
 	record.CreatedAt = now
 	record.Mode = setting.Mode
-	if violationExempt(user.Role) {
-		record.Mode = model.ViolationModeExempt
-	}
 
 	mergeSeconds := max(int64(setting.SuspendHours)*3600, minViolationMergeSeconds)
 	// A refused client check, or a lenient refusal by an uncounted model, is
@@ -445,9 +444,6 @@ func applyViolationStrike(setting operation_setting.ViolationGuardSetting, recor
 		common.SysError(common.LogText("violation guard: failed to clear expired refused messages: %s", err.Error()))
 	}
 	common.SysLog(common.LogText("violation guard: upstream refused a request of user %d (category %q); action %s in %s mode", record.UserId, record.Category, record.Action, record.Mode))
-	if record.Mode == model.ViolationModeExempt {
-		return nil
-	}
 
 	violationGuardState.Lock()
 	if violationGuardState.loaded && record.ConversationKey != "" {
