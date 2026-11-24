@@ -23,6 +23,7 @@ import type { ApiResponse } from '../wallet/types'
 import type {
   ActivityInsights,
   BusinessInsights,
+  CampaignInsights,
   CapacityInsights,
   ChannelCost,
   ChannelInsights,
@@ -32,6 +33,7 @@ import type {
   EngineResetResult,
   ExperienceInsights,
   FinanceInsights,
+  GateInsights,
   GrowthInsights,
   InsightsRange,
   KeyInsights,
@@ -60,6 +62,8 @@ export type InsightsView =
   | 'customers'
   | 'model-behavior'
   | 'experience'
+  | 'campaigns'
+  | 'gate'
 
 export type InsightsByView = {
   capacity: CapacityInsights
@@ -76,6 +80,8 @@ export type InsightsByView = {
   customers: CustomerInsights
   'model-behavior': ModelBehavior
   experience: ExperienceInsights
+  campaigns: CampaignInsights
+  gate: GateInsights
 }
 
 /** The longest range, in days, each view's endpoint accepts. */
@@ -96,6 +102,9 @@ export const VIEW_MAX_DAYS: Record<InsightsView, number> = {
   'model-behavior': 92,
   // Its logs reach back 30 days at most; the range may be longer.
   experience: 92,
+  campaigns: 366,
+  // The gate view scans request logs for a marker.
+  gate: 14,
 }
 
 export async function getInsights<V extends InsightsView>(

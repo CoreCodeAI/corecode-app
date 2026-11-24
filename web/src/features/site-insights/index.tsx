@@ -361,6 +361,23 @@ export function SiteInsights() {
       previousQuery?.queryKey[1] === 'customers' ? previous : undefined,
     meta: { errorToast: false },
   })
+  // The channels tab's campaign payback and the risk tab's gate effect: each has
+  // its own read, so the tab's other panels never wait on it. A server without
+  // the view leaves the panel to say so.
+  const campaigns = useQuery({
+    ...insightsQuery('campaigns'),
+    enabled: tab === 'channels',
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === 'campaigns' ? previous : undefined,
+    meta: { errorToast: false },
+  })
+  const gate = useQuery({
+    ...insightsQuery('gate'),
+    enabled: tab === 'risk',
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === 'gate' ? previous : undefined,
+    meta: { errorToast: false },
+  })
   // The overview's own queries, so Refresh shows them loading there too.
   const overviewFetching = useIsFetching({ queryKey: ['site-insights'] })
   // The overview has no query of its own to say where the logs begin: the
@@ -394,6 +411,12 @@ export function SiteInsights() {
     if (next === 'overview') return
     void queryClient.prefetchQuery(insightsQuery(next))
     if (next !== 'pool') void queryClient.prefetchQuery(previousQuery(next))
+    if (next === 'channels' || next === 'risk') {
+      void queryClient.prefetchQuery({
+        ...insightsQuery(next === 'channels' ? 'campaigns' : 'gate'),
+        meta: { errorToast: false },
+      })
+    }
     if (next === 'activity') {
       void queryClient.prefetchQuery({
         ...insightsQuery('customers'),
@@ -450,6 +473,8 @@ export function SiteInsights() {
       keys: sourceState(keys),
       customers: sourceState(customers),
     }),
+    ...(tab === 'channels' && { campaigns: sourceState(campaigns) }),
+    ...(tab === 'risk' && { gate: sourceState(gate) }),
   }
 
   // On a narrow screen the tabs scroll sideways in one row; the open one is
@@ -627,6 +652,8 @@ export function SiteInsights() {
                     keys={keys.data}
                     customers={customers.data}
                     behavior={behavior.data}
+                    campaigns={campaigns.data}
+                    gate={gate.data}
                     models={{
                       selected: models,
                       onChange: (next) =>
@@ -688,7 +715,7 @@ export function SiteInsights() {
 function InsightsView(props: {
   view: Exclude<
     InsightsView,
-    'business' | 'keys' | 'customers' | 'model-behavior'
+    'business' | 'keys' | 'customers' | 'model-behavior' | 'campaigns' | 'gate'
   >
   data: unknown
   previous: unknown
@@ -699,6 +726,8 @@ function InsightsView(props: {
   keys: unknown
   customers: unknown
   behavior: unknown
+  campaigns: unknown
+  gate: unknown
   models: { selected: string[]; onChange: (models: string[]) => void }
   pool: {
     provider: PoolProvider
@@ -753,6 +782,7 @@ function InsightsView(props: {
         <RiskTab
           data={props.data as never}
           previous={previous}
+          gate={props.gate as never}
           range={range}
           onOpen={onOpen}
           {...states}
@@ -812,6 +842,7 @@ function InsightsView(props: {
         <ChannelsTab
           data={props.data as never}
           previous={previous}
+          campaigns={props.campaigns as never}
           range={range}
           onOpen={onOpen}
           {...states}
