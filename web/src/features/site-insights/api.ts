@@ -30,6 +30,7 @@ import type {
   EngineOutlook,
   EnginePool,
   EngineResetResult,
+  ExperienceInsights,
   FinanceInsights,
   GrowthInsights,
   InsightsRange,
@@ -58,6 +59,7 @@ export type InsightsView =
   | 'upstream'
   | 'customers'
   | 'model-behavior'
+  | 'experience'
 
 export type InsightsByView = {
   capacity: CapacityInsights
@@ -73,6 +75,7 @@ export type InsightsByView = {
   upstream: UpstreamInsights
   customers: CustomerInsights
   'model-behavior': ModelBehavior
+  experience: ExperienceInsights
 }
 
 /** The longest range, in days, each view's endpoint accepts. */
@@ -91,6 +94,8 @@ export const VIEW_MAX_DAYS: Record<InsightsView, number> = {
   upstream: 92,
   customers: 366,
   'model-behavior': 92,
+  // Its logs reach back 30 days at most; the range may be longer.
+  experience: 92,
 }
 
 export async function getInsights<V extends InsightsView>(

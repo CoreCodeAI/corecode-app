@@ -82,6 +82,7 @@ const TAB_MODULES = {
   finance: () => import('./components/finance-tab'),
   growth: () => import('./components/growth-tab'),
   activity: () => import('./components/growth-tab'),
+  experience: () => import('./components/experience-tab'),
   channels: () => import('./components/channels-tab'),
   risk: () => import('./components/risk-tab'),
 } satisfies Record<InsightsTab, () => Promise<unknown>>
@@ -109,6 +110,11 @@ const GrowthTab = lazy(() =>
 )
 const ActivityTab = lazy(() =>
   TAB_MODULES.activity().then((module) => ({ default: module.ActivityTab }))
+)
+const ExperienceTab = lazy(() =>
+  TAB_MODULES.experience().then((module) => ({
+    default: module.ExperienceTab,
+  }))
 )
 const ChannelsTab = lazy(() =>
   TAB_MODULES.channels().then((module) => ({ default: module.ChannelsTab }))
@@ -410,6 +416,7 @@ export function SiteInsights() {
     channels: t('Promotion channels'),
     upstream: t('Upstreams'),
     activity: t('Activity & retention'),
+    experience: t('Customer experience'),
     risk: t('Risk'),
   }
   const groupLabels: Record<string, string> = {
@@ -770,6 +777,16 @@ function InsightsView(props: {
           previous={previous}
           keys={props.keys as never}
           customers={props.customers as never}
+          range={range}
+          onOpen={onOpen}
+          {...states}
+        />
+      )
+    case 'experience':
+      return (
+        <ExperienceTab
+          data={props.data as never}
+          previous={previous}
           range={range}
           onOpen={onOpen}
           {...states}

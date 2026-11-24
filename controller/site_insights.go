@@ -304,6 +304,14 @@ func GetCustomerInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxDays, settledRead("customers", model.GetCustomerInsights))
 }
 
+// GetExperienceInsights answers the experience view: the money customers spent
+// on refused, failed and misbilled requests, and the reports and replies that
+// followed. It reads up to InsightsMaxLogDays; the request logs it scans are
+// bounded inside the view (model.GetExperienceInsights).
+func GetExperienceInsights(c *gin.Context) {
+	serveInsights(c, model.InsightsMaxLogDays, settledRead("experience", model.GetExperienceInsights))
+}
+
 func GetGrowthInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxDays, settledRead("growth", model.GetGrowthInsights))
 }

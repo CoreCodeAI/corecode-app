@@ -1757,3 +1757,129 @@ export type ModelBehavior = {
   /** Final hours of the range not stored yet; the figures cover the rest. */
   missing_hours: number
 }
+
+/** The kinds of money a customer spent for nothing. */
+export type WasteKind = 'refusal' | 'failed_billed' | 'gate_wallet' | 'cache_1h'
+
+/** One day (or hour) of the experience view: wasted money by kind and reports by category, in quota dollars. */
+export type ExperiencePoint = {
+  at: number
+  refusal_usd: number
+  failed_usd: number
+  gate_usd: number
+  cache_usd: number
+  refund_usd: number
+  refusals: number
+  bug: number
+  suggestion: number
+  billing: number
+  other_feedback: number
+}
+
+/** A kind's total: requests (writes for the cache), customers and money. */
+export type ExperienceKind = {
+  kind: string
+  requests: number
+  users: number
+  usd: number
+}
+
+export type ExperienceRefusal = UserRef & {
+  at: number
+  model_name: string
+  category: string
+  usd: number
+  request_id: string
+}
+
+export type ExperienceGroup = {
+  name: string
+  requests: number
+  users: number
+  usd: number
+}
+
+/** A customer's wasted money by kind, with whether they filed a report and have gone silent. */
+export type ExperienceUser = UserRef & {
+  refusal_usd: number
+  failed_usd: number
+  gate_usd: number
+  cache_usd: number
+  total_usd: number
+  requests: number
+  filed_feedback: boolean
+  /** Last request hour within thirty days; 0 when none. */
+  last_request_at: number
+  silent: boolean
+}
+
+export type ExperienceWaste = {
+  /** Where the logs read for the first three kinds begin: later than the range's start when the range is longer than the view reads. */
+  log_start: number
+  /** The same for the one-hour cache estimate, which reads fewer days. */
+  cache_start: number
+  /** The last write the cache estimate could judge; the hour after it is still open. */
+  cache_judged_until: number
+  /** What customers consumed over [log_start, end): the whole the shares are of. */
+  consumed_usd: number
+  total_usd: number
+  /** A log scan reached its row bound. */
+  truncated: boolean
+  /** One-hour writes whose log lacks the ratios to price them. */
+  unpriced: number
+  kinds: ExperienceKind[]
+  refusals: ExperienceRefusal[]
+  refusal_models: ExperienceGroup[]
+  refusal_reasons: ExperienceGroup[]
+  refunds: ExperienceKind
+  refund_models: ExperienceGroup[]
+  top: ExperienceUser[]
+  silent: ExperienceUser[]
+  /** Of the checked wasteful customers, how many filed a report. */
+  reported_top: number
+  checked_top: number
+}
+
+export type ExperienceWaiting = UserRef & {
+  id: number
+  category: string
+  title: string
+  created_time: number
+}
+
+export type ExperienceLapsed = UserRef & {
+  category: string
+  at: number
+  before_usd: number
+}
+
+export type ExperienceFeedback = {
+  total: number
+  statuses: NamedCount[]
+  categories: NamedCount[]
+  replied: number
+  /** Seconds from a report to the first administrator change to it. */
+  first_reply_p50: number
+  first_reply_p90: number
+  open: number
+  unanswered_24h: number
+  rewarded: number
+  reward_usd: number
+  senders: number
+  judged: number
+  active: number
+  pending: number
+  before_usd: number
+  after_usd: number
+  waiting: ExperienceWaiting[]
+  lapsed: ExperienceLapsed[]
+}
+
+export type ExperienceInsights = {
+  /** Where the logs begin, unix seconds; see LogsSince. */
+  logs_since?: number | null
+  series_unit: 'day' | 'hour'
+  series: ExperiencePoint[]
+  waste: ExperienceWaste
+  feedback: ExperienceFeedback
+}

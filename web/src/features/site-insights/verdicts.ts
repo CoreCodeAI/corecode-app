@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 // Each tab's verdict hook lives in verdicts/<tab>.ts.
 export { useCapacityVerdict } from './verdicts/capacity'
 export { useChannelsVerdict } from './verdicts/channels'
+export { useExperienceVerdict } from './verdicts/experience'
 export { useFinanceVerdict } from './verdicts/finance'
 export { useActivityVerdict, useGrowthVerdict } from './verdicts/growth'
 export { useQualityVerdict } from './verdicts/quality'

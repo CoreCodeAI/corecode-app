@@ -296,6 +296,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/site-insights/growth":                                                          accessTokenScopeRule("user:read"),
 	"GET /api/site-insights/activity":                                                        accessTokenScopeRule("user:read"),
 	"GET /api/site-insights/customers":                                                       accessTokenScopeRule("user:read"),
+	"GET /api/site-insights/experience":                                                      accessTokenScopeRule("user:read"),
 	// router/api-router.go: /api/rival-prices, root only
 	"GET /api/rival-prices":                  accessTokenScopeRule("ops:read"),
 	"GET /api/rival-prices/changes":          accessTokenScopeRule("ops:read"),
