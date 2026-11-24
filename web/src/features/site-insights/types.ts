@@ -1665,6 +1665,11 @@ export type UpstreamChannel = {
   cost_source: UpstreamCostSource
   monthly_fee_usd: number
   latest_cost_at: number
+  /**
+   * The newest charged request of the channel in the range after
+   * latest_cost_at; 0 when none followed.
+   */
+  latest_revenue_at: number
   upstream_group: string
   upstream_group_ratio: number
   ttft_p50_ms: number
@@ -1783,15 +1788,21 @@ export type ModelBehavior = {
 }
 
 /** The kinds of money a customer spent for nothing. */
-export type WasteKind = 'refusal' | 'failed_billed' | 'gate_wallet' | 'cache_1h'
+export type WasteKind = 'refusal' | 'failed_billed' | 'gate_wallet'
 
-/** One day (or hour) of the experience view: wasted money by kind and reports by category, in quota dollars. */
+/**
+ * One day (or hour) of the experience view in quota dollars: wasted money by
+ * kind; beside it what customers cancelled, the task refunds, and the one-hour
+ * cache's premium and saving; and reports by category.
+ */
 export type ExperiencePoint = {
   at: number
   refusal_usd: number
   failed_usd: number
   gate_usd: number
-  cache_usd: number
+  cancel_usd: number
+  cache_paid_usd: number
+  cache_saved_usd: number
   refund_usd: number
   refusals: number
   bug: number
@@ -1800,7 +1811,7 @@ export type ExperiencePoint = {
   other_feedback: number
 }
 
-/** A kind's total: requests (writes for the cache), customers and money. */
+/** A kind's total: requests, customers and money. */
 export type ExperienceKind = {
   kind: string
   requests: number
@@ -1828,7 +1839,6 @@ export type ExperienceUser = UserRef & {
   refusal_usd: number
   failed_usd: number
   gate_usd: number
-  cache_usd: number
   total_usd: number
   requests: number
   filed_feedback: boolean
@@ -1837,21 +1847,49 @@ export type ExperienceUser = UserRef & {
   silent: boolean
 }
 
+/**
+ * The one-hour cache's trade: what its writes cost over five-minute ones
+ * (paid), the part on writes nothing of the key requested within the hour
+ * (unread), and what its reads saved over the writes a five-minute entry would
+ * have needed after a pause (saved). net is saved less paid.
+ */
+export type ExperienceCache = {
+  paid_usd: number
+  writes: number
+  unread_usd: number
+  unread_writes: number
+  saved_usd: number
+  reads: number
+  net_usd: number
+  users: number
+  /** Requests whose log lacks what pricing them needs. */
+  unpriced: number
+}
+
 export type ExperienceWaste = {
-  /** Where the logs read for the first three kinds begin: later than the range's start when the range is longer than the view reads. */
+  /** Where the logs read for the kinds begin: later than the range's start when the range is longer than the view reads. */
   log_start: number
-  /** The same for the one-hour cache estimate, which reads fewer days. */
+  /** The same for the one-hour cache. */
   cache_start: number
-  /** The last write the cache estimate could judge; the hour after it is still open. */
+  /** The last write the unread estimate could judge; the hour after it is still open. */
   cache_judged_until: number
   /** What customers consumed over [log_start, end): the whole the shares are of. */
   consumed_usd: number
   total_usd: number
   /** A log scan reached its row bound. */
   truncated: boolean
-  /** One-hour writes whose log lacks the ratios to price them. */
-  unpriced: number
+  /** Hours stored under an older version, served until stored again: they lack cancels, causes and the cache's trade. */
+  stale_hours: number
   kinds: ExperienceKind[]
+  /** The failed kind by what broke: reset, http2, eof, timeout, panic, ping_fail, other, unknown. */
+  failed_causes: ExperienceGroup[]
+  /** Failed requests that returned no output token, and their money. */
+  failed_no_output: number
+  failed_no_output_usd: number
+  /** Charged requests the customer hung up on: not waste of ours. */
+  cancelled: ExperienceKind
+  cancelled_no_output: number
+  cache: ExperienceCache
   refusals: ExperienceRefusal[]
   refusal_models: ExperienceGroup[]
   refusal_reasons: ExperienceGroup[]

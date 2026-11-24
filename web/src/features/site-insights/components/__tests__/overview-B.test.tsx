@@ -56,6 +56,7 @@ function channel(overrides: Partial<UpstreamChannel>): UpstreamChannel {
     cost_source: 'upstream',
     monthly_fee_usd: 0,
     latest_cost_at: 0,
+    latest_revenue_at: 0,
     upstream_group: '',
     upstream_group_ratio: 0,
     ttft_p50_ms: 0,

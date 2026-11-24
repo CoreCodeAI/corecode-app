@@ -1611,7 +1611,7 @@ func TestFinancePlansOrdersAndGroups(t *testing.T) {
 func TestVendorUpstreamCosts(t *testing.T) {
 	upstream := &UpstreamInsights{
 		Channels: []UpstreamChannel{
-			{ID: 1, CostSource: UpstreamCostSourceUpstream, CostUSD: 10, LatestCostAt: 100},
+			{ID: 1, CostSource: UpstreamCostSourceUpstream, CostUSD: 10, LatestCostAt: 100, LatestRevenueAt: 1901},
 			{ID: 2, CostSource: UpstreamCostSourceFee, CostUSD: 4},
 			{ID: 3, CostSource: UpstreamCostSourceNone},
 			{ID: 4, CostSource: UpstreamCostSourceFee, CostUSD: 2},

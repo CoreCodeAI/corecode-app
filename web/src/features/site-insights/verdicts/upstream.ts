@@ -65,7 +65,7 @@ export function useUpstreamVerdict(
   const candidates = data.channels.filter(
     (row) => attemptsOf(row) >= SMALL_SAMPLE
   )
-  const stale = staleCosts(data, range?.end)
+  const stale = staleCosts(data)
   const incidents = upstreamIncidents(data.hourly, data.rescues, range)
   let tone: Tone = 'default'
   const parts: (string | false | null | undefined)[] = []

@@ -71,7 +71,9 @@ function point(day: number, patch: Partial<ExperiencePoint> = {}) {
     refusal_usd: 0,
     failed_usd: 0,
     gate_usd: 0,
-    cache_usd: 0,
+    cancel_usd: 0,
+    cache_paid_usd: 0,
+    cache_saved_usd: 0,
     refund_usd: 0,
     refusals: 0,
     bug: 0,
@@ -92,7 +94,6 @@ function loser(
     refusal_usd: 0,
     failed_usd: 0,
     gate_usd: 0,
-    cache_usd: 0,
     total_usd: 0,
     requests: 1,
     filed_feedback: false,
@@ -115,13 +116,31 @@ function insights(patch: Partial<ExperienceInsights> = {}): ExperienceInsights {
       consumed_usd: 1000,
       total_usd: 20,
       truncated: false,
-      unpriced: 0,
+      stale_hours: 0,
       kinds: [
         { kind: 'refusal', requests: 3, users: 2, usd: 12 },
         { kind: 'failed_billed', requests: 2, users: 1, usd: 5 },
-        { kind: 'gate_wallet', requests: 1, users: 1, usd: 1 },
-        { kind: 'cache_1h', requests: 4, users: 2, usd: 2 },
+        { kind: 'gate_wallet', requests: 1, users: 1, usd: 3 },
       ],
+      failed_causes: [
+        { name: 'reset', requests: 1, users: 1, usd: 3 },
+        { name: 'http2', requests: 1, users: 1, usd: 2 },
+      ],
+      failed_no_output: 1,
+      failed_no_output_usd: 3,
+      cancelled: { kind: 'client_cancel', requests: 7, users: 3, usd: 9 },
+      cancelled_no_output: 2,
+      cache: {
+        paid_usd: 4,
+        writes: 40,
+        unread_usd: 1,
+        unread_writes: 10,
+        saved_usd: 10,
+        reads: 25,
+        net_usd: 6,
+        users: 3,
+        unpriced: 0,
+      },
       refusals: [
         {
           user_id: 4673,
@@ -286,12 +305,32 @@ describe('experience verdict', () => {
       '1 of the 2 customers who lost most never filed'
     )
     expect(verdict?.text).toContain('2 reports have waited more than a day')
+    expect(verdict?.text).toContain(
+      'Customers hung up on 7 charged requests ($9.00); that is their choice, not waste.'
+    )
+    expect(verdict?.text).toContain(
+      'The 1h cache saved customers $6.00 net: its reads saved $10.00, its writes cost $4.00 more.'
+    )
     expect(verdict?.chips?.map((chip) => chip.label)).toEqual([
       'Wasted',
       'Refusals charged',
       'Reports',
       'Unanswered over 24 hours',
     ])
+  })
+
+  it('says when the 1h cache cost customers more than it saved', () => {
+    const data = insights()
+    const verdict = verdictOf({
+      ...data,
+      waste: {
+        ...data.waste,
+        cache: { ...data.waste.cache, saved_usd: 1, net_usd: -3 },
+      },
+    })
+    expect(verdict?.text).toContain(
+      'The 1h cache cost customers $3.00 net: its writes cost $4.00 more, its reads saved $1.00.'
+    )
   })
 
   it('turns red from 5% of consumption lost or five reports unanswered', () => {
@@ -373,6 +412,25 @@ describe('experience tab', () => {
     expect(within(silent).getAllByText('user1').length).toBeGreaterThan(0)
     expect(within(silent).queryByText('user2')).toBeNull()
 
+    const causes = screen
+      .getByText('Why streams failed')
+      .closest('[data-slot=card]') as HTMLElement
+    expect(
+      within(causes).getByText('Upstream reset the connection')
+    ).toBeInTheDocument()
+    expect(
+      within(causes).getByText(
+        /1 failed requests returned no output at all \(\$3\.00\)\. Customers hung up on 7 more/
+      )
+    ).toBeInTheDocument()
+    const cache = screen
+      .getByText('One-hour cache: cost against saving')
+      .closest('[data-slot=card]') as HTMLElement
+    expect(
+      within(cache).getByText('Net for customers: +$6.00 over 3 customers.')
+    ).toBeInTheDocument()
+    expect(within(cache).getByText('25 reads')).toBeInTheDocument()
+
     expect(screen.getByText('Charged twice')).toBeInTheDocument()
     expect(
       screen.getByRole('link', { name: 'Open feedback review' })
@@ -406,7 +464,8 @@ describe('experience tab', () => {
             log_start: START + 2 * DAY,
             cache_start: START + 4 * DAY,
             truncated: true,
-            unpriced: 2,
+            stale_hours: 5,
+            cache: { ...data.waste.cache, unpriced: 2 },
           },
         }}
         range={range}
@@ -419,7 +478,7 @@ describe('experience tab', () => {
       )
     ).toBeInTheDocument()
     expect(
-      screen.getByText(/The one-hour cache estimate reads only from/)
+      screen.getByText(/The one-hour cache reads only from/)
     ).toBeInTheDocument()
     expect(
       screen.getByText(
@@ -427,8 +486,11 @@ describe('experience tab', () => {
       )
     ).toBeInTheDocument()
     expect(
-      screen.getByText(/2 one-hour cache writes lacked the prices/)
+      screen.getByText(/2 requests lacked the prices to be valued/)
     ).toBeInTheDocument()
+    expect(
+      screen.getAllByText(/5 hours are still stored the old way/).length
+    ).toBeGreaterThan(0)
   })
 
   it('names empty lists, not zeros, when the range had nothing', () => {

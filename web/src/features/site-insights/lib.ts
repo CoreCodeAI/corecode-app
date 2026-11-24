@@ -223,6 +223,23 @@ export const GIFT_SHARE_WARN = 0.3
 /** An upstream bill read longer ago than this leaves recent revenue uncosted. */
 export const COST_STALE_SECONDS = 1800
 
+/**
+ * The channel's upstream bill is behind its charged requests by more than
+ * COST_STALE_SECONDS. A channel that went quiet after its last bill is not.
+ */
+export function costBehind(channel: {
+  cost_source: string
+  latest_cost_at: number
+  latest_revenue_at?: number
+}): boolean {
+  return (
+    channel.cost_source === 'upstream' &&
+    channel.latest_cost_at > 0 &&
+    (channel.latest_revenue_at ?? 0) - channel.latest_cost_at >
+      COST_STALE_SECONDS
+  )
+}
+
 /** A channel's ROI over a shorter range than this is not judged. */
 export const SHORT_ROI_DAYS = 7
 

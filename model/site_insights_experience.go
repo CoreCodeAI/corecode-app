@@ -17,20 +17,24 @@ import (
 //     (other.upstream_refusal) and it was charged for its input and cache writes.
 //   - failed_billed: the stream ended abnormally (stream_status.end_reason
 //     timeout, scanner_error, panic or ping_fail) and the request was still
-//     charged. A client that hung up (client_gone) is not a failure of ours.
+//     charged. A client that hung up is not a failure of ours: before the relay
+//     recorded it as client_gone, its read failed as scanner_error with
+//     "context canceled", and those are counted as client_cancel, apart.
 //   - gate_wallet: the newcomer plan's address gate moved the request onto the
 //     wallet (admin_info.limited_plan_ip_gate = wallet). The customer paid cash
 //     for a request their plan would have covered. This view counts it from
 //     the customer's side; the risk tab counts what the gate saved.
-//   - cache_1h: the extra a one-hour cache write cost over a five-minute one
-//     when nothing of that customer's key was requested in the hour after it.
-//     It is an estimate with a stated lower bound: a later request of the same
-//     key is taken to have read the cache, though it may not have.
 //
-// A request is counted once, under the first kind above that fits; the cache
-// premium is added only to requests no other kind took. Task refunds
-// (type 6, a failed image or video task) are counted apart, since the money
-// went back.
+// A request is counted once, under the first kind above that fits. Apart from
+// the waste: requests the customer cancelled and was charged for
+// (client_cancel); task refunds (type 6, a failed image or video task), since
+// the money went back; and the one-hour cache, which is a trade, not a waste.
+// Its writes cost more than five-minute ones (cache_paid; cache_1h is the part
+// of it nothing of the key requested within the hour) and its reads cost less
+// than the writes a five-minute entry would have needed after a pause of five
+// minutes to an hour (cache_saved). The view nets the two. Counting a write
+// that something later read, though it might not have, bounds the unread part
+// from below; the key may carry several threads, so the saving is an estimate.
 //
 // The request logs carry these markers inside other, which no index reaches,
 // so they are found by a LIKE that reads every row of its range: a quarter of
@@ -46,6 +50,9 @@ const (
 	experienceCacheWindow = 900
 	// A one-hour write that nothing was requested after within this long is unread.
 	experienceCacheReuseSeconds = 3600
+	// A read longer than this after the key's last request would have missed a
+	// five-minute entry.
+	experienceCacheShortSeconds = 300
 	// experienceLogRows bounds the rows one scan parses.
 	experienceLogRows = 250_000
 	// experienceCacheUsersPerRead is how many writers one read of their requests names.
@@ -71,17 +78,27 @@ const (
 	WasteRefusal      = "refusal"
 	WasteFailedBilled = "failed_billed"
 	WasteGateWallet   = "gate_wallet"
-	WasteCache1h      = "cache_1h"
+	// WasteCache1h is the unread part of the one-hour cache premium. It is
+	// reported with the cache, not with the waste.
+	WasteCache1h = "cache_1h"
+	// ExperienceClientCancel is a charged request the customer hung up on.
+	ExperienceClientCancel = "client_cancel"
 )
 
+// experienceWasteKinds are the kinds the waste total sums.
+var experienceWasteKinds = []string{WasteRefusal, WasteFailedBilled, WasteGateWallet}
+
 // ExperiencePoint is one day's (or hour's) wasted money by kind in quota
-// dollars, the task refunds beside it, and the reports filed by category.
+// dollars; beside it the cancelled requests, the task refunds and the
+// one-hour cache's premium and saving; and the reports filed by category.
 type ExperiencePoint struct {
 	At            int64   `json:"at"`
 	RefusalUSD    float64 `json:"refusal_usd"`
 	FailedUSD     float64 `json:"failed_usd"`
 	GateUSD       float64 `json:"gate_usd"`
-	CacheUSD      float64 `json:"cache_usd"`
+	CancelUSD     float64 `json:"cancel_usd"`
+	CachePaidUSD  float64 `json:"cache_paid_usd"`
+	CacheSavedUSD float64 `json:"cache_saved_usd"`
 	RefundUSD     float64 `json:"refund_usd"`
 	Refusals      int64   `json:"refusals"`
 	Bug           int64   `json:"bug"`
@@ -126,7 +143,6 @@ type ExperienceUser struct {
 	RefusalUSD    float64 `json:"refusal_usd"`
 	FailedUSD     float64 `json:"failed_usd"`
 	GateUSD       float64 `json:"gate_usd"`
-	CacheUSD      float64 `json:"cache_usd"`
 	TotalUSD      float64 `json:"total_usd"`
 	Requests      int64   `json:"requests"`
 	FiledFeedback bool    `json:"filed_feedback"`
@@ -134,31 +150,60 @@ type ExperienceUser struct {
 	Silent        bool    `json:"silent"`
 }
 
+// ExperienceCache is the one-hour cache's trade. PaidUSD is what Writes cost
+// over five-minute writes, UnreadUSD the part of it on UnreadWrites, writes
+// nothing of the key requested within the hour (judged up to
+// CacheJudgedUntil). SavedUSD is what Reads would have cost as five-minute
+// writes; NetUSD is SavedUSD less PaidUSD, what the customers came out ahead.
+// Unpriced counts requests whose log lacks what pricing them needs.
+type ExperienceCache struct {
+	PaidUSD      float64 `json:"paid_usd"`
+	Writes       int64   `json:"writes"`
+	UnreadUSD    float64 `json:"unread_usd"`
+	UnreadWrites int64   `json:"unread_writes"`
+	SavedUSD     float64 `json:"saved_usd"`
+	Reads        int64   `json:"reads"`
+	NetUSD       float64 `json:"net_usd"`
+	Users        int64   `json:"users"`
+	Unpriced     int64   `json:"unpriced"`
+}
+
 // ExperienceWaste is the money customers spent for nothing. LogStart and
 // CacheStart are where the logs read for the kinds begin (the range's start
 // unless the range is longer than the view reads); CacheJudgedUntil is the
-// last write the cache estimate could judge, the hour after it still open.
+// last write the unread estimate could judge, the hour after it still open.
 // ConsumedUSD is the customers' consumption over [LogStart, End), the whole
-// the shares are of. Truncated says a scan hit its row bound. Unpriced counts
-// one-hour writes whose log lacks the ratios to price them.
+// the shares are of. Truncated says a scan hit its row bound; StaleHours
+// counts hours stored under an older version, served until they are stored
+// again (they lack the cancelled requests and the cache's premium and saving).
+// FailedCauses splits the failed kind by what broke, and FailedNoOutput
+// counts the failed requests that returned no output token. Cancelled are the
+// charged requests the customer hung up on, CancelledNoOutput those of them
+// cut off before any output.
 type ExperienceWaste struct {
-	LogStart         int64               `json:"log_start"`
-	CacheStart       int64               `json:"cache_start"`
-	CacheJudgedUntil int64               `json:"cache_judged_until"`
-	ConsumedUSD      float64             `json:"consumed_usd"`
-	TotalUSD         float64             `json:"total_usd"`
-	Truncated        bool                `json:"truncated"`
-	Unpriced         int64               `json:"unpriced"`
-	Kinds            []ExperienceKind    `json:"kinds"`
-	Refusals         []ExperienceRefusal `json:"refusals"`
-	RefusalModels    []ExperienceGroup   `json:"refusal_models"`
-	RefusalReasons   []ExperienceGroup   `json:"refusal_reasons"`
-	Refunds          ExperienceKind      `json:"refunds"`
-	RefundModels     []ExperienceGroup   `json:"refund_models"`
-	Top              []ExperienceUser    `json:"top"`
-	Silent           []ExperienceUser    `json:"silent"`
-	ReportedTop      int64               `json:"reported_top"`
-	CheckedTop       int64               `json:"checked_top"`
+	LogStart          int64               `json:"log_start"`
+	CacheStart        int64               `json:"cache_start"`
+	CacheJudgedUntil  int64               `json:"cache_judged_until"`
+	ConsumedUSD       float64             `json:"consumed_usd"`
+	TotalUSD          float64             `json:"total_usd"`
+	Truncated         bool                `json:"truncated"`
+	StaleHours        int                 `json:"stale_hours"`
+	Kinds             []ExperienceKind    `json:"kinds"`
+	FailedCauses      []ExperienceGroup   `json:"failed_causes"`
+	FailedNoOutput    int64               `json:"failed_no_output"`
+	FailedNoOutputUSD float64             `json:"failed_no_output_usd"`
+	Cancelled         ExperienceKind      `json:"cancelled"`
+	CancelledNoOutput int64               `json:"cancelled_no_output"`
+	Cache             ExperienceCache     `json:"cache"`
+	Refusals          []ExperienceRefusal `json:"refusals"`
+	RefusalModels     []ExperienceGroup   `json:"refusal_models"`
+	RefusalReasons    []ExperienceGroup   `json:"refusal_reasons"`
+	Refunds           ExperienceKind      `json:"refunds"`
+	RefundModels      []ExperienceGroup   `json:"refund_models"`
+	Top               []ExperienceUser    `json:"top"`
+	Silent            []ExperienceUser    `json:"silent"`
+	ReportedTop       int64               `json:"reported_top"`
+	CheckedTop        int64               `json:"checked_top"`
 }
 
 // ExperienceWaiting is a report still waiting for its first reply.
@@ -232,8 +277,14 @@ type experienceOther struct {
 	IsTask                  bool    `json:"is_task"`
 	TaskId                  string  `json:"task_id"`
 	PreConsumedQuota        *int64  `json:"pre_consumed_quota"`
+	CacheTokens             int64   `json:"cache_tokens"`
+	CacheRatio              float64 `json:"cache_ratio"`
+	CacheCreationTokens     int64   `json:"cache_creation_tokens"`
+	BillingMode             string  `json:"billing_mode"`
+	ExprB64                 string  `json:"expr_b64"`
 	StreamStatus            struct {
 		EndReason string `json:"end_reason"`
+		EndError  string `json:"end_error"`
 	} `json:"stream_status"`
 	AdminInfo struct {
 		LimitedPlanIPGate string `json:"limited_plan_ip_gate"`
@@ -245,7 +296,7 @@ type experienceOther struct {
 var experienceAbnormalEnds = []string{"timeout", "scanner_error", "panic", "ping_fail"}
 
 // experienceEventMarkers are the LIKE patterns a log must match for the
-// refusal, failed and gate kinds. Their JSON is compact and key order does not
+// refusal, failed, cancelled and gate kinds. Their JSON is compact and key order does not
 // matter to the match.
 var experienceEventMarkers = []string{
 	`%"upstream_refusal":true%`,
@@ -254,19 +305,27 @@ var experienceEventMarkers = []string{
 	`%"end_reason":"scanner_error"%`,
 	`%"end_reason":"panic"%`,
 	`%"end_reason":"ping_fail"%`,
+	`%"end_reason":"client_gone"%`,
 }
 
-const experienceCacheMarker = `%"cache_creation_tokens_1h":%`
+// experienceCacheMarkers find the requests made under the one-hour cache: the
+// ones that wrote one-hour entries, and the ones sent with the one-hour
+// default, which may only read.
+var experienceCacheMarkers = []string{`%"cache_creation_tokens_1h":%`, `%"default_cache_ttl":"1h"%`}
+
+const experienceLogColumns = "id, user_id, token_id, created_at, model_name, quota, prompt_tokens, completion_tokens, request_id, other"
 
 type experienceLog struct {
-	Id        int
-	UserId    int
-	TokenId   int
-	CreatedAt int64
-	ModelName string
-	Quota     int
-	RequestId string
-	Other     string
+	Id               int
+	UserId           int
+	TokenId          int
+	CreatedAt        int64
+	ModelName        string
+	Quota            int
+	PromptTokens     int
+	CompletionTokens int
+	RequestId        string
+	Other            string
 }
 
 // experienceWasteTally collects one scan's money by user and kind.
@@ -282,7 +341,7 @@ func newExperienceWasteTally() *experienceWasteTally {
 		kinds:  make(map[string]*ExperienceKind),
 		users:  make(map[string]map[int]bool),
 	}
-	for _, kind := range []string{WasteRefusal, WasteFailedBilled, WasteGateWallet, WasteCache1h} {
+	for _, kind := range experienceWasteKinds {
 		tally.kinds[kind] = &ExperienceKind{Kind: kind}
 		tally.users[kind] = make(map[int]bool)
 	}
@@ -302,8 +361,6 @@ func (tally *experienceWasteTally) add(kind string, userID int, quota float64) {
 		entry.FailedUSD += quota
 	case WasteGateWallet:
 		entry.GateUSD += quota
-	case WasteCache1h:
-		entry.CacheUSD += quota
 	}
 	entry.Requests++
 	tally.kinds[kind].Requests++
@@ -335,8 +392,7 @@ func scanExperienceLogs(start, end, window int64, patterns []string, budget time
 		lo := max(start, hi-window)
 		args[1], args[2] = lo, hi
 		var page []experienceLog
-		if err := LOG_DB.Model(&Log{}).
-			Select("id, user_id, token_id, created_at, model_name, quota, request_id, other").
+		if err := LOG_DB.Model(&Log{}).Select(experienceLogColumns).
 			Where(where, args...).Find(&page).Error; err != nil {
 			return covered, false, err
 		}
@@ -393,10 +449,11 @@ func experienceInsightsAt(r InsightsRange, now int64) (*ExperienceInsights, erro
 	}
 
 	waste := &result.Waste
-	events, covered, truncated, err := readExperienceEvents(r, now, staff)
+	events, covered, truncated, stale, err := readExperienceEvents(r, now, staff)
 	if err != nil {
 		return nil, err
 	}
+	waste.StaleHours = stale
 	// What the stored hours do not reach is not read: say where the figures begin.
 	waste.LogStart, waste.CacheStart = covered, covered
 	waste.CacheJudgedUntil = r.End - experienceCacheReuseSeconds
@@ -406,11 +463,45 @@ func experienceInsightsAt(r InsightsRange, now int64) (*ExperienceInsights, erro
 	refundModels := newExperienceBreakdown()
 	refundUsers := make(map[int]bool)
 	refunds := ExperienceKind{Kind: experienceKindRefund}
+	failedCauses := newExperienceBreakdown()
+	cancelUsers, cacheUsers := make(map[int]bool), make(map[int]bool)
+	waste.Cancelled.Kind = ExperienceClientCancel
+	cache := &waste.Cache
 	for _, event := range events {
 		p := point(event.EventAt)
+		// A summed cache row stands for its requests; an event row, or a row
+		// stored before the count was, for one.
+		requests := max(event.Requests, 1)
 		switch event.Kind {
 		case experienceKindCacheUnpriced:
-			waste.Unpriced++
+			cache.Unpriced += requests
+		case experienceKindCachePaid:
+			cache.PaidUSD += event.Usd
+			cache.Writes += requests
+			cacheUsers[event.UserId] = true
+			if p != nil {
+				p.CachePaidUSD += event.Usd
+			}
+		case experienceKindCacheSaved:
+			cache.SavedUSD += event.Usd
+			cache.Reads += requests
+			cacheUsers[event.UserId] = true
+			if p != nil {
+				p.CacheSavedUSD += event.Usd
+			}
+		case WasteCache1h:
+			cache.UnreadUSD += event.Usd
+			cache.UnreadWrites += requests
+		case ExperienceClientCancel:
+			waste.Cancelled.Requests++
+			waste.Cancelled.USD += event.Usd
+			cancelUsers[event.UserId] = true
+			if event.NoOutput {
+				waste.CancelledNoOutput++
+			}
+			if p != nil {
+				p.CancelUSD += event.Usd
+			}
 		case experienceKindRefund:
 			refunds.Requests++
 			refunds.USD += event.Usd
@@ -419,8 +510,16 @@ func experienceInsightsAt(r InsightsRange, now int64) (*ExperienceInsights, erro
 			if p != nil {
 				p.RefundUSD += event.Usd
 			}
-		case WasteRefusal, WasteFailedBilled, WasteGateWallet, WasteCache1h:
+		case WasteRefusal, WasteFailedBilled, WasteGateWallet:
 			tally.add(event.Kind, event.UserId, event.Usd)
+			if event.Kind == WasteFailedBilled {
+				// Hours stored before causes were kept have none.
+				failedCauses.add(cmp.Or(event.Category, "unknown"), event.UserId, event.Usd)
+				if event.NoOutput {
+					waste.FailedNoOutput++
+					waste.FailedNoOutputUSD += event.Usd
+				}
+			}
 			if p != nil {
 				switch event.Kind {
 				case WasteRefusal:
@@ -430,8 +529,6 @@ func experienceInsightsAt(r InsightsRange, now int64) (*ExperienceInsights, erro
 					p.FailedUSD += event.Usd
 				case WasteGateWallet:
 					p.GateUSD += event.Usd
-				case WasteCache1h:
-					p.CacheUSD += event.Usd
 				}
 			}
 			if event.Kind == WasteRefusal {
@@ -448,6 +545,14 @@ func experienceInsightsAt(r InsightsRange, now int64) (*ExperienceInsights, erro
 	refunds.USD = roundTo(refunds.USD, 4)
 	waste.Refunds = refunds
 	waste.RefundModels = refundModels.ranked()
+	waste.FailedCauses = failedCauses.ranked()
+	waste.FailedNoOutputUSD = roundTo(waste.FailedNoOutputUSD, 4)
+	waste.Cancelled.Users = int64(len(cancelUsers))
+	waste.Cancelled.USD = roundTo(waste.Cancelled.USD, 4)
+	cache.Users = int64(len(cacheUsers))
+	cache.PaidUSD, cache.SavedUSD = roundTo(cache.PaidUSD, 4), roundTo(cache.SavedUSD, 4)
+	cache.UnreadUSD = roundTo(cache.UnreadUSD, 4)
+	cache.NetUSD = roundTo(cache.SavedUSD-cache.PaidUSD, 4)
 
 	if err := fillExperienceConsumption(waste, r, staffIDs); err != nil {
 		return nil, err
@@ -456,7 +561,7 @@ func experienceInsightsAt(r InsightsRange, now int64) (*ExperienceInsights, erro
 		return nil, err
 	}
 
-	for _, kind := range []string{WasteRefusal, WasteFailedBilled, WasteGateWallet, WasteCache1h} {
+	for _, kind := range experienceWasteKinds {
 		entry := tally.kinds[kind]
 		entry.Users = int64(len(tally.users[kind]))
 		entry.USD = roundTo(entry.USD, 4)
@@ -467,7 +572,8 @@ func experienceInsightsAt(r InsightsRange, now int64) (*ExperienceInsights, erro
 	for i := range result.Series {
 		p := &result.Series[i]
 		p.RefusalUSD, p.FailedUSD, p.GateUSD = roundTo(p.RefusalUSD, 4), roundTo(p.FailedUSD, 4), roundTo(p.GateUSD, 4)
-		p.CacheUSD, p.RefundUSD = roundTo(p.CacheUSD, 4), roundTo(p.RefundUSD, 4)
+		p.CancelUSD, p.RefundUSD = roundTo(p.CancelUSD, 4), roundTo(p.RefundUSD, 4)
+		p.CachePaidUSD, p.CacheSavedUSD = roundTo(p.CachePaidUSD, 4), roundTo(p.CacheSavedUSD, 4)
 	}
 
 	waste.RefusalModels = refusalModels.ranked()

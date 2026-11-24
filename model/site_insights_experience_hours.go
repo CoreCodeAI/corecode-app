@@ -2,10 +2,13 @@ package model
 
 import (
 	"cmp"
+	"encoding/base64"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/pkg/billingexpr"
 
 	"gorm.io/gorm"
 )
@@ -33,9 +36,14 @@ const (
 	experienceHourSettle = insightLogInsertSlack
 	// experienceTailBudget bounds the live read of the hours not final yet.
 	experienceTailBudget = 30 * time.Second
-	// Kinds stored besides the four wasted ones.
+	// Kinds stored besides the wasted ones.
 	experienceKindRefund        = "refund"
 	experienceKindCacheUnpriced = "cache_unpriced"
+	experienceKindCachePaid     = "cache_paid"
+	experienceKindCacheSaved    = "cache_saved"
+	// experienceHourVersion is stored in the marker's category. An hour stored
+	// under another version is served as it is, counted stale, and stored again.
+	experienceHourVersion = "v2"
 )
 
 // InsightExperienceHour is one event of an hour. The row with LogId 0 marks
@@ -51,6 +59,11 @@ type InsightExperienceHour struct {
 	ModelName string  `gorm:"type:varchar(191)"`
 	Category  string  `gorm:"type:varchar(64)"`
 	RequestId string  `gorm:"type:varchar(128)"`
+	// Requests is how many requests a summed cache row stands for; an event
+	// row stands for one and may read 0, as rows stored before the column do.
+	Requests int64 `gorm:"not null;default:0"`
+	// NoOutput: the request returned no output token.
+	NoOutput bool `gorm:"not null;default:false"`
 }
 
 func experienceStaff() (map[int]bool, error) {
@@ -84,10 +97,10 @@ func experienceEvent(row experienceLog, kind string, usd float64, category strin
 }
 
 // computeExperienceEvents reads the events of the customers' logs in
-// [start, end) from the request logs. A one-hour cache write is judged only if
-// it was made before judgedUntil, and is unread if none of the requests read
-// up to requestsUntil followed it within the hour. It reports whether the row
-// bound cut a scan short.
+// [start, end) from the request logs. A one-hour cache write is judged unread
+// only if it was made before judgedUntil and none of the requests read up to
+// requestsUntil followed it within the hour. It reports whether the row bound
+// cut a scan short.
 func computeExperienceEvents(start, end, judgedUntil, requestsUntil int64, staff map[int]bool) ([]InsightExperienceHour, bool, error) {
 	var events []InsightExperienceHour
 	taken := make(map[int]bool)
@@ -100,24 +113,14 @@ func computeExperienceEvents(start, end, judgedUntil, requestsUntil int64, staff
 		if err := common.UnmarshalJsonStr(row.Other, &other); err != nil {
 			return
 		}
-		kind := ""
-		switch {
-		case other.UpstreamRefusal:
-			kind = WasteRefusal
-		case slices.Contains(experienceAbnormalEnds, other.StreamStatus.EndReason):
-			kind = WasteFailedBilled
-		case other.AdminInfo.LimitedPlanIPGate == LimitedPlanGateWallet:
-			kind = WasteGateWallet
-		}
+		kind, category := experienceEventKind(other)
 		if kind == "" {
 			return
 		}
-		category := ""
-		if kind == WasteRefusal {
-			category = cmp.Or(other.UpstreamRefusalCategory, "unknown")
-		}
 		taken[row.Id] = true
-		events = append(events, experienceEvent(row, kind, quotaUSD(int64(row.Quota)), category))
+		event := experienceEvent(row, kind, quotaUSD(int64(row.Quota)), category)
+		event.NoOutput = row.CompletionTokens == 0
+		events = append(events, event)
 	})
 	if err != nil {
 		return nil, false, err
@@ -127,8 +130,7 @@ func computeExperienceEvents(start, end, judgedUntil, requestsUntil int64, staff
 	// told apart from the settlement delta of a task that ran cheaper than
 	// reserved, which carries pre_consumed_quota.
 	var refunds []experienceLog
-	if err := LOG_DB.Model(&Log{}).
-		Select("id, user_id, token_id, created_at, model_name, quota, request_id, other").
+	if err := LOG_DB.Model(&Log{}).Select(experienceLogColumns).
 		Where("type = ? AND created_at >= ? AND created_at < ?", LogTypeRefund, start, end).
 		Find(&refunds).Error; err != nil {
 		return nil, false, err
@@ -147,30 +149,92 @@ func computeExperienceEvents(start, end, judgedUntil, requestsUntil int64, staff
 		events = append(events, experienceEvent(row, experienceKindRefund, quotaUSD(int64(row.Quota)), ""))
 	}
 
-	// One-hour writes: the extra they cost over five minutes, for the ones
-	// nothing of the same key was requested after within the hour.
-	cacheEnd := min(end, judgedUntil+1)
-	if cacheEnd <= start {
-		return events, truncated, nil
-	}
-	var writes []experienceLog
-	_, cacheTruncated, err := scanExperienceLogs(start, cacheEnd, experienceCacheWindow, []string{experienceCacheMarker}, experienceTailBudget, func(row experienceLog) {
-		if !staff[row.UserId] && row.Quota > 0 && !taken[row.Id] {
-			writes = append(writes, row)
-		}
-	})
+	cache, cacheTruncated, err := computeExperienceCache(start, end, judgedUntil, requestsUntil, staff, taken)
 	if err != nil {
 		return nil, false, err
 	}
-	truncated = truncated || cacheTruncated
-	if len(writes) == 0 {
-		return events, truncated, nil
+	return append(events, cache...), truncated || cacheTruncated, nil
+}
+
+// experienceEventKind names the kind of a log the event markers matched, and
+// its category: the refusal's category, or the cause of a failed or
+// cancelled stream.
+func experienceEventKind(other experienceOther) (kind, category string) {
+	reason, endError := other.StreamStatus.EndReason, other.StreamStatus.EndError
+	switch {
+	case other.UpstreamRefusal:
+		return WasteRefusal, cmp.Or(other.UpstreamRefusalCategory, "unknown")
+	case reason == "client_gone" || reason == "scanner_error" && strings.Contains(endError, "context canceled"):
+		// Before the relay told them apart, a client hanging up during a read
+		// was recorded as scanner_error with the client's "context canceled".
+		return ExperienceClientCancel, ""
+	case slices.Contains(experienceAbnormalEnds, reason):
+		return WasteFailedBilled, experienceFailureCause(reason, endError)
+	case other.AdminInfo.LimitedPlanIPGate == LimitedPlanGateWallet:
+		return WasteGateWallet, ""
+	}
+	return "", ""
+}
+
+// experienceFailureCause groups an abnormal end by what broke.
+func experienceFailureCause(reason, endError string) string {
+	if reason != "scanner_error" {
+		return reason
+	}
+	switch {
+	case strings.Contains(endError, "connection reset"):
+		return "reset"
+	case strings.Contains(endError, "stream error") || strings.Contains(endError, "INTERNAL_ERROR"):
+		return "http2"
+	case strings.Contains(endError, "EOF"):
+		return "eof"
+	case strings.Contains(endError, "deadline exceeded") || strings.Contains(endError, "timeout"):
+		return "timeout"
+	}
+	return "other"
+}
+
+// experienceCacheTally sums one customer's hour of one cache kind.
+type experienceCacheTally struct {
+	key      experienceCacheKey
+	at       int64
+	requests int64
+	usd      float64
+}
+
+type experienceCacheKey struct {
+	hour int64
+	user int
+	kind string
+}
+
+// experienceCacheKinds numbers the cache kinds for the log id of their rows.
+var experienceCacheKinds = map[string]int{
+	experienceKindCachePaid: 1, WasteCache1h: 2, experienceKindCacheSaved: 3, experienceKindCacheUnpriced: 4,
+}
+
+// computeExperienceCache prices the one-hour cache of the customers' requests
+// in [start, end): what its writes cost over five-minute ones, the part of
+// that nothing read, and what its reads saved. A read saved money when the
+// key's previous request came more than five minutes and at most an hour
+// before it: a five-minute entry would have expired and the read would have
+// been a write. Both are estimates by the key, which may carry several
+// threads. They are thousands an hour, so they are stored summed per
+// customer, hour and kind, under a negative log id.
+func computeExperienceCache(start, end, judgedUntil, requestsUntil int64, staff map[int]bool, taken map[int]bool) ([]InsightExperienceHour, bool, error) {
+	var rows []experienceLog
+	_, truncated, err := scanExperienceLogs(start, end, experienceCacheWindow, experienceCacheMarkers, experienceTailBudget, func(row experienceLog) {
+		if !staff[row.UserId] && row.Quota > 0 && !taken[row.Id] {
+			rows = append(rows, row)
+		}
+	})
+	if err != nil || len(rows) == 0 {
+		return nil, truncated, err
 	}
 
 	type keyOf struct{ user, token int }
-	// The requests that could follow a write are the same customers'.
 	writers := make(map[int]bool)
-	for _, row := range writes {
+	for _, row := range rows {
 		writers[row.UserId] = true
 	}
 	ids := make([]int, 0, len(writers))
@@ -186,8 +250,8 @@ func computeExperienceEvents(start, end, judgedUntil, requestsUntil int64, staff
 			CreatedAt int64
 		}
 		if err := LOG_DB.Model(&Log{}).Select("user_id, token_id, created_at").
-			Where("type = ? AND created_at >= ? AND created_at < ? AND user_id IN ?", LogTypeConsume, start, requestsUntil,
-				ids[from:min(from+experienceCacheUsersPerRead, len(ids))]).
+			Where("type = ? AND created_at >= ? AND created_at < ? AND user_id IN ?", LogTypeConsume,
+				start-experienceCacheReuseSeconds, requestsUntil, ids[from:min(from+experienceCacheUsersPerRead, len(ids))]).
 			Find(&chunk).Error; err != nil {
 			return nil, false, err
 		}
@@ -199,32 +263,141 @@ func computeExperienceEvents(start, end, judgedUntil, requestsUntil int64, staff
 	for _, series := range times {
 		slices.Sort(series)
 	}
-	for _, row := range writes {
-		var other experienceOther
-		if err := common.UnmarshalJsonStr(row.Other, &other); err != nil || other.CacheCreationTokens1h <= 0 {
-			continue
+
+	sums := make(map[experienceCacheKey]*experienceCacheTally)
+	add := func(row experienceLog, kind string, usd float64) {
+		hour := insightHourKey(row.CreatedAt)
+		key := experienceCacheKey{hour, row.UserId, kind}
+		sum := sums[key]
+		if sum == nil {
+			sum = &experienceCacheTally{key: key, at: max(hour, start)}
+			sums[key] = sum
 		}
-		series := times[keyOf{row.UserId, row.TokenId}]
-		first, _ := slices.BinarySearch(series, row.CreatedAt)
-		last, _ := slices.BinarySearch(series, row.CreatedAt+experienceCacheReuseSeconds+1)
-		if last-first >= 2 {
-			// Something of this key followed within the hour.
-			continue
-		}
-		base := cmp.Or(other.CacheCreationRatio5m, other.CacheCreationRatio)
-		if other.ModelRatio <= 0 || other.GroupRatio <= 0 || other.CacheCreationRatio1h <= base || base <= 0 {
-			events = append(events, experienceEvent(row, experienceKindCacheUnpriced, 0, ""))
-			continue
-		}
-		premium := float64(other.CacheCreationTokens1h) * (other.CacheCreationRatio1h - base) * other.ModelRatio * other.GroupRatio
-		events = append(events, experienceEvent(row, WasteCache1h, roundTo(premium/common.QuotaPerUnit, 6), ""))
+		sum.requests++
+		sum.usd += usd
 	}
+	for _, row := range rows {
+		var other experienceOther
+		if err := common.UnmarshalJsonStr(row.Other, &other); err != nil {
+			continue
+		}
+		price, ok := experienceCachePricing(row, other)
+		series := times[keyOf{row.UserId, row.TokenId}]
+		at, _ := slices.BinarySearch(series, row.CreatedAt)
+		if !ok {
+			if other.CacheCreationTokens1h > 0 || other.CacheTokens > 0 {
+				add(row, experienceKindCacheUnpriced, 0)
+			}
+			continue
+		}
+		if other.CacheCreationTokens1h > 0 {
+			premium := price.premium()
+			add(row, experienceKindCachePaid, premium)
+			following, _ := slices.BinarySearch(series, row.CreatedAt+experienceCacheReuseSeconds+1)
+			// The write's own request is in the series; another one of the key
+			// within the hour may have read it.
+			if row.CreatedAt <= judgedUntil && following-at < 2 {
+				add(row, WasteCache1h, premium)
+			}
+		}
+		if other.CacheTokens > 0 && at > 0 {
+			gap := row.CreatedAt - series[at-1]
+			if gap > experienceCacheShortSeconds && gap <= experienceCacheReuseSeconds {
+				if saved := price.saved(); saved > 0 {
+					add(row, experienceKindCacheSaved, saved)
+				}
+			}
+		}
+	}
+
+	events := make([]InsightExperienceHour, 0, len(sums))
+	for _, sum := range sums {
+		events = append(events, InsightExperienceHour{
+			HourStart: sum.key.hour, LogId: -(sum.key.user*16 + experienceCacheKinds[sum.key.kind]),
+			UserId: sum.key.user, EventAt: sum.at, Kind: sum.key.kind,
+			Usd: roundTo(sum.usd/common.QuotaPerUnit, 6), Requests: sum.requests,
+		})
+	}
+	slices.SortFunc(events, func(a, b InsightExperienceHour) int {
+		return cmp.Or(cmp.Compare(a.HourStart, b.HourStart), cmp.Compare(a.LogId, b.LogId))
+	})
 	return events, truncated, nil
+}
+
+// experienceCachePrice prices a log's cache tokens in quota, by its ratios or
+// by the tiered expression it was billed with.
+type experienceCachePrice struct {
+	params billingexpr.TokenParams
+	expr   string
+	// ratio pricing
+	write5m, write1h, read, scale float64
+}
+
+func experienceCachePricing(row experienceLog, other experienceOther) (experienceCachePrice, bool) {
+	price := experienceCachePrice{}
+	cc1h := float64(other.CacheCreationTokens1h)
+	cc := max(0, float64(other.CacheCreationTokens)-cc1h)
+	cr := float64(other.CacheTokens)
+	p := float64(row.PromptTokens)
+	price.params = billingexpr.TokenParams{P: p, C: float64(row.CompletionTokens), Len: p + cr + cc + cc1h, CR: cr, CC: cc, CC1h: cc1h}
+	if other.BillingMode == "tiered_expr" {
+		expr, err := base64.StdEncoding.DecodeString(other.ExprB64)
+		if err != nil || len(expr) == 0 || other.GroupRatio <= 0 {
+			return price, false
+		}
+		price.expr = string(expr)
+		price.scale = common.QuotaPerUnit / 1_000_000 * other.GroupRatio
+		_, ok := price.cost(price.params)
+		return price, ok
+	}
+	price.write5m = cmp.Or(other.CacheCreationRatio5m, other.CacheCreationRatio)
+	price.write1h = other.CacheCreationRatio1h
+	price.read = other.CacheRatio
+	price.scale = other.ModelRatio * other.GroupRatio
+	if price.scale <= 0 || price.write5m <= 0 || price.write5m <= price.read {
+		return price, false
+	}
+	if cc1h > 0 && price.write1h <= price.write5m {
+		return price, false
+	}
+	return price, true
+}
+
+func (price experienceCachePrice) cost(params billingexpr.TokenParams) (float64, bool) {
+	cost, _, err := billingexpr.RunExpr(price.expr, params)
+	if err != nil {
+		return 0, false
+	}
+	return cost * price.scale, true
+}
+
+// premium is what the one-hour writes cost over five-minute ones.
+func (price experienceCachePrice) premium() float64 {
+	if price.expr == "" {
+		return price.params.CC1h * (price.write1h - price.write5m) * price.scale
+	}
+	as5m := price.params
+	as5m.CC, as5m.CC1h = as5m.CC+as5m.CC1h, 0
+	paid, _ := price.cost(price.params)
+	instead, _ := price.cost(as5m)
+	return max(0, paid-instead)
+}
+
+// saved is what the cache reads would have cost written as five-minute entries.
+func (price experienceCachePrice) saved() float64 {
+	if price.expr == "" {
+		return price.params.CR * (price.write5m - price.read) * price.scale
+	}
+	missed := price.params
+	missed.CC, missed.CR = missed.CC+missed.CR, 0
+	paid, _ := price.cost(price.params)
+	instead, _ := price.cost(missed)
+	return max(0, instead-paid)
 }
 
 func storeExperienceHour(start int64, events []InsightExperienceHour) error {
 	rows := make([]InsightExperienceHour, 0, len(events)+1)
-	rows = append(rows, InsightExperienceHour{HourStart: start})
+	rows = append(rows, InsightExperienceHour{HourStart: start, Category: experienceHourVersion})
 	for _, event := range events {
 		event.HourStart = start
 		rows = append(rows, event)
@@ -241,7 +414,8 @@ func storeExperienceHour(start int64, events []InsightExperienceHour) error {
 	// During a release both colors may store the same hour; the loser fails on
 	// the key and the hour is there all the same.
 	var marked int64
-	if DB.Model(&InsightExperienceHour{}).Where("hour_start = ? AND log_id = 0", start).Count(&marked).Error == nil && marked > 0 {
+	if DB.Model(&InsightExperienceHour{}).Where("hour_start = ? AND log_id = 0 AND category = ?", start, experienceHourVersion).
+		Count(&marked).Error == nil && marked > 0 {
 		return nil
 	}
 	return err
@@ -277,7 +451,8 @@ func fillInsightExperience(now int64, limit int) (int, error) {
 	}
 	oldest := max(newest-experienceFillDays*86400, insightHourKey(earliest))
 	var have []int64
-	if err := DB.Model(&InsightExperienceHour{}).Where("hour_start >= ? AND hour_start <= ? AND log_id = 0", oldest, newest).
+	if err := DB.Model(&InsightExperienceHour{}).
+		Where("hour_start >= ? AND hour_start <= ? AND log_id = 0 AND category = ?", oldest, newest, experienceHourVersion).
 		Pluck("hour_start", &have).Error; err != nil {
 		return 0, err
 	}
@@ -316,21 +491,25 @@ func fillInsightExperience(now int64, limit int) (int, error) {
 // tail that is not final yet, worked out from the logs. covered is where the
 // events begin: r.Start when the whole range was read; truncated says the tail
 // hit the row bound.
-func readExperienceEvents(r InsightsRange, now int64, staff map[int]bool) (events []InsightExperienceHour, covered int64, truncated bool, err error) {
+func readExperienceEvents(r InsightsRange, now int64, staff map[int]bool) (events []InsightExperienceHour, covered int64, truncated bool, stale int, err error) {
 	finalNewest := newestFinalExperienceHour(now)
 	liveFrom := finalNewest + 3600
 	covered = r.Start
 	bottom := insightHourKey(r.Start)
 	top := min(finalNewest, insightHourKey(r.End-1))
 	if top >= bottom {
-		var have []int64
-		if err = DB.Model(&InsightExperienceHour{}).Where("hour_start >= ? AND hour_start <= ? AND log_id = 0", bottom, top).
-			Pluck("hour_start", &have).Error; err != nil {
+		var have []InsightExperienceHour
+		if err = DB.Model(&InsightExperienceHour{}).Select("hour_start, category").
+			Where("hour_start >= ? AND hour_start <= ? AND log_id = 0", bottom, top).
+			Find(&have).Error; err != nil {
 			return
 		}
 		stored := make(map[int64]bool, len(have))
-		for _, start := range have {
-			stored[start] = true
+		for _, marker := range have {
+			stored[marker.HourStart] = true
+			if marker.Category != experienceHourVersion {
+				stale++
+			}
 		}
 		first := top + 3600
 		for first-3600 >= bottom && stored[first-3600] {
@@ -339,7 +518,7 @@ func readExperienceEvents(r InsightsRange, now int64, staff map[int]bool) (event
 		covered = max(r.Start, first)
 		if first <= top {
 			var rows []InsightExperienceHour
-			if err = DB.Where("hour_start >= ? AND hour_start <= ? AND log_id > 0 AND event_at >= ? AND event_at < ?", first, top, r.Start, r.End).
+			if err = DB.Where("hour_start >= ? AND hour_start <= ? AND log_id <> 0 AND event_at >= ? AND event_at < ?", first, top, r.Start, r.End).
 				Find(&rows).Error; err != nil {
 				return
 			}
@@ -359,5 +538,5 @@ func readExperienceEvents(r InsightsRange, now int64, staff map[int]bool) (event
 		events = append(events, tail...)
 	}
 	events = slices.DeleteFunc(events, func(event InsightExperienceHour) bool { return staff[event.UserId] })
-	return events, covered, truncated, nil
+	return events, covered, truncated, stale, nil
 }

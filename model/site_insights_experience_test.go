@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"testing"
@@ -37,14 +38,32 @@ func TestExperienceInsightsCountWastedMoneyAndFollowReports(t *testing.T) {
 			// five-minute price of 1.25 and a one-hour price of 2: 0.75 × 2.5 × 1e6 quota.
 			write := `{"cache_creation_tokens_1h":1000000,"cache_creation_ratio":1.25,"cache_creation_ratio_1h":2,"model_ratio":2.5,"group_ratio":1}`
 			premiumUSD := float64(1_875_000) / float64(dollar)
+			// A read of a million tokens under the one-hour default, ten minutes after
+			// the key's last request: a five-minute entry would have been written again
+			// at 1.25 instead of read at 0.1, (1.25 - 0.1) × 2.5 × 1e6 quota.
+			read := `{"cache_tokens":1000000,"cache_ratio":0.1,"cache_creation_ratio":1.25,"model_ratio":2.5,"group_ratio":1,"admin_info":{"default_cache_ttl":"1h"}}`
+			savedUSD := float64(2_875_000) / float64(dollar)
+			// A tiered price at group ratio 2: a million one-hour tokens are past the
+			// standard tier, where they cost 1 against 0.625 per million at five minutes.
+			expr := base64.StdEncoding.EncodeToString([]byte(`len <= 100000 ? tier("standard", p*0.1 + c*0.5 + cr*0.01 + cc*0.125 + cc1h*0.2) : tier("long_context", p*0.5 + c*2.5 + cr*0.05 + cc*0.625 + cc1h*1)`))
+			tiered := `{"billing_mode":"tiered_expr","expr_b64":"` + expr + `","group_ratio":2,"model_ratio":0,"cache_creation_tokens":1000000,"cache_creation_tokens_1h":1000000}`
+			tieredPremiumUSD := 0.375 * 2
+			withOutput := func(row Log, tokens int) Log {
+				row.CompletionTokens = tokens
+				return row
+			}
 			logs := []Log{
 				// The earliest log: the fill starts at the hour of the first log.
 				consume(dave, 7, r.Start, dollar, `{}`),
 				consume(alice, 1, at(2, 0), 8*dollar, `{"upstream_refusal":true,"upstream_refusal_category":"cyber"}`),
 				consume(ops, 1, at(2, 5), 50*dollar, `{"upstream_refusal":true}`),
-				consume(bob, 2, at(1, 0), 3*dollar, `{"stream_status":{"end_reason":"timeout"}}`),
+				withOutput(consume(bob, 2, at(1, 0), 3*dollar, `{"stream_status":{"end_reason":"timeout"}}`), 50),
 				consume(bob, 2, at(1, 100), 5*dollar, `{"stream_status":{"end_reason":"done"}}`),
-				consume(bob, 2, at(1, 200), 5*dollar, `{"stream_status":{"end_reason":"client_gone"}}`),
+				// The customer hung up: recorded as client_gone now, and as the read
+				// the hang-up failed before the relay told the two apart.
+				consume(bob, 2, at(1, 200), 5*dollar, `{"stream_status":{"end_reason":"client_gone","end_error":"context canceled"}}`),
+				withOutput(consume(carol, 3, at(3, 100), dollar, `{"stream_status":{"end_reason":"scanner_error","end_error":"context canceled"}}`), 10),
+				consume(carol, 3, at(3, 200), 3*dollar, `{"stream_status":{"end_reason":"scanner_error","end_error":"read tcp 10.0.0.1:1->10.0.0.2:443: read: connection reset by peer"}}`),
 				consume(carol, 3, at(3, 0), 2*dollar, `{"admin_info":{"limited_plan_ip_gate":"wallet"}}`),
 				// A refused request that also wrote a one-hour cache costs once, as a refusal.
 				consume(alice, 1, at(2, 1), 4*dollar, `{"upstream_refusal":true,"upstream_refusal_category":"cyber","cache_creation_tokens_1h":1000000,"cache_creation_ratio":1.25,"cache_creation_ratio_1h":2,"model_ratio":2.5,"group_ratio":1}`),
@@ -52,7 +71,9 @@ func TestExperienceInsightsCountWastedMoneyAndFollowReports(t *testing.T) {
 				// The cache pass reads only the last day.
 				consume(alice, 9, at(0, 20*3600), 6*dollar, write),
 				consume(bob, 8, at(0, 10*3600), 6*dollar, write),
-				consume(bob, 8, at(0, 10*3600-600), dollar, `{}`),
+				consume(bob, 8, at(0, 10*3600-600), dollar, read),
+				consume(dave, 5, at(0, 15*3600), dollar, tiered),
+				consume(dave, 5, at(0, 15*3600-100), dollar, `{}`),
 				// Too late to judge, and one with no ratios to price it.
 				consume(alice, 9, 0+end-1800, 6*dollar, write),
 				consume(carol, 4, at(0, 12*3600), 6*dollar, `{"cache_creation_tokens_1h":1000}`),
@@ -74,6 +95,8 @@ func TestExperienceInsightsCountWastedMoneyAndFollowReports(t *testing.T) {
 				feedbackAt(carol, FeedbackCategoryBilling, at(10, 0), 0, FeedbackStatusPending, 0),
 				feedbackAt(dave, FeedbackCategorySuggestion, at(0, 36000), 0, FeedbackStatusPending, 0),
 				feedbackAt(ops, FeedbackCategoryOther, at(5, 0), 0, FeedbackStatusPending, 0),
+				// Closed before replied_time was recorded: it reads 0 there but waits for nothing.
+				feedbackAt(carol, FeedbackCategoryBug, r.Start-86400, 0, FeedbackStatusResolved, 0),
 			}).Error)
 
 			hour := func(u *User, when int64, quota int) QuotaData {
@@ -99,18 +122,33 @@ func TestExperienceInsightsCountWastedMoneyAndFollowReports(t *testing.T) {
 			assert.Equal(t, end-3600, waste.CacheJudgedUntil)
 			assert.Equal(t, 29.0, waste.ConsumedUSD, "customers' consumption in the window, staff left out")
 			assert.False(t, waste.Truncated)
+			assert.Zero(t, waste.StaleHours)
 
 			byKind := map[string]ExperienceKind{}
 			for _, kind := range waste.Kinds {
 				byKind[kind.Kind] = kind
 			}
 			assert.Equal(t, ExperienceKind{Kind: WasteRefusal, Requests: 2, Users: 1, USD: 12}, byKind[WasteRefusal], "a staff refusal is not counted, a refusal with a cache write counts once")
-			assert.Equal(t, ExperienceKind{Kind: WasteFailedBilled, Requests: 1, Users: 1, USD: 3}, byKind[WasteFailedBilled], "done and client_gone are not failures")
+			assert.Equal(t, ExperienceKind{Kind: WasteFailedBilled, Requests: 2, Users: 2, USD: 6}, byKind[WasteFailedBilled], "done and a hang-up are not failures")
 			assert.Equal(t, ExperienceKind{Kind: WasteGateWallet, Requests: 1, Users: 1, USD: 2}, byKind[WasteGateWallet])
-			assert.EqualValues(t, 1, byKind[WasteCache1h].Requests, "only the write nothing followed, inside the judged span")
-			assert.InDelta(t, premiumUSD, byKind[WasteCache1h].USD, 1e-4)
-			assert.EqualValues(t, 1, waste.Unpriced)
-			assert.InDelta(t, 12+3+2+premiumUSD, waste.TotalUSD, 1e-3)
+			assert.Len(t, waste.Kinds, 3, "the one-hour cache is a trade, not a waste")
+			assert.Equal(t, 20.0, waste.TotalUSD)
+			assert.Equal(t, []ExperienceGroup{{Name: "reset", Requests: 1, Users: 1, USD: 3}, {Name: "timeout", Requests: 1, Users: 1, USD: 3}}, waste.FailedCauses)
+			assert.EqualValues(t, 1, waste.FailedNoOutput, "the reset returned nothing, the timeout some output")
+			assert.Equal(t, 3.0, waste.FailedNoOutputUSD)
+			assert.Equal(t, ExperienceKind{Kind: ExperienceClientCancel, Requests: 2, Users: 2, USD: 6}, waste.Cancelled)
+			assert.EqualValues(t, 1, waste.CancelledNoOutput)
+
+			cache := waste.Cache
+			assert.EqualValues(t, 4, cache.Writes, "every priced one-hour write, the one too late to judge too")
+			assert.InDelta(t, 3*premiumUSD+tieredPremiumUSD, cache.PaidUSD, 1e-4, "a tiered write is priced by its expression")
+			assert.EqualValues(t, 1, cache.UnreadWrites, "only the write nothing followed, inside the judged span")
+			assert.InDelta(t, premiumUSD, cache.UnreadUSD, 1e-4)
+			assert.EqualValues(t, 1, cache.Reads)
+			assert.InDelta(t, savedUSD, cache.SavedUSD, 1e-4)
+			assert.InDelta(t, savedUSD-3*premiumUSD-tieredPremiumUSD, cache.NetUSD, 1e-4)
+			assert.EqualValues(t, 3, cache.Users)
+			assert.EqualValues(t, 1, cache.Unpriced)
 			assert.Equal(t, ExperienceKind{Kind: "refund", Requests: 1, Users: 1, USD: 4}, waste.Refunds, "a settlement delta is not a failed task")
 
 			require.Len(t, waste.Refusals, 2)
@@ -120,31 +158,28 @@ func TestExperienceInsightsCountWastedMoneyAndFollowReports(t *testing.T) {
 			require.Len(t, waste.RefusalModels, 1)
 			assert.EqualValues(t, 2, waste.RefusalModels[0].Requests)
 
-			var refusalUSD, cacheUSD float64
+			var refusalUSD, paidUSD, savedSeriesUSD, cancelUSD float64
 			var refusals int64
 			for _, point := range insights.Series {
 				refusalUSD += point.RefusalUSD
-				cacheUSD += point.CacheUSD
+				paidUSD += point.CachePaidUSD
+				savedSeriesUSD += point.CacheSavedUSD
+				cancelUSD += point.CancelUSD
 				refusals += point.Refusals
 			}
 			assert.Equal(t, 12.0, refusalUSD, "the daily series adds up to the totals")
 			assert.EqualValues(t, 2, refusals)
-			assert.InDelta(t, premiumUSD, cacheUSD, 1e-4)
-			var cacheDay *ExperiencePoint
-			for i := range insights.Series {
-				if insights.Series[i].At == r.DayStart(at(0, 20*3600)) {
-					cacheDay = &insights.Series[i]
-				}
-			}
-			require.NotNil(t, cacheDay)
-			assert.InDelta(t, premiumUSD, cacheDay.CacheUSD, 1e-4, "a write lands on the day it was made")
+			assert.InDelta(t, cache.PaidUSD, paidUSD, 1e-4)
+			assert.InDelta(t, savedUSD, savedSeriesUSD, 1e-4)
+			assert.Equal(t, 6.0, cancelUSD)
 
 			require.Len(t, waste.Top, 3)
-			assert.Equal(t, []string{"alice", "bob", "carol"}, []string{waste.Top[0].Username, waste.Top[1].Username, waste.Top[2].Username})
-			assert.True(t, waste.Top[1].FiledFeedback)
+			assert.Equal(t, []string{"alice", "carol", "bob"}, []string{waste.Top[0].Username, waste.Top[1].Username, waste.Top[2].Username})
+			assert.Equal(t, 5.0, waste.Top[1].TotalUSD, "carol's reset and gate charge; her cancel is not waste")
+			assert.True(t, waste.Top[2].FiledFeedback)
 			assert.False(t, waste.Top[0].FiledFeedback)
 			assert.True(t, waste.Top[0].Silent, "alice's last request was four days ago")
-			assert.False(t, waste.Top[1].Silent)
+			assert.False(t, waste.Top[2].Silent)
 			require.Len(t, waste.Silent, 1, "silent and never wrote: carol wrote, bob is active")
 			assert.Equal(t, "alice", waste.Silent[0].Username)
 			assert.EqualValues(t, 3, waste.CheckedTop)
@@ -156,7 +191,7 @@ func TestExperienceInsightsCountWastedMoneyAndFollowReports(t *testing.T) {
 			assert.EqualValues(t, 3600, feedback.FirstReplyP50)
 			assert.EqualValues(t, 7200, feedback.FirstReplyP90)
 			assert.EqualValues(t, 3, feedback.Open, "pending and processing, staff left out")
-			assert.EqualValues(t, 1, feedback.Unanswered24h, "dave's report is ten hours old")
+			assert.EqualValues(t, 1, feedback.Unanswered24h, "dave's report is ten hours old, carol's old one is closed")
 			require.Len(t, feedback.Waiting, 1)
 			assert.Equal(t, "carol", feedback.Waiting[0].Username)
 			assert.EqualValues(t, 1, feedback.Rewarded)
@@ -242,6 +277,46 @@ func TestExperienceInsightsJoinStoredHoursAndTheLiveTail(t *testing.T) {
 	again, err := fillInsightExperience(end+3*3600, 1<<30)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, again, "only the missing hour")
+}
+
+// An hour stored under an older version is served and counted stale until
+// the fill stores it again.
+func TestExperienceHoursStoredUnderAnOlderVersionAreRebuilt(t *testing.T) {
+	useInsightsTestDB(t, "sqlite")
+	require.NoError(t, DB.AutoMigrate(&Feedback{}))
+	t.Cleanup(func() { require.NoError(t, DB.Migrator().DropTable(&Feedback{})) })
+	dollar := int(common.QuotaPerUnit)
+	const end = int64(1759190400) + 40*86400
+	r := InsightsRange{Start: end - 86400, End: end}
+	alice := registerAffiliateTestUser(t, "alice", "")
+	reset := `{"stream_status":{"end_reason":"scanner_error","end_error":"read: connection reset by peer"}}`
+	require.NoError(t, DB.Create(&[]Log{
+		{UserId: alice.Id, Username: "alice", CreatedAt: r.Start, Type: LogTypeConsume, ModelName: "m", Quota: dollar, Other: `{}`},
+		{UserId: alice.Id, Username: "alice", CreatedAt: r.Start + 7200, Type: LogTypeConsume, ModelName: "m", Quota: 2 * dollar, Other: reset},
+	}).Error)
+	_, err := fillInsightExperience(end, 1<<30)
+	require.NoError(t, err)
+	// The hour as the first version stored it: a marker with no version and an
+	// event with no cause.
+	old := insightHourKey(r.Start + 7200)
+	require.NoError(t, DB.Where("hour_start = ?", old).Delete(&InsightExperienceHour{}).Error)
+	require.NoError(t, DB.Create(&[]InsightExperienceHour{
+		{HourStart: old},
+		{HourStart: old, LogId: 99, UserId: alice.Id, EventAt: r.Start + 7200, Kind: WasteFailedBilled, Usd: 2},
+	}).Error)
+
+	insights, err := experienceInsightsAt(r, end)
+	require.NoError(t, err)
+	assert.Equal(t, 1, insights.Waste.StaleHours)
+	assert.Equal(t, []ExperienceGroup{{Name: "unknown", Requests: 1, Users: 1, USD: 2}}, insights.Waste.FailedCauses)
+
+	again, err := fillInsightExperience(end, 1<<30)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, again, "only the stale hour")
+	insights, err = experienceInsightsAt(r, end)
+	require.NoError(t, err)
+	assert.Zero(t, insights.Waste.StaleHours)
+	assert.Equal(t, []ExperienceGroup{{Name: "reset", Requests: 1, Users: 1, USD: 2}}, insights.Waste.FailedCauses)
 }
 
 // A text longer than its column is cut, so one odd refusal category cannot

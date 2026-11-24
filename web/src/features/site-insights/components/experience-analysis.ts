@@ -30,7 +30,6 @@ export const WASTE_KINDS: WasteKind[] = [
   'refusal',
   'failed_billed',
   'gate_wallet',
-  'cache_1h',
 ]
 
 /** A range's waste share from this much is worth a look, and from the second figure it needs action. */
@@ -44,7 +43,6 @@ export const KIND_DOTS: Record<WasteKind, string> = {
   refusal: 'bg-primary',
   failed_billed: 'bg-sky-500',
   gate_wallet: 'bg-amber-500',
-  cache_1h: 'bg-rose-500',
 }
 
 const HOUR = 3600
@@ -54,14 +52,14 @@ export function kindUsd(waste: ExperienceWaste, kind: WasteKind): number {
   return waste.kinds.find((item) => item.kind === kind)?.usd ?? 0
 }
 
-/** One kind's request count (cache writes for the cache kind). */
+/** One kind's request count. */
 export function kindRequests(waste: ExperienceWaste, kind: WasteKind): number {
   return waste.kinds.find((item) => item.kind === kind)?.requests ?? 0
 }
 
-/** A point's wasted money, the four kinds summed. */
+/** A point's wasted money, the kinds summed. */
 export function pointWaste(point: ExperiencePoint): number {
-  return point.refusal_usd + point.failed_usd + point.gate_usd + point.cache_usd
+  return point.refusal_usd + point.failed_usd + point.gate_usd
 }
 
 /** A point's reports, the four categories summed. */
@@ -87,7 +85,7 @@ export function unreadFrom(
   return waste.log_start
 }
 
-/** Where the one-hour cache estimate starts reading, when later than the other kinds. */
+/** Where the one-hour cache starts reading, when later than the other kinds. */
 export function cacheUnreadBefore(waste: ExperienceWaste): number | null {
   return waste.cache_start > waste.log_start + HOUR ? waste.cache_start : null
 }
@@ -137,4 +135,15 @@ export function unheard(waste: ExperienceWaste): number {
 /** The share of senders whose week is over that sent a request in it, or null with none judged. */
 export function stayedShare(feedback: ExperienceFeedback): number | null {
   return feedback.judged > 0 ? feedback.active / feedback.judged : null
+}
+
+/**
+ * How the one-hour cache came out for customers: ahead when its reads saved
+ * more than its writes cost over five-minute ones. Null with nothing priced.
+ */
+export function cacheVerdict(
+  cache: ExperienceWaste['cache']
+): 'ahead' | 'behind' | null {
+  if (cache.writes === 0 && cache.reads === 0) return null
+  return cache.net_usd >= 0 ? 'ahead' : 'behind'
 }

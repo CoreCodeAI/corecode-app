@@ -21,7 +21,7 @@ For commercial licensing, please contact support@quantumnous.com
  * view so the tab only lays them out.
  */
 import { contributions, isOpenHour, type Contribution } from './analysis'
-import { COST_STALE_SECONDS, SMALL_SAMPLE } from './lib'
+import { costBehind, SMALL_SAMPLE } from './lib'
 import type {
   TaskOutcome,
   UpstreamChannel,
@@ -194,25 +194,18 @@ export function topRescuer(
 }
 
 /**
- * A channel's upstream bill was last read more than COST_STALE_SECONDS
- * before the range ended while it still earned: its latest revenue has no
- * cost yet. revenue is what it earned from the hour of the last read on, or
- * null without an hourly series to tell.
+ * A channel whose upstream bill fell behind its charged requests (costBehind):
+ * its latest revenue has no cost yet. revenue is what it earned from the hour
+ * of the last read on, or null without an hourly series to tell.
  */
 export type StaleCost = { channel: UpstreamChannel; revenue: number | null }
 
-export function staleCosts(
-  data: UpstreamInsights | undefined,
-  end: number | undefined
-): StaleCost[] {
-  if (!data || end === undefined) return []
+export function staleCosts(data: UpstreamInsights | undefined): StaleCost[] {
+  if (!data) return []
   const hourly = data.hourly ?? null
   const result: StaleCost[] = []
   for (const channel of data.channels) {
-    if (channel.cost_source !== 'upstream' || channel.latest_cost_at <= 0) {
-      continue
-    }
-    if (end - channel.latest_cost_at <= COST_STALE_SECONDS) continue
+    if (!costBehind(channel)) continue
     if (hourly === null) {
       if (channel.requests > 0) result.push({ channel, revenue: null })
       continue

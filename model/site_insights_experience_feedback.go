@@ -29,9 +29,9 @@ func fillExperienceConsumption(waste *ExperienceWaste, r InsightsRange, staffIDs
 func fillExperienceUsers(r InsightsRange, tally *experienceWasteTally, waste *ExperienceWaste) error {
 	ranked := make([]*ExperienceUser, 0, len(tally.byUser))
 	for _, entry := range tally.byUser {
-		entry.TotalUSD = roundTo(entry.RefusalUSD+entry.FailedUSD+entry.GateUSD+entry.CacheUSD, 4)
+		entry.TotalUSD = roundTo(entry.RefusalUSD+entry.FailedUSD+entry.GateUSD, 4)
 		entry.RefusalUSD, entry.FailedUSD = roundTo(entry.RefusalUSD, 4), roundTo(entry.FailedUSD, 4)
-		entry.GateUSD, entry.CacheUSD = roundTo(entry.GateUSD, 4), roundTo(entry.CacheUSD, 4)
+		entry.GateUSD = roundTo(entry.GateUSD, 4)
 		ranked = append(ranked, entry)
 	}
 	slices.SortFunc(ranked, func(a, b *ExperienceUser) int {
@@ -173,7 +173,10 @@ func fillExperienceFeedback(r InsightsRange, staff map[int]bool, point func(int6
 		return err
 	}
 	untouched := func() *gorm.DB {
-		return queue("replied_time = 0 AND created_time <= ?", r.End-experienceWaitingSeconds)
+		// A report closed before replied_time was recorded still reads 0 there;
+		// only one that is still open is waiting.
+		return queue("replied_time = 0 AND created_time <= ? AND status IN ?", r.End-experienceWaitingSeconds,
+			[]string{FeedbackStatusPending, FeedbackStatusProcessing})
 	}
 	if err := untouched().Count(&feedback.Unanswered24h).Error; err != nil {
 		return err

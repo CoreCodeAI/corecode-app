@@ -293,8 +293,9 @@ type OrderMethodFunnel struct {
 // remainder by the vendor's share of the channel's revenue. CostedRevenueUSD
 // is customers' charge on channels with a bill or fee, UncostedRevenueUSD on
 // channels with neither, such as the pool's, whose cost is its accounts.
-// OldestBillAt is the oldest newest bill among its billed channels: revenue
-// after it is not costed yet. Channels lists the costed channels.
+// OldestBillAt is the oldest newest bill among its billed channels whose bill
+// fell behind their charged requests (UpstreamCostBehind): revenue after it is
+// not costed yet. Channels lists the costed channels.
 type VendorUpstreamCost struct {
 	Vendor             string  `json:"vendor"`
 	BillUSD            float64 `json:"bill_usd"`
@@ -843,8 +844,7 @@ func vendorUpstreamCosts(upstream *UpstreamInsights) (rows []VendorUpstreamCost,
 					row.FeeUSD += part
 				}
 			}
-			if channel.CostSource == UpstreamCostSourceUpstream && channel.LatestCostAt > 0 &&
-				(row.OldestBillAt == 0 || channel.LatestCostAt < row.OldestBillAt) {
+			if UpstreamCostBehind(channel) && (row.OldestBillAt == 0 || channel.LatestCostAt < row.OldestBillAt) {
 				row.OldestBillAt = channel.LatestCostAt
 			}
 		}

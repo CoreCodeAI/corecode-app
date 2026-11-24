@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useTranslation } from 'react-i18next'
 
 import {
+  cacheVerdict,
   kindRequests,
   kindUsd,
   unheard,
@@ -84,9 +85,24 @@ export function useWasteKindLabel(): (kind: string) => string {
     refusal: t('Refused but charged'),
     failed_billed: t('Failed but charged'),
     gate_wallet: t('Plan gate charged the wallet'),
-    cache_1h: t('1h cache never reused'),
   }
   return (kind) => labels[kind as WasteKind] ?? kind
+}
+
+/** What broke a failed stream, named in words. */
+export function useFailureCauseLabel(): (cause: string) => string {
+  const { t } = useTranslation()
+  const labels: Record<string, string> = {
+    reset: t('Upstream reset the connection'),
+    http2: t('Upstream HTTP/2 stream error'),
+    eof: t('Upstream closed the stream early'),
+    timeout: t('No data before the stream timeout'),
+    panic: t('Relay error'),
+    ping_fail: t('Keep-alive write failed'),
+    other: t('Other read error'),
+    unknown: t('Not recorded (older hours)'),
+  }
+  return (cause) => labels[cause] ?? cause
 }
 
 export function useExperienceVerdict(
@@ -107,6 +123,7 @@ export function useExperienceVerdict(
   })).reduce((best, item) => (item.usd > best.usd ? item : best))
   const unheardCount = unheard(waste)
   const unread = unreadFrom(waste, range)
+  const cache = cacheVerdict(waste.cache)
 
   let tone: Tone = 'good'
   if (share != null && share >= WASTE_SHARE_WARN) tone = 'warning'
@@ -182,9 +199,36 @@ export function useExperienceVerdict(
           'Waste figures cover only from {{time}}: earlier hours are not stored.',
           { time: fmt.time(unread) }
         ),
-      waste.total_usd > 0 &&
+      waste.cancelled.requests > 0 &&
         t(
-          'The 1h cache figure is an estimate: it counts writes no request of the same key followed within an hour.'
+          'Customers hung up on {{count}} charged requests ({{amount}}); that is their choice, not waste.',
+          {
+            count: fmt.num(waste.cancelled.requests),
+            amount: fmt.usd(waste.cancelled.usd),
+          }
+        ),
+      cache === 'ahead' &&
+        t(
+          'The 1h cache saved customers {{amount}} net: its reads saved {{saved}}, its writes cost {{paid}} more.',
+          {
+            amount: fmt.usd(waste.cache.net_usd),
+            saved: fmt.usd(waste.cache.saved_usd),
+            paid: fmt.usd(waste.cache.paid_usd),
+          }
+        ),
+      cache === 'behind' &&
+        t(
+          'The 1h cache cost customers {{amount}} net: its writes cost {{paid}} more, its reads saved {{saved}}.',
+          {
+            amount: fmt.usd(-waste.cache.net_usd),
+            saved: fmt.usd(waste.cache.saved_usd),
+            paid: fmt.usd(waste.cache.paid_usd),
+          }
+        ),
+      waste.stale_hours > 0 &&
+        t(
+          '{{count}} hours are still stored the old way and are being rebuilt: until then they lack cancels, failure causes and the cache trade.',
+          { count: fmt.num(waste.stale_hours) }
         )
     ),
   }
