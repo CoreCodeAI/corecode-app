@@ -77,6 +77,12 @@ access-token scope table (`user:read`).
   PostgreSQL. The view is capped at 14 days (`InsightsMaxGateDays`), reads from a primary-key
   lower bound, and groups by account, kind and hour in the database, so only groups arrive.
   Cost grows with log rows in the range; production is PostgreSQL.
+- Live after release (11-24): `/gate` took 2.9 to 6.8 s for the 7-day range on production, over
+  the 2 s target, because a range that ends now is not settled, so `settledRead` never kept it
+  and every load scanned all seven days. The scan now goes day by day: a day that ended more
+  than an hour ago is kept in process (`gateDayCache`, at most 56 days, keyed by log database
+  and day), so a range ending now scans only the running day on every load after the first.
+  The first load after a restart is still the full scan. Logs of an ended day do not change.
 - Campaign cost on the same data: 51 to 89 ms on MySQL, 47 to 159 ms on PostgreSQL for 7 to
   90 days.
 - Console: typecheck, `lint:check`, vitest (745 tests in site-insights and i18n), build and
