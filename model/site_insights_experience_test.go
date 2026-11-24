@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -37,6 +38,8 @@ func TestExperienceInsightsCountWastedMoneyAndFollowReports(t *testing.T) {
 			write := `{"cache_creation_tokens_1h":1000000,"cache_creation_ratio":1.25,"cache_creation_ratio_1h":2,"model_ratio":2.5,"group_ratio":1}`
 			premiumUSD := float64(1_875_000) / float64(dollar)
 			logs := []Log{
+				// The earliest log: the fill starts at the hour of the first log.
+				consume(dave, 7, r.Start, dollar, `{}`),
 				consume(alice, 1, at(2, 0), 8*dollar, `{"upstream_refusal":true,"upstream_refusal_category":"cyber"}`),
 				consume(ops, 1, at(2, 5), 50*dollar, `{"upstream_refusal":true}`),
 				consume(bob, 2, at(1, 0), 3*dollar, `{"stream_status":{"end_reason":"timeout"}}`),
@@ -82,13 +85,17 @@ func TestExperienceInsightsCountWastedMoneyAndFollowReports(t *testing.T) {
 				hour(carol, at(14, 0), 6), hour(ops, at(2, 0), 100),
 			}).Error)
 
-			insights, err := GetExperienceInsights(r)
+			// Read as of the range's end: the last two hours are not final and are
+			// worked out from the logs, the rest is stored by the fill.
+			_, err := fillInsightExperience(end, 1<<30)
+			require.NoError(t, err)
+			insights, err := experienceInsightsAt(r, end)
 			require.NoError(t, err)
 			waste := insights.Waste
 
 			assert.Equal(t, "day", insights.SeriesUnit)
 			assert.Equal(t, r.Start, waste.LogStart)
-			assert.Equal(t, end-86400, waste.CacheStart)
+			assert.Equal(t, r.Start, waste.CacheStart, "stored hours reach as far back as the logs do")
 			assert.Equal(t, end-3600, waste.CacheJudgedUntil)
 			assert.Equal(t, 29.0, waste.ConsumedUSD, "customers' consumption in the window, staff left out")
 			assert.False(t, waste.Truncated)
@@ -182,34 +189,67 @@ func TestExperienceInsightsReadByTheHourOverADay(t *testing.T) {
 	assert.Empty(t, insights.Feedback.Waiting)
 }
 
-// A scan that runs out of its time budget keeps what it read and says where
-// the figures begin, so a slow read of a long range answers instead of hanging.
-func TestExperienceInsightsStopAtTheScanBudget(t *testing.T) {
+// Stored hours and the tail worked out live give the same answer, and an hour
+// missing from the stored run moves the start of the figures forward.
+func TestExperienceInsightsJoinStoredHoursAndTheLiveTail(t *testing.T) {
 	useInsightsTestDB(t, "sqlite")
 	require.NoError(t, DB.AutoMigrate(&Feedback{}))
 	t.Cleanup(func() { require.NoError(t, DB.Migrator().DropTable(&Feedback{})) })
 	dollar := int(common.QuotaPerUnit)
 	const end = int64(1759190400) + 40*86400
+	r := InsightsRange{Start: end - 3*86400, End: end}
 	alice := registerAffiliateTestUser(t, "alice", "")
 	refusal := `{"upstream_refusal":true}`
 	require.NoError(t, DB.Create(&[]Log{
-		{UserId: alice.Id, Username: "alice", CreatedAt: end - 600, Type: LogTypeConsume, ModelName: "m", Quota: 2 * dollar, Other: refusal},
-		{UserId: alice.Id, Username: "alice", CreatedAt: end - 5*86400, Type: LogTypeConsume, ModelName: "m", Quota: 7 * dollar, Other: refusal},
+		{UserId: alice.Id, Username: "alice", CreatedAt: r.Start, Type: LogTypeConsume, ModelName: "m", Quota: dollar, Other: `{}`},
+		{UserId: alice.Id, Username: "alice", CreatedAt: end - 5000, Type: LogTypeConsume, ModelName: "m", Quota: 2 * dollar, Other: refusal},
+		{UserId: alice.Id, Username: "alice", CreatedAt: end - 2*86400, Type: LogTypeConsume, ModelName: "m", Quota: 7 * dollar, Other: refusal},
 	}).Error)
 
-	insights, err := GetExperienceInsights(InsightsRange{Start: end - 10*86400, End: end})
+	// Nothing stored yet: only the tail is read, and the range starts there.
+	insights, err := experienceInsightsAt(r, end)
 	require.NoError(t, err)
-	assert.Equal(t, end-10*86400, insights.Waste.LogStart, "within the budget the whole range is read")
-	assert.Equal(t, 9.0, kindOf(insights.Waste, WasteRefusal).USD)
-
-	old := experienceScanBudget
-	experienceScanBudget = 0
-	t.Cleanup(func() { experienceScanBudget = old })
-	insights, err = GetExperienceInsights(InsightsRange{Start: end - 10*86400, End: end})
-	require.NoError(t, err)
-	assert.Equal(t, end-3600, insights.Waste.LogStart, "only the newest hour was read")
+	assert.Equal(t, end-7200, insights.Waste.LogStart)
 	assert.Equal(t, 2.0, kindOf(insights.Waste, WasteRefusal).USD)
-	assert.False(t, insights.Waste.Truncated, "a spent budget is not the row bound")
+
+	stored, err := fillInsightExperience(end, 1<<30)
+	require.NoError(t, err)
+	assert.EqualValues(t, 3*24-2, stored, "three days of hours, less the two not final")
+	insights, err = experienceInsightsAt(r, end)
+	require.NoError(t, err)
+	assert.Equal(t, r.Start, insights.Waste.LogStart)
+	assert.Equal(t, 9.0, kindOf(insights.Waste, WasteRefusal).USD, "the stored day and the live tail add up")
+	assert.EqualValues(t, 2, kindOf(insights.Waste, WasteRefusal).Requests)
+
+	// Everything stored, read well after the end: the same figures.
+	_, err = fillInsightExperience(end+3*3600, 1<<30)
+	require.NoError(t, err)
+	later, err := experienceInsightsAt(r, end+3*3600)
+	require.NoError(t, err)
+	assert.Equal(t, insights.Waste.Kinds, later.Waste.Kinds)
+	assert.Equal(t, insights.Waste.Refusals, later.Waste.Refusals)
+
+	// A stored hour that is missing stops the run: the figures begin after it.
+	gap := end - 2*86400 + 3600
+	require.NoError(t, DB.Where("hour_start = ?", gap).Delete(&InsightExperienceHour{}).Error)
+	cut, err := experienceInsightsAt(r, end+3*3600)
+	require.NoError(t, err)
+	assert.Equal(t, gap+3600, cut.Waste.LogStart)
+	assert.Equal(t, 2.0, kindOf(cut.Waste, WasteRefusal).USD, "the day before the gap is not read")
+	assert.False(t, cut.Waste.Truncated)
+
+	// A filled hour is not read again.
+	again, err := fillInsightExperience(end+3*3600, 1<<30)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, again, "only the missing hour")
+}
+
+// A text longer than its column is cut, so one odd refusal category cannot
+// keep an hour from being stored.
+func TestExperienceClipCutsToTheColumn(t *testing.T) {
+	long := strings.Repeat("é", 100)
+	assert.Equal(t, strings.Repeat("é", 64), experienceClip(long, 64))
+	assert.Equal(t, "cyber", experienceClip("cyber", 64))
 }
 
 func kindOf(waste ExperienceWaste, kind string) ExperienceKind {

@@ -415,7 +415,7 @@ describe('experience tab', () => {
     )
     expect(
       screen.getByText(
-        /Reading further back would be too slow, so waste is counted only from/
+        /Waste is stored by the hour and the stored hours begin at/
       )
     ).toBeInTheDocument()
     expect(
