@@ -21,23 +21,28 @@ fields are additive; the pool tab is untouched.
   waste, feedback}`, through `serveInsights` and `settledRead` (5-minute cache). It is
   declared in `middleware/access_token_routes.go` under `user:read`, like every dashboard
   route. Ranges up to 92 days (`VIEW_MAX_DAYS.experience`).
-- **No rollup change.** The hourly rollup carries no refusal, stream-end, gate or cache-write
-  detail. The view scans `LOG_DB`: an `other LIKE` marker per kind, then Go-side JSON parsing
-  of the matching rows only. A LIKE reads every row of its range, so the scan walks the range
-  **newest hour first** (one query per hour, through the `created_at` index), stops at a time
-  budget (6 s for the refusal, failed and gate kinds, 3 s for the cache pass) and returns how
-  far back it got in `waste.log_start` / `cache_start`; the console prints "Waste is counted
-  only from X" and hides the period-over-period change when the range was not read in full
-  (`wasteComparable`). Event kinds read at most 30 days back, the 1h cache pass the last day
-  (it needs the requests that follow each write: only the writers' requests are read), 250,000
-  rows each, with a `truncated` flag for the row bound.
-- **First version, and why it was replaced.** It paged by `id` (`WHERE ... AND id > ? ORDER BY
-  id LIMIT 5000`) and read every consume row of the last 3 days for the cache pass. On
-  production (2026-11-24, after #383 merged) one read took 45 s for a 1-day range and 45 s for
-  7 days: the planner walked the primary key of the whole logs table whatever the range. A
-  test on SQLite cannot show this. Fixed in a follow-up: time-window paging, the budget, and
-  the cache pass cut to one day. The lasting answer for 30- and 90-day ranges is a pre-
-  aggregated table (below).
+- **Events stored by the hour.** The hourly rollups carry no refusal, stream-end, gate or
+  cache-write detail, and finding them is a `LIKE` over `other`, which no index reaches: on
+  production it reads an hour in about a quarter of a second. So the events are stored, as the
+  model-behavior hours are (`InsightExperienceHour`, `site_insights_experience_hours.go`): a
+  row per event (refusal, failed, gate, unreused 1h cache write, unpriced write, task refund;
+  user, time, dollars, model, reason, request id) and a marker row (`log_id` 0) per stored
+  hour, so an hour with no event is told from one not read yet. `FillInsightExperience` runs in
+  the existing site-insights rollup task, newest hour first, 48 hours a tick, the last 35 days
+  (from the hour of the first log); the first fill takes a few hours and until then the view
+  says where its figures begin (`waste.log_start`, the oldest hour of the unbroken stored run).
+  An hour is final one hour after it ends, plus the log-insert slack, because a one-hour write
+  is unread only if nothing of its key followed within the hour. The view reads the stored
+  hours and works out only the tail that is not final yet (about 2 to 3 hours) from the logs,
+  so a read costs a second, not the range. Storing an hour replaces it whole; during a release
+  both colors may fill it.
+- **First version, and why it was replaced.** #383 scanned the logs at request time: it paged by
+  `id` (`... AND id > ? ORDER BY id LIMIT 5000`) and read every consume row of the last 3 days
+  for the cache pass. On production (2026-11-24) one read took 45 s for a 1-day range and 45 s
+  for 7 days: the planner walked the primary key of the whole logs table whatever the range. A
+  test on SQLite cannot show a plan problem; the cost has to be read on production. #385
+  bounded it to about 9 s with hourly windows and a time budget (a gap in coverage, but it
+  answered); this change stores the events and drops the scan from the request path.
 - **What counts as waste.** Per log row, one kind, by priority: refusal
   (`upstream_refusal`) > abnormal stream end (`timeout`, `scanner_error`, `panic`,
   `ping_fail`; `done` and `client_gone` are not failures) > plan gate charged to the wallet
@@ -71,10 +76,6 @@ fields are additive; the pool tab is untouched.
   it is invisible here. The only compensation the view can see is `feedbacks.reward_quota`.
 - **Overview signal skipped.** An optional overview card would run these scans on every
   overview load. The tab is opened on demand; the overview stays as cheap as before.
-- **A pre-aggregated table** (one row per refusal / failed / gate / unreused-cache event,
-  filled by a periodic job from a watermark, backfilled once) would answer any range in
-  milliseconds. It needs a schema change, a job and a backfill on production, so it is the
-  follow-up the owner decides on; until then the console shows the time the figures begin.
 - **A chart library** was not added: the first-load budget has about 1 KB left on
   `/dashboard/overview` and `/keys`. Charts are the existing hand-rolled SVG, in the lazy
   tab chunk.
@@ -89,11 +90,13 @@ fields are additive; the pool tab is untouched.
   settlement delta, the series adding up to the totals, the top order, the silent list,
   reply p50 / p90, open and unanswered counts, retention before / after and the lapsed list.
   `TestExperienceInsightsReadByTheHourOverADay` covers the hour series, and
-  `TestExperienceInsightsStopAtTheScanBudget` the stop at the time budget and the reported start.
+  `TestExperienceInsightsJoinStoredHoursAndTheLiveTail` the stored hours, the live tail, the
+  same answer once everything is stored, a missing hour moving the start of the figures, and a
+  filled hour not being read again.
 - Web: `bun run typecheck`, `bun run lint:check` (no new findings), `bun run test` (432
   files, 4,544 tests, including 19 in `experience-tab.test.tsx`) pass; `bun run i18n:sync`
   ran and the 8 locales carry the 96 new keys; `bun run first-load:check` passes (`/sign-in`
-  1,175 B, `/dashboard/overview` 747 B, `/keys` 986 B left).
+  1,124 B, `/dashboard/overview` 696 B, `/keys` 935 B left).
   `bun run format:check` fails on files this change does not touch (other lines' format
   debt); the files of this change are clean.
 - Screenshots: synthetic data. A stub server serves the built bundle and answers `/api` from

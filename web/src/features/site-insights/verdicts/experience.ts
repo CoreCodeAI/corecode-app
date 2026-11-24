@@ -179,7 +179,7 @@ export function useExperienceVerdict(
         }),
       unread != null &&
         t(
-          'Waste figures cover only from {{time}}: reading further back would be too slow.',
+          'Waste figures cover only from {{time}}: earlier hours are not stored.',
           { time: fmt.time(unread) }
         ),
       waste.total_usd > 0 &&

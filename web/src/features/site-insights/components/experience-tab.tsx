@@ -148,7 +148,7 @@ export function ExperienceTab(props: {
   if (unread != null) {
     notes.push(
       t(
-        'Reading further back would be too slow, so waste is counted only from {{time}}.',
+        'Waste is stored by the hour and the stored hours begin at {{time}}, so it is counted only from then.',
         {
           time: fmt.time(unread),
         }

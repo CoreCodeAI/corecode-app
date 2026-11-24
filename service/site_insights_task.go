@@ -19,6 +19,10 @@ const (
 	siteInsightsRollupBatch = 200
 	// siteInsightsBehaviorBatch bounds the behavior hours one tick stores.
 	siteInsightsBehaviorBatch = 24
+	// siteInsightsExperienceBatch bounds the experience hours one tick stores:
+	// an hour reads about a quarter of a second of logs, and the first fill is
+	// the last 35 days of hours.
+	siteInsightsExperienceBatch = 48
 )
 
 var siteInsightsRollupOnce sync.Once
@@ -44,6 +48,9 @@ func StartSiteInsightsRollupTask() {
 				// weeks does not read the log table in one go.
 				if _, err := model.FillInsightBehavior(siteInsightsBehaviorBatch); err != nil {
 					logger.LogWarn(context.Background(), common.LogText("site insights behavior rollup failed: %v", err))
+				}
+				if _, err := model.FillInsightExperience(siteInsightsExperienceBatch); err != nil {
+					logger.LogWarn(context.Background(), common.LogText("site insights experience rollup failed: %v", err))
 				}
 				<-ticker.C
 			}

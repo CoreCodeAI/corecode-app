@@ -5,8 +5,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/QuantumNous/new-api/common"
 )
 
 // The experience view names the money customers spent on requests that gave
@@ -35,16 +33,13 @@ import (
 // went back.
 //
 // The request logs carry these markers inside other, which no index reaches,
-// so the view reads them with a LIKE and parses only the rows that match. A
-// LIKE still reads every row of its range, so the cost grows with the range
-// and the view bounds it twice: the scan walks the range newest hour first
-// through the created_at index and stops at a time budget, and the response
-// says where it got to (LogStart, CacheStart), which the console prints. An
-// earlier version paged by id; the planner then walked the primary key of the
-// whole table whatever the range, and a read took 45 seconds on production.
+// so they are found by a LIKE that reads every row of its range: a quarter of
+// a second an hour on production, a minute for a day. An earlier version
+// scanned at request time (paging by id, which sent the planner down the
+// primary key of the whole table) and took 45 seconds. The events are now
+// stored by the hour (site_insights_experience_hours.go); this view reads the
+// stored hours and works out only the tail that is not final yet.
 const (
-	experienceLogDays   = 30
-	experienceCacheDays = 1
 	// experienceEventWindow and experienceCacheWindow are the spans one query
 	// reads; a cache window is shorter because many more rows match.
 	experienceEventWindow = 3600
@@ -316,14 +311,6 @@ func (tally *experienceWasteTally) add(kind string, userID int, quota float64) {
 	tally.users[kind][userID] = true
 }
 
-// experienceScanBudget is how long the refusal, failed and gate scan may run
-// before it stops and reports how far back it got, and experienceCacheBudget
-// the same for the cache scan. Variables so a test can cut them.
-var (
-	experienceScanBudget  = 6 * time.Second
-	experienceCacheBudget = 3 * time.Second
-)
-
 // scanExperienceLogs reads the consume logs in [start, end) that match any of
 // the LIKE patterns, one window at a time from the newest, and hands each to
 // visit. It stops at the budget or at the row bound and returns the start of
@@ -366,6 +353,11 @@ func scanExperienceLogs(start, end, window int64, patterns []string, budget time
 }
 
 func GetExperienceInsights(r InsightsRange) (*ExperienceInsights, error) {
+	return experienceInsightsAt(r, time.Now().Unix())
+}
+
+// experienceInsightsAt reads the view as of now, which decides which hours are final.
+func experienceInsightsAt(r InsightsRange, now int64) (*ExperienceInsights, error) {
 	staffIDs, err := StaffUserIDs()
 	if err != nil {
 		return nil, err
@@ -401,151 +393,62 @@ func GetExperienceInsights(r InsightsRange) (*ExperienceInsights, error) {
 	}
 
 	waste := &result.Waste
-	waste.LogStart = max(r.Start, r.End-experienceLogDays*86400)
-	waste.CacheStart = max(r.Start, r.End-experienceCacheDays*86400)
-	waste.CacheJudgedUntil = r.End - experienceCacheReuseSeconds
-	tally := newExperienceWasteTally()
-	refusalModels, refusalReasons := newExperienceBreakdown(), newExperienceBreakdown()
-	taken := make(map[int]bool)
-
-	covered, truncated, err := scanExperienceLogs(waste.LogStart, r.End, experienceEventWindow, experienceEventMarkers, experienceScanBudget, func(row experienceLog) {
-		if staff[row.UserId] || row.Quota <= 0 {
-			return
-		}
-		var other experienceOther
-		if err := common.UnmarshalJsonStr(row.Other, &other); err != nil {
-			return
-		}
-		usd := quotaUSD(int64(row.Quota))
-		kind := ""
-		switch {
-		case other.UpstreamRefusal:
-			kind = WasteRefusal
-		case slices.Contains(experienceAbnormalEnds, other.StreamStatus.EndReason):
-			kind = WasteFailedBilled
-		case other.AdminInfo.LimitedPlanIPGate == LimitedPlanGateWallet:
-			kind = WasteGateWallet
-		}
-		if kind == "" {
-			return
-		}
-		taken[row.Id] = true
-		tally.add(kind, row.UserId, usd)
-		if p := point(row.CreatedAt); p != nil {
-			switch kind {
-			case WasteRefusal:
-				p.RefusalUSD += usd
-				p.Refusals++
-			case WasteFailedBilled:
-				p.FailedUSD += usd
-			case WasteGateWallet:
-				p.GateUSD += usd
-			}
-		}
-		if kind != WasteRefusal {
-			return
-		}
-		category := other.UpstreamRefusalCategory
-		if category == "" {
-			category = "unknown"
-		}
-		refusalModels.add(row.ModelName, row.UserId, usd)
-		refusalReasons.add(category, row.UserId, usd)
-		waste.Refusals = append(waste.Refusals, ExperienceRefusal{
-			UserRef: UserRef{UserID: row.UserId}, At: row.CreatedAt, ModelName: row.ModelName,
-			Category: category, USD: usd, RequestID: row.RequestId,
-		})
-	})
+	events, covered, truncated, err := readExperienceEvents(r, now, staff)
 	if err != nil {
 		return nil, err
 	}
+	// What the stored hours do not reach is not read: say where the figures begin.
+	waste.LogStart, waste.CacheStart = covered, covered
+	waste.CacheJudgedUntil = r.End - experienceCacheReuseSeconds
 	waste.Truncated = truncated
-	// What the scan did not reach is not read: say where the figures begin.
-	waste.LogStart = covered
-
-	// One-hour writes: the extra they cost over five minutes, for the ones
-	// nothing of the same key was requested after within the hour.
-	if waste.CacheJudgedUntil > waste.CacheStart {
-		type keyOf struct{ user, token int }
-		var writes []experienceLog
-		cacheCovered, cacheTruncated, err := scanExperienceLogs(waste.CacheStart, waste.CacheJudgedUntil+1, experienceCacheWindow, []string{experienceCacheMarker}, experienceCacheBudget, func(row experienceLog) {
-			if !staff[row.UserId] && row.Quota > 0 && !taken[row.Id] {
-				writes = append(writes, row)
+	tally := newExperienceWasteTally()
+	refusalModels, refusalReasons := newExperienceBreakdown(), newExperienceBreakdown()
+	refundModels := newExperienceBreakdown()
+	refundUsers := make(map[int]bool)
+	refunds := ExperienceKind{Kind: experienceKindRefund}
+	for _, event := range events {
+		p := point(event.EventAt)
+		switch event.Kind {
+		case experienceKindCacheUnpriced:
+			waste.Unpriced++
+		case experienceKindRefund:
+			refunds.Requests++
+			refunds.USD += event.Usd
+			refundUsers[event.UserId] = true
+			refundModels.add(event.ModelName, event.UserId, event.Usd)
+			if p != nil {
+				p.RefundUSD += event.Usd
 			}
-		})
-		if err != nil {
-			return nil, err
-		}
-		waste.CacheStart = cacheCovered
-		waste.Truncated = waste.Truncated || cacheTruncated
-		if len(writes) > 0 {
-			// The requests that could follow a write are the same customers'.
-			writers := make(map[int]bool)
-			for _, row := range writes {
-				writers[row.UserId] = true
-			}
-			ids := make([]int, 0, len(writers))
-			for id := range writers {
-				ids = append(ids, id)
-			}
-			slices.Sort(ids)
-			var requests []struct {
-				UserId    int
-				TokenId   int
-				CreatedAt int64
-			}
-			for from := 0; from < len(ids); from += experienceCacheUsersPerRead {
-				var chunk []struct {
-					UserId    int
-					TokenId   int
-					CreatedAt int64
+		case WasteRefusal, WasteFailedBilled, WasteGateWallet, WasteCache1h:
+			tally.add(event.Kind, event.UserId, event.Usd)
+			if p != nil {
+				switch event.Kind {
+				case WasteRefusal:
+					p.RefusalUSD += event.Usd
+					p.Refusals++
+				case WasteFailedBilled:
+					p.FailedUSD += event.Usd
+				case WasteGateWallet:
+					p.GateUSD += event.Usd
+				case WasteCache1h:
+					p.CacheUSD += event.Usd
 				}
-				if err := LOG_DB.Model(&Log{}).Select("user_id, token_id, created_at").
-					Where("type = ? AND created_at >= ? AND created_at < ? AND user_id IN ?", LogTypeConsume, waste.CacheStart, r.End,
-						ids[from:min(from+experienceCacheUsersPerRead, len(ids))]).
-					Find(&chunk).Error; err != nil {
-					return nil, err
-				}
-				requests = append(requests, chunk...)
 			}
-			times := make(map[keyOf][]int64)
-			for _, request := range requests {
-				key := keyOf{request.UserId, request.TokenId}
-				times[key] = append(times[key], request.CreatedAt)
-			}
-			for _, series := range times {
-				slices.Sort(series)
-			}
-			for _, row := range writes {
-				var other experienceOther
-				if err := common.UnmarshalJsonStr(row.Other, &other); err != nil || other.CacheCreationTokens1h <= 0 {
-					continue
-				}
-				series := times[keyOf{row.UserId, row.TokenId}]
-				from, _ := slices.BinarySearch(series, row.CreatedAt)
-				to, _ := slices.BinarySearch(series, row.CreatedAt+experienceCacheReuseSeconds+1)
-				if to-from >= 2 {
-					// Something of this key followed within the hour.
-					continue
-				}
-				base := cmp.Or(other.CacheCreationRatio5m, other.CacheCreationRatio)
-				if other.ModelRatio <= 0 || other.GroupRatio <= 0 || other.CacheCreationRatio1h <= base || base <= 0 {
-					waste.Unpriced++
-					continue
-				}
-				premium := float64(other.CacheCreationTokens1h) * (other.CacheCreationRatio1h - base) * other.ModelRatio * other.GroupRatio
-				usd := roundTo(premium/common.QuotaPerUnit, 6)
-				tally.add(WasteCache1h, row.UserId, usd)
-				if p := point(row.CreatedAt); p != nil {
-					p.CacheUSD += usd
-				}
+			if event.Kind == WasteRefusal {
+				refusalModels.add(event.ModelName, event.UserId, event.Usd)
+				refusalReasons.add(event.Category, event.UserId, event.Usd)
+				waste.Refusals = append(waste.Refusals, ExperienceRefusal{
+					UserRef: UserRef{UserID: event.UserId}, At: event.EventAt, ModelName: event.ModelName,
+					Category: event.Category, USD: event.Usd, RequestID: event.RequestId,
+				})
 			}
 		}
 	}
+	refunds.Users = int64(len(refundUsers))
+	refunds.USD = roundTo(refunds.USD, 4)
+	waste.Refunds = refunds
+	waste.RefundModels = refundModels.ranked()
 
-	if err := fillExperienceRefunds(r, staff, point, waste); err != nil {
-		return nil, err
-	}
 	if err := fillExperienceConsumption(waste, r, staffIDs); err != nil {
 		return nil, err
 	}
