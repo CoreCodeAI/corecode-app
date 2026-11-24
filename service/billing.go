@@ -50,7 +50,25 @@ func PreConsumeBilling(c *gin.Context, preConsumedQuota int, relayInfo *relaycom
 	}
 	session, apiErr := NewBillingSession(c, relayInfo, preConsumedQuota)
 	if apiErr != nil {
-		return apiErr
+		// Only a balance too small for the full reservation tries the
+		// cache-based one; any other refusal stands, and so does this one when
+		// the cache-based reservation does not fit either.
+		if apiErr.GetErrorCode() != types.ErrorCodeInsufficientUserQuota || apiErr.StatusCode != http.StatusPaymentRequired {
+			return apiErr
+		}
+		plan := planCacheAwarePreConsume(c, relayInfo, preConsumedQuota)
+		if plan == nil {
+			return apiErr
+		}
+		cacheSession, cacheErr := newBillingSession(c, relayInfo, plan.CacheQuota, plan)
+		if cacheErr != nil {
+			return apiErr
+		}
+		relayInfo.CacheAwarePreConsume = plan
+		relayInfo.Billing = cacheSession
+		logger.LogInfo(c, common.LogText("user %d admitted on a cache-aware pre-consume: reserved %s instead of %s (previous request %d s ago, cache lifetime %d s)",
+			relayInfo.UserId, logger.FormatQuota(plan.CacheQuota), logger.FormatQuota(plan.FullQuota), plan.GapSeconds, plan.TTLSeconds))
+		return nil
 	}
 	relayInfo.Billing = session
 	return nil

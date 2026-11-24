@@ -108,6 +108,16 @@ func AppendRelayLogAdminInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 		if relayInfo.LimitedPlanGateExit != "" {
 			other.SetAdmin("limited_plan_ip_gate_exit", relayInfo.LimitedPlanGateExit)
 		}
+		if cacheAware := relayInfo.CacheAwarePreConsume; cacheAware != nil {
+			other.SetAdmin("pre_consume_mode", "cache_aware")
+			other.SetAdmin("cache_aware_gap_seconds", cacheAware.GapSeconds)
+			other.SetAdmin("cache_aware_ttl_seconds", cacheAware.TTLSeconds)
+			other.SetAdmin("cache_aware_full_quota", cacheAware.FullQuota)
+			other.SetAdmin("cache_aware_quota", cacheAware.CacheQuota)
+			if cacheAware.Overdraft > 0 {
+				other.SetAdmin("overdraft", cacheAware.Overdraft)
+			}
+		}
 	}
 	if common.GetContextKeyBool(ctx, constant.ContextKeyChannelIsMultiKey) {
 		other.SetAdmin("is_multi_key", true)

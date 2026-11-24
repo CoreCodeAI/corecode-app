@@ -547,21 +547,27 @@ func ApplyChannelAffinityOverrideTemplate(c *gin.Context, paramOverride map[stri
 	return mergedParam, true
 }
 
-func GetPreferredChannelByAffinity(c *gin.Context, modelName string, usingGroup string) (int, bool) {
-	setting := operation_setting.GetChannelAffinitySetting()
-	state := RequestPolicy(c)
-	if setting == nil || !setting.Enabled {
-		return 0, false
-	}
+// channelAffinityMatch is a rule that applies to a request, with the affinity
+// value its first usable key source read.
+type channelAffinityMatch struct {
+	rule   operation_setting.ChannelAffinityRule
+	value  string
+	source operation_setting.ChannelAffinityKeySource
+}
+
+// matchChannelAffinityRule returns the first rule that applies to the request:
+// the model, path and user agent match and a key source yields a value the rule
+// accepts. It reads only the request, so billing can derive the same session
+// key before a channel is selected.
+func matchChannelAffinityRule(c *gin.Context, setting *operation_setting.ChannelAffinitySetting, modelName string) (channelAffinityMatch, bool) {
 	path := ""
-	if c != nil && c.Request != nil && c.Request.URL != nil {
-		path = c.Request.URL.Path
-	}
 	userAgent := ""
 	if c != nil && c.Request != nil {
 		userAgent = c.Request.UserAgent()
+		if c.Request.URL != nil {
+			path = c.Request.URL.Path
+		}
 	}
-
 	for _, rule := range setting.Rules {
 		if !matchAnyRegexCached(rule.ModelRegex, modelName) {
 			continue
@@ -587,45 +593,64 @@ func GetPreferredChannelByAffinity(c *gin.Context, modelName string, usingGroup 
 		if rule.ValueRegex != "" && !matchAnyRegexCached([]string{rule.ValueRegex}, affinityValue) {
 			continue
 		}
+		return channelAffinityMatch{rule: rule, value: affinityValue, source: usedSource}, true
+	}
+	return channelAffinityMatch{}, false
+}
 
-		ttlSeconds := rule.TTLSeconds
-		if ttlSeconds <= 0 {
-			ttlSeconds = setting.DefaultTTLSeconds
-		}
-		cacheKeySuffix := buildChannelAffinityCacheKeySuffix(rule, modelName, usingGroup, affinityValue)
-		cacheKeyFull := channelAffinityCacheNamespace + ":" + cacheKeySuffix
-		state.SessionMode, state.SessionModeSource = EffectiveSessionMode(setting, rule)
-		state.RuleName = rule.Name
-		setChannelAffinityContext(c, channelAffinityMeta{
-			CacheKey:       cacheKeyFull,
-			TTLSeconds:     ttlSeconds,
-			RuleName:       rule.Name,
-			SkipRetry:      state.SessionMode == "strict",
-			ParamTemplate:  cloneStringAnyMap(rule.ParamOverrideTemplate),
-			KeySourceType:  strings.TrimSpace(usedSource.Type),
-			KeySourceKey:   strings.TrimSpace(usedSource.Key),
-			KeySourcePath:  strings.TrimSpace(usedSource.Path),
-			KeyHint:        buildChannelAffinityKeyHint(affinityValue),
-			KeyFingerprint: affinityFingerprint(affinityValue),
-			UsingGroup:     usingGroup,
-			ModelName:      modelName,
-			RequestPath:    path,
-		})
-
-		state.AddEvent(PolicyEvent{Decision: PolicyDecision{Action: "match", Reason: "session_rule_matched", Source: "session_rule"}})
-		if state.SessionMode == "off" {
-			return 0, false
-		}
-		cache := getChannelAffinityCache()
-		channelID, found, err := cache.Get(cacheKeySuffix)
-		if err != nil {
-			common.SysError(common.LogText("channel affinity cache get failed: key=%s, err=%v", cacheKeyFull, err))
-			return 0, false
-		}
-		if found {
-			return channelID, true
-		}
+func GetPreferredChannelByAffinity(c *gin.Context, modelName string, usingGroup string) (int, bool) {
+	setting := operation_setting.GetChannelAffinitySetting()
+	state := RequestPolicy(c)
+	if setting == nil || !setting.Enabled {
 		return 0, false
+	}
+	path := ""
+	if c != nil && c.Request != nil && c.Request.URL != nil {
+		path = c.Request.URL.Path
+	}
+
+	matched, ok := matchChannelAffinityRule(c, setting, modelName)
+	if !ok {
+		return 0, false
+	}
+	rule, affinityValue, usedSource := matched.rule, matched.value, matched.source
+
+	ttlSeconds := rule.TTLSeconds
+	if ttlSeconds <= 0 {
+		ttlSeconds = setting.DefaultTTLSeconds
+	}
+	cacheKeySuffix := buildChannelAffinityCacheKeySuffix(rule, modelName, usingGroup, affinityValue)
+	cacheKeyFull := channelAffinityCacheNamespace + ":" + cacheKeySuffix
+	state.SessionMode, state.SessionModeSource = EffectiveSessionMode(setting, rule)
+	state.RuleName = rule.Name
+	setChannelAffinityContext(c, channelAffinityMeta{
+		CacheKey:       cacheKeyFull,
+		TTLSeconds:     ttlSeconds,
+		RuleName:       rule.Name,
+		SkipRetry:      state.SessionMode == "strict",
+		ParamTemplate:  cloneStringAnyMap(rule.ParamOverrideTemplate),
+		KeySourceType:  strings.TrimSpace(usedSource.Type),
+		KeySourceKey:   strings.TrimSpace(usedSource.Key),
+		KeySourcePath:  strings.TrimSpace(usedSource.Path),
+		KeyHint:        buildChannelAffinityKeyHint(affinityValue),
+		KeyFingerprint: affinityFingerprint(affinityValue),
+		UsingGroup:     usingGroup,
+		ModelName:      modelName,
+		RequestPath:    path,
+	})
+
+	state.AddEvent(PolicyEvent{Decision: PolicyDecision{Action: "match", Reason: "session_rule_matched", Source: "session_rule"}})
+	if state.SessionMode == "off" {
+		return 0, false
+	}
+	cache := getChannelAffinityCache()
+	channelID, found, err := cache.Get(cacheKeySuffix)
+	if err != nil {
+		common.SysError(common.LogText("channel affinity cache get failed: key=%s, err=%v", cacheKeyFull, err))
+		return 0, false
+	}
+	if found {
+		return channelID, true
 	}
 	return 0, false
 }

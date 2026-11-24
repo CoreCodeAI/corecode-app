@@ -172,6 +172,10 @@ type RelayInfo struct {
 	LimitedPlanGateHolders int
 	LimitedPlanGateScope   string
 	LimitedPlanGateExit    string
+	// CacheAwarePreConsume is set when the balance could not hold the full
+	// pre-consume and the request was admitted on a cache-based estimate
+	// instead; log metadata and the settlement overdraft only.
+	CacheAwarePreConsume *CacheAwarePreConsume
 	// RequestId is used for idempotent pre-consume/refund
 	RequestId string
 	// SubscriptionAmountTotal / SubscriptionAmountUsedAfterPreConsume are used to compute remaining in logs.
@@ -1346,4 +1350,19 @@ func RemoveGeminiDisabledFields(jsonData []byte) ([]byte, error) {
 		}
 	}
 	return doc.Bytes(), nil
+}
+
+// CacheAwarePreConsume records how a request was admitted on a cache-based
+// pre-consume (service.PreConsumeBilling). Quotas are after the group ratio.
+type CacheAwarePreConsume struct {
+	// FullQuota is the full-price estimate the balance could not hold;
+	// CacheQuota is the reservation taken instead, margin included.
+	FullQuota  int
+	CacheQuota int
+	// GapSeconds is the time since the same session's previous request, and
+	// TTLSeconds the cache lifetime it was judged against.
+	GapSeconds int
+	TTLSeconds int
+	// Overdraft is how far settlement went past the reservation.
+	Overdraft int
 }

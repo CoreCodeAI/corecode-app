@@ -20,10 +20,12 @@ import (
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -582,6 +584,256 @@ func TestPreConsumeShortfallCap(t *testing.T) {
 					assert.Equal(t, tc.wantHeld, info.FinalPreConsumedQuota)
 				})
 			}
+		})
+	}
+}
+
+// A balance that cannot hold the full reservation of a long Claude conversation
+// reserves a cache-based estimate when the same conversation's previous request
+// left a cache that is still alive. The full estimate here is 1,500,000 quota
+// for a 1,000,000-token prompt; a previous request that cached 900,000 of them
+// leaves 900,000 cache reads and 100,000 writes, 435,000 quota (1h writes) or
+// 322,500 (5m), times the 1.5 margin.
+func TestCacheAwarePreConsume(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	previousConfig := config.GlobalConfig.ExportAllConfigs()
+	previousUnit, previousBatch := common.QuotaPerUnit, common.BatchUpdateEnabled
+	common.QuotaPerUnit, common.BatchUpdateEnabled = 500000, false
+	t.Cleanup(func() {
+		require.NoError(t, config.GlobalConfig.LoadFromDB(previousConfig))
+		common.QuotaPerUnit, common.BatchUpdateEnabled = previousUnit, previousBatch
+	})
+	const (
+		fullQuota        = 1500000
+		cacheQuota1h     = 652500
+		cacheQuota5m     = 483750
+		previousTokens   = 900000
+		promptTokens     = 1000000
+		tieredModel      = "claude-cache-tiered"
+		legacyModel      = "claude-cache-legacy"
+		balanceBelowFull = 1000000
+	)
+	for _, dialect := range []struct{ kind, env string }{{"sqlite", ""}, {"mysql", "TEST_MYSQL_DSN"}, {"postgres", "TEST_POSTGRES_DSN"}} {
+		t.Run(dialect.kind, func(t *testing.T) {
+			if dialect.env != "" && os.Getenv(dialect.env) == "" {
+				t.Skip("set " + dialect.env + " to run this database")
+			}
+			db := modelManagementDB(t, dialect.kind, os.Getenv(dialect.env))
+			require.NoError(t, db.AutoMigrate(&model.Token{}, &model.SubscriptionPlan{}, &model.UserSubscription{}, &model.SubscriptionPreConsumeRecord{}))
+			require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"`+legacyModel+`":1.5}`))
+			require.NoError(t, ratio_setting.UpdateCacheRatioByJSONString(`{"`+legacyModel+`":0.1}`))
+			require.NoError(t, ratio_setting.UpdateCreateCacheRatioByJSONString(`{"`+legacyModel+`":1.25}`))
+			loadOptions := func(extra map[string]string) {
+				options := map[string]string{
+					"billing_setting.billing_mode":               `{"` + tieredModel + `":"tiered_expr"}`,
+					"billing_setting.billing_expr":               `{"` + tieredModel + `":"tier(\"base\", p * 3 + c * 15 + cr * 0.3 + cc * 3.75 + cc1h * 6)"}`,
+					"group_ratio_setting.group_ratio":            `{"default":1}`,
+					"quota_setting.trust_quota_usd":              "0",
+					"quota_setting.pre_consume_multiplier":       "1",
+					"quota_setting.max_shortfall_usd":            "0.001",
+					"channel_affinity_setting.enabled":           "true",
+					"billing.cache_aware_pre_consume_enabled":    "true",
+					"claude.default_prompt_cache_ttl_min_tokens": "0",
+				}
+				for key, value := range extra {
+					options[key] = value
+				}
+				require.NoError(t, config.GlobalConfig.LoadFromDB(options))
+			}
+			loadOptions(nil)
+			plan := model.SubscriptionPlan{Title: "cache-aware-plan", TotalAmount: 2000000, QuotaResetPeriod: "never"}
+			require.NoError(t, db.Create(&plan).Error)
+
+			sequence := 0
+			type fixture struct {
+				user    model.User
+				token   model.Token
+				session string
+			}
+			newFixture := func(wallet int) fixture {
+				sequence++
+				user := model.User{Username: fmt.Sprintf("cache-user-%d", sequence), Quota: wallet, Group: "default", AffCode: fmt.Sprintf("cache-aff-%d", sequence)}
+				require.NoError(t, db.Create(&user).Error)
+				token := model.Token{UserId: user.Id, Key: fmt.Sprintf("cache-token-%d", sequence), UnlimitedQuota: true}
+				require.NoError(t, db.Create(&token).Error)
+				return fixture{user: user, token: token, session: fmt.Sprintf("user_%d_account__session_%d", sequence, sequence)}
+			}
+			// request builds one request of the fixture's conversation.
+			request := func(f fixture, modelName, preference, cacheTTLHeader string) (*gin.Context, *relaycommon.RelayInfo) {
+				sequence++
+				ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+				body := fmt.Sprintf(`{"model":%q,"metadata":{"user_id":%q},"messages":[]}`, modelName, f.session)
+				ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(body))
+				ctx.Request.Header.Set("Content-Type", "application/json")
+				if cacheTTLHeader != "" {
+					ctx.Request.Header.Set(relaycommon.ClientCacheTTLHeader, cacheTTLHeader)
+				}
+				info := &relaycommon.RelayInfo{RequestId: fmt.Sprintf("cache-request-%d", sequence), UserId: f.user.Id, TokenId: f.token.Id, TokenKey: f.token.Key, TokenUnlimited: true,
+					OriginModelName: modelName, UserGroup: "default", UsingGroup: "default", RelayFormat: types.RelayFormatClaude, Request: &dto.ClaudeRequest{},
+					StartTime: time.Now(), BillingRequestInput: &billingexpr.RequestInput{}}
+				info.UserSetting.BillingPreference = preference
+				info.SetEstimatePromptTokens(promptTokens)
+				return ctx, info
+			}
+			// previous records a request of the conversation that started ago ago.
+			previous := func(f fixture, modelName string, ago time.Duration) {
+				ctx, info := request(f, modelName, "wallet_only", "")
+				info.StartTime = time.Now().Add(-ago)
+				service.RememberCacheAwareSession(ctx, info, previousTokens, true)
+			}
+			reserve := func(ctx *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
+				price, err := helper.ModelPriceHelper(ctx, info, promptTokens, &types.TokenCountMeta{})
+				require.NoError(t, err)
+				require.Equal(t, fullQuota, price.QuotaToPreConsume)
+				return service.PreConsumeBilling(ctx, price.QuotaToPreConsume, info)
+			}
+			wallet := func(f fixture) int {
+				var user model.User
+				require.NoError(t, db.First(&user, f.user.Id).Error)
+				return user.Quota
+			}
+			refused := func(t *testing.T, f fixture, apiErr *types.NewAPIError, info *relaycommon.RelayInfo, balance int) {
+				require.NotNil(t, apiErr)
+				assert.Equal(t, types.ErrorCodeInsufficientUserQuota, apiErr.GetErrorCode())
+				assert.Equal(t, http.StatusPaymentRequired, apiErr.StatusCode)
+				assert.Nil(t, info.CacheAwarePreConsume)
+				assert.Nil(t, info.Billing)
+				assert.Eventually(t, func() bool { return wallet(f) == balance }, 2*time.Second, 20*time.Millisecond, "a refused request must leave the wallet untouched")
+			}
+
+			t.Run("a balance that covers the full estimate is unchanged", func(t *testing.T) {
+				f := newFixture(2000000)
+				previous(f, tieredModel, time.Minute)
+				ctx, info := request(f, tieredModel, "wallet_only", "")
+				require.Nil(t, reserve(ctx, info))
+				assert.Nil(t, info.CacheAwarePreConsume)
+				assert.Equal(t, fullQuota, info.FinalPreConsumedQuota)
+				assert.Equal(t, 2000000-fullQuota, wallet(f))
+			})
+			t.Run("an insufficient balance and a live cache reserves the cache estimate", func(t *testing.T) {
+				for _, modelName := range []string{tieredModel, legacyModel} {
+					f := newFixture(balanceBelowFull)
+					previous(f, modelName, time.Minute)
+					ctx, info := request(f, modelName, "wallet_only", "")
+					require.Nil(t, reserve(ctx, info))
+					require.NotNil(t, info.CacheAwarePreConsume, modelName)
+					assert.Equal(t, fullQuota, info.CacheAwarePreConsume.FullQuota)
+					assert.Equal(t, cacheQuota1h, info.CacheAwarePreConsume.CacheQuota)
+					assert.InDelta(t, 60, info.CacheAwarePreConsume.GapSeconds, 2)
+					assert.Equal(t, 3600, info.CacheAwarePreConsume.TTLSeconds)
+					assert.Equal(t, cacheQuota1h, info.FinalPreConsumedQuota)
+					assert.Equal(t, balanceBelowFull-cacheQuota1h, wallet(f))
+
+					if modelName == tieredModel {
+						// The estimate made again once a channel is chosen reserves
+						// the same share of itself, not the full price.
+						require.Nil(t, service.PrepareTieredBillingForSelectedGroup(ctx, info))
+						assert.Equal(t, cacheQuota1h, info.Billing.GetPreConsumedQuota())
+						assert.Equal(t, balanceBelowFull-cacheQuota1h, wallet(f))
+					}
+
+					other := model.NewLogOther()
+					service.AppendRelayLogAdminInfo(ctx, info, other)
+					admin, _ := other.Snapshot()["admin_info"].(map[string]any)
+					assert.Equal(t, "cache_aware", admin["pre_consume_mode"])
+					assert.EqualValues(t, fullQuota, admin["cache_aware_full_quota"])
+					assert.EqualValues(t, cacheQuota1h, admin["cache_aware_quota"])
+					assert.NotContains(t, admin, "overdraft")
+				}
+			})
+			t.Run("a cache that has expired keeps the refusal", func(t *testing.T) {
+				f := newFixture(balanceBelowFull)
+				previous(f, tieredModel, 55*time.Minute)
+				ctx, info := request(f, tieredModel, "wallet_only", "")
+				refused(t, f, reserve(ctx, info), info, balanceBelowFull)
+			})
+			t.Run("a conversation with no previous request keeps the refusal", func(t *testing.T) {
+				f := newFixture(balanceBelowFull)
+				ctx, info := request(f, tieredModel, "wallet_only", "")
+				refused(t, f, reserve(ctx, info), info, balanceBelowFull)
+			})
+			t.Run("another model or user does not share a cache", func(t *testing.T) {
+				f := newFixture(balanceBelowFull)
+				previous(f, legacyModel, time.Minute)
+				ctx, info := request(f, tieredModel, "wallet_only", "")
+				refused(t, f, reserve(ctx, info), info, balanceBelowFull)
+			})
+			t.Run("a client on the 5 minute ttl gets no discount after 6 minutes", func(t *testing.T) {
+				f := newFixture(balanceBelowFull)
+				previous(f, tieredModel, 6*time.Minute)
+				ctx, info := request(f, tieredModel, "wallet_only", "5m")
+				refused(t, f, reserve(ctx, info), info, balanceBelowFull)
+				// The same gap is inside the 1 hour cache of a client that did not ask.
+				ctx, info = request(f, tieredModel, "wallet_only", "")
+				require.Nil(t, reserve(ctx, info))
+				assert.Equal(t, cacheQuota1h, info.FinalPreConsumedQuota)
+			})
+			t.Run("a client on the 5 minute ttl is priced at 5 minute writes inside it", func(t *testing.T) {
+				f := newFixture(balanceBelowFull)
+				previous(f, tieredModel, 2*time.Minute)
+				ctx, info := request(f, tieredModel, "wallet_only", "5m")
+				require.Nil(t, reserve(ctx, info))
+				assert.Equal(t, cacheQuota5m, info.FinalPreConsumedQuota)
+				assert.Equal(t, 300, info.CacheAwarePreConsume.TTLSeconds)
+			})
+			t.Run("a balance below the cache estimate keeps the refusal", func(t *testing.T) {
+				f := newFixture(cacheQuota1h - 1)
+				previous(f, tieredModel, time.Minute)
+				ctx, info := request(f, tieredModel, "wallet_only", "")
+				refused(t, f, reserve(ctx, info), info, cacheQuota1h-1)
+			})
+			t.Run("the switch off restores the old behavior", func(t *testing.T) {
+				loadOptions(map[string]string{"billing.cache_aware_pre_consume_enabled": "false"})
+				defer loadOptions(nil)
+				f := newFixture(balanceBelowFull)
+				previous(f, tieredModel, time.Minute)
+				ctx, info := request(f, tieredModel, "wallet_only", "")
+				refused(t, f, reserve(ctx, info), info, balanceBelowFull)
+			})
+			t.Run("a cost above the reservation overdraws the wallet once", func(t *testing.T) {
+				f := newFixture(balanceBelowFull)
+				previous(f, tieredModel, time.Minute)
+				ctx, info := request(f, tieredModel, "wallet_only", "")
+				require.Nil(t, reserve(ctx, info))
+				const actual = 2000000
+				require.NoError(t, info.Billing.Settle(actual))
+				assert.Equal(t, actual-cacheQuota1h, info.CacheAwarePreConsume.Overdraft)
+				assert.Equal(t, balanceBelowFull-actual, wallet(f))
+				other := model.NewLogOther()
+				service.AppendRelayLogAdminInfo(ctx, info, other)
+				admin, _ := other.Snapshot()["admin_info"].(map[string]any)
+				assert.EqualValues(t, actual-cacheQuota1h, admin["overdraft"])
+
+				// The conversation's cache is still alive, but the balance is not.
+				previous(f, tieredModel, time.Second)
+				ctx, info = request(f, tieredModel, "wallet_only", "")
+				refused(t, f, reserve(ctx, info), info, balanceBelowFull-actual)
+			})
+			t.Run("a plan without wallet overflow is refused, with it the wallet takes the excess", func(t *testing.T) {
+				for _, overflow := range []bool{false, true} {
+					f := newFixture(0)
+					sub := model.UserSubscription{UserId: f.user.Id, PlanId: plan.Id, AmountTotal: 2000000, AmountUsed: 1000000,
+						StartTime: common.GetTimestamp(), EndTime: common.GetTimestamp() + 86400, Status: "active", AllowWalletOverflow: overflow}
+					require.NoError(t, db.Create(&sub).Error)
+					previous(f, tieredModel, time.Minute)
+					ctx, info := request(f, tieredModel, "subscription_first", "")
+					apiErr := reserve(ctx, info)
+					if !overflow {
+						require.NotNil(t, apiErr)
+						assert.Equal(t, http.StatusPaymentRequired, apiErr.StatusCode)
+						assert.Nil(t, info.CacheAwarePreConsume)
+						continue
+					}
+					require.Nil(t, apiErr)
+					assert.Equal(t, cacheQuota1h, info.FinalPreConsumedQuota)
+					// The plan holds 347,500 more; the wallet takes what is left.
+					require.NoError(t, info.Billing.Settle(1500000))
+					var after model.UserSubscription
+					require.NoError(t, db.First(&after, sub.Id).Error)
+					assert.EqualValues(t, 2000000, after.AmountUsed)
+					assert.Equal(t, -500000, wallet(f))
+				}
+			})
 		})
 	}
 }

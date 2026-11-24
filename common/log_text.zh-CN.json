@@ -847,6 +847,7 @@
   "upstream model update task query failed: %v": "上游模型更新检查: 查询渠道失败: %v",
   "upstream response body: %s": "上游响应体: %s",
   "usage extracted from second last SSE: PromptTokens=%d, CompletionTokens=%d, TotalTokens=%d, InputTokens=%d, OutputTokens=%d": "从倒数第二条 SSE 数据中取得用量: PromptTokens=%d, CompletionTokens=%d, TotalTokens=%d, InputTokens=%d, OutputTokens=%d",
+  "user %d admitted on a cache-aware pre-consume: reserved %s instead of %s (previous request %d s ago, cache lifetime %d s)": "用户 %d 按缓存估算放行预扣费：预扣 %s（全价估算 %s，同会话上一次请求在 %d 秒前，缓存寿命 %d 秒）",
   "user %d has enough quota, trusted without pre-consume (funding=%s)": "用户 %d 额度充足, 信任且不需要预扣费 (funding=%s)",
   "user %d has no bark url, skip sending bark": "用户 %d 没有填写 Bark 推送地址，未发送 Bark 通知",
   "user %d has no email, skip sending email": "用户 %d 没有绑定邮箱，未发送邮件通知",

@@ -42,12 +42,19 @@ type BillingSession struct {
 	// 没有预扣到、结算时再收的部分。异步任务和图片请求必须全额预扣。
 	allowShortfall bool
 	shortfall      int
-	trusted        bool   // 是否命中信任额度旁路
-	fundingSettled bool   // funding.Settle 已成功，资金来源已提交
-	settled        bool   // Settle 全部完成（资金 + 令牌）
-	refunded       bool   // Refund 已调用
-	lang           string // 请求声明的语言，为空表示未声明
-	mu             sync.Mutex
+	// maxShortfall is the most a shortfall may be: the configured cap, or 0
+	// for a cache-aware reservation, which must be held in full.
+	maxShortfall int
+	// cacheAwareScale is the cache-based reservation as a share of the full
+	// estimate, 0 for an ordinary session. A later estimate of the full price
+	// (another group, a channel retry) reserves the same share of itself.
+	cacheAwareScale float64
+	trusted         bool   // 是否命中信任额度旁路
+	fundingSettled  bool   // funding.Settle 已成功，资金来源已提交
+	settled         bool   // Settle 全部完成（资金 + 令牌）
+	refunded        bool   // Refund 已调用
+	lang            string // 请求声明的语言，为空表示未声明
+	mu              sync.Mutex
 }
 
 // Settle 根据实际消耗额度进行结算。
@@ -64,6 +71,9 @@ func (s *BillingSession) Settle(actualQuota int) error {
 		s.settled = true
 		s.releaseSubscriptionReservations()
 		return nil
+	}
+	if delta > 0 && s.relayInfo.CacheAwarePreConsume != nil {
+		s.relayInfo.CacheAwarePreConsume.Overdraft = delta
 	}
 	// 1) 调整资金来源（仅在尚未提交时执行，防止重复调用）
 	var fundingErr error
@@ -303,6 +313,9 @@ func (s *BillingSession) reserve(targetQuota int, requireAvailableQuota bool) er
 		_, imageRequest := s.relayInfo.Request.(*dto.ImageRequest)
 		requireAvailableQuota = requireAvailableQuota || imageRequest || s.relayInfo.ImageRequestCount > 0
 	}
+	if s.cacheAwareScale > 0 {
+		targetQuota = common.QuotaRound(float64(targetQuota) * s.cacheAwareScale)
+	}
 	// 预扣不足额的会话按预估判断是否需要补扣，未预扣的部分仍在结算时收取。
 	covered := s.preConsumedQuota
 	if !requireAvailableQuota {
@@ -378,6 +391,16 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIErro
 		logger.LogInfo(c, common.LogText("user %d needs pre-consume %s (funding=%s)", s.relayInfo.UserId, logger.FormatQuota(effectiveQuota), s.funding.Source()))
 	}
 
+	// A wallet that is the only source knows its answer before it reserves
+	// anything. Refusing first leaves nothing to refund, so a caller that tries
+	// a smaller reservation next reads the balance as it was, not as the
+	// refused reservation left it until the wallet cache catches up.
+	if _, ok := s.funding.(*WalletFunding); ok && s.allowShortfall && s.overflow == nil {
+		if held := min(effectiveQuota, max(s.relayInfo.UserQuota, 0)); effectiveQuota-held > s.maxShortfall {
+			return s.refuseShortfall(c, held, effectiveQuota)
+		}
+	}
+
 	// ---- 1) 预扣资金来源 ----
 	held, apiErr := s.preConsumeFunding(c, effectiveQuota)
 	if apiErr != nil {
@@ -385,15 +408,9 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIErro
 	}
 	// A shortfall is charged only at settlement and can leave the wallet below
 	// zero; past the cap the request is refused instead of admitted on credit.
-	if s.allowShortfall && effectiveQuota-held > operation_setting.MaxShortfallQuota() {
+	if s.allowShortfall && effectiveQuota-held > s.maxShortfall {
 		s.releaseFunding()
-		logger.LogInfo(c, common.LogText("user %d refused: reserved %s of %s, shortfall above the cap (funding=%s)", s.relayInfo.UserId, logger.FormatQuota(held), logger.FormatQuota(effectiveQuota), s.funding.Source()))
-		message := &quotaMessage{
-			text:  i18n.TBilingual(c, i18n.MsgQuotaShortfallAboveCap, map[string]any{"Available": logger.FormatQuotaBrief(held), "Required": logger.FormatQuotaBrief(effectiveQuota)}),
-			cause: errShortfallAboveCap,
-		}
-		return types.NewErrorWithStatusCode(message, types.ErrorCodeInsufficientUserQuota, http.StatusPaymentRequired,
-			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+		return s.refuseShortfall(c, held, effectiveQuota)
 	}
 
 	// ---- 2) 预扣令牌额度 ----
@@ -415,6 +432,18 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIErro
 	s.syncRelayInfo()
 
 	return nil
+}
+
+// refuseShortfall is the refusal of a reservation that its sources cannot
+// hold within the shortfall cap; held is what they could hold.
+func (s *BillingSession) refuseShortfall(c *gin.Context, held, required int) *types.NewAPIError {
+	logger.LogInfo(c, common.LogText("user %d refused: reserved %s of %s, shortfall above the cap (funding=%s)", s.relayInfo.UserId, logger.FormatQuota(held), logger.FormatQuota(required), s.funding.Source()))
+	message := &quotaMessage{
+		text:  i18n.TBilingual(c, i18n.MsgQuotaShortfallAboveCap, map[string]any{"Available": logger.FormatQuotaBrief(held), "Required": logger.FormatQuotaBrief(required)}),
+		cause: errShortfallAboveCap,
+	}
+	return types.NewErrorWithStatusCode(message, types.ErrorCodeInsufficientUserQuota, http.StatusPaymentRequired,
+		types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 }
 
 // preConsumeFunding 从主来源预扣，允许不足额时只预扣其现有余额，剩余部分交给
@@ -654,6 +683,15 @@ func (s *BillingSession) syncRelayInfo() {
 // （订阅优先且允许钱包溢出时的钱包、钱包优先时的订阅）承担差额，结算时钱包吸收
 // 两者都覆盖不了的部分。异步任务和图片请求仍要求单一来源全额预扣。
 func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preConsumedQuota int) (*BillingSession, *types.NewAPIError) {
+	return newBillingSession(c, relayInfo, preConsumedQuota, nil)
+}
+
+// newBillingSession is NewBillingSession for a reservation that may be a
+// cache-aware one (planCacheAwarePreConsume). That reservation must be held in
+// full, and it settles on the wallet: whatever the response costs beyond it
+// goes to a wallet that may go below zero for this one request, and a
+// subscription with no wallet behind it would take the excess for nothing.
+func newBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preConsumedQuota int, cacheAware *relaycommon.CacheAwarePreConsume) (*BillingSession, *types.NewAPIError) {
 	if relayInfo == nil {
 		return nil, types.NewError(fmt.Errorf("relayInfo is nil"), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
 	}
@@ -661,6 +699,15 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 	pref := common.NormalizeBillingPreference(relayInfo.UserSetting.BillingPreference)
 	_, imageRequest := relayInfo.Request.(*dto.ImageRequest)
 	allowShortfall := !relayInfo.ForcePreConsume && !imageRequest && relayInfo.ImageRequestCount == 0
+	maxShortfall := operation_setting.MaxShortfallQuota()
+	cacheAwareScale := 0.0
+	if cacheAware != nil {
+		if !allowShortfall || cacheAware.FullQuota <= 0 {
+			return nil, types.NewError(fmt.Errorf("cache-aware pre-consume does not apply to this request"), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
+		}
+		maxShortfall = 0
+		cacheAwareScale = float64(cacheAware.CacheQuota) / float64(cacheAware.FullQuota)
+	}
 
 	// A plan limited per user does not serve a request from an address that
 	// other holders of such plans already use (model.CheckLimitedPlanGate).
@@ -709,10 +756,12 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		relayInfo.UserQuota = userQuota
 
 		session := &BillingSession{
-			relayInfo:      relayInfo,
-			funding:        &WalletFunding{userId: relayInfo.UserId},
-			lang:           i18n.StatedLang(c),
-			allowShortfall: allowShortfall,
+			relayInfo:       relayInfo,
+			funding:         &WalletFunding{userId: relayInfo.UserId},
+			lang:            i18n.StatedLang(c),
+			allowShortfall:  allowShortfall,
+			maxShortfall:    maxShortfall,
+			cacheAwareScale: cacheAwareScale,
 		}
 		if subscriptionOverflow && allowShortfall && userQuota < preConsumedQuota {
 			hasSub, subCheckErr := model.HasActiveUserSubscriptionExcept(relayInfo.UserId, except)
@@ -736,10 +785,18 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		if subConsume <= 0 {
 			subConsume = 1
 		}
+		if cacheAware != nil && !(walletOverflow && allowShortfall) {
+			return nil, types.NewErrorWithStatusCode(
+				errors.New(i18n.TBilingual(c, i18n.MsgQuotaSubscriptionInsufficient)),
+				types.ErrorCodeInsufficientUserQuota, http.StatusPaymentRequired,
+				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+		}
 		session := &BillingSession{
-			relayInfo:      relayInfo,
-			lang:           i18n.StatedLang(c),
-			allowShortfall: allowShortfall,
+			relayInfo:       relayInfo,
+			lang:            i18n.StatedLang(c),
+			allowShortfall:  allowShortfall,
+			maxShortfall:    maxShortfall,
+			cacheAwareScale: cacheAwareScale,
 		}
 		walletPositive := false
 		if walletOverflow && allowShortfall {

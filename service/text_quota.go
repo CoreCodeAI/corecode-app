@@ -466,6 +466,9 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if err := SettleBilling(ctx, relayInfo, summary.Quota); err != nil {
 		logger.LogError(ctx, common.LogText("error settling billing: %s", err.Error()))
 	}
+	if summary.IsClaudeUsageSemantic && summary.hasBillableUsage() {
+		RememberCacheAwareSession(ctx, relayInfo, summary.CacheTokens+summary.CacheCreationTokens, summary.CacheCreationTokens1h > 0)
+	}
 
 	logModel := summary.ModelName
 	if strings.HasPrefix(logModel, "gpt-4-gizmo") {
