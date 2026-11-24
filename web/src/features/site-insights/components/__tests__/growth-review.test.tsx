@@ -66,7 +66,9 @@ describe('weekly sign-ups', () => {
     }))
     render(<WeeklySignupsPanel daily={daily} />)
     expect(screen.getByText('Sign-ups by week')).toBeInTheDocument()
-    expect(screen.getByText(/Best full week: .*, 28 sign-ups\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Best full week: .*, 28 sign-ups\./)
+    ).toBeInTheDocument()
   })
 })
 
@@ -104,8 +106,20 @@ describe('stacked funnel', () => {
         label={label}
         empty='Nothing'
         rows={[
-          { segment: 'github', registered: 10, activated: 6, paid: 2, repeat: 1 },
-          { segment: 'email', registered: 50, activated: 20, paid: 10, repeat: 4 },
+          {
+            segment: 'github',
+            registered: 10,
+            activated: 6,
+            paid: 2,
+            repeat: 1,
+          },
+          {
+            segment: 'email',
+            registered: 50,
+            activated: 20,
+            paid: 10,
+            repeat: 4,
+          },
           { segment: 'none', registered: 0, activated: 0, paid: 0, repeat: 0 },
         ]}
       />
@@ -124,7 +138,9 @@ describe('stacked funnel', () => {
       <StackedFunnel label={label} empty='Nothing' rows={[]} />
     )
     expect(screen.getByText('Nothing')).toBeInTheDocument()
-    rerender(<StackedFunnel label={label} empty='Nothing' rows={null} loading />)
+    rerender(
+      <StackedFunnel label={label} empty='Nothing' rows={null} loading />
+    )
     expect(container.querySelector('.animate-pulse')).not.toBeNull()
   })
 })
@@ -193,7 +209,9 @@ describe('customer tiers by spend', () => {
     render(<SpendTiersPanel groups={groups} />)
     expect(screen.getByText('Customer tiers by spend')).toBeInTheDocument()
     expect(
-      screen.getByText(/^1 whales \(3\.?\d*% of customers\) brought 59\.?\d*% of the spend\.$/)
+      screen.getByText(
+        /^1 whales \(3\.?\d*% of customers\) brought 59\.?\d*% of the spend\.$/
+      )
     ).toBeInTheDocument()
   })
 
@@ -203,7 +221,9 @@ describe('customer tiers by spend', () => {
     await user.click(screen.getByRole('button', { name: 'Claude' }))
     // No whale among Claude's customers.
     expect(
-      screen.getByText(/^0 whales \(0% of customers\) brought 0% of the spend\.$/)
+      screen.getByText(
+        /^0 whales \(0% of customers\) brought 0% of the spend\.$/
+      )
     ).toBeInTheDocument()
     const table = screen.getByRole('table')
     expect(within(table).getByText('Long tail')).toBeInTheDocument()
@@ -287,8 +307,7 @@ describe('biggest customers', () => {
     expect(
       screen.getAllByRole('img', {
         name: /^Spend of alice over the last 7 days from/,
-      })
-        .length
+      }).length
     ).toBeGreaterThan(0)
   })
 
@@ -315,8 +334,12 @@ describe('churn watch', () => {
       screen.getByText('1 of the 50 biggest customers are slipping.')
     ).toBeInTheDocument()
     expect(screen.getAllByText('bob').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Use fell by over half').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('No request in 3 days').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Use fell by over half').length).toBeGreaterThan(
+      0
+    )
+    expect(screen.getAllByText('No request in 3 days').length).toBeGreaterThan(
+      0
+    )
   })
 
   it('says none has dropped off when the list is empty', () => {
@@ -358,14 +381,18 @@ describe('weekly retention', () => {
     expect(within(table).getByText('W2')).toBeInTheDocument()
     expect(within(table).getByText(/partial week/)).toBeInTheDocument()
     // 30 of 50 used quota the week after; the other week is still filling.
-    expect(screen.getByText(/kept the most \(All sign-ups\): 60%/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/kept the most \(All sign-ups\): 60%/)
+    ).toBeInTheDocument()
   })
 
   it('reads the sign-ups the reader picks', async () => {
     const user = userEvent.setup()
     render(<WeeklyRetentionPanel weeks={weeks} state='ready' />)
     await user.click(screen.getByRole('button', { name: 'Paid sign-ups' }))
-    expect(screen.getByText(/kept the most \(Paid sign-ups\): 80%/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/kept the most \(Paid sign-ups\): 80%/)
+    ).toBeInTheDocument()
   })
 
   it('leaves the panel out when the server sends no weeks', () => {
@@ -412,7 +439,12 @@ describe('channel panels', () => {
   const rows = [
     channel(1, 'v2ex', { registered: 40, paid: 4, revenue: 400 }),
     channel(2, 'linuxdo', { registered: 90, paid: 9, revenue: 100 }),
-    channel(0, '', { segment: 'organic', registered: 10, paid: 1, revenue: 50 }),
+    channel(0, '', {
+      segment: 'organic',
+      registered: 10,
+      paid: 1,
+      revenue: 50,
+    }),
   ]
 
   it('ranks the sign-ups, paying accounts and revenue of each source', () => {
@@ -420,16 +452,17 @@ describe('channel panels', () => {
     expect(screen.getByText('What each source brought')).toBeInTheDocument()
     const lists = screen.getAllByRole('list')
     expect(lists).toHaveLength(3)
-    expect(within(lists[0]).getAllByRole('listitem')[0]).toHaveTextContent('linuxdo')
-    expect(within(lists[2]).getAllByRole('listitem')[0]).toHaveTextContent('v2ex')
+    expect(within(lists[0]).getAllByRole('listitem')[0]).toHaveTextContent(
+      'linuxdo'
+    )
+    expect(within(lists[2]).getAllByRole('listitem')[0]).toHaveTextContent(
+      'v2ex'
+    )
     expect(screen.getAllByText('Organic').length).toBeGreaterThan(0)
   })
 
   it('stacks each day by the three largest sources and the rest together', () => {
-    const many = [
-      ...rows,
-      channel(3, 'extra', { registered: 5 }),
-    ]
+    const many = [...rows, channel(3, 'extra', { registered: 5 })]
     const data = {
       signups_by_day: [
         {

@@ -67,40 +67,40 @@ export function ChannelBarsPanel(props: {
       )}
     >
       {failed ? null : (
-      <div className='grid gap-6 md:grid-cols-3'>
-        <div className='grid content-start gap-2'>
-          <h4 className='text-muted-foreground text-xs font-medium'>
-            {t('Sign-ups')}
-          </h4>
-          <RankBars
-            items={item((row) => row.registered)}
-            format={fmt.num}
-            empty={empty}
-          />
+        <div className='grid gap-6 md:grid-cols-3'>
+          <div className='grid content-start gap-2'>
+            <h4 className='text-muted-foreground text-xs font-medium'>
+              {t('Sign-ups')}
+            </h4>
+            <RankBars
+              items={item((row) => row.registered)}
+              format={fmt.num}
+              empty={empty}
+            />
+          </div>
+          <div className='grid content-start gap-2'>
+            <h4 className='text-muted-foreground text-xs font-medium'>
+              {t('Paying accounts')}
+            </h4>
+            <RankBars
+              items={item((row) => row.paid)}
+              format={fmt.num}
+              barClass='bg-sky-500/70'
+              empty={empty}
+            />
+          </div>
+          <div className='grid content-start gap-2'>
+            <h4 className='text-muted-foreground text-xs font-medium'>
+              {t('Revenue')}
+            </h4>
+            <RankBars
+              items={item((row) => row.revenue)}
+              format={fmt.cny}
+              barClass='bg-[var(--series-3)]/70'
+              empty={empty}
+            />
+          </div>
         </div>
-        <div className='grid content-start gap-2'>
-          <h4 className='text-muted-foreground text-xs font-medium'>
-            {t('Paying accounts')}
-          </h4>
-          <RankBars
-            items={item((row) => row.paid)}
-            format={fmt.num}
-            barClass='bg-sky-500/70'
-            empty={empty}
-          />
-        </div>
-        <div className='grid content-start gap-2'>
-          <h4 className='text-muted-foreground text-xs font-medium'>
-            {t('Revenue')}
-          </h4>
-          <RankBars
-            items={item((row) => row.revenue)}
-            format={fmt.cny}
-            barClass='bg-[var(--series-3)]/70'
-            empty={empty}
-          />
-        </div>
-      </div>
       )}
     </Panel>
   )
@@ -136,10 +136,9 @@ export function ChannelDailyPanel(props: {
     .slice(0, NAMED_SOURCES)
   const keys = named.map(channelKey)
   const folded = [...totals.values()].reduce((sum, n) => sum + n, 0)
-  const hasOther = named.reduce(
-    (sum, row) => sum + (totals.get(channelKey(row)) ?? 0),
-    0
-  ) < folded
+  const hasOther =
+    named.reduce((sum, row) => sum + (totals.get(channelKey(row)) ?? 0), 0) <
+    folded
   const series = [
     ...named.map((row) => ({ label: name(row) })),
     ...(hasOther ? [{ label: t('Other sources'), muted: true }] : []),

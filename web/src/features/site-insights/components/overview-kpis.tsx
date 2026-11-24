@@ -38,10 +38,7 @@ import {
  * it. Every card of the overview's top block draws one, so the block reads
  * as figures and their shape at once.
  */
-export function KpiCard(props: {
-  item: MetricItem
-  loading?: boolean
-}) {
+export function KpiCard(props: { item: MetricItem; loading?: boolean }) {
   const fmt = useInsightsFormat()
   const { item } = props
   const shown = !props.loading && !item.missing
@@ -53,7 +50,7 @@ export function KpiCard(props: {
       <dt className='text-muted-foreground truncate text-xs'>
         <HelpLabel label={item.label} help={item.help} />
       </dt>
-      <dd className='flex min-w-0 flex-wrap items-baseline gap-x-2 text-xl font-semibold sm:text-2xl tabular-nums'>
+      <dd className='flex min-w-0 flex-wrap items-baseline gap-x-2 text-xl font-semibold tabular-nums sm:text-2xl'>
         {props.loading && <Skeleton className='h-8 w-20' />}
         {!props.loading && item.missing && (
           <span className='text-muted-foreground'>-</span>
@@ -139,7 +136,9 @@ export function TopCustomersPanel(props: {
       }
     >
       {!props.activity && props.failed && (
-        <p className='text-muted-foreground text-xs'>{t('Could not be read')}</p>
+        <p className='text-muted-foreground text-xs'>
+          {t('Could not be read')}
+        </p>
       )}
       {!props.activity && !props.failed && (
         <div className='bg-muted h-40 animate-pulse rounded-md' />

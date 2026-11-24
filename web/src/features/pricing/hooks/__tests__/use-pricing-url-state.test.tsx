@@ -332,7 +332,10 @@ it('preserves document scroll when closing a shared model link or updating filte
     await waitFor(() => expect(search(router).model).toBeUndefined())
     expect(scrollY).toBe(420)
 
-    await user.type(screen.getByRole('searchbox', { name: 'Search models' }), 'opus')
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Search models' }),
+      'opus'
+    )
     await waitFor(() => expect(search(router).search).toBe('opus'))
     expect(scrollY).toBe(420)
   } finally {

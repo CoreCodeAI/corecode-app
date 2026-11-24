@@ -17,13 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -36,12 +30,8 @@ import type {
   RiskInsights,
 } from '../../types'
 import type { Finding } from '../insight-kit'
+import { attentionCounts, tabHealth, URGENT_SHOWN } from '../overview-health'
 import { TopCustomersPanel } from '../overview-kpis'
-import {
-  attentionCounts,
-  tabHealth,
-  URGENT_SHOWN,
-} from '../overview-health'
 import { niceAxis, overviewTrends } from '../overview-series'
 import { OverviewTab } from '../overview-tab'
 import { ComboChart } from '../overview-trend-charts'

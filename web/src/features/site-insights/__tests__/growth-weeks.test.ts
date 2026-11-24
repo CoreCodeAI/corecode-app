@@ -51,13 +51,13 @@ describe('signup weeks', () => {
       day(7, 5),
     ]
     const weeks = signupWeeks(daily)
-    expect(weeks.map((week) => [week.days, week.registered, week.partial])).toEqual(
-      [
-        [2, 3, true],
-        [7, 21, false],
-        [1, 5, true],
-      ]
-    )
+    expect(
+      weeks.map((week) => [week.days, week.registered, week.partial])
+    ).toEqual([
+      [2, 3, true],
+      [7, 21, false],
+      [1, 5, true],
+    ])
     expect(weeks[1]).toMatchObject({ activated: 14, paid: 7 })
     expect(weeks[1].start).toBe(midnight(0))
   })
@@ -143,9 +143,7 @@ describe('weekly retention rows', () => {
   })
 
   it('reads the segment the reader picks', () => {
-    const weeks = [
-      week(0, 40, [40, 20], { paid: { size: 4, active: [4, 1] } }),
-    ]
+    const weeks = [week(0, 40, [40, 20], { paid: { size: 4, active: [4, 1] } })]
     const [row] = weekRetentionRows(weeks, 'paid')
     expect(row.size).toBe(4)
     expect(row.cells[1]?.rate).toBe(0.25)

@@ -108,7 +108,10 @@ export function TabCards(props: {
                   </button>
                 )}
               </div>
-              <p className='line-clamp-2 text-sm leading-snug' title={verdict.text}>
+              <p
+                className='line-clamp-2 text-sm leading-snug'
+                title={verdict.text}
+              >
                 {headline}
               </p>
               {rest.length > 0 && (

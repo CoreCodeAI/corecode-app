@@ -334,4 +334,3 @@ export function niceAxis(max: number): { top: number; ticks: number[] } {
   )
   return { top, ticks }
 }
-

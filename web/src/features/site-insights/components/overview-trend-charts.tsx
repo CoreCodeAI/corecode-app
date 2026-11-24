@@ -442,7 +442,9 @@ export function OverviewTrendCharts(props: {
     if (ready) return chart()
     if (failed) {
       return (
-        <p className='text-muted-foreground text-xs'>{t('Could not be read')}</p>
+        <p className='text-muted-foreground text-xs'>
+          {t('Could not be read')}
+        </p>
       )
     }
     if (props.loading) return <Skeleton className='h-56 w-full rounded-md' />
@@ -464,40 +466,44 @@ export function OverviewTrendCharts(props: {
           'Revenue is money paid in, top-ups and plans. Consumption is what customers and root were charged at list price. Revenue earned is the part of revenue recognised so far. The dashed line is the previous period’s revenue.'
         )}
       >
-        {body(!!trends.revenue && trends.revenue.length > 1, props.failed?.finance, () => (
-          <ComboChart
-            ariaLabel={t('Revenue and consumption')}
-            bars={trends.revenue ?? []}
-            barLabel={t('Revenue')}
-            barFormat={fmt.cny}
-            axisFormat={fmt.cnyCompact}
-            barColor={BAR}
-            lines={[
-              ...(consumption
-                ? [
-                    {
-                      key: 'consumption',
-                      label: t('Consumption'),
-                      points: consumption,
-                      format: fmt.cny,
-                      color: LINE_A,
-                    },
-                  ]
-                : []),
-              ...(recognized && recognized.some((point) => point.value > 0)
-                ? [
-                    {
-                      key: 'recognized',
-                      label: t('Revenue earned'),
-                      points: recognized,
-                      format: fmt.cny,
-                      color: LINE_B,
-                    },
-                  ]
-                : []),
-            ]}
-          />
-        ))}
+        {body(
+          !!trends.revenue && trends.revenue.length > 1,
+          props.failed?.finance,
+          () => (
+            <ComboChart
+              ariaLabel={t('Revenue and consumption')}
+              bars={trends.revenue ?? []}
+              barLabel={t('Revenue')}
+              barFormat={fmt.cny}
+              axisFormat={fmt.cnyCompact}
+              barColor={BAR}
+              lines={[
+                ...(consumption
+                  ? [
+                      {
+                        key: 'consumption',
+                        label: t('Consumption'),
+                        points: consumption,
+                        format: fmt.cny,
+                        color: LINE_A,
+                      },
+                    ]
+                  : []),
+                ...(recognized && recognized.some((point) => point.value > 0)
+                  ? [
+                      {
+                        key: 'recognized',
+                        label: t('Revenue earned'),
+                        points: recognized,
+                        format: fmt.cny,
+                        color: LINE_B,
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          )
+        )}
       </Panel>
       <Panel
         title={t('Requests and failure rate')}
@@ -508,31 +514,35 @@ export function OverviewTrendCharts(props: {
           'Requests are counted as on the service quality tab. The failure rate reads on the right axis. The dashed line is the previous period’s requests.'
         )}
       >
-        {body(!!trends.requests && trends.requests.length > 1, props.failed?.quality, () => (
-          <ComboChart
-            ariaLabel={t('Requests and failure rate')}
-            bars={trends.requests ?? []}
-            barLabel={t('Requests')}
-            barFormat={fmt.num}
-            axisFormat={fmt.numCompact}
-            barColor={BAR}
-            rightAxisFormat={fmt.pct}
-            lines={
-              failure
-                ? [
-                    {
-                      key: 'failure',
-                      label: t('Failure rate'),
-                      points: failure,
-                      format: fmt.pct,
-                      axis: 'right' as const,
-                      color: LINE_A,
-                    },
-                  ]
-                : []
-            }
-          />
-        ))}
+        {body(
+          !!trends.requests && trends.requests.length > 1,
+          props.failed?.quality,
+          () => (
+            <ComboChart
+              ariaLabel={t('Requests and failure rate')}
+              bars={trends.requests ?? []}
+              barLabel={t('Requests')}
+              barFormat={fmt.num}
+              axisFormat={fmt.numCompact}
+              barColor={BAR}
+              rightAxisFormat={fmt.pct}
+              lines={
+                failure
+                  ? [
+                      {
+                        key: 'failure',
+                        label: t('Failure rate'),
+                        points: failure,
+                        format: fmt.pct,
+                        axis: 'right' as const,
+                        color: LINE_A,
+                      },
+                    ]
+                  : []
+              }
+            />
+          )
+        )}
       </Panel>
     </div>
   )

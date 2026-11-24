@@ -105,13 +105,19 @@ export function StatusBar(props: {
           <span className='text-muted-foreground flex items-center gap-2 text-xs font-normal'>
             {counts.danger > 0 && (
               <span className='flex items-center gap-1'>
-                <span aria-hidden className={cn('size-2 rounded-full', DOTS.danger)} />
+                <span
+                  aria-hidden
+                  className={cn('size-2 rounded-full', DOTS.danger)}
+                />
                 {t('{{count}} red', { count: counts.danger })}
               </span>
             )}
             {counts.warning > 0 && (
               <span className='flex items-center gap-1'>
-                <span aria-hidden className={cn('size-2 rounded-full', DOTS.warning)} />
+                <span
+                  aria-hidden
+                  className={cn('size-2 rounded-full', DOTS.warning)}
+                />
                 {t('{{count}} amber', { count: counts.warning })}
               </span>
             )}
@@ -121,7 +127,12 @@ export function StatusBar(props: {
       </button>
       <ul className='flex w-full flex-wrap items-center gap-x-1 gap-y-1 sm:w-auto sm:flex-1'>
         {HEALTH_TABS.map((tab) => {
-          const tone = tabHealth(tab, props.verdicts, props.signals, !!props.read[tab])
+          const tone = tabHealth(
+            tab,
+            props.verdicts,
+            props.signals,
+            !!props.read[tab]
+          )
           const name = label(tab)
           return (
             <li key={tab}>
@@ -214,7 +225,10 @@ export function AttentionPanel(props: {
       />
       {rest.length > 0 && (
         // Kept in the page while folded, so every finding can be found.
-        <div hidden={hidden} className={cn(shown.length > 0 && 'mt-2 border-t pt-2')}>
+        <div
+          hidden={hidden}
+          className={cn(shown.length > 0 && 'mt-2 border-t pt-2')}
+        >
           <Findings items={rest} onOpen={props.onOpen} />
         </div>
       )}
