@@ -143,7 +143,7 @@ export function ShareDonut(props: {
           )}
         </div>
       </div>
-      <ul className='grid w-full min-w-0 gap-1 text-xs'>
+      <ul className='grid w-full min-w-0 grid-cols-1 gap-1 text-xs sm:w-auto sm:flex-1'>
         {slices.map((slice) => (
           <li
             key={slice.key}

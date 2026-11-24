@@ -267,12 +267,12 @@ describe('overview with a source missing', () => {
     expect(screen.queryByText('0 orders · 0 payers')).not.toBeInTheDocument()
   })
 
-  it('puts what needs attention above the cards below the headline', async () => {
+  it('puts what needs attention at the foot of the page, after the figures', async () => {
     renderOverview({ quality, risk, pool, finance: null })
     const attention = await screen.findByText('Needs attention')
     const failure = screen.getByText('Failure rate')
     expect(
-      attention.compareDocumentPosition(failure) &
+      failure.compareDocumentPosition(attention) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
   })

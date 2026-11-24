@@ -19,38 +19,17 @@ For commercial licensing, please contact support@quantumnous.com
 import { useTranslation } from 'react-i18next'
 
 import { paymentMethodLabel } from '@/features/wallet/lib/billing'
+import { cn } from '@/lib/utils'
 
 import { dominant, type Contribution } from '../analysis'
 import {
-  joinSentences,
   useInsightsFormat,
+  useTabLabel,
   useVendorName,
-  type InsightsRangeInfo,
   type InsightsTab,
 } from '../lib'
-import type {
-  CapacityInsights,
-  EngineOutlook,
-  FinanceInsights,
-  QualityInsights,
-  RiskInsights,
-  UpstreamInsights,
-} from '../types'
-import {
-  useCapacityVerdict,
-  useFinanceVerdict,
-  useQualityVerdict,
-  useRiskVerdict,
-  useUpstreamVerdict,
-  type TabVerdict,
-} from '../verdicts'
-import {
-  Drivers,
-  Findings,
-  SampleNote,
-  type DriverRow,
-  type Finding,
-} from './insight-kit'
+import type { FinanceInsights, QualityInsights } from '../types'
+import { Drivers, SampleNote, type DriverRow } from './insight-kit'
 import {
   consumptionContributions,
   methodOrders,
@@ -58,65 +37,96 @@ import {
   revenueComparable,
   revenueContributions,
 } from './overview-analysis'
-import { Panel } from './shared'
+import type { TabVerdicts } from './overview-verdicts'
+import { Panel, type Tone } from './shared'
 
 /** Parts listed under each headline change. */
 const DRIVER_LIMIT = 3
 
 type Pair<T> = [T | undefined, T | undefined]
 
-/** One line per tab: its verdict, worst first, each linked to its tab. */
-export function TabDigest(props: {
-  capacity: Pair<CapacityInsights>
-  quality: Pair<QualityInsights>
-  finance: Pair<FinanceInsights>
-  risk: RiskInsights | undefined
-  upstream: Pair<UpstreamInsights>
-  range?: InsightsRangeInfo
-  outlook?: EngineOutlook
+const CARD_TONES: Record<Tone, { dot: string; ring: string }> = {
+  danger: { dot: 'bg-destructive', ring: 'border-l-destructive' },
+  warning: { dot: 'bg-amber-500', ring: 'border-l-amber-500' },
+  default: {
+    dot: 'bg-muted-foreground',
+    ring: 'border-l-muted-foreground/40',
+  },
+  good: { dot: 'bg-emerald-500', ring: 'border-l-emerald-500' },
+}
+
+const TONE_RANK: Tone[] = ['danger', 'warning', 'default', 'good']
+
+/**
+ * One small card per tab: its name, its headline, a color for how it reads.
+ * The rest of the verdict opens under the headline; the name opens the tab.
+ */
+export function TabCards(props: {
+  verdicts: TabVerdicts
   onOpen?: (tab: InsightsTab, section?: string) => void
 }) {
   const { t } = useTranslation()
-  const verdicts: [InsightsTab, TabVerdict | undefined][] = [
-    [
-      'capacity',
-      useCapacityVerdict(
-        props.capacity[0],
-        props.capacity[1],
-        undefined,
-        undefined,
-        props.outlook
-      ),
-    ],
-    ['quality', useQualityVerdict(props.quality[0], props.quality[1])],
-    ['finance', useFinanceVerdict(props.finance[0], props.finance[1])],
-    [
-      'upstream',
-      useUpstreamVerdict(props.upstream[0], props.upstream[1], props.range),
-    ],
-    ['risk', useRiskVerdict(props.risk)],
-  ]
-  // The headline is the line; the rest of the answer reads under it.
-  const items: Finding[] = verdicts.flatMap(([tab, verdict]) => {
-    if (!verdict) return []
-    const [title = verdict.text, ...rest] = verdict.points
-    return [
-      {
-        key: tab,
-        tone: verdict.tone,
-        title,
-        detail: rest.length > 0 ? joinSentences(...rest) : undefined,
-        tab,
-      },
-    ]
-  })
-  if (items.length === 0) return null
+  const label = useTabLabel()
+  const cards = props.verdicts
+    .flatMap(([tab, verdict]) => (verdict ? [{ tab, verdict }] : []))
+    .sort(
+      (a, b) =>
+        TONE_RANK.indexOf(a.verdict.tone) - TONE_RANK.indexOf(b.verdict.tone)
+    )
+  if (cards.length === 0) return null
   return (
     <Panel
       title={t('Tab by tab')}
       help={t('Each tab’s own one-line verdict, the worst first.')}
     >
-      <Findings items={items} onOpen={props.onOpen} />
+      <ul className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
+        {cards.map(({ tab, verdict }) => {
+          const [headline = verdict.text, ...rest] = verdict.points
+          const tone = CARD_TONES[verdict.tone]
+          return (
+            <li
+              key={tab}
+              data-tone={verdict.tone}
+              className={cn(
+                'bg-muted/20 grid content-start gap-1.5 rounded-lg border border-l-4 px-3 py-2.5',
+                tone.ring
+              )}
+            >
+              <div className='flex items-center gap-2'>
+                <span
+                  aria-hidden
+                  className={cn('size-2 shrink-0 rounded-full', tone.dot)}
+                />
+                <span className='text-sm font-semibold'>{label(tab)}</span>
+                {props.onOpen && (
+                  <button
+                    type='button'
+                    className='text-primary ml-auto text-xs font-medium hover:underline'
+                    onClick={() => props.onOpen?.(tab)}
+                  >
+                    {t('Open')} →
+                  </button>
+                )}
+              </div>
+              <p className='line-clamp-2 text-sm leading-snug' title={verdict.text}>
+                {headline}
+              </p>
+              {rest.length > 0 && (
+                <details className='group text-xs'>
+                  <summary className='text-muted-foreground hover:text-foreground cursor-pointer select-none'>
+                    {t('{{count}} more points', { count: rest.length })}
+                  </summary>
+                  <ul className='text-foreground/80 mt-1 grid list-disc gap-0.5 pl-4'>
+                    {rest.map((point) => (
+                      <li key={point}>{point}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </li>
+          )
+        })}
+      </ul>
     </Panel>
   )
 }

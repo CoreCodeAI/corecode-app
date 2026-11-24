@@ -17,9 +17,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQueries } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { alignPrevious, beforeLogs, closedHours } from '../analysis'
 import type { InsightsView } from '../api'
 import {
   ATTENTION,
@@ -46,7 +46,7 @@ import {
   type InsightsTab,
   attentionLabel,
 } from '../lib'
-import { previousDayPartial, usePartialDays } from '../partial-days'
+import { usePartialDays } from '../partial-days'
 import { onSale } from '../quality-analysis'
 import type {
   ActivityInsights,
@@ -61,7 +61,7 @@ import type {
 } from '../types'
 import { checkoutLossFindings, refundedCheckoutFindings } from './checkout-loss'
 import { DigestSettings } from './digest-settings'
-import { Findings, StaleNote, type Finding } from './insight-kit'
+import { StaleNote, type Finding } from './insight-kit'
 import {
   FAILING_RATE,
   marginCard,
@@ -73,7 +73,12 @@ import {
   TopModelsPanel,
   type OverviewSources,
 } from './overview-charts'
-import { TabDigest, WhatChanged } from './overview-insights'
+import { TabCards, WhatChanged } from './overview-insights'
+import { KpiGrid, TopCustomersPanel } from './overview-kpis'
+import { overviewTrends } from './overview-series'
+import { AttentionPanel, StatusBar } from './overview-status'
+import { useOverviewVerdicts } from './overview-verdicts'
+import { OverviewTrendCharts } from './overview-trend-charts'
 import {
   overviewQuotaSignals,
   overviewServiceSignals,
@@ -81,7 +86,7 @@ import {
   poolPeakAgainstSlots,
 } from './overview-signals'
 import { rankClusters, riskRangeStart } from './risk-analysis'
-import { MetricGrid, Panel, type MetricItem, type TrendPoint } from './shared'
+import { MetricGrid, Panel, type MetricItem } from './shared'
 
 type InsightsQuery = {
   queryKey: readonly unknown[]
@@ -105,41 +110,6 @@ const EARLIER_VIEWS = [
   'upstream',
   'activity',
 ] as const satisfies readonly InsightsView[]
-
-/**
- * An hourly series as trend points, the hour still filling left out. Each
- * point's previous-period value is the hour one range earlier, where that
- * period has it and the comparison holds.
- */
-function hourlyTrend<T extends { hour: number }, B extends { hour: number }>(
-  rows: T[],
-  end: number,
-  options: {
-    title: (hour: number) => string
-    value: (row: T) => number
-    earlier: B[] | null | undefined
-    earlierValue: (row: B) => number
-    span: number
-    gate: boolean
-    /** An hour before the logs: drawn missing, not as zero. */
-    missing?: (hour: number) => boolean
-  }
-): TrendPoint[] {
-  const closed = closedHours(rows, end)
-  const before = alignPrevious(closed, options.earlier, options.span)
-  return closed.map((row, index) => {
-    const prior = before[index]
-    return {
-      title: options.title(row.hour),
-      value: options.value(row),
-      missing: options.missing?.(row.hour),
-      previous:
-        options.gate && options.span > 0 && prior
-          ? options.earlierValue(prior)
-          : undefined,
-    }
-  })
-}
 
 /** Vendors the quality verdict names when they fail. */
 const NAMED_VENDORS = new Set(['claude', 'codex', 'grok', 'gemini', 'media'])
@@ -486,112 +456,33 @@ export function OverviewTab(props: {
   }
 
   // A short range reads by the hour, the hour still filling left out; a
-  // longer one by the day. The previous period is read at the same place in
-  // its range: a day by its place (day 1 with day 1), an hour by the hour one
-  // range earlier. Nothing is compared where that period is missing.
+  // longer one by the day. The cards and the charts read the same series.
   const hourly = range?.hourly ?? false
   const end = range?.end ?? 0
   const span = range ? rangeSpan(range) : 0
-  const revenueOf = (row: { topup: number; subscription: number }) =>
-    row.topup + row.subscription
-  const financeBefore = previousFinance?.daily ?? []
-  let revenueTrend: TrendPoint[] | undefined = (finance?.daily ?? []).map(
-    (day, index) => {
-      const value = revenueOf(day)
-      const before = financeBefore.at(index)
-      return {
-        title: fmt.day(day.day),
-        value,
-        partial: financeDay(day.day, [value]),
-        previous: previousMissing || !before ? undefined : revenueOf(before),
-        previousPartial: previousDayPartial(index, financeBefore.length),
-      }
-    }
-  )
-  // The requests of a previous period counted on another basis are not
-  // compared, as the figures above are not.
-  const requestsComparable =
-    !previousMissing &&
-    countsRequestsOnce(previousQuality) === countsRequestsOnce(quality)
-  const requestsBefore = previousQuality?.daily ?? []
-  let requestsTrend: TrendPoint[] | undefined = (quality?.daily ?? []).map(
-    (day, index) => {
-      const before = requestsBefore.at(index)
-      return {
-        title: fmt.day(day.day),
-        value: day.requests,
-        partial: qualityDay(day.day, [day.requests]),
-        missing: beforeLogs(day.day, 86400, logsSince),
-        previous: requestsComparable && before ? before.requests : undefined,
-        previousPartial: previousDayPartial(index, requestsBefore.length),
-      }
-    }
-  )
-  let signupTrend: TrendPoint[] | undefined
-  if (risk?.signup_series) {
-    const series = risk.signup_series.map((point) => ({
-      hour: point.at,
-      value: point.count,
-    }))
-    // Sign-ups of the previous period, on the same unit as this one.
-    const earlier =
-      previousRisk?.series_unit === risk.series_unit
-        ? (previousRisk.signup_series ?? []).map((point) => ({
-            hour: point.at,
-            value: point.count,
-          }))
-        : []
-    signupTrend =
-      risk.series_unit === 'hour'
-        ? hourlyTrend(series, end || Infinity, {
-            title: (hour) => hours.title(hour),
-            value: (row) => row.value,
-            earlier,
-            earlierValue: (row) => row.value,
-            span,
-            gate: true,
-          })
-        : series.map((point, index) => ({
-            title: fmt.day(point.hour),
-            value: point.value,
-            previous: earlier.at(index)?.value,
-            previousPartial: previousDayPartial(index, earlier.length),
-          }))
-  }
-  if (hourly) {
-    revenueTrend = finance?.hourly
-      ? hourlyTrend(finance.hourly, end, {
-          title: (hour) => hours.title(hour),
-          value: revenueOf,
-          earlier: previousFinance?.hourly,
-          earlierValue: revenueOf,
-          span,
-          gate: !previousMissing,
-        })
-      : undefined
-    const requestHours: { hour: number; requests: number }[] | undefined =
-      quality?.hourly ?? capacity?.hourly
-    const earlierRequests:
-      | { hour: number; requests: number }[]
-      | null
-      | undefined = quality?.hourly
-      ? previousQuality?.hourly
-      : previousCapacity?.hourly
-    // An hour before the logs has no data: drawn missing, not as zero.
-    requestsTrend = requestHours
-      ? hourlyTrend(requestHours, end, {
-          title: (hour) => hours.title(hour),
-          value: (row) => row.requests,
-          earlier: earlierRequests,
-          earlierValue: (row) => row.requests,
-          span,
-          gate: requestsComparable,
-          missing: (hour) => beforeLogs(hour, 3600, logsSince),
-        })
-      : undefined
-  }
-  const qualitySampled = (quality?.requests ?? 0) >= SMALL_SAMPLE
+  const trends = overviewTrends({
+    hourly,
+    end,
+    span,
+    previousMissing,
+    logsSince,
+    dayTitle: fmt.day,
+    hourTitle: (hour) => hours.title(hour),
+    financeDay,
+    qualityDay,
+    finance,
+    previousFinance,
+    quality,
+    previousQuality,
+    capacity,
+    previousCapacity,
+    risk,
+    previousRisk,
+    activity,
+    previousActivity,
+  })
   const once = countsRequestsOnce(quality)
+  const qualitySampled = (quality?.requests ?? 0) >= SMALL_SAMPLE
   const five = pool?.five_hour_estimate
   const hoursInRange = range ? rangeHours(range) : 0
   const staleHours = Math.max(
@@ -639,6 +530,8 @@ export function OverviewTab(props: {
         : undefined,
     tone: qualitySampled ? failureTone(quality?.error_rate ?? 0) : 'default',
     hint: failureHint,
+    trend: trends.failureRate,
+    trendFormat: fmt.pct,
   }
 
   const poolPeak = poolPeakAgainstSlots(capacity)
@@ -675,92 +568,282 @@ export function OverviewTab(props: {
         hint: capacity ? fmt.time(capacity.peak_at) : undefined,
       }
 
+  const chargeOf = (data: FinanceInsights) =>
+    data.consumption_usd + (data.root_consumption_usd ?? 0)
+  const earned = finance?.recognized_revenue
+  const kpis: MetricItem[] = [
+    {
+      label: t('Revenue'),
+      help: definitions.paidRevenue,
+      missing: !finance,
+      value: fmt.cny(finance?.revenue ?? 0),
+      delta: finance
+        ? {
+            current: finance.revenue,
+            previous: previousFinance?.revenue,
+            better: 'up',
+          }
+        : undefined,
+      trend: trends.revenue,
+      trendFormat: fmt.cny,
+      trendBars: true,
+      hint: finance
+        ? t('{{orders}} orders · {{users}} payers', {
+            orders: finance.orders,
+            users: finance.paying_users,
+          })
+        : undefined,
+    },
+    {
+      label: t('Revenue earned'),
+      help: definitions.earnedRevenue,
+      missing: !finance || earned === undefined,
+      value: fmt.cny(earned ?? 0),
+      delta:
+        finance && earned !== undefined
+          ? {
+              current: earned,
+              previous: previousFinance?.recognized_revenue,
+              better: 'up',
+            }
+          : undefined,
+      trend: trends.recognized,
+      trendFormat: fmt.cny,
+      trendBars: true,
+      hint: finance
+        ? t('Wallets {{wallet}} · plans {{plans}}', {
+            wallet: fmt.cny(finance.recognized_wallet_revenue ?? 0),
+            plans: fmt.cny(finance.recognized_subscription_revenue ?? 0),
+          })
+        : undefined,
+    },
+    margin,
+    {
+      label: t('Consumption'),
+      help: definitions.listCharge,
+      missing: !finance,
+      value: fmt.cny(finance ? chargeOf(finance) : 0),
+      delta: finance
+        ? {
+            current: chargeOf(finance),
+            previous: previousFinance ? chargeOf(previousFinance) : undefined,
+            better: 'up',
+          }
+        : undefined,
+      trend: trends.consumption,
+      trendFormat: fmt.cny,
+      trendBars: true,
+      hint: finance
+        ? t('At list price, root and staff included.')
+        : undefined,
+    },
+    {
+      label: t('Requests'),
+      help: joinSentences(
+        once ? definitions.requests : definitions.requestsAsAttempts,
+        definitions.everyone
+      ),
+      missing: !quality,
+      value: fmt.num(quality?.requests ?? 0),
+      delta: quality
+        ? {
+            current: quality.requests,
+            previous:
+              countsRequestsOnce(previousQuality) === once
+                ? previousQuality?.requests
+                : undefined,
+            better: 'neutral',
+            missing: previousMissing,
+          }
+        : undefined,
+      trend: trends.requests,
+      trendBars: true,
+    },
+    failureCard,
+    {
+      label: t('Active users'),
+      missing: !activity,
+      value: fmt.num(activity?.active_users ?? 0),
+      delta: activity
+        ? {
+            current: activity.active_users,
+            previous: previousActivity?.active_users,
+            better: 'up',
+            missing: previousMissing,
+          }
+        : undefined,
+      trend: trends.activeUsers,
+    },
+    {
+      label: t('Sign-ups'),
+      missing: !risk,
+      value: fmt.num(risk?.signups ?? 0),
+      delta: risk
+        ? {
+            current: risk.signups,
+            previous: previousRisk?.signups,
+            better: 'neutral',
+          }
+        : undefined,
+      trend: trends.signups,
+      trendBars: true,
+    },
+  ]
+
+  const verdicts = useOverviewVerdicts({
+    capacity: [capacity, previousCapacity],
+    quality: [quality, previousQuality],
+    finance: [finance, previousFinance],
+    risk,
+    upstream: [upstream, previousUpstream],
+    range,
+    outlook: props.outlook,
+  })
+  const [attentionOpen, setAttentionOpen] = useState(false)
+  const showAttention = () => {
+    setAttentionOpen(true)
+    // After the folded findings are drawn.
+    requestAnimationFrame(() =>
+      document
+        .querySelector('#overview-attention')
+        ?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    )
+  }
+  const unreadable = (view: 'quality' | 'finance') =>
+    state(view).status === 'error' && !(view === 'quality' ? quality : finance)
+
   return (
     <div className='grid gap-4'>
-      <MetricGrid
-        loading={headlinePending}
-        items={[
-          {
-            label: t('Revenue'),
-            featured: true,
-            help: definitions.paidRevenue,
-            missing: !finance,
-            value: fmt.cny(finance?.revenue ?? 0),
-            delta: finance
-              ? {
-                  current: finance.revenue,
-                  previous: previousFinance?.revenue,
-                  better: 'up',
-                }
-              : undefined,
-            trend: revenueTrend,
-            trendFormat: fmt.cny,
-            trendBars: hourly,
-            hint: finance
-              ? t('{{orders}} orders · {{users}} payers', {
-                  orders: finance.orders,
-                  users: finance.paying_users,
-                })
-              : undefined,
-          },
-          {
-            label: t('Requests'),
-            featured: true,
-            help: joinSentences(
-              once ? definitions.requests : definitions.requestsAsAttempts,
-              definitions.everyone
-            ),
-            missing: !quality,
-            value: fmt.num(quality?.requests ?? 0),
-            delta: quality
-              ? {
-                  current: quality.requests,
-                  previous:
-                    countsRequestsOnce(previousQuality) === once
-                      ? previousQuality?.requests
-                      : undefined,
-                  better: 'neutral',
-                  missing: previousMissing,
-                }
-              : undefined,
-            trend: requestsTrend,
-            trendBars: hourly,
-            hint: finance
-              ? t('Consumption {{amount}} at list price', {
-                  amount: fmt.cny(
-                    finance.consumption_usd +
-                      (finance.root_consumption_usd ?? 0)
-                  ),
-                })
-              : undefined,
-          },
-          {
-            label: t('Sign-ups'),
-            featured: true,
-            missing: !risk,
-            value: fmt.num(risk?.signups ?? 0),
-            delta: risk
-              ? {
-                  current: risk.signups,
-                  previous: previousRisk?.signups,
-                  better: 'neutral',
-                }
-              : undefined,
-            trend: signupTrend,
-            trendBars: true,
-          },
-        ]}
+      <StatusBar
+        signals={signals}
+        verdicts={verdicts}
+        loading={loading}
+        read={{
+          capacity: !!capacity,
+          pool: !!pool,
+          quality: !!quality,
+          upstream: !!upstream,
+          finance: !!finance,
+          risk: !!risk,
+        }}
+        onOpen={props.onOpen}
+        onShowAttention={showAttention}
+        actions={<DigestSettings />}
       />
       <StaleNote staleHours={staleHours} rangeHours={hoursInRange} />
+      <KpiGrid items={kpis} loading={headlinePending} />
+      <OverviewTrendCharts
+        trends={trends}
+        loading={headlinePending}
+        hourly={hourly}
+        failed={{
+          finance: unreadable('finance'),
+          quality: unreadable('quality'),
+        }}
+      />
 
-      <Panel
-        title={t('Needs attention')}
-        actions={<DigestSettings />}
-        description={
-          loading > 0
-            ? t('Reading {{count}} more views…', { count: loading })
-            : undefined
-        }
+      <ShareCharts quality={quality} finance={finance} sources={sources} />
+      <div className='grid gap-4 lg:grid-cols-2'>
+        <TopModelsPanel
+          quality={quality}
+          source={sources.quality}
+          onOpen={props.onOpen ? () => props.onOpen?.('quality') : undefined}
+        />
+        <TopCustomersPanel
+          activity={activity}
+          failed={state('activity').status === 'error'}
+          onOpen={props.onOpen ? (tab) => props.onOpen?.(tab) : undefined}
+        />
+      </div>
+
+      <WhatChanged
+        quality={[quality, previousQuality]}
+        finance={[finance, previousFinance]}
+      />
+
+      <Panel title={t('Right now')}>
+        <MetricGrid
+          className={
+            pool?.configured && !pool.error
+              ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6'
+              : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-3'
+          }
+          items={[
+            peakCard,
+            {
+              label: t('Debt (negative balances)'),
+              help: definitions.live,
+              missing: !finance,
+              value: fmt.cny(finance?.debt_usd ?? 0),
+              tone:
+                (finance?.debt_usd ?? 0) < DEBT_ALERT_USD
+                  ? 'danger'
+                  : 'default',
+              hint: definitions.now,
+            },
+            {
+              label: t('Shared addresses'),
+              missing: !risk,
+              value: fmt.num(clusters.length),
+            },
+            ...(pool?.configured && !pool.error
+              ? [
+                  {
+                    label: t('Schedulable accounts'),
+                    help: definitions.live,
+                    value: `${pool.eligible_accounts} / ${pool.accounts.length}`,
+                    tone:
+                      pool.eligible_accounts <= ELIGIBLE_ACCOUNTS_LOW
+                        ? ('danger' as const)
+                        : ('default' as const),
+                    hint: definitions.now,
+                  },
+                  {
+                    label: t('In flight now'),
+                    help: definitions.live,
+                    value: `${pool.in_flight} / ${pool.effective_slots}`,
+                    meter: pool.effective_slots
+                      ? {
+                          value: pool.in_flight / pool.effective_slots,
+                          label: t('In flight now'),
+                        }
+                      : undefined,
+                  },
+                  {
+                    label: t('5-hour left'),
+                    help: definitions.live,
+                    value: five ? `≈ ${fmt.usdWhole(five.remaining_usd)}` : '-',
+                    meter: five
+                      ? {
+                          value: share(five),
+                          tone:
+                            share(five) < REMAINING_DANGER
+                              ? ('danger' as const)
+                              : ('default' as const),
+                          label: t('5-hour left'),
+                        }
+                      : undefined,
+                    hint: definitions.now,
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </Panel>
+
+      <ProvidersPanel
+        pool={pool}
+        quality={quality}
+        finance={finance}
+        sources={sources}
+      />
+      <TabCards verdicts={verdicts} onOpen={props.onOpen} />
+      <AttentionPanel
+        signals={signals}
+        loading={loading}
+        open={attentionOpen}
+        onToggle={() => setAttentionOpen((open) => !open)}
+        onOpen={props.onOpen}
         help={joinSentences(
           t(
             'Signals use the thresholds the tabs color by: failure rate above 2% over at least 100 requests, Claude TTFT p95 above 10 s, under a quarter of a quota budget left, debt beyond ¥1, two or fewer schedulable accounts. The last full hour is compared with the same hour of the previous period. The worst and largest come first.'
@@ -769,120 +852,6 @@ export function OverviewTab(props: {
             'The pool’s peak is read against its slots from 80% of them; image and video tasks when over 5% of at least 100 finished failed; checkouts when the share paid fell under half the previous period’s, over at least 5 in each. Debt and the pool are as they stand now.'
           )
         )}
-      >
-        <Findings
-          items={signals}
-          empty={
-            loading === 0
-              ? t('Nothing needs attention, in this range or now.')
-              : undefined
-          }
-          onOpen={props.onOpen}
-        />
-      </Panel>
-      <TabDigest
-        capacity={[capacity, previousCapacity]}
-        quality={[quality, previousQuality]}
-        finance={[finance, previousFinance]}
-        risk={risk}
-        upstream={[upstream, previousUpstream]}
-        range={range}
-        outlook={props.outlook}
-        onOpen={props.onOpen}
-      />
-
-      <MetricGrid
-        items={[
-          failureCard,
-          margin,
-          {
-            label: t('Active users'),
-            missing: !activity,
-            value: fmt.num(activity?.active_users ?? 0),
-            delta: activity
-              ? {
-                  current: activity.active_users,
-                  previous: previousActivity?.active_users,
-                  better: 'up',
-                  missing: previousMissing,
-                }
-              : undefined,
-          },
-          peakCard,
-          {
-            label: t('Debt (negative balances)'),
-            help: definitions.live,
-            missing: !finance,
-            value: fmt.cny(finance?.debt_usd ?? 0),
-            tone:
-              (finance?.debt_usd ?? 0) < DEBT_ALERT_USD ? 'danger' : 'default',
-            hint: definitions.now,
-          },
-          {
-            label: t('Shared addresses'),
-            missing: !risk,
-            value: fmt.num(clusters.length),
-          },
-        ]}
-      />
-      {pool?.configured && !pool.error && (
-        <MetricGrid
-          className='grid-cols-2 sm:grid-cols-3 lg:grid-cols-3'
-          items={[
-            {
-              label: t('Schedulable accounts'),
-              help: definitions.live,
-              value: `${pool.eligible_accounts} / ${pool.accounts.length}`,
-              tone:
-                pool.eligible_accounts <= ELIGIBLE_ACCOUNTS_LOW
-                  ? 'danger'
-                  : 'default',
-              hint: definitions.now,
-            },
-            {
-              label: t('In flight now'),
-              help: definitions.live,
-              value: `${pool.in_flight} / ${pool.effective_slots}`,
-              meter: pool.effective_slots
-                ? {
-                    value: pool.in_flight / pool.effective_slots,
-                    label: t('In flight now'),
-                  }
-                : undefined,
-            },
-            {
-              label: t('5-hour left'),
-              help: definitions.live,
-              value: five ? `≈ ${fmt.usdWhole(five.remaining_usd)}` : '-',
-              meter: five
-                ? {
-                    value: share(five),
-                    tone: share(five) < REMAINING_DANGER ? 'danger' : 'default',
-                    label: t('5-hour left'),
-                  }
-                : undefined,
-              hint: definitions.now,
-            },
-          ]}
-        />
-      )}
-
-      <WhatChanged
-        quality={[quality, previousQuality]}
-        finance={[finance, previousFinance]}
-      />
-
-      <ProvidersPanel
-        pool={pool}
-        quality={quality}
-        finance={finance}
-        sources={sources}
-      />
-      <ShareCharts quality={quality} finance={finance} sources={sources} />
-      <TopModelsPanel
-        quality={quality}
-        source={sources.quality}
-        onOpen={props.onOpen ? () => props.onOpen?.('quality') : undefined}
       />
     </div>
   )
