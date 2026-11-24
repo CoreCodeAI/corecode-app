@@ -43,6 +43,7 @@ import type {
   QualityInsights,
   RiskInsights,
   UpstreamInsights,
+  UpstreamRunway,
   UserSpend,
   UserSpendHours,
 } from './types'
@@ -140,6 +141,20 @@ export async function saveChannelCosts(costs: ChannelCost[]) {
   if (!res.data.success) {
     throw createServerError(res.data, 'Failed to save channel costs')
   }
+}
+
+/**
+ * How long each upstream account's balance lasts at the last seven days' pace.
+ * It takes no range: balances are live and the window ends now.
+ */
+export async function getUpstreamRunway(): Promise<UpstreamRunway> {
+  const res = await api.get<ApiResponse<UpstreamRunway>>(
+    '/api/site-insights/upstream-runway'
+  )
+  if (!res.data.success || res.data.data === undefined) {
+    throw createServerError(res.data, 'Failed to load site insights')
+  }
+  return res.data.data
 }
 
 /** One provider's use on new-api and gpt-load, with a forecast. */

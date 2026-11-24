@@ -506,6 +506,7 @@ func SetApiRouter(router *gin.Engine) {
 			siteInsightsRoute.PUT("/channel-costs", controller.SetChannelCosts)
 			siteInsightsRoute.GET("/upstream", controller.GetUpstreamInsights)
 			siteInsightsRoute.PUT("/upstream-fees", controller.SetUpstreamFees)
+			siteInsightsRoute.GET("/upstream-runway", controller.GetUpstreamRunway)
 			siteInsightsRoute.GET("/pool", controller.GetEnginePool)
 			siteInsightsRoute.PUT("/pool/subscription-renewals/:organization_uuid", controller.SetEngineSubscriptionRenewal)
 			siteInsightsRoute.POST("/pool/groups/:group_id/credentials/:credential_id/reset-credits", controller.ConsumeEngineResetCredit)

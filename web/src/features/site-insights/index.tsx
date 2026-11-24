@@ -41,6 +41,7 @@ import {
   getDayProfile,
   getInsights,
   getPoolOutlook,
+  getUpstreamRunway,
   getPoolUsage,
   VIEW_MAX_DAYS,
   type InsightsView,
@@ -64,10 +65,17 @@ import {
   writePoolRefresh,
   type InsightsRangeInfo,
   type InsightsSources,
+  type SourceState,
   type InsightsTab,
 } from './lib'
 import { InsightsSpanContext } from './partial-days'
-import type { EngineOutlook, LogsSince, PoolProvider, PoolUsage } from './types'
+import type {
+  EngineOutlook,
+  LogsSince,
+  PoolProvider,
+  PoolUsage,
+  UpstreamRunway,
+} from './types'
 
 const route = getRouteApi('/_authenticated/site-insights/')
 
@@ -308,6 +316,16 @@ export function SiteInsights() {
       tab === 'pool'
         ? poolRefresh * 1000 || false
         : (REFRESH_MS.capacity ?? false),
+    meta: { errorToast: false },
+  })
+  // How long each upstream account's balance lasts. Balances are live and the
+  // window ends now, so it takes no range; the overview reads it for its signal.
+  // Its failure is named in its own panel, not as a toast.
+  const runway = useQuery({
+    queryKey: ['site-insights', 'upstream-runway'],
+    queryFn: getUpstreamRunway,
+    enabled: tab === 'upstream' || tab === 'overview',
+    staleTime: 60_000,
     meta: { errorToast: false },
   })
   // How a typical day's requests spread over its hours, to project the days
@@ -692,6 +710,16 @@ export function SiteInsights() {
                         }),
                       outlook: outlook.data,
                     }}
+                    runway={{
+                      data: runway.data,
+                      source: {
+                        status: runway.status,
+                        error:
+                          runway.error instanceof Error
+                            ? runway.error.message
+                            : undefined,
+                      },
+                    }}
                   />
                 ) : (
                   <OverviewTab
@@ -701,6 +729,7 @@ export function SiteInsights() {
                     onOpen={openTab}
                     range={range}
                     outlook={outlook.data}
+                    runway={runway.data}
                   />
                 )}
               </Suspense>
@@ -742,6 +771,7 @@ function InsightsView(props: {
     onVendor: (vendor: CapacityVendor) => void
     outlook: EngineOutlook | undefined
   }
+  runway: { data: UpstreamRunway | undefined; source: SourceState }
 }) {
   // Each query key includes the view, so data always matches it. The
   // previous period's key does too, and is undefined until it loads.
@@ -855,6 +885,8 @@ function InsightsView(props: {
           previous={previous}
           range={range}
           onOpen={onOpen}
+          runway={props.runway.data}
+          runwaySource={props.runway.source}
           {...states}
         />
       )

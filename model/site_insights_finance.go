@@ -241,6 +241,9 @@ type FinanceInsights struct {
 	// the upstream bills, fees and pool accounts, with a staff row and an
 	// unattributed row (see GroupAllocation). Absent before the server's release.
 	GroupAllocations []GroupAllocation `json:"group_allocations"`
+	// ModelAllocations is the same shares by model, with each model's customer
+	// charge and requests (see ModelAllocation). Absent before the server's release.
+	ModelAllocations []ModelAllocation `json:"model_allocations"`
 	// StaleHours counts the range's hours still stored under an older rollup
 	// version, until they are rebuilt; omitted when none.
 	StaleHours int `json:"stale_hours"`
@@ -530,6 +533,7 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 		return nil, err
 	}
 	result.GroupAllocations = allocateGroupMargins(upstream, usage, userRevenue, engines)
+	result.ModelAllocations = allocateModelMargins(upstream, usage, engines)
 	for _, day := range days {
 		day.Topup, day.Subscription, day.ConsumptionUSD = roundTo(day.Topup, 2), roundTo(day.Subscription, 2), roundTo(max(day.ConsumptionUSD, 0), 4)
 		day.RecognizedRevenue = roundTo(max(day.RecognizedRevenue, 0), 2)

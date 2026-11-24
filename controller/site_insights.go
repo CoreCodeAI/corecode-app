@@ -449,6 +449,18 @@ func GetUpstreamInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxLogDays, settledRead("upstream", model.GetUpstreamInsights))
 }
 
+// GetUpstreamRunway answers how long each upstream account's balance lasts at
+// the pace of the trailing seven days. It takes no range: the balances are what
+// the channels hold now, and the bill window ends now.
+func GetUpstreamRunway(c *gin.Context) {
+	result, err := model.GetUpstreamRunway(time.Now().Unix())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, result)
+}
+
 // SetUpstreamFees replaces the monthly fees of channels whose upstream bill
 // cannot be read, such as subscription accounts.
 func SetUpstreamFees(c *gin.Context) {

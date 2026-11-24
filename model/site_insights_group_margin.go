@@ -61,6 +61,8 @@ type allocationUsage struct {
 	model   string
 	charged float64
 	weight  float64
+	// requests is the logged request count of the sum (quota_data.count).
+	requests int64
 }
 
 // readAllocationUsage sums quota_data by group, channel, model and user. Staff's
@@ -73,9 +75,10 @@ func readAllocationUsage(r InsightsRange, staff []int) ([]allocationUsage, error
 		ModelName string
 		UserId    int
 		Quota     int64
+		Count     int64
 	}
 	if err := DB.Model(&QuotaData{}).
-		Select("use_group, channel_id, model_name, user_id, SUM(quota) AS quota").
+		Select("use_group, channel_id, model_name, user_id, SUM(quota) AS quota, SUM(count) AS count").
 		Where("created_at >= ? AND created_at < ?", r.Start, r.End).
 		Group("use_group, channel_id, model_name, user_id").Find(&rows).Error; err != nil {
 		return nil, err
@@ -101,7 +104,7 @@ func readAllocationUsage(r InsightsRange, staff []int) ([]allocationUsage, error
 		charged := float64(row.Quota)
 		usage = append(usage, allocationUsage{
 			key: key, userID: row.UserId, channel: row.ChannelId, model: row.ModelName,
-			charged: charged, weight: charged / divisor,
+			charged: charged, weight: charged / divisor, requests: row.Count,
 		})
 	}
 	return usage, nil
