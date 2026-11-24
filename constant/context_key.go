@@ -63,8 +63,11 @@ const (
 	ContextKeyUserStatus  ContextKey = "user_status"
 	ContextKeyUserEmail   ContextKey = "user_email"
 	ContextKeyUserGroup   ContextKey = "user_group"
-	ContextKeyUsingGroup  ContextKey = "group"
-	ContextKeyUserName    ContextKey = "username"
+	// ContextKeyUserRole is the user's role, so a relay request can tell an
+	// administrator without another cache read.
+	ContextKeyUserRole   ContextKey = "user_role"
+	ContextKeyUsingGroup ContextKey = "group"
+	ContextKeyUserName   ContextKey = "username"
 	// ContextKeyUserConcurrencyLimit is the user's concurrency limit, set by
 	// middleware.UserConcurrencyLimit when one applies.
 	ContextKeyUserConcurrencyLimit ContextKey = "user_concurrency_limit"

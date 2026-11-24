@@ -6900,7 +6900,7 @@
     "When performance monitoring is enabled and system resource usage exceeds the set threshold, new Relay requests will be rejected.": "When performance monitoring is enabled and system resource usage exceeds the set threshold, new Relay requests will be rejected.",
     "When running in containers or ephemeral environments, ensure the SQLite file is mapped to persistent storage to avoid data loss on restart.": "When running in containers or ephemeral environments, ensure the SQLite file is mapped to persistent storage to avoid data loss on restart.",
     "When the primary domain changes, the previous domain is automatically kept in the compatible domains list.": "When the primary domain changes, the previous domain is automatically kept in the compatible domains list.",
-    "When the upstream model refuses a request under its usage policy, record a violation against the customer who sent it. Administrators are never restricted.": "When the upstream model refuses a request under its usage policy, record a violation against the customer who sent it. Administrators are never restricted.",
+    "When the upstream model refuses a request under its usage policy, record a violation against the customer who sent it. Requests from administrators and root skip risk control and are not recorded.": "When the upstream model refuses a request under its usage policy, record a violation against the customer who sent it. Requests from administrators and root skip risk control and are not recorded.",
     "Whitelist": "Whitelist",
     "Whitelist (Only allow listed domains)": "Whitelist (Only allow listed domains)",
     "Whitelist (Only allow listed IPs)": "Whitelist (Only allow listed IPs)",

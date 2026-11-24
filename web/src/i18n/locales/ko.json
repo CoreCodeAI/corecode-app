@@ -6900,7 +6900,7 @@
     "When performance monitoring is enabled and system resource usage exceeds the set threshold, new Relay requests will be rejected.": "성능 모니터링이 활성화되어 있고 시스템 리소스 사용량이 설정한 임계값을 초과하면 새 Relay 요청이 거부됩니다.",
     "When running in containers or ephemeral environments, ensure the SQLite file is mapped to persistent storage to avoid data loss on restart.": "컨테이너나 임시 환경에서 실행할 때는 재시작 시 데이터가 손실되지 않도록 SQLite 파일을 영구 스토리지에 매핑하세요.",
     "When the primary domain changes, the previous domain is automatically kept in the compatible domains list.": "기본 도메인이 변경되면 이전 도메인은 호환 도메인 목록에 자동으로 유지됩니다.",
-    "When the upstream model refuses a request under its usage policy, record a violation against the customer who sent it. Administrators are never restricted.": "업스트림 모델이 사용 정책에 따라 요청을 거부하면 요청을 보낸 고객에게 위반을 기록합니다. 관리자는 제한되지 않습니다.",
+    "When the upstream model refuses a request under its usage policy, record a violation against the customer who sent it. Requests from administrators and root skip risk control and are not recorded.": "업스트림 모델이 사용 정책에 따라 요청을 거부하면 요청을 보낸 고객에게 위반을 기록합니다. 관리자와 root의 요청은 위험 관리를 거치지 않으며 기록되지 않습니다.",
     "Whitelist": "허용 목록",
     "Whitelist (Only allow listed domains)": "허용 목록(나열된 도메인만 허용)",
     "Whitelist (Only allow listed IPs)": "허용 목록(나열된 IP만 허용)",

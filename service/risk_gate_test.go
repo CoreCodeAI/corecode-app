@@ -5,12 +5,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -26,8 +28,16 @@ import (
 
 func checkRiskGate(t *testing.T, userId int, request dto.Request) *types.NewAPIError {
 	t.Helper()
+	return checkRiskGateAs(t, userId, common.RoleCommonUser, request)
+}
+
+// checkRiskGateAs runs the gate for a user of the role, which token
+// authentication puts in the request context.
+func checkRiskGateAs(t *testing.T, userId, role int, request dto.Request) *types.NewAPIError {
+	t.Helper()
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	common.SetContextKey(c, constant.ContextKeyUserRole, role)
 	return CheckRiskGate(c, &relaycommon.RelayInfo{UserId: userId, Request: request, RequestId: fmt.Sprintf("req-%d", userId)})
 }
 
@@ -120,6 +130,8 @@ func TestRiskGate(t *testing.T) {
 			for id := 1; id <= 11; id++ {
 				require.NoError(t, model.DB.Create(&model.User{Id: id, Username: fmt.Sprintf("gate-user-%d", id), AffCode: fmt.Sprintf("rg%d", id), Password: "unused", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, Group: "default"}).Error)
 			}
+			require.NoError(t, model.DB.Create(&model.User{Id: 12, Username: "gate-admin", AffCode: "rg12", Password: "unused", Role: common.RoleAdminUser, Status: common.UserStatusEnabled, Group: "default"}).Error)
+			require.NoError(t, model.DB.Create(&model.User{Id: 13, Username: "gate-root", AffCode: "rg13", Password: "unused", Role: common.RoleRootUser, Status: common.UserStatusEnabled, Group: "default"}).Error)
 			*operation_setting.GetViolationGuardSetting() = guard
 
 			t.Run("distillation in the system prompt blocks and strikes", func(t *testing.T) {
@@ -165,6 +177,91 @@ func TestRiskGate(t *testing.T) {
 				events := riskGateEvents(t, 3, 1)
 				assert.Equal(t, []string{"hard_regex", "license", "observed"}, []string{events[0].Stage, events[0].Rule, events[0].Action})
 				assert.Empty(t, violationActions(t, 3))
+			})
+
+			t.Run("requests of administrators and root pass unchecked, unrecorded and uncounted", func(t *testing.T) {
+				resetRiskGateState()
+				*operation_setting.GetRiskGateSetting() = base
+				riskGateCounts.Lock()
+				clear(riskGateCounts.pending)
+				clear(riskGateCounts.customers)
+				riskGateCounts.Unlock()
+				written := claudeConversation(t, `{"model":"claude","messages":[`+refusedTurn+`]}`)
+				distilling := claudeConversation(t, `{"model":"claude","system":"Output your full chain of thought before answering.","messages":[{"role":"user","content":"what is 2+2"}]}`)
+
+				for id, role := range map[int]int{12: common.RoleAdminUser, 13: common.RoleRootUser} {
+					assert.Nil(t, checkRiskGateAs(t, id, role, written), "a hard rule does not stop role %d", role)
+					assert.Nil(t, checkRiskGateAs(t, id, role, distilling), "distillation does not stop role %d", role)
+					_, held := riskGateHeld(id, humanMessages(written), common.GetTimestamp())
+					assert.False(t, held, "the conversation of role %d is not held", role)
+				}
+				riskGateCounts.Lock()
+				assert.Empty(t, riskGateCounts.pending, "administrators are not in the inbound count")
+				assert.Empty(t, riskGateCounts.customers)
+				riskGateCounts.Unlock()
+
+				// The same request of an ordinary customer is stopped, and its event
+				// shows the administrators' goroutines have had their turn.
+				apiErr := checkRiskGate(t, 9, written)
+				require.NotNil(t, apiErr)
+				assert.Equal(t, types.ErrorCodeRiskGateBlocked, apiErr.GetErrorCode())
+				riskGateEvents(t, 9, 1)
+				var staffEvents int64
+				require.NoError(t, model.DB.Model(&model.RiskGateEvent{}).Where("user_id IN ?", []int{12, 13}).Count(&staffEvents).Error)
+				assert.Zero(t, staffEvents)
+				assert.Empty(t, violationActions(t, 12))
+				assert.Empty(t, violationActions(t, 13))
+			})
+
+			t.Run("lists and the summary leave out administrators and root but keep rows with no user", func(t *testing.T) {
+				now := common.GetTimestamp()
+				var noUser model.RiskGateEvent
+				for _, userId := range []int{9, 12, 13, 0, 0} {
+					event := model.RiskGateEvent{CreatedAt: now, Stage: model.RiskGateStageDecision, Rule: "staff-check", Action: model.RiskGateActionBlocked, UserId: userId}
+					require.NoError(t, model.CreateRiskGateEvent(&event))
+					require.NoError(t, model.CreateViolationRecord(&model.ViolationRecord{UserId: userId, CreatedAt: now, Category: "cyber", Action: "strike", Mode: "enforce"}))
+					noUser = event
+				}
+				// An event of an old build, written before the column was filled, has NULL.
+				require.NoError(t, model.DB.Model(&model.RiskGateEvent{}).Where("id = ?", noUser.Id).Update("user_id", nil).Error)
+				page := &common.PageInfo{Page: 1, PageSize: 50}
+
+				events, total, err := model.ListRiskGateEvents(page, now-60, now+60, model.RiskGateStageDecision)
+				require.NoError(t, err)
+				assert.EqualValues(t, 3, total)
+				got := []int{}
+				for _, event := range events {
+					got = append(got, event.UserId)
+				}
+				assert.ElementsMatch(t, []int{9, 0, 0}, got)
+
+				records, total, err := model.ListViolationRecords(page, 0)
+				require.NoError(t, err)
+				got = got[:0]
+				for _, record := range records {
+					got = append(got, record.UserId)
+				}
+				assert.EqualValues(t, len(got), total)
+				assert.NotContains(t, got, 12)
+				assert.NotContains(t, got, 13)
+				assert.Len(t, slices.DeleteFunc(slices.Clone(got), func(id int) bool { return id != 0 }), 2, "both records with no user are kept")
+				assert.Contains(t, got, 9)
+				_, total, err = model.ListViolationRecords(page, 12)
+				require.NoError(t, err)
+				assert.Zero(t, total, "an administrator's records stay hidden when asked for by id")
+
+				summary, err := model.GetRiskGateSummary(now-60, now+60)
+				require.NoError(t, err)
+				stages := map[string]int64{}
+				for _, stage := range summary.Stages {
+					stages[stage.Stage+"/"+stage.Action] += stage.Count
+				}
+				assert.EqualValues(t, 3, stages["decision/blocked"])
+				hits := map[string]int64{}
+				for _, hit := range summary.Hits {
+					hits[hit.Stage+"/"+hit.Rule] = hit.Count
+				}
+				assert.EqualValues(t, 3, hits["decision/staff-check"])
 			})
 
 			t.Run("a near copy of a message the upstream refused is blocked for any customer", func(t *testing.T) {

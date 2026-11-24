@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
@@ -46,8 +47,12 @@ const (
 // and channel selection: distillation, hard regex, refusal cache and decision
 // model, in that order, stopping at the first stage that hits. In observe mode
 // a hit is recorded and the request passes. With the gate off only the
-// violation guard runs, as before.
+// violation guard runs, as before. Requests of administrators and root skip
+// the gate and the guard altogether: nothing is checked, recorded or counted.
 func CheckRiskGate(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
+	if violationExempt(common.GetContextKeyInt(c, constant.ContextKeyUserRole)) {
+		return nil
+	}
 	gate := *operation_setting.GetRiskGateSetting()
 	if !gate.Enabled || info == nil {
 		return CheckViolationGuard(c, info)

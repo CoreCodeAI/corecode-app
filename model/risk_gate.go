@@ -110,6 +110,15 @@ func AddRiskGateCounts(hour, inbound, decisionCalls, decisionFailures int64) err
 	}).Error
 }
 
+// withoutStaffRows drops the rows of administrators and root from a query on a
+// table with a user id column. Their requests no longer pass risk control, but
+// rows recorded earlier stay in the database. Rows with no user are kept, and
+// deleted accounts count as well, so the subquery is unscoped.
+func withoutStaffRows(query *gorm.DB, column string) *gorm.DB {
+	staff := DB.Unscoped().Model(&User{}).Select("id").Where("role >= ?", common.RoleAdminUser)
+	return query.Where("("+column+" IS NULL OR "+column+" NOT IN (?))", staff)
+}
+
 type RiskGateStageCount struct {
 	Stage  string `json:"stage"`
 	Action string `json:"action"`
@@ -131,6 +140,9 @@ type RiskGateSummary struct {
 }
 
 // GetRiskGateSummary counts the gate's traffic and events in [start, end).
+// Events of administrators and root are left out; the hourly request counts
+// are not per user, so they include what administrators sent before the gate
+// began to skip them.
 func GetRiskGateSummary(start, end int64) (RiskGateSummary, error) {
 	summary := RiskGateSummary{Stages: []RiskGateStageCount{}, Hits: []RiskGateHitCount{}}
 	var counts struct {
@@ -146,7 +158,7 @@ func GetRiskGateSummary(start, end int64) (RiskGateSummary, error) {
 		return summary, err
 	}
 	summary.Inbound, summary.DecisionCalls, summary.DecisionFailures = counts.Inbound, counts.DecisionCalls, counts.DecisionFailures
-	events := DB.Model(&RiskGateEvent{}).Where("created_at >= ? AND created_at < ?", start, end)
+	events := withoutStaffRows(DB.Model(&RiskGateEvent{}).Where("created_at >= ? AND created_at < ?", start, end), "user_id")
 	if err := events.Session(&gorm.Session{}).Select("stage, action, COUNT(*) AS count").Group("stage, action").Scan(&summary.Stages).Error; err != nil {
 		return summary, err
 	}
@@ -162,9 +174,10 @@ type RiskGateEventView struct {
 }
 
 // ListRiskGateEvents returns events in [start, end) newest first, optionally
-// for one stage, with each user's name.
+// for one stage, with each user's name. Events of administrators and root are
+// left out.
 func ListRiskGateEvents(pageInfo *common.PageInfo, start, end int64, stage string) ([]RiskGateEventView, int64, error) {
-	query := DB.Model(&RiskGateEvent{}).Where("created_at >= ? AND created_at < ?", start, end)
+	query := withoutStaffRows(DB.Model(&RiskGateEvent{}).Where("created_at >= ? AND created_at < ?", start, end), "user_id")
 	if stage != "" {
 		query = query.Where("stage = ?", stage)
 	}

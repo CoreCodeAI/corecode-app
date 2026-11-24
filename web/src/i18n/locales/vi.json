@@ -6900,7 +6900,7 @@
     "When performance monitoring is enabled and system resource usage exceeds the set threshold, new Relay requests will be rejected.": "Khi giám sát hiệu suất được bật và mức sử dụng tài nguyên vượt quá ngưỡng, các yêu cầu Relay mới sẽ bị từ chối.",
     "When running in containers or ephemeral environments, ensure the SQLite file is mapped to persistent storage to avoid data loss on restart.": "Khi chạy trong container hoặc môi trường tạm thời, hãy đảm bảo tệp SQLite được ánh xạ vào bộ nhớ lưu trữ bền vững để tránh mất dữ liệu khi khởi động lại.",
     "When the primary domain changes, the previous domain is automatically kept in the compatible domains list.": "Khi đổi tên miền chính, tên miền cũ sẽ tự động được giữ trong danh sách tên miền tương thích.",
-    "When the upstream model refuses a request under its usage policy, record a violation against the customer who sent it. Administrators are never restricted.": "Khi mô hình thượng nguồn từ chối yêu cầu theo chính sách sử dụng, ghi nhận một vi phạm cho khách hàng đã gửi yêu cầu. Quản trị viên không bao giờ bị hạn chế.",
+    "When the upstream model refuses a request under its usage policy, record a violation against the customer who sent it. Requests from administrators and root skip risk control and are not recorded.": "Khi mô hình thượng nguồn từ chối yêu cầu theo chính sách sử dụng, ghi nhận một vi phạm cho khách hàng đã gửi yêu cầu. Yêu cầu của quản trị viên và root không qua kiểm soát rủi ro và không được ghi lại.",
     "Whitelist": "Danh sách trắng",
     "Whitelist (Only allow listed domains)": "Danh sách trắng (Chỉ cho phép các tên miền được liệt kê)",
     "Whitelist (Only allow listed IPs)": "Danh sách trắng (Chỉ cho phép các IP đã liệt kê)",
