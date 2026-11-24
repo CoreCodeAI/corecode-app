@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 )
@@ -34,19 +35,26 @@ import (
 // went back.
 //
 // The request logs carry these markers inside other, which no index reaches,
-// so the view reads them with a LIKE on the narrowest marker and parses only
-// the rows that match. That bounds the cost by the range, and the view bounds
-// the range itself: the refusal, failed and gate kinds read at most the last
-// experienceLogDays of the range, the cache estimate the last
-// experienceCacheDays, and the response says where each begins.
+// so the view reads them with a LIKE and parses only the rows that match. A
+// LIKE still reads every row of its range, so the cost grows with the range
+// and the view bounds it twice: the scan walks the range newest hour first
+// through the created_at index and stops at a time budget, and the response
+// says where it got to (LogStart, CacheStart), which the console prints. An
+// earlier version paged by id; the planner then walked the primary key of the
+// whole table whatever the range, and a read took 45 seconds on production.
 const (
 	experienceLogDays   = 30
-	experienceCacheDays = 3
+	experienceCacheDays = 1
+	// experienceEventWindow and experienceCacheWindow are the spans one query
+	// reads; a cache window is shorter because many more rows match.
+	experienceEventWindow = 3600
+	experienceCacheWindow = 900
 	// A one-hour write that nothing was requested after within this long is unread.
 	experienceCacheReuseSeconds = 3600
-	experienceLogPage           = 5000
 	// experienceLogRows bounds the rows one scan parses.
 	experienceLogRows = 250_000
+	// experienceCacheUsersPerRead is how many writers one read of their requests names.
+	experienceCacheUsersPerRead = 500
 	// experienceUsersListed is how many customers the table names, and
 	// experienceUsersChecked how many of the most wasteful are checked for a
 	// report and for silence.
@@ -308,38 +316,53 @@ func (tally *experienceWasteTally) add(kind string, userID int, quota float64) {
 	tally.users[kind][userID] = true
 }
 
+// experienceScanBudget is how long the refusal, failed and gate scan may run
+// before it stops and reports how far back it got, and experienceCacheBudget
+// the same for the cache scan. Variables so a test can cut them.
+var (
+	experienceScanBudget  = 6 * time.Second
+	experienceCacheBudget = 3 * time.Second
+)
+
 // scanExperienceLogs reads the consume logs in [start, end) that match any of
-// the LIKE patterns, a page at a time keyed by id, and hands each to visit. It
-// reports whether the row bound cut the scan short.
-func scanExperienceLogs(start, end int64, patterns []string, visit func(experienceLog)) (bool, error) {
+// the LIKE patterns, one window at a time from the newest, and hands each to
+// visit. It stops at the budget or at the row bound and returns the start of
+// the oldest window it read in full (end when it read none); truncated says
+// the row bound, not the budget, cut it. The first window is always read.
+func scanExperienceLogs(start, end, window int64, patterns []string, budget time.Duration, visit func(experienceLog)) (covered int64, truncated bool, err error) {
 	conditions := make([]string, len(patterns))
-	args := make([]any, 0, len(patterns)+4)
-	args = append(args, LogTypeConsume, start, end)
+	args := make([]any, 0, len(patterns)+3)
+	args = append(args, LogTypeConsume, 0, 0)
 	for i, pattern := range patterns {
 		conditions[i] = "other LIKE ?"
 		args = append(args, pattern)
 	}
-	var last, seen int
-	for {
+	where := "type = ? AND created_at >= ? AND created_at < ? AND (" + strings.Join(conditions, " OR ") + ")"
+	deadline := time.Now().Add(budget)
+	covered = end
+	seen := 0
+	for hi := end; hi > start; hi -= window {
+		if covered < end && time.Now().After(deadline) {
+			return covered, false, nil
+		}
+		lo := max(start, hi-window)
+		args[1], args[2] = lo, hi
 		var page []experienceLog
 		if err := LOG_DB.Model(&Log{}).
 			Select("id, user_id, token_id, created_at, model_name, quota, request_id, other").
-			Where("type = ? AND created_at >= ? AND created_at < ? AND ("+strings.Join(conditions, " OR ")+")", args...).
-			Where("id > ?", last).Order("id asc").Limit(experienceLogPage).Find(&page).Error; err != nil {
-			return false, err
+			Where(where, args...).Find(&page).Error; err != nil {
+			return covered, false, err
 		}
 		for _, row := range page {
-			last = row.Id
 			visit(row)
 		}
+		covered = lo
 		seen += len(page)
-		if len(page) < experienceLogPage {
-			return false, nil
-		}
-		if seen >= experienceLogRows {
-			return true, nil
+		if seen >= experienceLogRows && lo > start {
+			return covered, true, nil
 		}
 	}
+	return covered, false, nil
 }
 
 func GetExperienceInsights(r InsightsRange) (*ExperienceInsights, error) {
@@ -385,7 +408,7 @@ func GetExperienceInsights(r InsightsRange) (*ExperienceInsights, error) {
 	refusalModels, refusalReasons := newExperienceBreakdown(), newExperienceBreakdown()
 	taken := make(map[int]bool)
 
-	truncated, err := scanExperienceLogs(waste.LogStart, r.End, experienceEventMarkers, func(row experienceLog) {
+	covered, truncated, err := scanExperienceLogs(waste.LogStart, r.End, experienceEventWindow, experienceEventMarkers, experienceScanBudget, func(row experienceLog) {
 		if staff[row.UserId] || row.Quota <= 0 {
 			return
 		}
@@ -437,13 +460,15 @@ func GetExperienceInsights(r InsightsRange) (*ExperienceInsights, error) {
 		return nil, err
 	}
 	waste.Truncated = truncated
+	// What the scan did not reach is not read: say where the figures begin.
+	waste.LogStart = covered
 
 	// One-hour writes: the extra they cost over five minutes, for the ones
 	// nothing of the same key was requested after within the hour.
 	if waste.CacheJudgedUntil > waste.CacheStart {
 		type keyOf struct{ user, token int }
 		var writes []experienceLog
-		cacheTruncated, err := scanExperienceLogs(waste.CacheStart, waste.CacheJudgedUntil+1, []string{experienceCacheMarker}, func(row experienceLog) {
+		cacheCovered, cacheTruncated, err := scanExperienceLogs(waste.CacheStart, waste.CacheJudgedUntil+1, experienceCacheWindow, []string{experienceCacheMarker}, experienceCacheBudget, func(row experienceLog) {
 			if !staff[row.UserId] && row.Quota > 0 && !taken[row.Id] {
 				writes = append(writes, row)
 			}
@@ -451,17 +476,37 @@ func GetExperienceInsights(r InsightsRange) (*ExperienceInsights, error) {
 		if err != nil {
 			return nil, err
 		}
+		waste.CacheStart = cacheCovered
 		waste.Truncated = waste.Truncated || cacheTruncated
 		if len(writes) > 0 {
+			// The requests that could follow a write are the same customers'.
+			writers := make(map[int]bool)
+			for _, row := range writes {
+				writers[row.UserId] = true
+			}
+			ids := make([]int, 0, len(writers))
+			for id := range writers {
+				ids = append(ids, id)
+			}
+			slices.Sort(ids)
 			var requests []struct {
 				UserId    int
 				TokenId   int
 				CreatedAt int64
 			}
-			if err := LOG_DB.Model(&Log{}).Select("user_id, token_id, created_at").
-				Where("type = ? AND created_at >= ? AND created_at < ?", LogTypeConsume, waste.CacheStart, r.End).
-				Find(&requests).Error; err != nil {
-				return nil, err
+			for from := 0; from < len(ids); from += experienceCacheUsersPerRead {
+				var chunk []struct {
+					UserId    int
+					TokenId   int
+					CreatedAt int64
+				}
+				if err := LOG_DB.Model(&Log{}).Select("user_id, token_id, created_at").
+					Where("type = ? AND created_at >= ? AND created_at < ? AND user_id IN ?", LogTypeConsume, waste.CacheStart, r.End,
+						ids[from:min(from+experienceCacheUsersPerRead, len(ids))]).
+					Find(&chunk).Error; err != nil {
+					return nil, err
+				}
+				requests = append(requests, chunk...)
 			}
 			times := make(map[keyOf][]int64)
 			for _, request := range requests {

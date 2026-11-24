@@ -415,7 +415,7 @@ describe('experience tab', () => {
     )
     expect(
       screen.getByText(
-        /The logs read reach back 30 days, so waste is counted only from/
+        /Reading further back would be too slow, so waste is counted only from/
       )
     ).toBeInTheDocument()
     expect(

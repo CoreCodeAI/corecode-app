@@ -148,7 +148,7 @@ export function ExperienceTab(props: {
   if (unread != null) {
     notes.push(
       t(
-        'The logs read reach back 30 days, so waste is counted only from {{time}}.',
+        'Reading further back would be too slow, so waste is counted only from {{time}}.',
         {
           time: fmt.time(unread),
         }

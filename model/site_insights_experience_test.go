@@ -46,12 +46,13 @@ func TestExperienceInsightsCountWastedMoneyAndFollowReports(t *testing.T) {
 				// A refused request that also wrote a one-hour cache costs once, as a refusal.
 				consume(alice, 1, at(2, 1), 4*dollar, `{"upstream_refusal":true,"upstream_refusal_category":"cyber","cache_creation_tokens_1h":1000000,"cache_creation_ratio":1.25,"cache_creation_ratio_1h":2,"model_ratio":2.5,"group_ratio":1}`),
 				// Cache writes: alice's is never followed by a request of her key, bob's is.
-				consume(alice, 9, at(2, 3600), 6*dollar, write),
-				consume(bob, 8, at(2, 7200), 6*dollar, write),
-				consume(bob, 8, at(2, 7200-600), dollar, `{}`),
+				// The cache pass reads only the last day.
+				consume(alice, 9, at(0, 20*3600), 6*dollar, write),
+				consume(bob, 8, at(0, 10*3600), 6*dollar, write),
+				consume(bob, 8, at(0, 10*3600-600), dollar, `{}`),
 				// Too late to judge, and one with no ratios to price it.
 				consume(alice, 9, 0+end-1800, 6*dollar, write),
-				consume(carol, 4, at(2, 9000), 6*dollar, `{"cache_creation_tokens_1h":1000}`),
+				consume(carol, 4, at(0, 12*3600), 6*dollar, `{"cache_creation_tokens_1h":1000}`),
 				{UserId: bob.Id, Username: bob.Username, CreatedAt: at(1, 3000), Type: LogTypeRefund, ModelName: "sora", Quota: 4 * dollar, Other: `{"is_task":true,"task_id":"t1","reason":"failed"}`},
 				{UserId: bob.Id, Username: bob.Username, CreatedAt: at(1, 3100), Type: LogTypeRefund, ModelName: "sora", Quota: dollar, Other: `{"is_task":true,"task_id":"t2","pre_consumed_quota":900}`},
 			}
@@ -87,7 +88,7 @@ func TestExperienceInsightsCountWastedMoneyAndFollowReports(t *testing.T) {
 
 			assert.Equal(t, "day", insights.SeriesUnit)
 			assert.Equal(t, r.Start, waste.LogStart)
-			assert.Equal(t, end-3*86400, waste.CacheStart)
+			assert.Equal(t, end-86400, waste.CacheStart)
 			assert.Equal(t, end-3600, waste.CacheJudgedUntil)
 			assert.Equal(t, 29.0, waste.ConsumedUSD, "customers' consumption in the window, staff left out")
 			assert.False(t, waste.Truncated)
@@ -124,7 +125,7 @@ func TestExperienceInsightsCountWastedMoneyAndFollowReports(t *testing.T) {
 			assert.InDelta(t, premiumUSD, cacheUSD, 1e-4)
 			var cacheDay *ExperiencePoint
 			for i := range insights.Series {
-				if insights.Series[i].At == r.DayStart(at(2, 3600)) {
+				if insights.Series[i].At == r.DayStart(at(0, 20*3600)) {
 					cacheDay = &insights.Series[i]
 				}
 			}
@@ -179,4 +180,43 @@ func TestExperienceInsightsReadByTheHourOverADay(t *testing.T) {
 	assert.Len(t, insights.Series, 24)
 	assert.Empty(t, insights.Waste.Top)
 	assert.Empty(t, insights.Feedback.Waiting)
+}
+
+// A scan that runs out of its time budget keeps what it read and says where
+// the figures begin, so a slow read of a long range answers instead of hanging.
+func TestExperienceInsightsStopAtTheScanBudget(t *testing.T) {
+	useInsightsTestDB(t, "sqlite")
+	require.NoError(t, DB.AutoMigrate(&Feedback{}))
+	t.Cleanup(func() { require.NoError(t, DB.Migrator().DropTable(&Feedback{})) })
+	dollar := int(common.QuotaPerUnit)
+	const end = int64(1759190400) + 40*86400
+	alice := registerAffiliateTestUser(t, "alice", "")
+	refusal := `{"upstream_refusal":true}`
+	require.NoError(t, DB.Create(&[]Log{
+		{UserId: alice.Id, Username: "alice", CreatedAt: end - 600, Type: LogTypeConsume, ModelName: "m", Quota: 2 * dollar, Other: refusal},
+		{UserId: alice.Id, Username: "alice", CreatedAt: end - 5*86400, Type: LogTypeConsume, ModelName: "m", Quota: 7 * dollar, Other: refusal},
+	}).Error)
+
+	insights, err := GetExperienceInsights(InsightsRange{Start: end - 10*86400, End: end})
+	require.NoError(t, err)
+	assert.Equal(t, end-10*86400, insights.Waste.LogStart, "within the budget the whole range is read")
+	assert.Equal(t, 9.0, kindOf(insights.Waste, WasteRefusal).USD)
+
+	old := experienceScanBudget
+	experienceScanBudget = 0
+	t.Cleanup(func() { experienceScanBudget = old })
+	insights, err = GetExperienceInsights(InsightsRange{Start: end - 10*86400, End: end})
+	require.NoError(t, err)
+	assert.Equal(t, end-3600, insights.Waste.LogStart, "only the newest hour was read")
+	assert.Equal(t, 2.0, kindOf(insights.Waste, WasteRefusal).USD)
+	assert.False(t, insights.Waste.Truncated, "a spent budget is not the row bound")
+}
+
+func kindOf(waste ExperienceWaste, kind string) ExperienceKind {
+	for _, item := range waste.Kinds {
+		if item.Kind == kind {
+			return item
+		}
+	}
+	return ExperienceKind{Kind: kind}
 }
