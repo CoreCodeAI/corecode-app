@@ -757,3 +757,65 @@ describe('risk tab', () => {
     expect(screen.getByText('Reasons')).toBeInTheDocument()
   })
 })
+
+describe('risk tab gate and violation cards', () => {
+  const start = 1_761_408_000
+  const range = { start, end: start + 3 * 86400, days: 3, hourly: false }
+  const base = {
+    signups: 3,
+    signup_series: [0, 1, 2].map((index) => ({
+      at: start + index * 86400,
+      count: 1,
+    })),
+    series_unit: 'day',
+    peak_signups: { at: 0, count: 0 },
+    signup_methods: [],
+    email_domains: [],
+    alias_emails: 0,
+    off_whitelist: 0,
+    zero_use_accounts: 0,
+    shared_ips: [],
+    debtors: [],
+    gate_blocked: 6,
+    gate_block_series: [
+      { at: start, stages: { hard_regex: 4 } },
+      { at: start + 86400, stages: { decision: 2 } },
+      { at: start + 2 * 86400, stages: {} },
+    ],
+    violations: 2,
+    violation_series: [
+      { at: start, count: 1 },
+      { at: start + 86400, count: 1 },
+      { at: start + 2 * 86400, count: 0 },
+    ],
+  } as unknown as RiskInsights
+
+  it('shows the gate blocks and violation incidents as cards, with the stage chart beside the sign-ups', () => {
+    render(<RiskTab data={base} range={range} />)
+    expect(screen.getByText('Gate blocks')).toBeInTheDocument()
+    expect(screen.getByText('Violation incidents')).toBeInTheDocument()
+    const titles = screen
+      .getAllByRole('heading', { level: 3 })
+      .map((heading) => heading.textContent)
+    expect(titles.indexOf('Gate blocks by stage')).toBeGreaterThanOrEqual(0)
+    expect(titles.indexOf('Gate blocks by stage')).toBeLessThan(
+      titles.indexOf('Sign-ups over time')
+    )
+    expect(titles.indexOf('Sign-ups over time')).toBeLessThan(
+      titles.indexOf('Sign-up method')
+    )
+  })
+
+  it('leaves the new cards and chart out on a server that does not count them', () => {
+    const old = { ...base } as Record<string, unknown>
+    delete old.gate_blocked
+    delete old.gate_block_series
+    delete old.violations
+    delete old.violation_series
+    render(<RiskTab data={old as unknown as RiskInsights} range={range} />)
+    expect(screen.queryByText('Gate blocks')).not.toBeInTheDocument()
+    expect(screen.queryByText('Violation incidents')).not.toBeInTheDocument()
+    expect(screen.queryByText('Gate blocks by stage')).not.toBeInTheDocument()
+    expect(screen.getByText('Sign-ups over time')).toBeInTheDocument()
+  })
+})

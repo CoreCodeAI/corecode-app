@@ -373,3 +373,55 @@ func TestRiskReadsCustomerBalancesOnlyForDebtors(t *testing.T) {
 	assert.EqualValues(t, 3+500, rows, "the view reads the sign-ups and the debtors from users, and no other balances")
 	assert.Equal(t, 3, statements, "the sign-ups, the staff ids and the debtors, once each")
 }
+
+// The risk gate's blocks and the violation incidents are counted per hour or
+// day of the sign-up series, every step present. Observe-mode hits, merged
+// refusals, exempt rows, rows outside the range and the staff's rows are left
+// out, and the gate's blocks are split by stage.
+func TestRiskCountsGateBlocksAndViolationsPerStep(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			const day1 = int64(1759248000)
+			r := InsightsRange{Start: day1, End: day1 + 2*86400}
+			customer := riskTestUser(t, "customer", "", day1-86400, nil)
+			staff := riskTestUser(t, "staff", "", day1-86400, map[string]any{"role": common.RoleAdminUser})
+			require.NoError(t, DB.Create(&[]RiskGateEvent{
+				{CreatedAt: day1 + 10, Stage: RiskGateStageHardRegex, Action: RiskGateActionBlocked, UserId: customer.Id},
+				{CreatedAt: day1 + 20, Stage: RiskGateStageHardRegex, Action: RiskGateActionBlocked, UserId: customer.Id},
+				{CreatedAt: day1 + 86400 + 30, Stage: RiskGateStageDecision, Action: RiskGateActionBlocked, UserId: customer.Id},
+				{CreatedAt: day1 + 40, Stage: RiskGateStageDecision, Action: RiskGateActionObserved, UserId: customer.Id},
+				{CreatedAt: day1 + 50, Stage: RiskGateStageDecision, Action: RiskGateActionBlocked, UserId: staff.Id},
+				{CreatedAt: day1 - 10, Stage: RiskGateStageDecision, Action: RiskGateActionBlocked, UserId: customer.Id},
+			}).Error)
+			require.NoError(t, DB.Create(&[]ViolationRecord{
+				{UserId: customer.Id, CreatedAt: day1 + 60, Action: ViolationActionStrike, Mode: "enforce"},
+				{UserId: customer.Id, CreatedAt: day1 + 70, Action: ViolationActionMerged, Mode: "enforce"},
+				{UserId: customer.Id, CreatedAt: day1 + 86400 + 80, Action: ViolationActionWarn, Mode: "enforce"},
+				{UserId: customer.Id, CreatedAt: day1 + 90, Action: ViolationActionStrike, Mode: ViolationModeExempt},
+				{UserId: staff.Id, CreatedAt: day1 + 100, Action: ViolationActionStrike, Mode: "enforce"},
+				{UserId: customer.Id, CreatedAt: day1 - 100, Action: ViolationActionStrike, Mode: "enforce"},
+			}).Error)
+
+			risk, err := GetRiskInsights(r)
+			require.NoError(t, err)
+			require.Equal(t, "hour", risk.SeriesUnit, "a two-day range is read by the hour")
+			assert.EqualValues(t, 3, risk.GateBlocked)
+			assert.EqualValues(t, 2, risk.Violations)
+			require.Len(t, risk.GateBlockSeries, 48, "every hour of the range has a point")
+			assert.Equal(t, map[string]int64{RiskGateStageHardRegex: 2}, risk.GateBlockSeries[0].Stages)
+			assert.Equal(t, map[string]int64{RiskGateStageDecision: 1}, risk.GateBlockSeries[24].Stages)
+			assert.Empty(t, risk.GateBlockSeries[1].Stages)
+			require.Len(t, risk.ViolationSeries, 48)
+			assert.EqualValues(t, 1, risk.ViolationSeries[0].Count)
+			assert.EqualValues(t, 1, risk.ViolationSeries[24].Count)
+
+			longer, err := GetRiskInsights(InsightsRange{Start: day1, End: day1 + 5*86400, Offset: 8 * 3600})
+			require.NoError(t, err)
+			require.Equal(t, "day", longer.SeriesUnit)
+			require.Len(t, longer.GateBlockSeries, 5)
+			assert.Equal(t, map[string]int64{RiskGateStageHardRegex: 2}, longer.GateBlockSeries[0].Stages)
+			assert.EqualValues(t, 1, longer.ViolationSeries[1].Count)
+		})
+	}
+}

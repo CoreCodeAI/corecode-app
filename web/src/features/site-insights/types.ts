@@ -126,6 +126,19 @@ export type TTFTPoint = {
   ttft_p95_ms: number
 }
 
+/** One day or hour of a vendor's requests and failed requests; start is unix seconds. */
+export type VendorTrendPoint = {
+  start: number
+  requests: number
+  errors: number
+}
+
+export type VendorTrend = {
+  vendor: string
+  daily: VendorTrendPoint[] | null
+  hourly?: VendorTrendPoint[] | null
+}
+
 export type TTFTSeries = {
   vendor: string
   daily: TTFTPoint[] | null
@@ -1005,6 +1018,14 @@ export type RiskInsights = StaleHours & {
   signup_gifts?: NamedCount[] | null
   /** Top 10 inviters by blocked (ip_used, cap_reached, email_blocked; email_signup is not a block), then gifted. */
   gift_block_inviters?: (UserRef & { blocked: number; gifted: number })[] | null
+  /** Requests the risk gate blocked in the range (customers only, observe-mode hits left out), and the same by stage over the hours or days of signup_series. Absent before the server's release. */
+  gate_blocked?: number
+  gate_block_series?:
+    | { at: number; stages: Record<string, number> | null }[]
+    | null
+  /** Violation incidents of the range (a strike or a warning started one), and the same over the hours or days of signup_series. */
+  violations?: number
+  violation_series?: CountPoint[] | null
 }
 
 export type FunnelRow = {
@@ -1370,6 +1391,8 @@ export type QualityInsights = StaleHours & {
   hourly?: QualityHour[] | null
   /** Each vendor's first-response time by day and, for a range with hourly rows, by hour; absent before the server's release. */
   ttft_vendors?: TTFTSeries[] | null
+  /** Each vendor's requests and failed requests by day and, for a range with hourly rows, by hour, over the selected models; a day or hour with no request has no point. Absent before the server's release. */
+  vendor_trends?: VendorTrend[] | null
   /** Customers only, as the capacity view's categories (ErrorCategory names, no_channel included); absent before the server's release. */
   error_categories?: NamedCount[] | null
   /** On every successful response from the server's release; absent before it. */
