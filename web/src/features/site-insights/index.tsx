@@ -337,6 +337,15 @@ export function SiteInsights() {
       previousQuery?.queryKey[1] === 'keys' ? previous : undefined,
     meta: { errorToast: false },
   })
+  // The activity tab's customers block. Like the keys panel, a server without
+  // the view leaves it out.
+  const customers = useQuery({
+    ...insightsQuery('customers'),
+    enabled: tab === 'activity',
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === 'customers' ? previous : undefined,
+    meta: { errorToast: false },
+  })
   // The overview's own queries, so Refresh shows them loading there too.
   const overviewFetching = useIsFetching({ queryKey: ['site-insights'] })
   // The overview has no query of its own to say where the logs begin: the
@@ -371,6 +380,10 @@ export function SiteInsights() {
     void queryClient.prefetchQuery(insightsQuery(next))
     if (next !== 'pool') void queryClient.prefetchQuery(previousQuery(next))
     if (next === 'activity') {
+      void queryClient.prefetchQuery({
+        ...insightsQuery('customers'),
+        meta: { errorToast: false },
+      })
       void queryClient.prefetchQuery({
         ...insightsQuery('keys'),
         meta: { errorToast: false },
@@ -416,7 +429,10 @@ export function SiteInsights() {
     ...(readsBusinessPrevious && {
       businessPrevious: sourceState(businessPrevious),
     }),
-    ...(tab === 'activity' && { keys: sourceState(keys) }),
+    ...(tab === 'activity' && {
+      keys: sourceState(keys),
+      customers: sourceState(customers),
+    }),
   }
 
   // On a narrow screen the tabs scroll sideways in one row; the open one is
@@ -592,6 +608,7 @@ export function SiteInsights() {
                       previous: businessPrevious.data,
                     }}
                     keys={keys.data}
+                    customers={customers.data}
                     models={{
                       selected: models,
                       onChange: (next) =>
@@ -651,7 +668,7 @@ export function SiteInsights() {
 }
 
 function InsightsView(props: {
-  view: Exclude<InsightsView, 'business' | 'keys'>
+  view: Exclude<InsightsView, 'business' | 'keys' | 'customers'>
   data: unknown
   previous: unknown
   sources: InsightsSources
@@ -659,6 +676,7 @@ function InsightsView(props: {
   onOpen: (tab: InsightsTab, section?: string) => void
   business: { data: unknown; previous: unknown }
   keys: unknown
+  customers: unknown
   models: { selected: string[]; onChange: (models: string[]) => void }
   pool: {
     provider: PoolProvider
@@ -736,6 +754,7 @@ function InsightsView(props: {
           data={props.data as never}
           previous={previous}
           keys={props.keys as never}
+          customers={props.customers as never}
           range={range}
           onOpen={onOpen}
           {...states}

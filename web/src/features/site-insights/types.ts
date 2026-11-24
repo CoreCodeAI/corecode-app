@@ -1072,6 +1072,32 @@ export type GrowthInsights = {
   first_payment?: PaymentTiming | null
   /** Accounts that paid before the range's end, by recent use; absent before the server's release. */
   payer_activity?: PayerActivity | null
+  /** Money paid on each day of the range; absent before the server's release. */
+  topups?: GrowthTopupDay[] | null
+}
+
+/** Money paid on one day, in the payment currency; plan_money is the part spent on plans. */
+export type GrowthTopupDay = {
+  day: number
+  money: number
+  plan_money: number
+  payers: number
+}
+
+/** Buckets in order, from the most recent to the longest silent; never is an account with no request. */
+export type SilentBucketName =
+  | 'within_1d'
+  | 'days_1_3'
+  | 'days_4_7'
+  | 'days_8_14'
+  | 'days_15_30'
+  | 'days_31_60'
+  | 'over_60'
+  | 'never'
+
+export type SilentPayers = {
+  payers: number
+  buckets: { name: SilentBucketName; count: number }[]
 }
 
 /** A fee paid to a promotion channel: monthly_usd every 30 days from start until end, or until now when end is 0. Unix seconds. */
@@ -1138,6 +1164,18 @@ export type ChannelInsights = StaleHours & {
   channels: ChannelRow[]
   costs: ChannelCost[]
   usd_exchange_rate: number
+  /** Sign-ups of every day of the range by source; absent before the server's release. */
+  signups_by_day?: ChannelSignupDay[] | null
+}
+
+/** One day's sign-ups by source; channel_id is the channel's account, 0 for the invited and organic rows. */
+export type ChannelSignupDay = {
+  day: number
+  sources: {
+    segment: ChannelRow['segment']
+    channel_id: number
+    registered: number
+  }[]
 }
 
 /** What one plan's accounts serve in a full week at official prices. */
@@ -1254,6 +1292,76 @@ export type ActivityInsights = {
   top10_share: number
   /** Ranges of 3 days or less; absent before the server's release. */
   hourly?: ActivityHour[] | null
+  /** Sign-up weeks, newest first; absent before the server's release. */
+  retention_weeks?: RetentionWeek[] | null
+  /** Customers banded by range spend, for all models and for each vendor group; absent before the server's release. */
+  spend_tiers?: SpendTierGroup[] | null
+  /** Paying accounts by days since their last charged request; absent before the server's release. */
+  silent_payers?: SilentPayers | null
+}
+
+/** The sign-ups of one Monday-based week; active[n] is how many used quota n weeks after the sign-up week (0 is the week itself). */
+export type RetentionWeek = {
+  week: number
+  size: number
+  /** The range began inside the week, or it is the current week. */
+  partial: boolean
+  active: number[]
+  activated: RetentionSegment
+  paid: RetentionSegment
+}
+
+export type SpendTierName = 'whale' | 'large' | 'mid' | 'tail'
+
+/** Customers that spent at least floor_usd (and under the band above) in the range, and what they spent (quota dollars, yuan). */
+export type SpendTier = {
+  tier: SpendTierName
+  floor_usd: number
+  users: number
+  quota_usd: number
+}
+
+export type SpendTierVendor = 'all' | 'claude' | 'gpt' | 'other'
+
+export type SpendTierGroup = { vendor: SpendTierVendor; tiers: SpendTier[] }
+
+/** One of the range's biggest customers; money figures are quota dollars (yuan) except topup_paid and subscription_paid, in the payment currency. */
+export type CustomerProfile = UserRef & {
+  remark: string
+  registered_at: number
+  topup_paid: number
+  subscription_paid: number
+  lifetime_usd: number
+  balance_usd: number
+  quota_usd: number
+  share: number
+  /** Spend per day over the last seven days, oldest first. */
+  trend: number[]
+  main_model: string
+  main_group: string
+  /** Unix seconds; 0 when never. */
+  last_used_at: number
+  active_days: number
+}
+
+/** A customer among the month's biggest whose use fell (dropped) or stopped for three days (idle). */
+export type ChurnWarning = UserRef & {
+  month_usd: number
+  last7_usd: number
+  previous7_usd: number
+  last_request_at: number
+  reasons: ('dropped' | 'idle')[]
+}
+
+export type CustomerInsights = {
+  customers_spending: number
+  total_usd: number
+  top5_share: number
+  top10_share: number
+  top20_share: number
+  top: CustomerProfile[]
+  watched: number
+  churn: ChurnWarning[]
 }
 
 /** One model of an API key over the range; quota_usd is in quota dollars (yuan), as the activity view's. */

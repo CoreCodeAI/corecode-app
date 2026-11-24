@@ -3,6 +3,7 @@ package model
 import (
 	"cmp"
 	"slices"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -54,6 +55,9 @@ type GrowthInsights struct {
 	// PayerActivity follows every account that paid before the range's end
 	// through the last two weeks of the range.
 	PayerActivity PayerActivity `json:"payer_activity"`
+	// Topups is the money paid on each day of the range, by the day the order
+	// was paid, whoever signed up on it. Additive: an older console ignores it.
+	Topups []GrowthTopupDay `json:"topups"`
 }
 
 // PaymentTiming is the time from sign-up to first payment over the cohort's
@@ -207,6 +211,11 @@ func GetGrowthInsights(r InsightsRange) (*GrowthInsights, error) {
 		return nil, err
 	}
 	result.PayerActivity = activity
+	staff, err := StaffUserIDs()
+	if err != nil {
+		return nil, err
+	}
+	result.Topups = growthTopups(r, orders, staff)
 	for _, row := range sources {
 		result.BySource = append(result.BySource, *row)
 	}
@@ -415,6 +424,14 @@ type ActivityInsights struct {
 	Top1Share      float64           `json:"top1_share"`
 	Top3Share      float64           `json:"top3_share"`
 	Top10Share     float64           `json:"top10_share"`
+	// RetentionWeeks is the same sign-ups grouped by week, each with how many
+	// were active in each later week; SpendTiers splits the range's customers
+	// by what they spent, for every vendor and for each of Claude, GPT and the
+	// rest; SilentPayers spreads the accounts that paid before the range's end
+	// by how long ago they last spent quota. All are additive.
+	RetentionWeeks []RetentionWeek  `json:"retention_weeks"`
+	SpendTiers     []SpendTierGroup `json:"spend_tiers"`
+	SilentPayers   SilentPayers     `json:"silent_payers"`
 }
 
 // retentionDays is how many days after sign-up retention reports. The cohorts
@@ -446,6 +463,7 @@ func GetActivityInsights(r InsightsRange) (*ActivityInsights, error) {
 		return nil, err
 	}
 	spend := make(map[int]*UserSpend)
+	vendorSpend := newVendorSpend()
 	active := make(map[int]bool)
 	var total, claude, rootQuota int64
 	// quota_data rows are keyed at their hour's start, so the hour a range
@@ -500,7 +518,9 @@ func GetActivityInsights(r InsightsRange) (*ActivityInsights, error) {
 		}
 		user.QuotaUSD += float64(row.Quota)
 		user.Requests += int64(row.Count)
+		vendorSpend.add(row.UserID, row.ModelName, int64(row.Quota))
 	}
+	result.SpendTiers = vendorSpend.tiers()
 	result.ActiveUsers = int64(len(active))
 	result.QuotaUSD = quotaUSD(total)
 	result.ClaudeQuotaUSD = quotaUSD(claude)
@@ -543,11 +563,15 @@ func GetActivityInsights(r InsightsRange) (*ActivityInsights, error) {
 	result.Top1Share, result.Top3Share, result.Top10Share = topShare(1), topShare(3), topShare(10)
 	result.TopUsers = users[:min(len(users), insightsTopN*2)]
 
-	retention, err := retentionCohorts(r, activeByDay)
+	signups, err := readRetentionSignups(r)
 	if err != nil {
 		return nil, err
 	}
-	result.Retention = retention
+	result.Retention = retentionCohorts(r, activeByDay, signups)
+	result.RetentionWeeks = retentionWeeks(r, activeByDay, signups)
+	if result.SilentPayers, err = readSilentPayers(r, signups.firstPaid, time.Now().Unix()); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -555,26 +579,13 @@ func GetActivityInsights(r InsightsRange) (*ActivityInsights, error) {
 // most, and reads their activity from activeByDay. A cohort's activated part
 // is the sign-ups the funnel counts as activated (a request, RequestCount) and
 // its paid part those with a paid order, as the funnel counts payers.
-func retentionCohorts(r InsightsRange, activeByDay map[int64]map[int]bool) ([]RetentionCohort, error) {
+func retentionCohorts(r InsightsRange, activeByDay map[int64]map[int]bool, signups retentionSignups) []RetentionCohort {
 	start := max(r.Start, r.DayStart(r.End)-29*86400)
-	users, err := readRiskUsers(func(tx *gorm.DB) *gorm.DB {
-		return tx.Where("created_at >= ? AND created_at < ? AND role < ?", start, r.End, customerRoleBound)
-	})
-	if err != nil {
-		return nil, err
-	}
-	orders, err := readPaidOrders(0, 0)
-	if err != nil {
-		return nil, err
-	}
-	payers := make(map[int]bool)
-	for _, order := range orders {
-		if order.Money > 0 {
-			payers[order.UserId] = true
-		}
-	}
 	members := make(map[int64][]riskUserRow)
-	for _, user := range users {
+	for _, user := range signups.users {
+		if user.CreatedAt < start {
+			continue
+		}
 		day := r.DayStart(user.CreatedAt)
 		members[day] = append(members[day], user)
 	}
@@ -587,7 +598,7 @@ func retentionCohorts(r InsightsRange, activeByDay map[int64]map[int]bool) ([]Re
 			if user.RequestCount > 0 {
 				activated = append(activated, user.Id)
 			}
-			if payers[user.Id] {
+			if hasPaid(signups, user.Id) {
 				paid = append(paid, user.Id)
 			}
 		}
@@ -604,7 +615,7 @@ func retentionCohorts(r InsightsRange, activeByDay map[int64]map[int]bool) ([]Re
 		result = append(result, cohort)
 	}
 	slices.SortFunc(result, func(a, b RetentionCohort) int { return cmp.Compare(b.Day, a.Day) })
-	return result, nil
+	return result
 }
 
 // countActive counts the ids that are active in a day.

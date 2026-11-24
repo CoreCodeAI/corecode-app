@@ -68,6 +68,7 @@ import {
   CommissionAccrualFindings,
   SinceFee,
 } from './channels-insights'
+import { ChannelBarsPanel, ChannelDailyPanel } from './channels-signups'
 import { SampleNote, StaleNote } from './insight-kit'
 import {
   CountRate,
@@ -347,6 +348,8 @@ export function ChannelsTab(props: {
           rangeHours={rangeHours(range)}
         />
       )}
+      <ChannelBarsPanel rows={rows} source={viewSource} />
+      <ChannelDailyPanel data={data} rows={rows} />
       <ChannelContractPanel
         costs={data?.costs ?? []}
         current={rows}
