@@ -38,10 +38,15 @@ import {
   useInsightsFormat,
   type InsightsRangeInfo,
   type InsightsSources,
+  type SourceState,
   type InsightsTab,
 } from '../lib'
 import { usePartialDays } from '../partial-days'
-import type { UpstreamChannel, UpstreamInsights } from '../types'
+import type {
+  UpstreamChannel,
+  UpstreamInsights,
+  UpstreamRunway,
+} from '../types'
 import {
   attemptsOf,
   channelNamer,
@@ -89,6 +94,7 @@ import {
   UpstreamTasks,
 } from './upstream-insights'
 import { UpstreamChannelCards, UpstreamSpendPanel } from './upstream-overview'
+import { UpstreamRunwayCards } from './upstream-runway-cards'
 
 const BEST = 'font-semibold text-emerald-600 dark:text-emerald-400'
 
@@ -957,6 +963,9 @@ export function UpstreamTab(props: {
   range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
   sources?: InsightsSources
+  /** How long each upstream account's balance lasts, read apart from the range. */
+  runway?: UpstreamRunway
+  runwaySource?: SourceState
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -1056,6 +1065,7 @@ export function UpstreamTab(props: {
           )}
         </SampleNote>
       )}
+      <UpstreamRunwayCards data={props.runway} source={props.runwaySource} />
       <UpstreamChannelCards data={props.data} />
       <UpstreamSpendPanel
         data={props.data}

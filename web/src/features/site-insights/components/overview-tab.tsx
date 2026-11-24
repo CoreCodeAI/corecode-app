@@ -59,6 +59,7 @@ import type {
   ModelBehavior,
   RiskInsights,
   UpstreamInsights,
+  UpstreamRunway,
 } from '../types'
 import { checkoutLossFindings, refundedCheckoutFindings } from './checkout-loss'
 import { DigestSettings } from './digest-settings'
@@ -80,6 +81,7 @@ import { overviewTrends } from './overview-series'
 import {
   overviewBehaviorSignals,
   overviewQuotaSignals,
+  overviewRunwaySignals,
   overviewServiceSignals,
   peakTone,
   poolPeakAgainstSlots,
@@ -130,6 +132,8 @@ export function OverviewTab(props: {
   range?: InsightsRangeInfo
   /** The Claude pool's quota outlook, read by the overview's quota signal and capacity line. */
   outlook?: EngineOutlook
+  /** How long each upstream account's balance lasts, read by the overview's runway signal. */
+  runway?: UpstreamRunway
 }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
@@ -204,6 +208,7 @@ export function OverviewTab(props: {
     }),
     ...overviewQuotaSignals(t, fmt, props.outlook),
     ...overviewBehaviorSignals(t, behavior),
+    ...overviewRunwaySignals(t, fmt, props.runway),
   ]
 
   OVERVIEW_VIEWS.forEach((view, index) => {

@@ -45,7 +45,9 @@ import type {
   OrderMethodFunnel,
   QualityInsights,
   TaskOutcome,
+  UpstreamRunway,
 } from '../types'
+import { formatDays, runwayDanger } from '../upstream-runway'
 import { quotaBinding, quotaSentences } from './outlook'
 import { FAILING_RATE, type InsightsFormat } from './overview-analysis'
 import {
@@ -475,6 +477,44 @@ export function overviewBehaviorSignals(
       tab: 'quality',
       section: SECTIONS.modelBehavior,
       impact: red.reduce((sum, alert) => sum + alert.samples, 0),
+    },
+  ]
+}
+
+/**
+ * An upstream account whose balance lasts under three days at its last week's
+ * spend: red, named with its days and balance, linked to the upstream tab where
+ * the runway cards are. One finding for all of them; nothing when every account
+ * has room, or without the runway.
+ */
+export function overviewRunwaySignals(
+  t: TFunction,
+  fmt: InsightsFormat,
+  runway: UpstreamRunway | undefined
+): Finding[] {
+  const low = runwayDanger(runway)
+  if (low.length === 0) return []
+  const list = low
+    .map((account) =>
+      t('{{host}}: {{days}} days, {{balance}} left', {
+        host: account.host,
+        days: formatDays(account.days_left ?? 0),
+        balance: fmt.usd(account.balance),
+      })
+    )
+    .join('; ')
+  return [
+    {
+      key: 'upstream-runway',
+      tone: 'danger',
+      title: t('{{count}} upstream accounts run out within 3 days', {
+        count: low.length,
+      }),
+      detail: t('{{list}}. Top up before requests start to fail.', {
+        list,
+      }),
+      tab: 'upstream',
+      impact: low.reduce((sum, account) => sum + account.daily_usd, 0),
     },
   ]
 }

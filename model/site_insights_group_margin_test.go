@@ -178,6 +178,15 @@ func TestGroupAllocationsSplitAUserAcrossGroupsByDatabase(t *testing.T) {
 			assert.InDelta(t, 3/total, allocationRowOf(t, rows, allocationKey{AllocationGroup, "A"}).PoolShare[VendorClaude], 1e-9)
 			assert.InDelta(t, 0.5/total, allocationRowOf(t, rows, allocationKey{AllocationGroup, "B"}).PoolShare[VendorClaude], 1e-9)
 			assert.InDelta(t, 2/total, allocationRowOf(t, rows, staffKey).PoolShare[VendorClaude], 1e-9, "staff's use is its own row")
+
+			// The same use by model: one model, customers' 4 charged over 4
+			// requests (alice's 3 and 1), staff's 2 on its own row.
+			opus := modelAllocationOf(t, finance.ModelAllocations, AllocationModel, "claude-opus")
+			assert.InDelta(t, 4, opus.RevenueUSD, 1e-6)
+			assert.Equal(t, int64(4), opus.Requests)
+			assert.InDelta(t, 4, opus.CostedRevenueUSD, 1e-6, "the pool's channel is costed by its accounts")
+			assert.InDelta(t, 3.5/total, opus.PoolShare[VendorClaude], 1e-9)
+			assert.InDelta(t, 2/total, modelAllocationOf(t, finance.ModelAllocations, AllocationStaff, "").PoolShare[VendorClaude], 1e-9)
 		})
 	}
 }

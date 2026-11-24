@@ -52,6 +52,7 @@ import {
   OrdersPanel,
   PlanBookPanel,
 } from './finance-insights'
+import { ModelMarginPanel } from './finance-model-margin'
 import {
   CustomerConcentrationPanel,
   DetailsGroup,
@@ -287,6 +288,7 @@ export function FinanceTab(props: {
 
       <VendorMarginPanel data={data} range={range} source={view} />
       <ProfitWaterfallPanel data={data} source={view} />
+      <ModelMarginPanel data={data} source={view} />
 
       <div className='grid items-start gap-4 lg:grid-cols-2'>
         <Panel title={t('By payment method')}>

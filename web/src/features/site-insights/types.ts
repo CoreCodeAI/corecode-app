@@ -769,6 +769,28 @@ export type GroupAllocation = {
   pool_share: Record<string, number> | null
 }
 
+/**
+ * One row of the model margin view: a model's customer use, the staff row, or
+ * the unattributed row. An allocation, not a measurement. revenue_usd is what
+ * customers (not staff) were charged at the groups' prices, in quota dollars,
+ * which is yuan one for one; it is not cash received. costed_revenue_usd is the
+ * part served where a cost is known: a billed upstream, a monthly fee or the
+ * pool's own accounts. bill_usd is in quota dollars one for one, fee_usd in
+ * real US dollars, and pool_share maps a vendor to the fraction of its pool
+ * account cost the row carries (fractions sum to 1 over the rows).
+ */
+export type ModelAllocation = {
+  model: string
+  kind: 'model' | 'staff' | 'unattributed'
+  vendor: string
+  requests: number
+  revenue_usd: number
+  costed_revenue_usd: number
+  bill_usd: number
+  fee_usd: number
+  pool_share: Record<string, number> | null
+}
+
 export type GroupConsumption = {
   group: string
   requests: number
@@ -903,6 +925,8 @@ export type FinanceInsights = StaleHours & {
   groups?: GroupConsumption[] | null
   /** Each group's revenue and cost share, with the staff and unattributed rows. Absent before the server's release. */
   group_allocations?: GroupAllocation[] | null
+  /** The same shares by model, with each model's charge and requests. Absent before the server's release. */
+  model_allocations?: ModelAllocation[] | null
 }
 
 /** A sign-up of the range that consumed and never paid (no successful top-up with money > 0 off the wallet, ever). Quota dollars. */
@@ -1970,4 +1994,41 @@ export type GateInsights = {
   users: number
   crowd: GateCrowd
   exemptions: GateExemptions
+}
+
+/**
+ * One upstream account, its channels pooled by host: the freshest balance read
+ * on any of them, and what its bill spent over the last `days` days (7). basis
+ * says how the bill is read: "request" per request, "day" in the supplier's day
+ * totals, "none" not at all, which leaves days_left absent. daily is the spend
+ * per block, oldest first; days_left is balance over the daily average and is
+ * absent without spending.
+ */
+export type UpstreamAccount = {
+  host: string
+  channels: number[]
+  names: string[]
+  balance: number
+  balance_updated_at: number
+  balance_channel: number
+  basis: 'request' | 'day' | 'none'
+  spent_usd: number
+  daily_usd: number
+  daily: number[]
+  days_left: number | null
+}
+
+/** A channel served inside the deployment whose balance is the pool's own figure, not money: never given a runway. */
+export type UpstreamPool = {
+  channel: number
+  name: string
+  balance: number
+  balance_updated_at: number
+}
+
+export type UpstreamRunway = {
+  days: number
+  at: number
+  accounts: UpstreamAccount[]
+  pools: UpstreamPool[]
 }
