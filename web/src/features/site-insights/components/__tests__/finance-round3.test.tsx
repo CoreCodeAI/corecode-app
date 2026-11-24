@@ -165,6 +165,8 @@ describe('funds help that says what the code counts', () => {
   it('puts spending bonus credit in the gifted part and lowers the average price', async () => {
     const user = userEvent.setup()
     render(<FinanceTab data={funds({ bonus_usd: 5 })} />)
+    // Wallet credit issued sits in the folded details.
+    await user.click(screen.getByRole('button', { name: /^Details/ }))
     await user.hover(screen.getByRole('button', { name: 'Top-up bonus' }))
     await waitFor(() =>
       expect(

@@ -170,7 +170,7 @@ export function FinanceSummary(props: {
 
   return (
     <TooltipProvider delay={150}>
-      <div className='grid gap-4 xl:grid-cols-5'>
+      <div className='grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-5'>
         <Panel
           className='xl:col-span-2'
           title={t('Cash')}

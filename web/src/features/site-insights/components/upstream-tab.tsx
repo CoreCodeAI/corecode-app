@@ -88,6 +88,7 @@ import {
   UpstreamRunRate,
   UpstreamTasks,
 } from './upstream-insights'
+import { UpstreamChannelCards, UpstreamSpendPanel } from './upstream-overview'
 
 const BEST = 'font-semibold text-emerald-600 dark:text-emerald-400'
 
@@ -1055,6 +1056,12 @@ export function UpstreamTab(props: {
           )}
         </SampleNote>
       )}
+      <UpstreamChannelCards data={props.data} />
+      <UpstreamSpendPanel
+        data={props.data}
+        range={props.range}
+        hourly={hourly}
+      />
       <MetricGrid
         loading={!props.data && !missing}
         items={[

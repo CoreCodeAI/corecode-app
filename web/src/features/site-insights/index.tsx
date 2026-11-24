@@ -48,6 +48,7 @@ import {
 import type { CapacityVendor } from './components/capacity-tab'
 import { LogsNote } from './components/insight-kit'
 import { SectionMenu } from './components/section-menu'
+import { revealPanel } from './components/sections'
 import {
   HOURLY_MAX_DAYS,
   INSIGHTS_PRESETS,
@@ -198,7 +199,10 @@ export function SiteInsights() {
     const started = Date.now()
     const timer = setInterval(() => {
       const panel = document.querySelector(`#${jump.section}`)
-      if (panel) panel.scrollIntoView({ block: 'start' })
+      if (panel) {
+        revealPanel(panel)
+        panel.scrollIntoView({ block: 'start' })
+      }
       if (panel || Date.now() - started > SECTION_WAIT_MS) {
         clearInterval(timer)
         setJump(undefined)

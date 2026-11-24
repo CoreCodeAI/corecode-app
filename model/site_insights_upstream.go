@@ -343,6 +343,9 @@ const (
 // for a multi-key channel still enabled, why and when its latest key was.
 // KeyCount is how many keys the channel holds and DisabledKeys how many of
 // them are disabled. Tasks counts the async tasks submitted to it in the range.
+// Balance is the balance last read from the upstream, in dollars, and
+// BalanceUpdatedAt when it was read in unix seconds; 0 means no balance has
+// ever been read, whatever Balance says.
 type UpstreamChannel struct {
 	ID               int          `json:"id"`
 	Name             string       `json:"name"`
@@ -376,6 +379,8 @@ type UpstreamChannel struct {
 	CacheRead        int64        `json:"cache_read_tokens"`
 	CompletionTokens int64        `json:"completion_tokens"`
 	Reasons          []NamedCount `json:"reasons"`
+	Balance          float64      `json:"balance"`
+	BalanceUpdatedAt int64        `json:"balance_updated_at"`
 }
 
 // UpstreamModel is one model on one channel over the range, with the
@@ -741,6 +746,8 @@ func upstreamInsightsFromHours(r InsightsRange, hours []*insightHour, stale int)
 			CacheRead:        total.cacheRead,
 			CompletionTokens: total.completion,
 			Reasons:          topNamedCounts(total.reasons, 5),
+			Balance:          channel.Balance,
+			BalanceUpdatedAt: channel.BalanceUpdatedTime,
 			CostSource:       UpstreamCostSourceNone,
 		}
 		if outcome != nil {

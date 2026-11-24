@@ -9827,6 +9827,23 @@
     "{{count}} yellow": "{{count}} 項黃色",
     "{{demand}} forecast demand of {{supply}} the pool can spend.": "預測需求 {{demand}}，號池可消耗 {{supply}}。",
     "{{failed}} of {{requests}}": "{{failed}} / {{requests}}",
-    "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.": "{{vendor}} 的失敗占比最高：{{count}} 個請求中失敗 {{rate}}。"
+    "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.": "{{vendor}} 的失敗占比最高：{{count}} 個請求中失敗 {{rate}}。",
+    "No balance is read for this upstream": "沒有讀取這個上游的餘額",
+    "{{count}} more upstreams are in the table below": "另有 {{count}} 個上游見下方表格",
+    "Upstream spend by channel": "按上游堆疊的花費",
+    "No upstream cost is known for this range.": "這個時間範圍內沒有已知的上游成本。",
+    "Hourly consumption": "每小時消耗",
+    "Revenue earned and consumption": "確認收入與消耗",
+    "No customer consumed anything in this window": "這個視窗內沒有客戶產生消耗",
+    "Share of customer consumption": "客戶消耗占比",
+    "Top {{count}} customers": "前 {{count}} 名客戶",
+    "{{count}} customers consumed in this window, {{total}} in all.": "這個視窗內有 {{count}} 位客戶產生消耗，共 {{total}}。",
+    "Customer concentration": "客戶集中度",
+    "Each hour’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the hours, the same cost the table below reads.": "每小時各上游的花費，按上游堆疊：花費最多的 {{count}} 個單獨列出，其餘合為一個系列。取自上游帳單，或把月費攤到各小時，與下方表格讀的是同一份成本。",
+    "Each day’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the days, the same cost the table below reads.": "每天各上游的花費，按上游堆疊：花費最多的 {{count}} 個單獨列出，其餘合為一個系列。取自上游帳單，或把月費攤到各天，與下方表格讀的是同一份成本。",
+    "Each hour’s consumption at list price, root and staff’s internal use included, in yuan.": "每小時按標價的消耗，含 root 和員工的內部使用，單位為元。",
+    "Each day’s revenue earned beside consumption at list price, root and staff’s internal use included, in yuan.": "每天的確認收入與按標價的消耗並排顯示，消耗含 root 和員工的內部使用，單位為元。",
+    "The share of what customers consumed in the window, at new-api’s charge, that the biggest five, ten and twenty took. Root’s and staff’s own use is not counted.": "視窗內客戶消耗（按 new-api 的計費）中，前 5、前 10、前 20 名客戶占的比例。root 和員工自己的使用不計入。",
+    "Plan book, gift watch, orders, wallet credit, balances and adjustments, and consumption by user": "套餐帳本、贈送監控、訂單、錢包額度、餘額與調整、按用戶消耗"
   }
 }

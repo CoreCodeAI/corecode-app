@@ -1534,6 +1534,10 @@ export type UpstreamChannel = {
   cache_read_tokens: number
   completion_tokens: number
   reasons: NamedCount[]
+  /** The balance last read from the upstream, dollars; absent before the server's release. */
+  balance?: number
+  /** When it was read, unix seconds; 0 when no balance has ever been read, whatever balance says. Absent before the server's release. */
+  balance_updated_at?: number
 }
 
 /** cost_usd includes bills under the name the channel's model mapping sent upstream, split by served requests when several names map to one. */

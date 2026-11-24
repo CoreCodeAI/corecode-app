@@ -1046,3 +1046,24 @@ export function planServed(input: {
     least,
   }
 }
+
+/** The head counts the concentration chart reads. */
+export const CONCENTRATION_TOPS = [5, 10, 20] as const
+
+/**
+ * How much of the customers' consumption the biggest few took: each head
+ * count's total and its share of the window's whole (the server's total
+ * covers every customer, not only the listed hundred). A head count above
+ * the customers listed is the whole list's. Null when nothing was consumed.
+ */
+export function spendConcentration(
+  users: Pick<UserSpendRow, 'quota_usd'>[],
+  total: number
+): { top: number; amount: number; share: number }[] | null {
+  if (!(total > 0)) return null
+  const sorted = users.map((row) => row.quota_usd).sort((a, b) => b - a)
+  return CONCENTRATION_TOPS.map((top) => {
+    const amount = sorted.slice(0, top).reduce((sum, value) => sum + value, 0)
+    return { top, amount, share: Math.min(1, amount / total) }
+  })
+}

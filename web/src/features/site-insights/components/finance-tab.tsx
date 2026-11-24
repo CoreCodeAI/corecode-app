@@ -52,6 +52,11 @@ import {
   OrdersPanel,
   PlanBookPanel,
 } from './finance-insights'
+import {
+  CustomerConcentrationPanel,
+  DetailsGroup,
+  FinanceFlowPanel,
+} from './finance-overview'
 import { FinanceSummary } from './finance-summary'
 import { StaleNote } from './insight-kit'
 import { ProfitWaterfallPanel } from './profit-waterfall'
@@ -183,7 +188,7 @@ export function FinanceTab(props: {
   }
   const issued = issuedRows.reduce((sum, row) => sum + row[1], 0)
   return (
-    <div className='grid gap-4'>
+    <div className='grid grid-cols-[minmax(0,1fr)] gap-4'>
       <Verdict
         loading={!props.data && !failed}
         tone={verdict?.tone ?? 'default'}
@@ -209,132 +214,81 @@ export function FinanceTab(props: {
         source={view}
       />
 
-      <FinanceDriversPanel
-        data={data}
-        previous={comparable}
-        previousSource={props.sources?.previous}
-      />
+      <div className='grid gap-4 lg:grid-cols-2'>
+        <Panel
+          title={hours ? t('Hourly revenue paid') : t('Daily revenue paid')}
+          description={chartNote}
+          error={failedText}
+          help={joinSentences(
+            t(
+              'The bars are revenue paid, top-ups and plans, in yuan. Consumption at list price, root and staff’s internal use included, reads out on each bar, and by the day revenue earned too.'
+            ),
+            defs.paidRevenue
+          )}
+        >
+          {!failed && hours && (
+            <BarSeries
+              ariaLabel={t('Hourly revenue')}
+              series={revenueSeries}
+              points={hourAxis.bars(
+                hours,
+                range.end,
+                (hour) => ({
+                  values: [hour.topup, hour.subscription],
+                  extra: [
+                    {
+                      label: t('Consumed at list price'),
+                      value: fmt.cny(
+                        hour.consumption_usd + hour.root_consumption_usd
+                      ),
+                    },
+                  ],
+                }),
+                logsSince
+              )}
+            />
+          )}
+          {!failed && !hours && (
+            <BarSeries
+              ariaLabel={t('Daily revenue')}
+              series={revenueSeries}
+              points={daily.map((day, index) => ({
+                key: day.day,
+                title: fmt.day(day.day),
+                values: [day.topup, day.subscription],
+                partial: partialDay(day.day, [day.topup, day.subscription]),
+                previous: earlierRevenue(earlierDays.at(index)),
+                previousPartial: previousDayPartial(index, earlierDays.length),
+                missing: bucketBeforeLogs(day.day, 'day', logsSince),
+                extra: [
+                  {
+                    label: t('Revenue earned'),
+                    value: fmt.cny(day.recognized_revenue ?? 0),
+                  },
+                  {
+                    label: t('Consumed at list price'),
+                    value: fmt.cny(
+                      day.consumption_usd + (day.root_consumption_usd ?? 0)
+                    ),
+                  },
+                ],
+              }))}
+            />
+          )}
+        </Panel>
+
+        <FinanceFlowPanel
+          data={data}
+          range={range}
+          hours={hours}
+          error={failedText}
+        />
+      </div>
 
       <VendorMarginPanel data={data} range={range} source={view} />
       <ProfitWaterfallPanel data={data} source={view} />
 
-      <VendorTabs data={data} />
-
-      <ModelMixPanel data={props.business} source={props.sources?.business} />
-
-      <GroupConsumptionPanel
-        data={data}
-        previous={comparable}
-        sources={props.sources}
-      />
-
-      <PlanBookPanel data={data} sources={props.sources} />
-
-      <Panel
-        title={hours ? t('Hourly revenue paid') : t('Daily revenue paid')}
-        description={chartNote}
-        error={failedText}
-        help={joinSentences(
-          t(
-            'The bars are revenue paid, top-ups and plans, in yuan. Consumption at list price, root and staff’s internal use included, reads out on each bar, and by the day revenue earned too.'
-          ),
-          defs.paidRevenue
-        )}
-      >
-        {!failed && hours && (
-          <BarSeries
-            ariaLabel={t('Hourly revenue')}
-            series={revenueSeries}
-            points={hourAxis.bars(
-              hours,
-              range.end,
-              (hour) => ({
-                values: [hour.topup, hour.subscription],
-                extra: [
-                  {
-                    label: t('Consumed at list price'),
-                    value: fmt.cny(
-                      hour.consumption_usd + hour.root_consumption_usd
-                    ),
-                  },
-                ],
-              }),
-              logsSince
-            )}
-          />
-        )}
-        {!failed && !hours && (
-          <BarSeries
-            ariaLabel={t('Daily revenue')}
-            series={revenueSeries}
-            points={daily.map((day, index) => ({
-              key: day.day,
-              title: fmt.day(day.day),
-              values: [day.topup, day.subscription],
-              partial: partialDay(day.day, [day.topup, day.subscription]),
-              previous: earlierRevenue(earlierDays.at(index)),
-              previousPartial: previousDayPartial(index, earlierDays.length),
-              missing: bucketBeforeLogs(day.day, 'day', logsSince),
-              extra: [
-                {
-                  label: t('Revenue earned'),
-                  value: fmt.cny(day.recognized_revenue ?? 0),
-                },
-                {
-                  label: t('Consumed at list price'),
-                  value: fmt.cny(
-                    day.consumption_usd + (day.root_consumption_usd ?? 0)
-                  ),
-                },
-              ],
-            }))}
-          />
-        )}
-      </Panel>
-
-      <GiftWatchPanel
-        data={data}
-        previous={previous}
-        range={range}
-        onOpen={props.onOpen}
-        source={view}
-      />
-
-      <OrdersPanel data={data} previous={comparable} sources={props.sources} />
-
-      <div className='grid gap-4 lg:grid-cols-3'>
-        <Panel
-          title={t('Wallet credit issued')}
-          error={failedText}
-          help={
-            signupRead
-              ? t(
-                  'Credit added to customers’ wallets in the range, in yuan, by where it came from. Only top-up credit was paid for. Sign-up and invitee bonuses are counts times today’s settings, so estimates.'
-                )
-              : t(
-                  'Credit added to customers’ wallets in the range, in yuan, by where it came from. Only top-up credit was paid for.'
-                )
-          }
-          description={
-            data && issued > 0
-              ? t('{{total}} in all; manual adjustments are {{share}}.', {
-                  total: fmt.cny(issued),
-                  share: fmt.pct((data.adjustment_net_usd ?? 0) / issued),
-                })
-              : undefined
-          }
-        >
-          <dl className='grid gap-2 text-sm'>
-            {issuedRows.map(([label, value, help]) => (
-              <div key={label} className='flex justify-between gap-2'>
-                <dt className='text-muted-foreground'>
-                  <HelpLabel label={label} help={help} />
-                </dt>
-                <dd className='tabular-nums'>{data ? fmt.cny(value) : '-'}</dd>
-              </div>
-            ))}
-          </dl>
-        </Panel>
+      <div className='grid items-start gap-4 lg:grid-cols-2'>
         <Panel title={t('By payment method')}>
           {!failed && (
             <ShareDonut
@@ -375,104 +329,181 @@ export function FinanceTab(props: {
             ]}
           />
         </Panel>
-        <Panel title={t('Largest balances')}>
-          <SimpleTable
-            rows={data?.top_balances}
-            rowKey={(row) => row.user_id}
-            empty={t('No customer balances')}
-            state={tableState(view, data?.top_balances)}
-            columns={[
-              {
-                key: 'user',
-                label: t('User'),
-                render: (row) => <UserLabel {...row} />,
-              },
-              {
-                key: 'b',
-                label: t('Balance'),
-                align: 'right',
-                render: (row) => fmt.cny(row.balance_usd),
-              },
-            ]}
-          />
-        </Panel>
+        <CustomerConcentrationPanel />
       </div>
 
-      <div className='grid gap-4 lg:grid-cols-2'>
-        <Panel
-          title={t('Manual balance adjustments')}
-          help={t(
-            'From the audit log: who changed whose balance, and by how much.'
-          )}
-          description={
-            data?.adjustments_truncated && data.adjustments_total != null
-              ? t('Showing the newest {{shown}} of {{total}}.', {
-                  shown: fmt.num(data.adjustments.length),
-                  total: fmt.num(data.adjustments_total),
-                })
-              : undefined
-          }
-        >
-          <SimpleTable
-            rows={data?.adjustments}
-            rowKey={(row, index) => `${row.created_at}-${index}`}
-            empty={t('No manual adjustments in this range')}
-            state={tableState(view, data?.adjustments)}
-            columns={[
-              {
-                key: 'at',
-                label: t('Time'),
-                render: (row) => fmt.time(row.created_at),
-              },
-              {
-                key: 'op',
-                label: t('Operator'),
-                render: (row) => row.operator,
-              },
-              {
-                key: 'target',
-                label: t('User'),
-                render: (row) => <UserLabel {...row.target} />,
-              },
-              {
-                key: 'delta',
-                label: t('Change'),
-                align: 'right',
-                render: (row) => {
-                  if (!row.success) return t('Failed')
-                  if (!row.has_snapshot) {
-                    return `${row.mode} ${fmt.cny(row.request_usd)}`
-                  }
-                  return `${fmt.cny(row.before_usd)} → ${fmt.cny(row.after_usd)}`
+      <FinanceDriversPanel
+        data={data}
+        previous={comparable}
+        previousSource={props.sources?.previous}
+      />
+
+      <VendorTabs data={data} />
+
+      <ModelMixPanel data={props.business} source={props.sources?.business} />
+
+      <GroupConsumptionPanel
+        data={data}
+        previous={comparable}
+        sources={props.sources}
+      />
+
+      <DetailsGroup
+        title={t('Details')}
+        hint={t(
+          'Plan book, gift watch, orders, wallet credit, balances and adjustments, and consumption by user'
+        )}
+      >
+        <PlanBookPanel data={data} sources={props.sources} />
+
+        <GiftWatchPanel
+          data={data}
+          previous={previous}
+          range={range}
+          onOpen={props.onOpen}
+          source={view}
+        />
+
+        <OrdersPanel
+          data={data}
+          previous={comparable}
+          sources={props.sources}
+        />
+
+        <div className='grid gap-4 lg:grid-cols-2'>
+          <Panel
+            title={t('Wallet credit issued')}
+            error={failedText}
+            help={
+              signupRead
+                ? t(
+                    'Credit added to customers’ wallets in the range, in yuan, by where it came from. Only top-up credit was paid for. Sign-up and invitee bonuses are counts times today’s settings, so estimates.'
+                  )
+                : t(
+                    'Credit added to customers’ wallets in the range, in yuan, by where it came from. Only top-up credit was paid for.'
+                  )
+            }
+            description={
+              data && issued > 0
+                ? t('{{total}} in all; manual adjustments are {{share}}.', {
+                    total: fmt.cny(issued),
+                    share: fmt.pct((data.adjustment_net_usd ?? 0) / issued),
+                  })
+                : undefined
+            }
+          >
+            <dl className='grid gap-2 text-sm'>
+              {issuedRows.map(([label, value, help]) => (
+                <div key={label} className='flex justify-between gap-2'>
+                  <dt className='text-muted-foreground'>
+                    <HelpLabel label={label} help={help} />
+                  </dt>
+                  <dd className='tabular-nums'>
+                    {data ? fmt.cny(value) : '-'}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Panel>
+          <Panel title={t('Largest balances')}>
+            <SimpleTable
+              rows={data?.top_balances}
+              rowKey={(row) => row.user_id}
+              empty={t('No customer balances')}
+              state={tableState(view, data?.top_balances)}
+              columns={[
+                {
+                  key: 'user',
+                  label: t('User'),
+                  render: (row) => <UserLabel {...row} />,
                 },
-              },
-            ]}
-          />
-        </Panel>
-        <Panel id={SECTIONS.debtors} title={t('Negative balances')}>
-          <SimpleTable
-            rows={data?.debtors}
-            rowKey={(row) => row.user_id}
-            empty={t('No customer owes money')}
-            state={tableState(view, data?.debtors)}
-            columns={[
-              {
-                key: 'user',
-                label: t('User'),
-                render: (row) => <UserLabel {...row} />,
-              },
-              {
-                key: 'b',
-                label: t('Balance'),
-                align: 'right',
-                render: (row) => fmt.cny(row.balance_usd),
-              },
-            ]}
-          />
-        </Panel>
-      </div>
+                {
+                  key: 'b',
+                  label: t('Balance'),
+                  align: 'right',
+                  render: (row) => fmt.cny(row.balance_usd),
+                },
+              ]}
+            />
+          </Panel>
+        </div>
 
-      <UserSpendPanel onOpen={props.onOpen} />
+        <div className='grid gap-4 lg:grid-cols-2'>
+          <Panel
+            title={t('Manual balance adjustments')}
+            help={t(
+              'From the audit log: who changed whose balance, and by how much.'
+            )}
+            description={
+              data?.adjustments_truncated && data.adjustments_total != null
+                ? t('Showing the newest {{shown}} of {{total}}.', {
+                    shown: fmt.num(data.adjustments.length),
+                    total: fmt.num(data.adjustments_total),
+                  })
+                : undefined
+            }
+          >
+            <SimpleTable
+              rows={data?.adjustments}
+              rowKey={(row, index) => `${row.created_at}-${index}`}
+              empty={t('No manual adjustments in this range')}
+              state={tableState(view, data?.adjustments)}
+              columns={[
+                {
+                  key: 'at',
+                  label: t('Time'),
+                  render: (row) => fmt.time(row.created_at),
+                },
+                {
+                  key: 'op',
+                  label: t('Operator'),
+                  render: (row) => row.operator,
+                },
+                {
+                  key: 'target',
+                  label: t('User'),
+                  render: (row) => <UserLabel {...row.target} />,
+                },
+                {
+                  key: 'delta',
+                  label: t('Change'),
+                  align: 'right',
+                  render: (row) => {
+                    if (!row.success) return t('Failed')
+                    if (!row.has_snapshot) {
+                      return `${row.mode} ${fmt.cny(row.request_usd)}`
+                    }
+                    return `${fmt.cny(row.before_usd)} → ${fmt.cny(row.after_usd)}`
+                  },
+                },
+              ]}
+            />
+          </Panel>
+          <Panel id={SECTIONS.debtors} title={t('Negative balances')}>
+            <SimpleTable
+              rows={data?.debtors}
+              rowKey={(row) => row.user_id}
+              empty={t('No customer owes money')}
+              state={tableState(view, data?.debtors)}
+              columns={[
+                {
+                  key: 'user',
+                  label: t('User'),
+                  render: (row) => <UserLabel {...row} />,
+                },
+                {
+                  key: 'b',
+                  label: t('Balance'),
+                  align: 'right',
+                  render: (row) => fmt.cny(row.balance_usd),
+                },
+              ]}
+            />
+          </Panel>
+        </div>
+
+        <UserSpendPanel onOpen={props.onOpen} />
+      </DetailsGroup>
     </div>
   )
 }

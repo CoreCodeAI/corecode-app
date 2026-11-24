@@ -143,9 +143,11 @@ describe('cash and credit at the head of the funds view', () => {
   it('counts root’s use in consumption, in yuan with its dollars', () => {
     render(<FinanceTab data={{ ...earned(), usd_exchange_rate: 5 }} />)
     // Customers 25 and root 30: ¥55, $11 at five yuan to the dollar.
+    // The daily chart's legend carries the same words; the figure is in a dl.
     const consumed = screen
-      .getByText('Consumed at list price')
-      .closest('dl') as HTMLElement
+      .getAllByText('Consumed at list price')
+      .map((label) => label.closest('dl'))
+      .find((list) => list !== null) as HTMLElement
     expect(within(consumed).getByText('¥55')).toBeInTheDocument()
     expect(within(consumed).getByText('≈ $11.00')).toBeInTheDocument()
     expect(
@@ -712,6 +714,8 @@ describe('gift watch', () => {
       topup_credit_usd: 50,
     }
     render(<FinanceTab data={data} onOpen={onOpen} />)
+    // Gift watch sits in the folded details.
+    fireEvent.click(screen.getByRole('button', { name: /^Details/ }))
     expect(
       screen.getAllByText('Gifted credit is 40% of customers’ consumption.')
     ).not.toHaveLength(0)

@@ -9827,6 +9827,23 @@
     "{{count}} yellow": "黄 {{count}} 件",
     "{{demand}} forecast demand of {{supply}} the pool can spend.": "予測需要 {{demand}}（プールが使える {{supply}} に対して）。",
     "{{failed}} of {{requests}}": "{{requests}} 件中 {{failed}} 件",
-    "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.": "{{vendor}} の失敗割合が最大：{{count}} 件中 {{rate}}。"
+    "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.": "{{vendor}} の失敗割合が最大：{{count}} 件中 {{rate}}。",
+    "No balance is read for this upstream": "このアップストリームの残高は取得されていません",
+    "{{count}} more upstreams are in the table below": "ほかの {{count}} 件のアップストリームは下の表にあります",
+    "Upstream spend by channel": "アップストリーム別の支出",
+    "No upstream cost is known for this range.": "この期間に判明しているアップストリームのコストはありません。",
+    "Hourly consumption": "時間ごとの消費",
+    "Revenue earned and consumption": "確認収益と消費",
+    "No customer consumed anything in this window": "この期間に消費した顧客はいません",
+    "Share of customer consumption": "顧客消費の構成比",
+    "Top {{count}} customers": "上位 {{count}} 顧客",
+    "{{count}} customers consumed in this window, {{total}} in all.": "この期間に {{count}} 人の顧客が消費し、合計 {{total}} でした。",
+    "Customer concentration": "顧客の集中度",
+    "Each hour’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the hours, the same cost the table below reads.": "各時間帯の各アップストリームのコストを積み上げて表示します。コストの大きい {{count}} 件は個別に、残りは 1 系列にまとめます。アップストリームの請求額、または月額料金を時間に按分した額で、下の表と同じコストです。",
+    "Each day’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the days, the same cost the table below reads.": "各日の各アップストリームのコストを積み上げて表示します。コストの大きい {{count}} 件は個別に、残りは 1 系列にまとめます。アップストリームの請求額、または月額料金を日に按分した額で、下の表と同じコストです。",
+    "Each hour’s consumption at list price, root and staff’s internal use included, in yuan.": "各時間帯の定価ベースの消費額（root とスタッフの内部利用を含む）。単位は元。",
+    "Each day’s revenue earned beside consumption at list price, root and staff’s internal use included, in yuan.": "各日の確認収益と定価ベースの消費額を並べて表示します。消費額は root とスタッフの内部利用を含み、単位は元です。",
+    "The share of what customers consumed in the window, at new-api’s charge, that the biggest five, ten and twenty took. Root’s and staff’s own use is not counted.": "期間内の顧客の消費（new-api の課金額）のうち、上位 5・10・20 人が占める割合です。root とスタッフ自身の利用は含みません。",
+    "Plan book, gift watch, orders, wallet credit, balances and adjustments, and consumption by user": "プラン台帳、ギフト監視、注文、ウォレットのクレジット、残高と調整、ユーザー別消費"
   }
 }

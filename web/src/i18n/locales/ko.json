@@ -9827,6 +9827,23 @@
     "{{count}} yellow": "노랑 {{count}}건",
     "{{demand}} forecast demand of {{supply}} the pool can spend.": "예상 수요 {{demand}} (풀이 쓸 수 있는 {{supply}} 중).",
     "{{failed}} of {{requests}}": "{{requests}}건 중 {{failed}}건",
-    "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.": "{{vendor}}의 실패 비중이 가장 큽니다: 요청 {{count}}건 중 {{rate}}."
+    "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.": "{{vendor}}의 실패 비중이 가장 큽니다: 요청 {{count}}건 중 {{rate}}.",
+    "No balance is read for this upstream": "이 업스트림의 잔액은 읽지 않습니다",
+    "{{count}} more upstreams are in the table below": "나머지 업스트림 {{count}}개는 아래 표에 있습니다",
+    "Upstream spend by channel": "업스트림별 지출",
+    "No upstream cost is known for this range.": "이 기간에 알려진 업스트림 비용이 없습니다.",
+    "Hourly consumption": "시간별 소비",
+    "Revenue earned and consumption": "인식 수익과 소비",
+    "No customer consumed anything in this window": "이 기간에 소비한 고객이 없습니다",
+    "Share of customer consumption": "고객 소비 비중",
+    "Top {{count}} customers": "상위 {{count}}명 고객",
+    "{{count}} customers consumed in this window, {{total}} in all.": "이 기간에 고객 {{count}}명이 소비했고 합계는 {{total}}입니다.",
+    "Customer concentration": "고객 집중도",
+    "Each hour’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the hours, the same cost the table below reads.": "시간별 업스트림 비용을 쌓아 보여 줍니다. 비용이 큰 {{count}}개는 따로, 나머지는 한 계열로 묶습니다. 업스트림 청구액 또는 월 요금을 시간으로 나눈 값이며 아래 표와 같은 비용입니다.",
+    "Each day’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the days, the same cost the table below reads.": "일별 업스트림 비용을 쌓아 보여 줍니다. 비용이 큰 {{count}}개는 따로, 나머지는 한 계열로 묶습니다. 업스트림 청구액 또는 월 요금을 일로 나눈 값이며 아래 표와 같은 비용입니다.",
+    "Each hour’s consumption at list price, root and staff’s internal use included, in yuan.": "시간별 정가 기준 소비액입니다. root와 직원의 내부 사용을 포함하며 단위는 위안입니다.",
+    "Each day’s revenue earned beside consumption at list price, root and staff’s internal use included, in yuan.": "일별 인식 수익과 정가 기준 소비액을 나란히 보여 줍니다. 소비액은 root와 직원의 내부 사용을 포함하며 단위는 위안입니다.",
+    "The share of what customers consumed in the window, at new-api’s charge, that the biggest five, ten and twenty took. Root’s and staff’s own use is not counted.": "기간 내 고객 소비(new-api 청구액) 중 상위 5·10·20명이 차지하는 비율입니다. root와 직원 본인의 사용은 포함하지 않습니다.",
+    "Plan book, gift watch, orders, wallet credit, balances and adjustments, and consumption by user": "플랜 장부, 선물 감시, 주문, 지갑 크레딧, 잔액과 조정, 사용자별 소비"
   }
 }
