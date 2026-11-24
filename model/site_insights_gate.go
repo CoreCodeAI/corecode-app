@@ -1,8 +1,10 @@
 package model
 
 import (
+	"fmt"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/QuantumNous/new-api/common"
 )
@@ -108,8 +110,84 @@ type gateGroup struct {
 }
 
 // readGateGroups counts the range's log rows that carry marker, by account, by
-// the kind the CASE names and by hour.
+// the kind the CASE names and by hour. A day that ended more than an hour ago can
+// no longer change, so its groups are kept (gateDayCache) and only the days still
+// running are scanned again: a range ending now reads one day, not the whole
+// range, on every load after the first.
 func readGateGroups(r InsightsRange, marker, kindCase string, kindArgs []any) ([]gateGroup, error) {
+	now := common.GetTimestamp()
+	var all []gateGroup
+	for _, day := range r.days() {
+		start, end := max(day, r.Start), min(r.DayStart(day)+86400, r.End)
+		if start >= end {
+			continue
+		}
+		key := gateDayKey(start, end, marker)
+		settled := end+3600 <= now
+		if settled {
+			if groups, ok := gateDayCache.get(key); ok {
+				all = append(all, groups...)
+				continue
+			}
+		}
+		groups, err := scanGateGroups(InsightsRange{Start: start, End: end, Offset: r.Offset}, marker, kindCase, kindArgs)
+		if err != nil {
+			return nil, err
+		}
+		if settled {
+			gateDayCache.put(key, groups)
+		}
+		all = append(all, groups...)
+	}
+	return all, nil
+}
+
+// gateDayCacheMaxDays bounds the kept days; a view covers at most InsightsMaxGateDays.
+const gateDayCacheMaxDays = 4 * InsightsMaxGateDays
+
+// gateDayCache keeps the groups of days that ended. The key names the log
+// database too, so a test that swaps databases never reads another's days.
+var gateDayCache = &gateDayStore{entries: map[string][]gateGroup{}}
+
+type gateDayStore struct {
+	mu      sync.Mutex
+	entries map[string][]gateGroup
+	order   []string
+}
+
+func gateDayKey(start, end int64, marker string) string {
+	return fmt.Sprintf("%p|%d|%d|%s", LOG_DB, start, end, marker)
+}
+
+func (c *gateDayStore) get(key string) ([]gateGroup, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	groups, ok := c.entries[key]
+	return groups, ok
+}
+
+func (c *gateDayStore) put(key string, groups []gateGroup) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.entries[key]; !ok {
+		c.order = append(c.order, key)
+	}
+	c.entries[key] = groups
+	for len(c.order) > gateDayCacheMaxDays {
+		delete(c.entries, c.order[0])
+		c.order = c.order[1:]
+	}
+}
+
+// reset forgets every kept day.
+func (c *gateDayStore) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries, c.order = map[string][]gateGroup{}, nil
+}
+
+// scanGateGroups is one scan of the range's logs.
+func scanGateGroups(r InsightsRange, marker, kindCase string, kindArgs []any) ([]gateGroup, error) {
 	query := LOG_DB.Model(&Log{}).
 		Where("created_at >= ? AND created_at < ? AND type IN ?", r.Start, r.End, []int{LogTypeConsume, LogTypeError}).
 		Where("other LIKE ?", marker+"%")

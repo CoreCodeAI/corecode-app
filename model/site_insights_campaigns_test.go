@@ -134,6 +134,8 @@ func TestGateInsightsCountMarkedRequestsAndMistakes(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
 			useInsightsTestDB(t, dialect)
+			gateDayCache.reset()
+			t.Cleanup(gateDayCache.reset)
 			const day1 = int64(1759190400)
 			const dollar = int64(affiliateDollar)
 			r := InsightsRange{Start: day1, End: day1 + 3*86400}
@@ -204,6 +206,25 @@ func TestGateInsightsCountMarkedRequestsAndMistakes(t *testing.T) {
 				"the administrator's plan is not counted; what the studio could not spend is the catch")
 			assert.Equal(t, GateExemptions{Accounts: 1, InRange: 1, Gated: 1, WalletBeforeUSD: 3, RefundedUSD: 4}, insights.Exemptions,
 				"three dollars were moved to the wallet before the exemption, four were paid back after")
+
+			// Days that ended are kept: the same range answers from them once the logs are gone.
+			require.NoError(t, LOG_DB.Where("1 = 1").Delete(&Log{}).Error)
+			again, err := GetGateInsights(r)
+			require.NoError(t, err)
+			assert.Equal(t, insights.Days, again.Days)
+			assert.Equal(t, insights.Exits, again.Exits)
+
+			// A range that ends now is not kept: its running day is read again.
+			today := common.GetTimestamp()
+			live := InsightsRange{Start: today - today%86400, End: today + 1}
+			require.NoError(t, LOG_DB.Create(&Log{UserId: farm.Id, Type: LogTypeConsume, CreatedAt: today, Quota: int(dollar), Other: `{"admin_info":{"limited_plan_ip_gate":"wallet"}}`}).Error)
+			first, err := GetGateInsights(live)
+			require.NoError(t, err)
+			assert.EqualValues(t, 1, first.Wallet)
+			require.NoError(t, LOG_DB.Where("1 = 1").Delete(&Log{}).Error)
+			second, err := GetGateInsights(live)
+			require.NoError(t, err)
+			assert.EqualValues(t, 0, second.Wallet)
 		})
 	}
 }
