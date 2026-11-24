@@ -71,4 +71,3 @@ export function useOverviewVerdicts(props: {
     ['risk', useRiskVerdict(props.risk)],
   ]
 }
-

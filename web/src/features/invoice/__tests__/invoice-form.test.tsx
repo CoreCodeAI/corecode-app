@@ -217,3 +217,51 @@ it('submitting is disabled until an order is selected', () => {
     screen.getByRole('button', { name: 'Submit application' })
   ).toBeDisabled()
 })
+
+it('an administrator files for a customer with the tax collected offline', async () => {
+  const post = vi.spyOn(api, 'post')
+  const onFile = vi.fn().mockResolvedValue(undefined)
+  const onSubmitted = vi.fn()
+  render(
+    <InvoiceForm
+      config={config}
+      orders={orders}
+      defaultEmail='finance@example.com'
+      balance={0}
+      onSubmitted={onSubmitted}
+      onFile={onFile}
+    />
+  )
+
+  // The tax shows, but nothing is to pay and no balance blocks the filing.
+  expect(screen.getAllByText('CN¥4.40')).toHaveLength(1)
+  expect(screen.queryByText('Amount to pay')).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Alipay' })).toBeNull()
+  expect(screen.getByText(/recorded as collected offline/)).toBeVisible()
+
+  await userEvent.type(
+    screen.getByLabelText(/Company name/),
+    '成都申德盈瑞科技有限公司'
+  )
+  await userEvent.type(
+    screen.getByLabelText(/Taxpayer identification number/),
+    '91510104MAEAKA016T'
+  )
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Submit application' })
+  )
+
+  await waitFor(() => expect(onSubmitted).toHaveBeenCalled())
+  expect(onFile).toHaveBeenCalledWith({
+    title_type: 'company',
+    title: '成都申德盈瑞科技有限公司',
+    tax_no: '91510104MAEAKA016T',
+    category: '软件开发服务',
+    email: 'finance@example.com',
+    orders: [
+      { order_type: 'topup', order_id: 101 },
+      { order_type: 'subscription', order_id: 201 },
+    ],
+  })
+  expect(post).not.toHaveBeenCalled()
+})

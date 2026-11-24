@@ -136,7 +136,9 @@ function WeekGrid(props: {
         <table className='text-xs tabular-nums'>
           <thead>
             <tr className='text-muted-foreground'>
-              <th className='pr-3 text-left font-normal'>{t('Sign-up week')}</th>
+              <th className='pr-3 text-left font-normal'>
+                {t('Sign-up week')}
+              </th>
               <th className='pr-3 text-right font-normal'>{t('Users')}</th>
               {Array.from({ length: width }, (_, week) => (
                 <th key={week} className='w-11 text-center font-normal'>
@@ -148,7 +150,9 @@ function WeekGrid(props: {
           <tbody>
             {props.rows.map((row) => (
               <tr key={row.week}>
-                <td className='pr-3 whitespace-nowrap'>{props.weekLabel(row)}</td>
+                <td className='pr-3 whitespace-nowrap'>
+                  {props.weekLabel(row)}
+                </td>
                 <td className='pr-3 text-right'>{fmt.num(row.size)}</td>
                 {Array.from({ length: width }, (_, index) => {
                   const cell = row.cells[index]

@@ -55,7 +55,11 @@ import {
   INVOICE_TAX_METHOD_LABEL,
 } from '../constants'
 import { formatInvoiceAmount } from '../lib/amount'
-import type { Invoice, InvoiceEpayMethod, InvoiceTaxMethod } from '../types'
+import type {
+  Invoice,
+  InvoiceCustomerTaxMethod,
+  InvoiceEpayMethod,
+} from '../types'
 import { InvoiceFacts } from './invoice-facts'
 
 const PAGE_SIZE = 10
@@ -111,7 +115,7 @@ export function MyInvoices(props: {
     if (page > lastPage) setPage(lastPage)
   }, [page, lastPage])
 
-  async function pay(invoice: Invoice, method: InvoiceTaxMethod) {
+  async function pay(invoice: Invoice, method: InvoiceCustomerTaxMethod) {
     setBusyId(invoice.id)
     try {
       const result = await payInvoiceTax(invoice.id, method)
@@ -251,7 +255,10 @@ export function MyInvoices(props: {
                           {t('Cancel application')}
                         </Button>
                         {(
-                          ['balance', ...props.payMethods] as InvoiceTaxMethod[]
+                          [
+                            'balance',
+                            ...props.payMethods,
+                          ] as InvoiceCustomerTaxMethod[]
                         ).map((method) => (
                           <Button
                             key={method}

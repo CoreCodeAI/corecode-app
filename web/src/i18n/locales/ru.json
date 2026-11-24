@@ -10127,6 +10127,13 @@
     "Read {{time}}": "Считано {{time}}",
     "{{host}}: {{days}} days, {{balance}} left": "{{host}}: {{days}} дн., осталось {{balance}}",
     "{{count}} upstream accounts run out within 3 days": "Аккаунтов апстрима, которых хватит меньше чем на 3 дня: {{count}}",
-    "{{list}}. Top up before requests start to fail.": "{{list}}. Пополните до того, как запросы начнут падать."
+    "{{list}}. Top up before requests start to fail.": "{{list}}. Пополните до того, как запросы начнут падать.",
+    "Collected offline": "Получен офлайн",
+    "The tax is recorded as collected offline. Nothing is deducted from the user's balance.": "Налог учтён как полученный офлайн. С баланса пользователя ничего не списывается.",
+    "File an application for a user": "Подать заявку за пользователя",
+    "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.": "Для клиента, который не может подать заявку в консоли. Налог учитывается как полученный офлайн, с баланса пользователя ничего не списывается.",
+    "Enter a user ID": "Введите ID пользователя",
+    "File for a user": "Заявка за пользователя",
+    "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.": "Пользователь увидит эту причину в центре счетов и в письме. Налог получен офлайн и не возвращается на баланс. Заказы снова станут доступны для счёта."
   }
 }

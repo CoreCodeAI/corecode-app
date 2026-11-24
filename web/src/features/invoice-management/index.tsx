@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
+import { FilePlus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -50,6 +51,7 @@ import {
 import { toIntlLocale } from '@/i18n/languages'
 import { formatTimestampToDate } from '@/lib/format'
 
+import { FileInvoiceDialog } from './components/file-invoice-dialog'
 import { InvoiceReviewDialog } from './components/invoice-review-dialog'
 
 const route = getRouteApi('/_authenticated/invoice-management/')
@@ -185,6 +187,7 @@ export function InvoiceManagement() {
   })
 
   const [openId, setOpenId] = useState<number | null>(null)
+  const [filing, setFiling] = useState(false)
   const columns = useInvoiceColumns((invoice) => setOpenId(invoice.id))
   const { table } = useDataTable<Invoice>({
     columns,
@@ -233,6 +236,12 @@ export function InvoiceManagement() {
         <SectionPageLayout.Title>
           {t('Invoice management')}
         </SectionPageLayout.Title>
+        <SectionPageLayout.Actions>
+          <Button size='sm' onClick={() => setFiling(true)}>
+            <FilePlus aria-hidden='true' />
+            {t('File for a user')}
+          </Button>
+        </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
           <DataTablePage
             table={table}
@@ -310,6 +319,7 @@ export function InvoiceManagement() {
       {openId !== null && (
         <InvoiceReviewDialog id={openId} onClose={() => setOpenId(null)} />
       )}
+      {filing && <FileInvoiceDialog onClose={() => setFiling(false)} />}
     </>
   )
 }

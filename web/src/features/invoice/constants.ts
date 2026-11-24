@@ -50,4 +50,5 @@ export const INVOICE_TAX_METHOD_LABEL: Record<InvoiceTaxMethod, string> = {
   balance: 'Balance',
   alipay: 'Alipay',
   wxpay: 'WeChat Pay',
+  offline: 'Collected offline',
 }

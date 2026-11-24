@@ -81,6 +81,8 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"POST /api/invoice/self/:id/pay":      accessTokenSessionRule,
 	"POST /api/invoice/self/:id/cancel":   accessTokenSessionRule,
 	"GET /api/invoice/admin":              accessTokenSessionRule,
+	"POST /api/invoice/admin":             accessTokenSessionRule,
+	"GET /api/invoice/admin/orders":       accessTokenSessionRule,
 	"GET /api/invoice/admin/review-count": accessTokenSessionRule,
 	"GET /api/invoice/admin/:id":          accessTokenSessionRule,
 	"POST /api/invoice/admin/:id/file":    accessTokenSessionRule,

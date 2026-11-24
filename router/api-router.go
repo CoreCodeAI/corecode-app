@@ -79,6 +79,8 @@ func SetApiRouter(router *gin.Engine) {
 		invoiceAdminRoute := apiRouter.Group("/invoice/admin", middleware.DisableCache(), middleware.AdminAuth())
 		{
 			invoiceAdminRoute.GET("", controller.GetAllInvoices)
+			invoiceAdminRoute.POST("", controller.CreateInvoiceAdmin)
+			invoiceAdminRoute.GET("/orders", controller.GetInvoiceOrdersAdmin)
 			invoiceAdminRoute.GET("/review-count", controller.GetInvoiceReviewCount)
 			invoiceAdminRoute.GET("/:id", controller.GetInvoiceAdmin)
 			invoiceAdminRoute.POST("/:id/file", controller.UploadInvoiceFile)

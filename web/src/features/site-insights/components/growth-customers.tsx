@@ -39,7 +39,13 @@ import type {
   SpendTierVendor,
 } from '../types'
 import { ShareDonut, type ShareSlice } from './share-donut'
-import { Panel, ProviderSwitch, SimpleTable, Sparkline, UserLabel } from './shared'
+import {
+  Panel,
+  ProviderSwitch,
+  SimpleTable,
+  Sparkline,
+  UserLabel,
+} from './shared'
 
 const DAY = 86400
 
@@ -52,7 +58,8 @@ function useDateFormat() {
     month: 'numeric',
     day: 'numeric',
   })
-  return (unix: number) => (unix > 0 ? format.format(new Date(unix * 1000)) : '-')
+  return (unix: number) =>
+    unix > 0 ? format.format(new Date(unix * 1000)) : '-'
 }
 
 /** How the top customers' shares of spending are drawn: one bar each against the whole. */
@@ -61,9 +68,24 @@ function Concentration(props: { data: CustomerInsights }) {
   const fmt = useInsightsFormat()
   const data = props.data
   const rows = [
-    { key: 'top5', label: t('Top {{n}} customers', { n: 5 }), share: data.top5_share, count: 5 },
-    { key: 'top10', label: t('Top {{n}} customers', { n: 10 }), share: data.top10_share, count: 10 },
-    { key: 'top20', label: t('Top {{n}} customers', { n: 20 }), share: data.top20_share, count: 20 },
+    {
+      key: 'top5',
+      label: t('Top {{n}} customers', { n: 5 }),
+      share: data.top5_share,
+      count: 5,
+    },
+    {
+      key: 'top10',
+      label: t('Top {{n}} customers', { n: 10 }),
+      share: data.top10_share,
+      count: 10,
+    },
+    {
+      key: 'top20',
+      label: t('Top {{n}} customers', { n: 20 }),
+      share: data.top20_share,
+      count: 20,
+    },
   ]
   return (
     <ul
@@ -117,7 +139,8 @@ export function CustomersPanel(props: {
   const fmt = useInsightsFormat()
   const date = useDateFormat()
   const data = props.data
-  const state = tableState(props.source, data?.top) ?? (data ? undefined : 'loading')
+  const state =
+    tableState(props.source, data?.top) ?? (data ? undefined : 'loading')
   const now = Math.floor(Date.now() / 1000)
   const lastRequest = (row: CustomerProfile) => {
     if (row.last_used_at <= 0) return t('Never')
@@ -203,10 +226,7 @@ export function CustomersPanel(props: {
               label: t('Remark'),
               render: (row) =>
                 row.remark ? (
-                  <span
-                    className='block max-w-32 truncate'
-                    title={row.remark}
-                  >
+                  <span className='block max-w-32 truncate' title={row.remark}>
                     {row.remark}
                   </span>
                 ) : (
@@ -276,7 +296,10 @@ export function CustomersPanel(props: {
               key: 'model',
               label: t('Main model'),
               render: (row) => (
-                <span className='block max-w-36 truncate' title={row.main_model}>
+                <span
+                  className='block max-w-36 truncate'
+                  title={row.main_model}
+                >
                   {row.main_model || '-'}
                 </span>
               ),
@@ -336,25 +359,30 @@ export function ChurnWatchPanel(props: {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const data = props.data
-  const state = tableState(props.source, data?.churn) ?? (data ? undefined : 'loading')
+  const state =
+    tableState(props.source, data?.churn) ?? (data ? undefined : 'loading')
   const now = Math.floor(Date.now() / 1000)
   const reason = (value: ChurnWarning['reasons'][number]) =>
     value === 'dropped' ? t('Use fell by over half') : t('No request in 3 days')
   let watchSentence: string | undefined
   if (data && data.churn.length > 0) {
-    watchSentence = t('{{count}} of the {{watched}} biggest customers are slipping.', {
-      count: fmt.num(data.churn.length),
-      watched: fmt.num(data.watched),
-    })
+    watchSentence = t(
+      '{{count}} of the {{watched}} biggest customers are slipping.',
+      {
+        count: fmt.num(data.churn.length),
+        watched: fmt.num(data.watched),
+      }
+    )
   } else if (data) {
-    watchSentence = t('None of the {{watched}} biggest customers has dropped off.', {
-      watched: fmt.num(data.watched),
-    })
+    watchSentence = t(
+      'None of the {{watched}} biggest customers has dropped off.',
+      {
+        watched: fmt.num(data.watched),
+      }
+    )
   }
   const change = (row: ChurnWarning) =>
-    row.previous7_usd > 0
-      ? fmt.pct(row.last7_usd / row.previous7_usd - 1)
-      : '-'
+    row.previous7_usd > 0 ? fmt.pct(row.last7_usd / row.previous7_usd - 1) : '-'
   return (
     <Panel
       title={t('Churn watch')}
@@ -428,7 +456,9 @@ export function ChurnWatchPanel(props: {
               const days = Math.floor((now - row.last_request_at) / DAY)
               return (
                 <span title={fmt.time(row.last_request_at)}>
-                  {days < 1 ? t('Today') : t('{{count}} days ago', { count: days })}
+                  {days < 1
+                    ? t('Today')
+                    : t('{{count}} days ago', { count: days })}
                 </span>
               )
             },
@@ -489,7 +519,9 @@ export function SpendTiersPanel(props: {
   const rangeOf = (index: number) => {
     const floor = tiers[index].floor_usd
     const above = index > 0 ? tiers[index - 1].floor_usd : undefined
-    if (above == null) return t('{{from}} and up', { from: fmt.usdWhole(floor) })
+    if (above == null) {
+      return t('{{from}} and up', { from: fmt.usdWhole(floor) })
+    }
     if (floor <= 0) return t('Under {{to}}', { to: fmt.usdWhole(above) })
     return `${fmt.usdWhole(floor)} – ${fmt.usdWhole(above)}`
   }
@@ -541,93 +573,95 @@ export function SpendTiersPanel(props: {
       }
     >
       {!groups ? null : (
-      <div className='grid gap-4'>
-        <div className='grid gap-4 lg:grid-cols-2'>
-          <div className='grid gap-2'>
-            <p className='text-muted-foreground text-xs'>
-              {t('Customers by tier')}
-            </p>
-            <ShareDonut
-              slices={slices((tier) => tier.users)}
-              format={fmt.num}
-              ariaLabel={t('Customers by tier')}
-              totalLabel={t('Customers')}
-              empty={t('No consumption in this range')}
-            />
+        <div className='grid gap-4'>
+          <div className='grid gap-4 lg:grid-cols-2'>
+            <div className='grid gap-2'>
+              <p className='text-muted-foreground text-xs'>
+                {t('Customers by tier')}
+              </p>
+              <ShareDonut
+                slices={slices((tier) => tier.users)}
+                format={fmt.num}
+                ariaLabel={t('Customers by tier')}
+                totalLabel={t('Customers')}
+                empty={t('No consumption in this range')}
+              />
+            </div>
+            <div className='grid gap-2'>
+              <p className='text-muted-foreground text-xs'>
+                {t('Spend by tier')}
+              </p>
+              <ShareDonut
+                slices={slices((tier) => tier.quota_usd)}
+                format={fmt.usdWhole}
+                ariaLabel={t('Spend by tier')}
+                totalLabel={t('Spend')}
+                empty={t('No consumption in this range')}
+              />
+            </div>
           </div>
-          <div className='grid gap-2'>
-            <p className='text-muted-foreground text-xs'>
-              {t('Spend by tier')}
-            </p>
-            <ShareDonut
-              slices={slices((tier) => tier.quota_usd)}
-              format={fmt.usdWhole}
-              ariaLabel={t('Spend by tier')}
-              totalLabel={t('Spend')}
-              empty={t('No consumption in this range')}
-            />
-          </div>
+          <SimpleTable<SpendTier>
+            rows={tiers}
+            rowKey={(row) => row.tier}
+            empty={t('No consumption in this range')}
+            columns={[
+              {
+                key: 'tier',
+                label: t('Tier'),
+                render: (row) => (
+                  <span className='inline-flex items-center gap-2'>
+                    <span
+                      aria-hidden
+                      className='size-2.5 rounded-sm'
+                      style={{ backgroundColor: TIER_COLORS[row.tier] }}
+                    />
+                    {names[row.tier]}
+                  </span>
+                ),
+              },
+              {
+                key: 'range',
+                label: t('Spend in the range'),
+                render: (row) => rangeOf(tiers.indexOf(row)),
+              },
+              {
+                key: 'users',
+                label: t('Customers'),
+                align: 'right',
+                render: (row) => (
+                  <span className='tabular-nums'>
+                    {fmt.num(row.users)}
+                    <span className='text-muted-foreground ml-1 text-xs'>
+                      {totalUsers > 0 ? fmt.pct(row.users / totalUsers) : '-'}
+                    </span>
+                  </span>
+                ),
+              },
+              {
+                key: 'spend',
+                label: t('Spend'),
+                align: 'right',
+                render: (row) => (
+                  <span className='tabular-nums'>
+                    {fmt.usd(row.quota_usd)}
+                    <span className='text-muted-foreground ml-1 text-xs'>
+                      {totalSpend > 0
+                        ? fmt.pct(row.quota_usd / totalSpend)
+                        : '-'}
+                    </span>
+                  </span>
+                ),
+              },
+              {
+                key: 'each',
+                label: t('Per customer'),
+                align: 'right',
+                render: (row) =>
+                  row.users > 0 ? fmt.usd(row.quota_usd / row.users) : '-',
+              },
+            ]}
+          />
         </div>
-        <SimpleTable<SpendTier>
-          rows={tiers}
-          rowKey={(row) => row.tier}
-          empty={t('No consumption in this range')}
-          columns={[
-            {
-              key: 'tier',
-              label: t('Tier'),
-              render: (row) => (
-                <span className='inline-flex items-center gap-2'>
-                  <span
-                    aria-hidden
-                    className='size-2.5 rounded-sm'
-                    style={{ backgroundColor: TIER_COLORS[row.tier] }}
-                  />
-                  {names[row.tier]}
-                </span>
-              ),
-            },
-            {
-              key: 'range',
-              label: t('Spend in the range'),
-              render: (row) => rangeOf(tiers.indexOf(row)),
-            },
-            {
-              key: 'users',
-              label: t('Customers'),
-              align: 'right',
-              render: (row) => (
-                <span className='tabular-nums'>
-                  {fmt.num(row.users)}
-                  <span className='text-muted-foreground ml-1 text-xs'>
-                    {totalUsers > 0 ? fmt.pct(row.users / totalUsers) : '-'}
-                  </span>
-                </span>
-              ),
-            },
-            {
-              key: 'spend',
-              label: t('Spend'),
-              align: 'right',
-              render: (row) => (
-                <span className='tabular-nums'>
-                  {fmt.usd(row.quota_usd)}
-                  <span className='text-muted-foreground ml-1 text-xs'>
-                    {totalSpend > 0 ? fmt.pct(row.quota_usd / totalSpend) : '-'}
-                  </span>
-                </span>
-              ),
-            },
-            {
-              key: 'each',
-              label: t('Per customer'),
-              align: 'right',
-              render: (row) =>
-                row.users > 0 ? fmt.usd(row.quota_usd / row.users) : '-',
-            },
-          ]}
-        />
-      </div>
       )}
     </Panel>
   )

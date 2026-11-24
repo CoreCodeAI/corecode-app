@@ -48,6 +48,11 @@ const (
 	InvoiceTaxBalance = "balance"
 	InvoiceTaxAlipay  = "alipay"
 	InvoiceTaxWxpay   = "wxpay"
+	// InvoiceTaxOffline is a tax collected outside new-api, such as with an
+	// enterprise's bank transfer. Only an administrator filing an application
+	// for a customer sets it; nothing is deducted, and nothing is returned
+	// when the application is rejected.
+	InvoiceTaxOffline = "offline"
 )
 
 // invoiceableProviders are the providers whose orders brought money in: the
@@ -195,8 +200,9 @@ type InvoiceApplication struct {
 	Category  string
 	Email     string
 	Orders    []InvoiceOrderRef
-	// TaxMethod is balance, alipay or wxpay. Balance pays the tax inside the
-	// submission; an epay method leaves the application awaiting payment.
+	// TaxMethod is balance, alipay, wxpay or offline. Balance pays the tax
+	// inside the submission; an epay method leaves the application awaiting
+	// payment; offline records it as collected already.
 	TaxMethod string
 }
 
@@ -491,9 +497,13 @@ func CreateInvoice(userId int, application InvoiceApplication) (*InvoiceTaxResul
 			CreatedTime: now,
 			UpdatedTime: now,
 		}
-		if invoice.TaxCents == 0 {
+		switch {
+		case invoice.TaxCents == 0:
 			invoice.Status = InvoiceStatusPendingReview
 			invoice.TaxMethod = ""
+		case application.TaxMethod == InvoiceTaxOffline:
+			invoice.Status = InvoiceStatusPendingReview
+			invoice.TaxPaidTime = now
 		}
 		if err := tx.Create(invoice).Error; err != nil {
 			return err
@@ -1006,7 +1016,8 @@ func IssueInvoice(id int, adminId int) (*Invoice, error) {
 // RejectInvoice refuses an application that is under review or awaiting its
 // tax, releases its orders, and returns a paid tax to the owner's balance:
 // the quota deducted for a balance payment, or the epay amount at the top-up
-// price.
+// price. A tax collected offline never reached the balance, so nothing is
+// returned for it.
 func RejectInvoice(id int, adminId int, reason string) (*InvoiceTaxResult, error) {
 	result := &InvoiceTaxResult{}
 	err := DB.Transaction(func(tx *gorm.DB) error {
@@ -1017,7 +1028,7 @@ func RejectInvoice(id int, adminId int, reason string) (*InvoiceTaxResult, error
 		if invoice.Status != InvoiceStatusPendingReview && invoice.Status != InvoiceStatusPendingPayment {
 			return ErrInvoiceStatusChanged
 		}
-		if invoice.TaxPaidTime > 0 && invoice.TaxCents > 0 {
+		if invoice.TaxPaidTime > 0 && invoice.TaxCents > 0 && invoice.TaxMethod != InvoiceTaxOffline {
 			refund := invoice.TaxQuota
 			if invoice.TaxMethod != InvoiceTaxBalance {
 				if refund, err = InvoiceQuotaForCents(invoice.TaxCents, false); err != nil {

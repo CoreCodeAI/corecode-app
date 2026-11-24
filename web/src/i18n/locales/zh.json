@@ -10127,6 +10127,13 @@
     "Read {{time}}": "读取于 {{time}}",
     "{{host}}: {{days}} days, {{balance}} left": "{{host}}：{{days}} 天，剩 {{balance}}",
     "{{count}} upstream accounts run out within 3 days": "{{count}} 个上游账户 3 天内耗尽",
-    "{{list}}. Top up before requests start to fail.": "{{list}}。请在请求开始失败前充值。"
+    "{{list}}. Top up before requests start to fail.": "{{list}}。请在请求开始失败前充值。",
+    "Collected offline": "线下已收",
+    "The tax is recorded as collected offline. Nothing is deducted from the user's balance.": "税费按线下已收记录，不扣用户余额。",
+    "File an application for a user": "代用户申请发票",
+    "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.": "用于无法在控制台自行申请的客户。税费按线下已收记录，不扣用户余额。",
+    "Enter a user ID": "请输入用户 ID",
+    "File for a user": "代用户申请",
+    "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.": "用户会在开票中心和通知邮件中看到该原因。税费为线下收取，不会退回余额，订单恢复为可开票。"
   }
 }

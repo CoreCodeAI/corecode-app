@@ -27,10 +27,16 @@ export type InvoiceTitleType = 'company' | 'personal'
 
 export type InvoiceOrderType = 'topup' | 'subscription'
 
-/** How a tax is paid: from the balance, or through epay. */
-export type InvoiceTaxMethod = 'balance' | 'alipay' | 'wxpay'
+/**
+ * How a tax is paid: from the balance, through epay, or collected offline
+ * when an administrator files the application for the customer.
+ */
+export type InvoiceTaxMethod = 'balance' | 'alipay' | 'wxpay' | 'offline'
 
-export type InvoiceEpayMethod = Exclude<InvoiceTaxMethod, 'balance'>
+/** The methods a customer pays with. */
+export type InvoiceCustomerTaxMethod = Exclude<InvoiceTaxMethod, 'offline'>
+
+export type InvoiceEpayMethod = Exclude<InvoiceCustomerTaxMethod, 'balance'>
 
 export interface InvoiceConfig {
   enabled: boolean
@@ -118,14 +124,29 @@ export interface InvoicePage {
   page_size: number
 }
 
-export interface InvoiceSubmission {
+/** The title, recipient and orders of an application. */
+export interface InvoiceTitleSubmission {
   title_type: InvoiceTitleType
   title: string
   tax_no: string
   category: string
   email: string
   orders: Array<{ order_type: InvoiceOrderType; order_id: number }>
-  payment_method: InvoiceTaxMethod
+}
+
+export interface InvoiceSubmission extends InvoiceTitleSubmission {
+  payment_method: InvoiceCustomerTaxMethod
+}
+
+/** An application an administrator files for a customer. */
+export interface InvoiceAdminSubmission extends InvoiceTitleSubmission {
+  user_id: number
+}
+
+/** A customer's account and invoiceable orders, for an administrator. */
+export interface InvoiceUserOrders {
+  user: { id: number; username: string; email: string }
+  orders: InvoiceableOrder[]
 }
 
 /**

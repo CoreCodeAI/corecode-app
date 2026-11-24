@@ -428,6 +428,78 @@ func GetAllInvoices(c *gin.Context) {
 	})
 }
 
+// GetInvoiceOrdersAdmin names an account and lists its invoiceable orders,
+// for an administrator filing an application on the customer's behalf.
+func GetInvoiceOrdersAdmin(c *gin.Context) {
+	userId, err := strconv.Atoi(c.Query("user_id"))
+	if err != nil || userId <= 0 {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		common.ApiErrorT(c, "User does not exist")
+		return
+	}
+	orders, err := model.ListInvoiceableOrders(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"user":   gin.H{"id": user.Id, "username": user.Username, "email": user.Email},
+		"orders": orders,
+	})
+}
+
+type adminInvoiceRequest struct {
+	UserId int `json:"user_id"`
+	invoiceRequest
+}
+
+// CreateInvoiceAdmin files an application for a customer who cannot apply
+// in the console, such as an enterprise whose payment, tax included, came by
+// bank transfer. The tax is recorded as collected offline: nothing is
+// deducted from the balance, and the application goes straight to review.
+func CreateInvoiceAdmin(c *gin.Context) {
+	setting := operation_setting.GetInvoiceSetting()
+	if !setting.Enabled {
+		common.ApiError(c, model.ErrInvoiceDisabled)
+		return
+	}
+	var request adminInvoiceRequest
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil || request.UserId <= 0 {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	// The customer's own methods are checked as for a balance payment, and
+	// the method is then replaced: offline is never a customer's choice.
+	request.PaymentMethod = model.InvoiceTaxBalance
+	application, message := invoiceApplicationFrom(request.invoiceRequest, setting)
+	if message != nil {
+		common.ApiError(c, message)
+		return
+	}
+	if application.TaxMethod != "" {
+		application.TaxMethod = model.InvoiceTaxOffline
+	}
+	result, err := model.CreateInvoice(request.UserId, application)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	invoice := result.Invoice
+	recordManageAuditFor(c, invoice.UserId, "invoice.admin_create", map[string]any{
+		"invoice_id":  invoice.Id,
+		"title":       invoice.Title,
+		"order_cents": invoice.OrderCents,
+		"tax_cents":   invoice.TaxCents,
+		"tax_method":  invoice.TaxMethod,
+	})
+	logger.LogInfo(c.Request.Context(), common.LogText("Invoice application filed by an administrator admin_id=%d user_id=%d invoice_id=%d order_cents=%d tax_cents=%d", c.GetInt("id"), invoice.UserId, invoice.Id, invoice.OrderCents, invoice.TaxCents))
+	common.ApiSuccess(c, gin.H{"invoice": invoice})
+}
+
 // GetInvoiceReviewCount counts the applications waiting for an
 // administrator.
 func GetInvoiceReviewCount(c *gin.Context) {

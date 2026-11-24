@@ -64,4 +64,3 @@ export function tabHealth(
     verdict?.tone ?? 'good'
   )
 }
-

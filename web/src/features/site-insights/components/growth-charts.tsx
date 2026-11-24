@@ -48,10 +48,7 @@ function Legend(props: { items: { label: string; dot: string }[] }) {
     <ul className='text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs'>
       {props.items.map((item) => (
         <li key={item.label} className='flex items-center gap-1.5'>
-          <span
-            aria-hidden
-            className={cn('size-2.5 rounded-sm', item.dot)}
-          />
+          <span aria-hidden className={cn('size-2.5 rounded-sm', item.dot)} />
           {item.label}
         </li>
       ))}
@@ -94,32 +91,32 @@ export function WeeklySignupsPanel(props: {
       }
     >
       {weeks.length === 0 ? null : (
-      <BarSeries
-        ariaLabel={t('Sign-ups by week')}
-        series={[
-          { label: t('Has paid') },
-          { label: t('Activated, not paid') },
-          { label: t('Not activated'), muted: true },
-        ]}
-        points={weeks.map((week) => ({
-          key: week.start,
-          title: t('Week of {{day}}', { day: fmt.day(week.start) }),
-          values: [
-            week.paid,
-            Math.max(week.activated - week.paid, 0),
-            Math.max(week.registered - week.activated, 0),
-          ],
-          faded: week.partial,
-          extra: week.partial
-            ? [
-                {
-                  label: t('Days in the range'),
-                  value: fmt.num(week.days),
-                },
-              ]
-            : undefined,
-        }))}
-      />
+        <BarSeries
+          ariaLabel={t('Sign-ups by week')}
+          series={[
+            { label: t('Has paid') },
+            { label: t('Activated, not paid') },
+            { label: t('Not activated'), muted: true },
+          ]}
+          points={weeks.map((week) => ({
+            key: week.start,
+            title: t('Week of {{day}}', { day: fmt.day(week.start) }),
+            values: [
+              week.paid,
+              Math.max(week.activated - week.paid, 0),
+              Math.max(week.registered - week.activated, 0),
+            ],
+            faded: week.partial,
+            extra: week.partial
+              ? [
+                  {
+                    label: t('Days in the range'),
+                    value: fmt.num(week.days),
+                  },
+                ]
+              : undefined,
+          }))}
+        />
       )}
     </Panel>
   )
@@ -397,7 +394,10 @@ export function StackedFunnel(props: {
               )}
             >
               <div className='flex items-baseline justify-between gap-2 text-xs'>
-                <span className='min-w-0 truncate' title={props.label(row.segment)}>
+                <span
+                  className='min-w-0 truncate'
+                  title={props.label(row.segment)}
+                >
                   {props.label(row.segment)}
                 </span>
                 <span className='text-muted-foreground shrink-0 tabular-nums'>
@@ -543,7 +543,10 @@ export function RankBars(props: {
           </div>
           <div className='bg-muted/40 h-2 overflow-hidden rounded-full'>
             <div
-              className={cn('h-full rounded-full', props.barClass ?? 'bg-primary/70')}
+              className={cn(
+                'h-full rounded-full',
+                props.barClass ?? 'bg-primary/70'
+              )}
               style={{
                 width: `${Math.max((item.value / largest) * 100, 1)}%`,
               }}

@@ -10127,6 +10127,13 @@
     "Read {{time}}": "{{time}} に取得",
     "{{host}}: {{days}} days, {{balance}} left": "{{host}}：{{days}} 日分、残り {{balance}}",
     "{{count}} upstream accounts run out within 3 days": "{{count}} 件の上流アカウントが 3 日以内に尽きます",
-    "{{list}}. Top up before requests start to fail.": "{{list}}。リクエストが失敗し始める前にチャージしてください。"
+    "{{list}}. Top up before requests start to fail.": "{{list}}。リクエストが失敗し始める前にチャージしてください。",
+    "Collected offline": "オフラインで受領",
+    "The tax is recorded as collected offline. Nothing is deducted from the user's balance.": "税金はオフラインで受領済みとして記録され、ユーザーの残高からは差し引かれません。",
+    "File an application for a user": "ユーザーに代わって申請",
+    "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.": "コンソールで申請できない顧客向けです。税金はオフラインで受領済みとして記録され、ユーザーの残高からは差し引かれません。",
+    "Enter a user ID": "ユーザー ID を入力してください",
+    "File for a user": "代理申請",
+    "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.": "ユーザーは請求書センターとメールでこの理由を確認できます。税金はオフラインで受領したため残高には返金されません。注文は再び請求可能になります。"
   }
 }

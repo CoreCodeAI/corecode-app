@@ -59,18 +59,24 @@ import {
 import { invoiceFormSchema, type InvoiceFormValues } from '../lib/schema'
 import type {
   InvoiceConfig,
-  InvoiceTaxMethod,
+  InvoiceCustomerTaxMethod,
+  InvoiceTitleSubmission,
   InvoiceTitleType,
   InvoiceableOrder,
 } from '../types'
 
-/** The title, recipient and tax payment of an application. */
+/**
+ * The title, recipient and tax payment of an application. With `onFile`, an
+ * administrator files it for a customer and the tax is recorded as collected
+ * offline, so no payment is asked for.
+ */
 export function InvoiceForm(props: {
   config: InvoiceConfig
   orders: InvoiceableOrder[]
   defaultEmail: string
   balance: number
   onSubmitted: () => void
+  onFile?: (submission: InvoiceTitleSubmission) => Promise<void>
 }) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
@@ -96,9 +102,13 @@ export function InvoiceForm(props: {
   const taxCents = invoiceTaxCents(orderCents, props.config.tax_rate)
   const taxQuota = invoiceTaxQuota(taxCents, props.config.quota_per_yuan)
   const hasTax = taxCents > 0
+  const filing = props.onFile !== undefined
   const shortOfBalance =
-    hasTax && method === 'balance' && props.balance < taxQuota
-  const methods: InvoiceTaxMethod[] = ['balance', ...props.config.pay_methods]
+    !filing && hasTax && method === 'balance' && props.balance < taxQuota
+  const methods: InvoiceCustomerTaxMethod[] = [
+    'balance',
+    ...props.config.pay_methods,
+  ]
   const canSubmit = props.orders.length > 0 && !submitting && !shortOfBalance
 
   async function onSubmit(values: InvoiceFormValues) {
@@ -107,14 +117,25 @@ export function InvoiceForm(props: {
       return
     }
     setSubmitting(true)
+    const { payment_method: paymentMethod, ...title } = values
+    const submission: InvoiceTitleSubmission = {
+      ...title,
+      tax_no: values.title_type === 'company' ? values.tax_no : '',
+      orders: props.orders.map((order) => ({
+        order_type: order.order_type,
+        order_id: order.order_id,
+      })),
+    }
     try {
+      if (props.onFile) {
+        await props.onFile(submission)
+        toast.success(t('Application submitted for review'))
+        props.onSubmitted()
+        return
+      }
       const result = await submitInvoice({
-        ...values,
-        tax_no: values.title_type === 'company' ? values.tax_no : '',
-        orders: props.orders.map((order) => ({
-          order_type: order.order_type,
-          order_id: order.order_id,
-        })),
+        ...submission,
+        payment_method: paymentMethod,
       })
       if (result.url && result.params) {
         submitPaymentForm(result.url, result.params)
@@ -272,14 +293,23 @@ export function InvoiceForm(props: {
                   {formatInvoiceAmount(taxCents, locale)}
                 </dd>
               </div>
-              <div className='flex justify-between font-semibold'>
-                <dt>{t('Amount to pay')}</dt>
-                <dd className='tabular-nums'>
-                  {formatInvoiceAmount(taxCents, locale)}
-                </dd>
-              </div>
+              {!filing && (
+                <div className='flex justify-between font-semibold'>
+                  <dt>{t('Amount to pay')}</dt>
+                  <dd className='tabular-nums'>
+                    {formatInvoiceAmount(taxCents, locale)}
+                  </dd>
+                </div>
+              )}
             </dl>
-            {hasTax && (
+            {filing && hasTax && (
+              <p className='text-muted-foreground text-xs'>
+                {t(
+                  "The tax is recorded as collected offline. Nothing is deducted from the user's balance."
+                )}
+              </p>
+            )}
+            {!filing && hasTax && (
               <FormField
                 control={form.control}
                 name='payment_method'
@@ -292,7 +322,9 @@ export function InvoiceForm(props: {
                         const next = values.find(
                           (value) => value !== field.value
                         )
-                        if (next) field.onChange(next as InvoiceTaxMethod)
+                        if (next) {
+                          field.onChange(next as InvoiceCustomerTaxMethod)
+                        }
                       }}
                       aria-label={t('Pay the tax with')}
                       variant='outline'
@@ -345,12 +377,16 @@ export function InvoiceForm(props: {
               {submitting && (
                 <Loader2 className='animate-spin' aria-hidden='true' />
               )}
-              {hasTax ? t('Submit and pay tax') : t('Submit application')}
+              {hasTax && !filing
+                ? t('Submit and pay tax')
+                : t('Submit application')}
             </Button>
-            <p className='text-muted-foreground -mt-2 flex items-center justify-center gap-1.5 text-xs'>
-              <Clock className='size-3.5 shrink-0' aria-hidden='true' />
-              {t('Issuing an invoice can take up to 5 business days.')}
-            </p>
+            {!filing && (
+              <p className='text-muted-foreground -mt-2 flex items-center justify-center gap-1.5 text-xs'>
+                <Clock className='size-3.5 shrink-0' aria-hidden='true' />
+                {t('Issuing an invoice can take up to 5 business days.')}
+              </p>
+            )}
           </form>
         </Form>
       </CardContent>
