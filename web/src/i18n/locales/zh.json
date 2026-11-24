@@ -9757,6 +9757,23 @@
     "The plugin no longer suggests where it runs, so this instance does not run. Choose another place for it.": "插件不再给出适用范围，这个实例已停止生效。请为它另选生效范围。",
     "This password is easy to guess.": "这个密码容易被猜到。",
     "Uppercase and lowercase letters": "同时包含大写和小写字母",
-    "Where the plugin suggests": "按插件建议"
+    "Where the plugin suggests": "按插件建议",
+    "Key figures": "关键数字",
+    "Hide details": "收起细节",
+    "{{count}} details": "展开 {{count}} 条细节",
+    "pt": "pt",
+    "Claude p95": "Claude p95",
+    "GPT p95": "GPT p95",
+    "Quota demand": "额度需求",
+    "Turned away": "被拒绝",
+    "Debt": "欠款",
+    "Top customer": "最大客户",
+    "Top 10": "前十名",
+    "Accounts in debt": "欠费账号",
+    "To check": "待查",
+    "Margin before upstream bills": "未计上游账单的毛利",
+    "New payers": "新付费用户",
+    "Stale bills": "账单过期",
+    "Payments received": "收款"
   }
 }

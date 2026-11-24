@@ -441,7 +441,7 @@ describe('UpstreamTab', () => {
         />
       </QueryClientProvider>
     )
-    expect(screen.getByText('Incidents')).toBeInTheDocument()
+    expect(screen.getAllByText('Incidents').length).toBeGreaterThan(0)
     expect(
       screen.getAllByText(/engine-gpt: 46\.9% failed from/).length
     ).toBeGreaterThan(0)

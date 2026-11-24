@@ -259,6 +259,7 @@ export function ChannelsTab(props: {
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text}
         points={verdict?.points}
+        chips={verdict?.chips}
         loading={!data && !failed}
       />
       <MetricGrid

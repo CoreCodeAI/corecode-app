@@ -33,7 +33,7 @@ import {
   type InsightsRangeInfo,
 } from '../lib'
 import type { ChannelInsights } from '../types'
-import { sentences, useChange, type TabVerdict } from './shared'
+import { chipList, sentences, useChange, type TabVerdict } from './shared'
 
 /** A fee is renegotiated on a loss read over at least this many days. */
 const JUDGE_DAYS = 30
@@ -61,6 +61,15 @@ export function useChannelsVerdict(
     : undefined
   const moved = change(totals.revenue, before?.revenue)
   const vars = { revenue: fmt.cny(totals.revenue), net: fmt.cny(totals.net) }
+  const chips = chipList(
+    { label: t('Revenue'), value: fmt.cny(totals.revenue) },
+    {
+      label: t('Net'),
+      value: fmt.cny(totals.net),
+      tone: totals.net < 0 ? 'warning' : 'good',
+    },
+    { label: t('New payers'), value: fmt.num(totals.newPayers) }
+  )
   const headline = moved
     ? t(
         'Paid channels brought {{revenue}} ({{change}}), net {{net}} after their cost.',
@@ -75,6 +84,7 @@ export function useChannelsVerdict(
   if (range && range.days < SHORT_ROI_DAYS) {
     return {
       tone: 'default',
+      chips,
       ...sentences(
         headline,
         t(
@@ -89,6 +99,7 @@ export function useChannelsVerdict(
   if (totals.newPayers < MIN_NEW_PAYERS) {
     return {
       tone: 'default',
+      chips,
       ...sentences(
         headline,
         t(
@@ -103,6 +114,7 @@ export function useChannelsVerdict(
   if (!worst || worstNet >= 0) {
     return {
       tone: 'good',
+      chips,
       ...sentences(headline, t('Every paid channel covers its cost.')),
     }
   }
@@ -131,5 +143,5 @@ export function useChannelsVerdict(
   }
   let tone: Tone = 'warning'
   if (totals.net < 0 && long) tone = 'danger'
-  return { tone, ...sentences(headline, action) }
+  return { tone, chips, ...sentences(headline, action) }
 }

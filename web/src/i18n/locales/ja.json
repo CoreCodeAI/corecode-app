@@ -9757,6 +9757,23 @@
     "The plugin no longer suggests where it runs, so this instance does not run. Choose another place for it.": "プラグインが適用範囲を示さなくなったため、このインスタンスは動作しません。別の適用範囲を選んでください。",
     "This password is easy to guess.": "このパスワードは推測されやすいです。",
     "Uppercase and lowercase letters": "英大文字と小文字",
-    "Where the plugin suggests": "プラグインの推奨どおり"
+    "Where the plugin suggests": "プラグインの推奨どおり",
+    "Key figures": "主な数値",
+    "Hide details": "詳細を閉じる",
+    "{{count}} details": "詳細 {{count}} 件を開く",
+    "pt": "pt",
+    "Claude p95": "Claude p95",
+    "GPT p95": "GPT p95",
+    "Quota demand": "クォータ需要",
+    "Turned away": "拒否",
+    "Debt": "未払い",
+    "Top customer": "最大の顧客",
+    "Top 10": "上位10件",
+    "Accounts in debt": "未払いアカウント",
+    "To check": "要確認",
+    "Margin before upstream bills": "上流請求前の粗利",
+    "New payers": "新規課金者",
+    "Stale bills": "古い請求",
+    "Payments received": "入金"
   }
 }

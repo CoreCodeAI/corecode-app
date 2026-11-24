@@ -42,7 +42,7 @@ import {
   upstreamIncidents,
   upstreamTotals,
 } from '../upstream'
-import { sentences, worse, type TabVerdict } from './shared'
+import { chipList, sentences, worse, type TabVerdict } from './shared'
 
 /**
  * The upstream tab's answer. Among channels with SMALL_SAMPLE attempts, the
@@ -276,5 +276,30 @@ export function useUpstreamVerdict(
       )
     }
   }
-  return { tone, ...sentences(...parts) }
+  return {
+    tone,
+    chips: chipList(
+      candidates.length > 0 && {
+        label: t('Failure rate'),
+        value: fmt.pct(totals.failureRate),
+        tone: failureTone(totals.failureRate),
+      },
+      totals.cost > 0 && {
+        label: t('Gross margin'),
+        value: fmt.pct(totals.marginRate),
+        tone: totals.margin < 0 ? 'warning' : 'default',
+      },
+      incidents.length > 0 && {
+        label: t('Incidents'),
+        value: fmt.num(incidents.length),
+        tone: 'danger',
+      },
+      stale.length > 0 && {
+        label: t('Stale bills'),
+        value: fmt.num(stale.length),
+        tone: 'warning',
+      }
+    ),
+    ...sentences(...parts),
+  }
 }

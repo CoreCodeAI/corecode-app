@@ -189,6 +189,7 @@ export function FinanceTab(props: {
         tone={verdict?.tone ?? 'default'}
         text={verdict?.text ?? failedText}
         points={verdict?.points}
+        chips={verdict?.chips}
       />
       <StaleNote
         staleHours={data?.stale_hours}

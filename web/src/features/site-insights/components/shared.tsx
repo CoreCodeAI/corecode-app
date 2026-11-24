@@ -16,7 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ChevronLeft, ChevronRight, CircleHelp } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+} from 'lucide-react'
 import {
   Fragment,
   useState,
@@ -29,6 +34,11 @@ import { useTranslation } from 'react-i18next'
 import { TapTooltip, TapTooltipTrigger } from '@/components/tap-tooltip'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import {
   Popover,
   PopoverContent,
@@ -175,46 +185,109 @@ const VERDICT_TONES: Record<Tone, { bar: string; dot: string }> = {
 }
 
 /**
+ * One figure of a verdict, small enough to sit in a row of them: the label,
+ * the value, and the value's tone (a figure that is merely fine has none).
+ */
+export type VerdictChip = { label: string; value: string; tone?: Tone }
+
+/**
  * A tab's answer, colored by how it reads: the first thing on the tab, so the
- * figures below it confirm rather than have to be read to find out. With its
- * sentences given one by one, the first is the headline and the rest a list
- * under it, so a long answer is scanned rather than read through.
+ * figures below it confirm rather than have to be read to find out. It is one
+ * line, the headline, and a row of chips with the figures the answer rests on;
+ * the rest of its sentences stay folded under "N details" until asked for, so
+ * the charts below come into the first screen. Given text alone it is a
+ * headline without details.
  */
 export function Verdict(props: {
   tone: Tone
   text: string | undefined
   /** The answer's sentences in order; text alone is one headline. */
   points?: string[]
+  /** The figures the answer rests on, drawn as a row under the headline. */
+  chips?: VerdictChip[]
   loading?: boolean
 }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
   const tone = VERDICT_TONES[props.tone]
   if (props.loading) return <Skeleton className='h-11 w-full rounded-xl' />
   if (!props.text) return null
   const [headline, ...rest] = props.points?.length ? props.points : [props.text]
+  const chips = props.chips ?? []
+  const toggle = rest.length > 0 && (
+    <CollapsibleTrigger
+      render={<Button variant='ghost' size='xs' />}
+      className='text-muted-foreground -mr-2 ml-auto shrink-0'
+    >
+      {open
+        ? t('Hide details')
+        : t('{{count}} details', { count: rest.length })}
+      <ChevronDown
+        aria-hidden
+        className={cn('transition-transform', open && 'rotate-180')}
+      />
+    </CollapsibleTrigger>
+  )
   return (
-    <div
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
       role='status'
       className={cn(
-        'bg-card flex items-start gap-2.5 rounded-xl border border-l-4 px-4 py-3 text-sm',
+        'bg-card rounded-xl border border-l-4 px-4 py-2.5 text-sm',
         tone.bar
       )}
     >
-      <span
-        aria-hidden
-        className={cn('mt-1.5 size-2 shrink-0 rounded-full', tone.dot)}
-      />
-      <div className='min-w-0 leading-relaxed'>
-        {/* The trailing spaces keep the sentences apart when read as one text. */}
-        <p className='font-medium'>{headline} </p>
-        {rest.length > 0 && (
-          <ul className='text-foreground/80 mt-1 grid list-disc gap-0.5 pl-4 text-[13px]'>
+      <div className='flex items-start gap-2.5'>
+        <span
+          aria-hidden
+          className={cn('mt-1.5 size-2 shrink-0 rounded-full', tone.dot)}
+        />
+        <div className='min-w-0 flex-1 leading-relaxed'>
+          <div className='flex items-start gap-2'>
+            {/* The trailing spaces keep the sentences apart when read as one text. */}
+            <p className='font-medium'>{headline} </p>
+            {chips.length === 0 && toggle}
+          </div>
+          {chips.length > 0 && (
+            <div className='mt-1.5 flex flex-wrap items-center gap-1.5'>
+              <ul
+                role='list'
+                className='contents'
+                aria-label={t('Key figures')}
+              >
+                {chips.map((chip) => (
+                  <li
+                    key={chip.label}
+                    className='bg-muted/50 inline-flex items-baseline gap-1.5 rounded-full border px-2.5 py-0.5 text-xs'
+                  >
+                    <span className='text-muted-foreground'>{chip.label}</span>
+                    <span
+                      className={cn(
+                        'font-medium tabular-nums',
+                        TONES[chip.tone ?? 'default']
+                      )}
+                    >
+                      {chip.value}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {toggle}
+            </div>
+          )}
+        </div>
+      </div>
+      {rest.length > 0 && (
+        <CollapsibleContent keepMounted>
+          <ul className='text-foreground/80 mt-2 grid list-disc gap-0.5 pl-9 text-[13px] leading-relaxed'>
             {rest.map((point) => (
               <li key={point}>{point} </li>
             ))}
           </ul>
-        )}
-      </div>
-    </div>
+        </CollapsibleContent>
+      )}
+    </Collapsible>
   )
 }
 
@@ -1376,7 +1449,7 @@ export function BarSeries(props: {
                       )}
                       <dl className='grid grid-cols-[1fr_auto] gap-x-4 gap-y-1'>
                         {rows.map((row) => (
-                          <div key={row.id} className='contents'>
+                          <div key={row.id} role='list' className='contents'>
                             <dt
                               className={cn(
                                 'flex items-center gap-1.5 opacity-80',
@@ -1406,7 +1479,7 @@ export function BarSeries(props: {
                           </dt>
                         )}
                         {(missing ? [] : (point.extra ?? [])).map((row) => (
-                          <div key={row.label} className='contents'>
+                          <div key={row.label} role='list' className='contents'>
                             <dt className='opacity-80'>{row.label}</dt>
                             <dd className='text-right tabular-nums'>
                               {row.value}
@@ -1419,7 +1492,7 @@ export function BarSeries(props: {
                           </dt>
                         )}
                         {expected.map((row) => (
-                          <div key={row.id} className='contents'>
+                          <div key={row.id} role='list' className='contents'>
                             <dt
                               className={cn(
                                 'opacity-80',

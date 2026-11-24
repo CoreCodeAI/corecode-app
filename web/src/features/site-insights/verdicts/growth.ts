@@ -37,7 +37,7 @@ import {
   type InsightsRangeInfo,
 } from '../lib'
 import type { ActivityInsights, GrowthInsights } from '../types'
-import { sentences, useChange, type TabVerdict } from './shared'
+import { chipList, sentences, useChange, type TabVerdict } from './shared'
 
 /** Activation under this share of a judgeable cohort needs a look. */
 export const ACTIVATION_WARN = 0.3
@@ -174,6 +174,17 @@ export function useGrowthVerdict(
   }
   return {
     tone,
+    chips: chipList(
+      { label: t('Sign-ups'), value: fmt.num(registered) },
+      registered > 0 &&
+        judgeable && {
+          label: t('Activated'),
+          value: fmt.pct(activation),
+          tone: activation < ACTIVATION_WARN ? 'warning' : 'good',
+        },
+      registered > 0 &&
+        judgeable && { label: t('Paid sign-ups'), value: fmt.pct(conversion) }
+    ),
     ...sentences(
       (() => {
         const moved = change(registered, previous?.funnel.registered)
@@ -253,6 +264,15 @@ export function useActivityVerdict(
   }
   return {
     tone: data.top1_share > CONCENTRATION_SHARE ? 'warning' : 'good',
+    chips: chipList(
+      { label: t('Active users'), value: fmt.num(data.active_users) },
+      top && {
+        label: t('Top customer'),
+        value: fmt.pct(data.top1_share),
+        tone: data.top1_share > CONCENTRATION_SHARE ? 'warning' : 'default',
+      },
+      top && { label: t('Top 10'), value: fmt.pct(data.top10_share) }
+    ),
     ...sentences(
       (() => {
         const moved = change(data.active_users, previous?.active_users)

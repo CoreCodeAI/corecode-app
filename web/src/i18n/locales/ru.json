@@ -9757,6 +9757,23 @@
     "The plugin no longer suggests where it runs, so this instance does not run. Choose another place for it.": "Плагин больше не предлагает область действия, поэтому этот экземпляр не работает. Выберите для него другую область.",
     "This password is easy to guess.": "Этот пароль легко угадать.",
     "Uppercase and lowercase letters": "Заглавные и строчные буквы",
-    "Where the plugin suggests": "Где предлагает плагин"
+    "Where the plugin suggests": "Где предлагает плагин",
+    "Key figures": "Ключевые цифры",
+    "Hide details": "Скрыть детали",
+    "{{count}} details": "Подробности: {{count}}",
+    "pt": "п.п.",
+    "Claude p95": "Claude p95",
+    "GPT p95": "GPT p95",
+    "Quota demand": "Спрос на квоту",
+    "Turned away": "Отклонено",
+    "Debt": "Долг",
+    "Top customer": "Крупнейший клиент",
+    "Top 10": "Топ-10",
+    "Accounts in debt": "Аккаунты в долгу",
+    "To check": "К проверке",
+    "Margin before upstream bills": "Маржа до счетов апстримов",
+    "New payers": "Новые плательщики",
+    "Stale bills": "Устаревшие счета",
+    "Payments received": "Получено платежей"
   }
 }

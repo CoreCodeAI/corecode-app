@@ -9757,6 +9757,23 @@
     "The plugin no longer suggests where it runs, so this instance does not run. Choose another place for it.": "Plugin không còn gợi ý phạm vi áp dụng nên phiên bản này không chạy. Hãy chọn phạm vi khác cho nó.",
     "This password is easy to guess.": "Mật khẩu này dễ đoán.",
     "Uppercase and lowercase letters": "Có chữ hoa và chữ thường",
-    "Where the plugin suggests": "Theo gợi ý của plugin"
+    "Where the plugin suggests": "Theo gợi ý của plugin",
+    "Key figures": "Số liệu chính",
+    "Hide details": "Ẩn chi tiết",
+    "{{count}} details": "{{count}} chi tiết",
+    "pt": "đ",
+    "Claude p95": "Claude p95",
+    "GPT p95": "GPT p95",
+    "Quota demand": "Nhu cầu hạn mức",
+    "Turned away": "Bị từ chối",
+    "Debt": "Công nợ",
+    "Top customer": "Khách lớn nhất",
+    "Top 10": "Top 10",
+    "Accounts in debt": "Tài khoản nợ",
+    "To check": "Cần kiểm tra",
+    "Margin before upstream bills": "Biên lợi nhuận trước hóa đơn upstream",
+    "New payers": "Người trả phí mới",
+    "Stale bills": "Hóa đơn cũ",
+    "Payments received": "Đã thu"
   }
 }
