@@ -135,7 +135,8 @@ function earned(): FinanceInsights {
 describe('cash and credit at the head of the funds view', () => {
   it('keeps cash in yuan and reads revenue earned beside it', () => {
     render(<FinanceTab data={earned()} />)
-    expect(screen.getByText('¥17.6')).toBeInTheDocument()
+    // The verdict's chip repeats the figure.
+    expect(screen.getAllByText('¥17.6').length).toBeGreaterThan(0)
     expect(screen.getByText('Wallets ¥12 · plans ¥5.6')).toBeInTheDocument()
   })
 

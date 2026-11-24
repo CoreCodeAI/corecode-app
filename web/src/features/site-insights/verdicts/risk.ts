@@ -41,7 +41,7 @@ import {
   type InsightsRangeInfo,
 } from '../lib'
 import type { RiskInsights } from '../types'
-import { sentences, type TabVerdict } from './shared'
+import { chipList, sentences, type TabVerdict } from './shared'
 
 /** One reason an address ranks where it does, as a badge reads it. */
 export type ClusterReason = { key: string; text: string; tone: Tone }
@@ -231,6 +231,21 @@ export function useRiskVerdict(
     )
   return {
     tone,
+    chips: chipList(
+      { label: t('Sign-ups'), value: fmt.num(data.signups) },
+      shared.total > 0 && {
+        label: t('Shared addresses'),
+        value: fmt.num(shared.total),
+        tone: buyers ? 'danger' : 'warning',
+      },
+      debtors > 0 && {
+        label: t('Accounts in debt'),
+        value: fmt.num(debtors),
+        tone: 'warning',
+      },
+      findings.length === 0 &&
+        !surge && { label: t('To check'), value: '0', tone: 'good' }
+    ),
     ...sentences(
       t('{{count}} sign-ups.', { count: fmt.num(data.signups) }),
       surge && surgeText(surge, data.series_unit === 'day' ? 'day' : 'hour'),

@@ -9757,6 +9757,23 @@
     "The plugin no longer suggests where it runs, so this instance does not run. Choose another place for it.": "Le plugin ne propose plus de portée, cette instance ne s’applique donc plus. Choisissez-lui une autre portée.",
     "This password is easy to guess.": "Ce mot de passe est facile à deviner.",
     "Uppercase and lowercase letters": "Majuscules et minuscules",
-    "Where the plugin suggests": "Là où le plugin le propose"
+    "Where the plugin suggests": "Là où le plugin le propose",
+    "Key figures": "Chiffres clés",
+    "Hide details": "Masquer les détails",
+    "{{count}} details": "{{count}} détails",
+    "pt": "pt",
+    "Claude p95": "Claude p95",
+    "GPT p95": "GPT p95",
+    "Quota demand": "Demande de quota",
+    "Turned away": "Refusées",
+    "Debt": "Dette",
+    "Top customer": "Plus gros client",
+    "Top 10": "Top 10",
+    "Accounts in debt": "Comptes en dette",
+    "To check": "À vérifier",
+    "Margin before upstream bills": "Marge avant factures amont",
+    "New payers": "Nouveaux payeurs",
+    "Stale bills": "Factures périmées",
+    "Payments received": "Paiements reçus"
   }
 }

@@ -32,7 +32,13 @@ import {
 } from '../finance-analysis'
 import { useChargeFormat, useInsightsFormat, useVendorName } from '../lib'
 import type { FinanceInsights } from '../types'
-import { sentences, useChange, worse, type TabVerdict } from './shared'
+import {
+  chipList,
+  sentences,
+  useChange,
+  worse,
+  type TabVerdict,
+} from './shared'
 
 export function useFinanceVerdict(
   data: FinanceInsights | undefined,
@@ -151,8 +157,30 @@ export function useFinanceVerdict(
     return t('Consumption {{amount}} ({{change}}).', vars)
   })()
 
+  let marginTone: Tone = 'good'
+  if (margin < 0) marginTone = 'danger'
+  else if (rate < 0.2) marginTone = 'warning'
   return {
     tone,
+    chips: chipList(
+      { label: t('Payments received'), value: fmt.cny(data.revenue) },
+      {
+        label: t('Recognized revenue'),
+        value: fmt.cny(data.recognized_revenue ?? 0),
+      },
+      revenue > 0 && {
+        label: margins.upstreamRead
+          ? t('Gross margin')
+          : t('Margin before upstream bills'),
+        value: fmt.pct(rate),
+        tone: marginTone,
+      },
+      data.debt_usd < -1 && {
+        label: t('Debt'),
+        value: fmt.cny(-data.debt_usd),
+        tone: 'warning',
+      }
+    ),
     ...sentences(
       paid,
       consumed,

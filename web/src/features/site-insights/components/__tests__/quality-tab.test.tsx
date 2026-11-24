@@ -240,9 +240,12 @@ describe('QualityTab diagnosis', () => {
         'Customers only, as in the headline; root and staff are left out.'
       )
     ).toBeInTheDocument()
-    expect(screen.getByText('Service failure rate')).toBeInTheDocument()
+    // The verdict's chip carries the same label and figure as the card.
+    expect(screen.getAllByText('Service failure rate').length).toBeGreaterThan(
+      0
+    )
     // (44 - 10) / (400 - 10)
-    expect(screen.getByText('8.7%')).toBeInTheDocument()
+    expect(screen.getAllByText('8.7%').length).toBeGreaterThan(0)
     expect(screen.getByText('Streams cut short')).toBeInTheDocument()
     await userEvent.click(
       screen.getAllByRole('button', { name: 'Upstreams →' })[0]

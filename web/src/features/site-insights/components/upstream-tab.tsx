@@ -1040,6 +1040,7 @@ export function UpstreamTab(props: {
           tone={verdict?.tone ?? 'default'}
           text={verdict?.text}
           points={verdict?.points}
+          chips={verdict?.chips}
         />
       )}
       <TruncatedNotice show={props.data?.truncated ?? false} />

@@ -18,14 +18,30 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import type { Tone } from '../components/shared'
+import type { Tone, VerdictChip } from '../components/shared'
 import { joinSentences, useInsightsFormat } from '../lib'
 
 /**
  * A tab's answer and how it reads: text is the whole answer, points its
  * sentences in order, the headline first.
  */
-export type TabVerdict = { tone: Tone; text: string; points: string[] }
+export type TabVerdict = {
+  tone: Tone
+  text: string
+  points: string[]
+  /**
+   * The figures the answer rests on, a few at most, drawn as a row under the
+   * headline. A verdict without them is drawn without the row.
+   */
+  chips?: VerdictChip[]
+}
+
+/** A verdict's chips: the ones that are present. */
+export function chipList(
+  ...items: (VerdictChip | false | null | undefined)[]
+): VerdictChip[] {
+  return items.filter((item): item is VerdictChip => !!item)
+}
 
 /**
  * A verdict's wording from its sentences: the parts that are present, as one

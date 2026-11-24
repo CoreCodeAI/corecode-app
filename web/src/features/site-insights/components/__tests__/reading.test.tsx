@@ -51,27 +51,69 @@ describe('a verdict read as a list', () => {
     expect(sentences()).toEqual({ text: '', points: [] })
   })
 
-  it('heads the list with the first sentence and lists the rest', () => {
+  it('heads the answer with the first sentence and folds the rest', async () => {
     const answer = sentences('1,200 requests.', 'Peak 30 of 60.', '4 refused.')
     render(<Verdict tone='warning' {...answer} />)
     const status = screen.getByRole('status')
     expect(status.querySelector('p')).toHaveTextContent('1,200 requests.')
+    // Folded: the sentences are on the page for a screen search but not shown.
+    const toggle = within(status).getByRole('button', { name: /2 details/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(within(status).queryAllByRole('listitem')).toHaveLength(0)
+    // Every sentence is still in the page's text, folded or not.
+    for (const point of answer.points) expect(status).toHaveTextContent(point)
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(
       within(status)
         .getAllByRole('listitem')
         .map((item) => item.textContent?.trim())
     ).toEqual(['Peak 30 of 60.', '4 refused.'])
-    // Read as one text, it is the answer it always was.
-    expect(status).toHaveTextContent(answer.text)
+    expect(
+      within(status).getByRole('button', { name: /Hide details/ })
+    ).toBeInTheDocument()
   })
 
-  it('shows one sentence, or a text given alone, without a list', () => {
+  it('draws the chips under the headline, each with its tone, and no row without them', () => {
+    const { rerender } = render(
+      <Verdict
+        tone='warning'
+        {...sentences('Failure rate 6.3%.', 'GPT fails 6.3% of requests.')}
+        chips={[
+          { label: 'Failure rate', value: '6.3% +1.1 pt', tone: 'danger' },
+          { label: 'GPT', value: '8.1%', tone: 'warning' },
+          { label: 'Requests', value: '1,200' },
+        ]}
+      />
+    )
+    const chips = within(
+      screen.getByRole('list', { name: 'Key figures' })
+    ).getAllByRole('listitem')
+    expect(chips.map((chip) => chip.textContent)).toEqual([
+      'Failure rate6.3% +1.1 pt',
+      'GPT8.1%',
+      'Requests1,200',
+    ])
+    expect(within(chips[0]).getByText('6.3% +1.1 pt')).toHaveClass(
+      'text-destructive'
+    )
+    expect(within(chips[2]).getByText('1,200')).not.toHaveClass(
+      'text-destructive'
+    )
+    rerender(<Verdict tone='warning' {...sentences('Failure rate 6.3%.')} />)
+    expect(
+      screen.queryByRole('list', { name: 'Key figures' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows one sentence, or a text given alone, without a fold', () => {
     const { rerender } = render(
       <Verdict tone='good' {...sentences('Nothing to check.')} />
     )
-    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
     rerender(<Verdict tone='danger' text='Could not be read' />)
     expect(screen.getByRole('status')).toHaveTextContent('Could not be read')
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.queryByRole('list')).not.toBeInTheDocument()
   })
 })

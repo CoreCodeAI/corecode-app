@@ -9757,6 +9757,23 @@
     "The plugin no longer suggests where it runs, so this instance does not run. Choose another place for it.": "The plugin no longer suggests where it runs, so this instance does not run. Choose another place for it.",
     "This password is easy to guess.": "This password is easy to guess.",
     "Uppercase and lowercase letters": "Uppercase and lowercase letters",
-    "Where the plugin suggests": "Where the plugin suggests"
+    "Where the plugin suggests": "Where the plugin suggests",
+    "Key figures": "주요 수치",
+    "Hide details": "세부 정보 접기",
+    "{{count}} details": "세부 정보 {{count}}건 펼치기",
+    "pt": "pt",
+    "Claude p95": "Claude p95",
+    "GPT p95": "GPT p95",
+    "Quota demand": "쿼터 수요",
+    "Turned away": "거절",
+    "Debt": "미납",
+    "Top customer": "최대 고객",
+    "Top 10": "상위 10명",
+    "Accounts in debt": "미납 계정",
+    "To check": "확인 필요",
+    "Margin before upstream bills": "업스트림 청구 전 마진",
+    "New payers": "신규 결제자",
+    "Stale bills": "오래된 청구",
+    "Payments received": "입금"
   }
 }

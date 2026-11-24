@@ -34,7 +34,13 @@ import {
   type InsightsRangeInfo,
 } from '../lib'
 import type { CapacityInsights, EngineOutlook } from '../types'
-import { sentences, useChange, worse, type TabVerdict } from './shared'
+import {
+  chipList,
+  sentences,
+  useChange,
+  worse,
+  type TabVerdict,
+} from './shared'
 
 /**
  * The capacity tab's verdict over the slots in view: every pool slot, or one
@@ -160,8 +166,28 @@ export function useCapacityVerdict(
       }
     )
   const turnedAway = pool + engine.limit + engine.budget + limited
+  let peakTone: Tone = 'default'
+  if (overSlots) peakTone = 'danger'
+  else if (slotsNear) peakTone = 'warning'
+  let turnedTone: Tone = 'good'
+  if (pool >= POOL_FULL_DANGER) turnedTone = 'danger'
+  else if (turnedAway > 0) turnedTone = 'warning'
   return {
     tone,
+    chips: chipList(
+      { label: t('Requests'), value: fmt.num(data.requests) },
+      slots > 0 && {
+        label: ownPeak ? t('Pool peak') : t('Peak'),
+        value: `${fmt.num(peak)} / ${fmt.num(slots)}`,
+        tone: peakTone,
+      },
+      { label: t('Turned away'), value: fmt.num(turnedAway), tone: turnedTone },
+      quota && {
+        label: t('Quota demand'),
+        value: fmt.pct(quota.share),
+        tone: quotaLine?.tone ?? 'default',
+      }
+    ),
     ...sentences(
       ...leadParts,
       (() => {

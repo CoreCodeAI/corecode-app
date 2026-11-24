@@ -9757,6 +9757,23 @@
     "The plugin no longer suggests where it runs, so this instance does not run. Choose another place for it.": "外掛不再提供適用範圍，這個實例已停止生效。請為它另選生效範圍。",
     "This password is easy to guess.": "這個密碼容易被猜到。",
     "Uppercase and lowercase letters": "同時包含大寫和小寫字母",
-    "Where the plugin suggests": "依外掛建議"
+    "Where the plugin suggests": "依外掛建議",
+    "Key figures": "關鍵數字",
+    "Hide details": "收起細節",
+    "{{count}} details": "展開 {{count}} 條細節",
+    "pt": "pt",
+    "Claude p95": "Claude p95",
+    "GPT p95": "GPT p95",
+    "Quota demand": "額度需求",
+    "Turned away": "被拒絕",
+    "Debt": "欠款",
+    "Top customer": "最大客戶",
+    "Top 10": "前十名",
+    "Accounts in debt": "欠費帳號",
+    "To check": "待查",
+    "Margin before upstream bills": "未計上游帳單的毛利",
+    "New payers": "新付費用戶",
+    "Stale bills": "帳單過期",
+    "Payments received": "收款"
   }
 }

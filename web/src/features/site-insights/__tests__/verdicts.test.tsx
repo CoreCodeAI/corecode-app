@@ -65,6 +65,12 @@ describe('tab verdicts', () => {
       tone: 'warning',
       text: '1,200 requests (up 20%). Peak concurrency 30 of 60 slots (50%). 4 turned away with the pool full.',
     })
+    // The figures the answer rests on, as chips, the refused ones in tone.
+    expect(result.current?.chips).toEqual([
+      { label: 'Requests', value: '1,200' },
+      { label: 'Peak', value: '30 / 60', tone: 'default' },
+      { label: 'Turned away', value: '4', tone: 'warning' },
+    ])
   })
 
   it('reads the capacity tab’s pool peak against the slots, and the engine’s caps and budgets apart', () => {
@@ -200,6 +206,38 @@ describe('tab verdicts', () => {
     expect(result.current?.text).toBe(
       'Failure rate 3% (+2 points). GPT fails 15% of requests. Claude first token 1.4s at p50, 6.8s at p95. GPT first token 5.7s at p50, 17.0s at p95. Failing most: gpt-6.1-terra at 15%.'
     )
+  })
+
+  it('puts the failure rate, the failing vendors and the first-token tails in chips', () => {
+    const data = {
+      requests: 1000,
+      error_rate: 0.03,
+      vendors: [
+        {
+          vendor: 'claude',
+          requests: 600,
+          error_rate: 0.001,
+          ttft_p50_ms: 1400,
+          ttft_p95_ms: 6800,
+        },
+        {
+          vendor: 'codex',
+          requests: 400,
+          error_rate: 0.15,
+          ttft_p50_ms: 5700,
+          ttft_p95_ms: 17000,
+        },
+      ],
+      models: [],
+    } as unknown as QualityInsights
+    const previous = { requests: 900, error_rate: 0.01 } as QualityInsights
+    const { result } = renderHook(() => useQualityVerdict(data, previous))
+    expect(result.current?.chips).toEqual([
+      { label: 'Failure rate', value: '3% +2 pt', tone: 'warning' },
+      { label: 'GPT', value: '15%', tone: 'danger' },
+      { label: 'Claude p95', value: '6.8s', tone: 'default' },
+      { label: 'GPT p95', value: '17.0s', tone: 'warning' },
+    ])
   })
 
   it('reads the quality failure rate without the customers’ own bad requests', () => {
@@ -810,7 +848,7 @@ describe('channels verdict', () => {
       useChannelsVerdict(insights([earning]), undefined, range(30))
     )
     // The owner does not act on it: the channels tab notes it in its own panel.
-    expect(result.current).toEqual({
+    expect(result.current).toMatchObject({
       tone: 'good',
       text: 'Paid channels brought ¥1,000, net ¥300 after their cost. Every paid channel covers its cost.',
       points: [
@@ -857,6 +895,21 @@ describe('finance verdict', () => {
     expect(result.current?.text).toMatch(
       /^Paid ¥200 \(to 2×, mostly .+ \+¥120\), earned ¥150\. Consumption ¥350 \(to 2\.2×\), mostly claude-opus \+¥200\.$/
     )
+  })
+
+  it('keeps the figures a reader checks first as chips: cash, revenue, margin, debt', () => {
+    const { result } = renderHook(() => useFinanceVerdict(base, before))
+    const chips = result.current?.chips ?? []
+    expect(chips.slice(0, 2)).toEqual([
+      { label: 'Payments received', value: '¥200' },
+      { label: 'Recognized revenue', value: '¥150' },
+    ])
+    expect(chips.map((chip) => chip.label)).not.toContain('Debt')
+    const owing = { ...base, debt_usd: -12 } as FinanceInsights
+    const debt = renderHook(() =>
+      useFinanceVerdict(owing, before)
+    ).result.current?.chips?.at(-1)
+    expect(debt).toMatchObject({ label: 'Debt', tone: 'warning' })
   })
 
   it('reads revenue over few orders as an amount with the counts', () => {

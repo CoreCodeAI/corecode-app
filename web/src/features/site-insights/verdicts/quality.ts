@@ -40,7 +40,7 @@ import {
   siteTtftP95,
 } from '../quality-analysis'
 import type { QualityInsights } from '../types'
-import { sentences, worse, type TabVerdict } from './shared'
+import { chipList, sentences, worse, type TabVerdict } from './shared'
 
 export function useQualityVerdict(
   data: QualityInsights | undefined,
@@ -226,6 +226,35 @@ export function useQualityVerdict(
 
   return {
     tone,
+    chips: chipList(
+      {
+        label: service ? t('Service failure rate') : t('Failure rate'),
+        value: moved
+          ? `${rate} ${points.sign}${points.points} ${t('pt')}`
+          : rate,
+        tone: judged && failure === 'default' ? 'good' : failure,
+      },
+      ...failingVendors.slice(0, 3).map((vendor) => ({
+        label: vendorName(vendor.vendor),
+        value: fmt.pct(vendor.error_rate),
+        tone: failureTone(vendor.error_rate),
+      })),
+      claude && {
+        label: t('Claude p95'),
+        value: fmt.measuredMs(claude.ttft_p95_ms),
+        tone: claude.ttft_p95_ms > 10000 ? 'warning' : 'default',
+      },
+      gpt && {
+        label: t('GPT p95'),
+        value: fmt.measuredMs(gpt.ttft_p95_ms),
+        tone: 'warning',
+      },
+      noChannel > 0 && {
+        label: t('No channel'),
+        value: fmt.num(noChannel),
+        tone: 'warning',
+      }
+    ),
     ...sentences(
       headline,
       driver,

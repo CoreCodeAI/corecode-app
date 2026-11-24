@@ -9757,6 +9757,23 @@
     "The plugin no longer suggests where it runs, so this instance does not run. Choose another place for it.": "The plugin no longer suggests where it runs, so this instance does not run. Choose another place for it.",
     "This password is easy to guess.": "This password is easy to guess.",
     "Uppercase and lowercase letters": "Uppercase and lowercase letters",
-    "Where the plugin suggests": "Where the plugin suggests"
+    "Where the plugin suggests": "Where the plugin suggests",
+    "Key figures": "Key figures",
+    "Hide details": "Hide details",
+    "{{count}} details": "{{count}} details",
+    "pt": "pt",
+    "Claude p95": "Claude p95",
+    "GPT p95": "GPT p95",
+    "Quota demand": "Quota demand",
+    "Turned away": "Turned away",
+    "Debt": "Debt",
+    "Top customer": "Top customer",
+    "Top 10": "Top 10",
+    "Accounts in debt": "Accounts in debt",
+    "To check": "To check",
+    "Margin before upstream bills": "Margin before upstream bills",
+    "New payers": "New payers",
+    "Stale bills": "Stale bills",
+    "Payments received": "Payments received"
   }
 }

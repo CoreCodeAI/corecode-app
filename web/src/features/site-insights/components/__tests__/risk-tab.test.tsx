@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -425,7 +426,7 @@ describe('risk analysis', () => {
 })
 
 describe('risk tab', () => {
-  it('ranks the farm first, marks a clustered debtor, and links to where the operator acts', () => {
+  it('ranks the farm first, marks a clustered debtor, and links to where the operator acts', async () => {
     const data = {
       signups: 3,
       signup_series: [],
@@ -449,13 +450,18 @@ describe('risk tab', () => {
       />
     )
     // The verdict reads as its headline and a list; as one text it is whole.
-    expect(screen.getByRole('status')).toHaveTextContent(
-      '3 sign-ups. To check: 2 addresses shared by several accounts, 1 accounts in debt. Review 10.0.0.1 first: 3 registered within 10 minutes, 3 created in this range, 3 unpaid with nothing left. Act on accounts from Users, usage logs and Risk Control.'
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('3 sign-ups.')
+    expect(status).toHaveTextContent(
+      'To check: 2 addresses shared by several accounts, 1 accounts in debt. Review 10.0.0.1 first: 3 registered within 10 minutes, 3 created in this range, 3 unpaid with nothing left. Act on accounts from Users, usage logs and Risk Control.'
+    )
+    await userEvent.click(
+      within(status).getByRole('button', { name: /3 details/ })
     )
     expect(
-      within(screen.getByRole('status'))
-        .getAllByRole('listitem')
-        .map((item) => item.textContent?.trim())
+      [...status.querySelectorAll('[data-slot=collapsible-content] li')].map(
+        (item) => item.textContent?.trim()
+      )
     ).toEqual([
       'To check: 2 addresses shared by several accounts, 1 accounts in debt.',
       'Review 10.0.0.1 first: 3 registered within 10 minutes, 3 created in this range, 3 unpaid with nothing left.',
