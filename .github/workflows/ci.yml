@@ -78,7 +78,7 @@ jobs:
           # takes tail's exit status, so a failing test would pass the job.
           set -euo pipefail
           go vet ./...
-          go test ./common/... ./controller/... ./middleware/... ./model/... ./router/... ./service/... 2>&1 | tail -40
+          go test ./common/... ./controller/... ./middleware/... ./model/... ./router/... ./service/... 2>&1 | grep -v task_plugin | tail -150
           go test -race ./pkg/deployment ./pkg/riskpolicy
 
       - name: Save Go caches
