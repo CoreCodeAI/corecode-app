@@ -375,6 +375,19 @@ func GetQualityInsights(c *gin.Context) {
 	}, models...))
 }
 
+// GetModelBehavior serves the model-behavior view: per model and day, how long
+// its answers, its thinking and its first token are, the upstream errors it
+// returned and the cache it read, with the days that moved past a threshold.
+func GetModelBehavior(c *gin.Context) {
+	models, ok := insightsModels(c)
+	if !ok {
+		return
+	}
+	serveInsights(c, model.InsightsMaxLogDays, settledRead("model-behavior", func(r model.InsightsRange) (*model.ModelBehavior, error) {
+		return model.GetModelBehavior(r, models)
+	}, models...))
+}
+
 // ChannelResponse adds the site's exchange rate to the channel view: revenue
 // is in yuan, fees in US dollars.
 type ChannelResponse struct {

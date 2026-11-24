@@ -9923,6 +9923,24 @@
     "Payment conversion": "결제 전환율",
     "{{paid}} of {{registered}} sign-ups so far": "가입 {{registered}}건 중 {{paid}}건 결제(현재까지)",
     "{{paid}} of {{registered}} aged sign-ups": "충분히 지난 가입 {{registered}}건 중 {{paid}}건 결제",
-    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "게이트웨이 주문을 완료한 가입의, 결제할 기회가 있을 만큼 시간이 지난 가입에 대한 비율입니다."
+    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "게이트웨이 주문을 완료한 가입의, 결제할 기회가 있을 만큼 시간이 지난 가입에 대한 비율입니다.",
+    "Model behavior": "모델 동작",
+    "Output length": "출력 길이",
+    "Upstream errors": "업스트림 오류",
+    "On the last day {{count}} model readings moved past a threshold: {{red}} red.": "최근 하루에 {{count}}개 지표가 임계값을 넘었습니다(빨강 {{red}}개).",
+    "No model moved past 40% against its previous seven days.": "직전 7일 대비 40%를 넘게 변한 모델이 없습니다.",
+    "Per model and day: the median output tokens, reasoning tokens, first-token time and total time, the upstream errors, and the share of input read from the cache. A reading that moved more than 40% (yellow) or 60% (red) against the seven days before is flagged, when both sides have at least 50 requests. Requests are compared only with requests of a similar input size, so a day of longer prompts is not read as a model that got wordier. Customers only.": "모델·일별: 출력 토큰, 추론 토큰, 첫 토큰 시간, 총 소요 시간의 중앙값, 업스트림 오류, 입력 중 캐시에서 읽은 비율. 직전 7일 대비 40% 초과(노랑) 또는 60% 초과(빨강) 변하고 양쪽 모두 요청이 50건 이상이면 표시합니다. 요청은 입력 크기가 비슷한 요청끼리만 비교하므로, 긴 프롬프트가 늘어난 날을 모델이 말이 길어진 것으로 오해하지 않습니다. 고객만 집계합니다.",
+    "Models that moved on the last day": "최근 하루에 급변한 모델",
+    "No model has enough requests in this range": "이 기간에 요청이 충분한 모델이 없습니다",
+    "Metric": "지표",
+    "Models shown": "표시할 모델",
+    "Reasoning tokens are recorded only for requests made after this release, so earlier days have none.": "추론 토큰은 이번 릴리스 이후의 요청부터만 기록되므로 그 이전 날짜에는 없습니다.",
+    "{{count}} hours of this range are still being read, so their requests are missing from the lines.": "이 기간 중 {{count}}시간은 아직 읽는 중이라 해당 요청이 선에 빠져 있습니다.",
+    "The last day, by model": "최근 하루, 모델별",
+    "Flags": "플래그",
+    "{{change}}, against {{baseline}} before": "{{change}}, 이전은 {{baseline}}",
+    "{{change}} against the 7 days before, inputs {{band}}": "직전 7일 대비 {{change}}, 입력 {{band}}",
+    "Cache hit rate by vendor": "벤더별 캐시 적중률",
+    "{{count}} models changed sharply on the last day: {{models}}": "최근 하루에 {{count}}개 모델이 급변: {{models}}"
   }
 }

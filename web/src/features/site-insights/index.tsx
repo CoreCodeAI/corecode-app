@@ -328,6 +328,15 @@ export function SiteInsights() {
     ...previousQuery('business'),
     enabled: tab === 'growth' || tab === 'finance',
   })
+  // The quality tab's model-behavior panel. An older server answers 404: the
+  // panel names it in itself, and nothing is toasted.
+  const behavior = useQuery({
+    ...insightsQuery('model-behavior', false),
+    enabled: tab === 'quality',
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === 'model-behavior' ? previous : undefined,
+    meta: { errorToast: false },
+  })
   // The activity tab's keys panel. A server without the view answers 404: the
   // panel is left out, and nothing is toasted.
   const keys = useQuery({
@@ -429,6 +438,7 @@ export function SiteInsights() {
     ...(readsBusinessPrevious && {
       businessPrevious: sourceState(businessPrevious),
     }),
+    ...(tab === 'quality' && { behavior: sourceState(behavior) }),
     ...(tab === 'activity' && {
       keys: sourceState(keys),
       customers: sourceState(customers),
@@ -609,6 +619,7 @@ export function SiteInsights() {
                     }}
                     keys={keys.data}
                     customers={customers.data}
+                    behavior={behavior.data}
                     models={{
                       selected: models,
                       onChange: (next) =>
@@ -668,7 +679,10 @@ export function SiteInsights() {
 }
 
 function InsightsView(props: {
-  view: Exclude<InsightsView, 'business' | 'keys' | 'customers'>
+  view: Exclude<
+    InsightsView,
+    'business' | 'keys' | 'customers' | 'model-behavior'
+  >
   data: unknown
   previous: unknown
   sources: InsightsSources
@@ -677,6 +691,7 @@ function InsightsView(props: {
   business: { data: unknown; previous: unknown }
   keys: unknown
   customers: unknown
+  behavior: unknown
   models: { selected: string[]; onChange: (models: string[]) => void }
   pool: {
     provider: PoolProvider
@@ -767,6 +782,7 @@ function InsightsView(props: {
           previous={previous}
           models={props.models}
           business={props.business.data as never}
+          behavior={props.behavior as never}
           range={range}
           onOpen={onOpen}
           {...states}

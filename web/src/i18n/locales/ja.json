@@ -9923,6 +9923,24 @@
     "Payment conversion": "支払いコンバージョン",
     "{{paid}} of {{registered}} sign-ups so far": "新規登録 {{registered}} 件のうち {{paid}} 件が支払い済み（現時点）",
     "{{paid}} of {{registered}} aged sign-ups": "十分に経過した登録 {{registered}} 件のうち {{paid}} 件が支払い済み",
-    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "ゲートウェイ注文を完了した登録の、支払いの機会があるだけ時間が経った登録に対する割合です。"
+    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "ゲートウェイ注文を完了した登録の、支払いの機会があるだけ時間が経った登録に対する割合です。",
+    "Model behavior": "モデルの挙動",
+    "Output length": "出力の長さ",
+    "Upstream errors": "上流エラー",
+    "On the last day {{count}} model readings moved past a threshold: {{red}} red.": "直近1日に {{count}} 件の指標がしきい値を超えました（赤 {{red}} 件）。",
+    "No model moved past 40% against its previous seven days.": "直近7日と比べて40%を超えて変化したモデルはありません。",
+    "Per model and day: the median output tokens, reasoning tokens, first-token time and total time, the upstream errors, and the share of input read from the cache. A reading that moved more than 40% (yellow) or 60% (red) against the seven days before is flagged, when both sides have at least 50 requests. Requests are compared only with requests of a similar input size, so a day of longer prompts is not read as a model that got wordier. Customers only.": "モデル別・日別：出力トークン、推論トークン、最初のトークンまでの時間、合計時間の中央値、上流エラー、入力のうちキャッシュから読んだ割合。直近7日と比べて40%超（黄）または60%超（赤）変化し、両側に50件以上のリクエストがある場合に印を付けます。リクエストは入力サイズが近いものどうしでだけ比べるため、長いプロンプトが増えた日をモデルが冗長になったと誤認しません。顧客のみ。",
+    "Models that moved on the last day": "直近1日に急変したモデル",
+    "No model has enough requests in this range": "この期間にリクエスト数が十分なモデルはありません",
+    "Metric": "指標",
+    "Models shown": "表示するモデル",
+    "Reasoning tokens are recorded only for requests made after this release, so earlier days have none.": "推論トークンはこのリリース以降のリクエストからのみ記録されるため、それ以前の日にはありません。",
+    "{{count}} hours of this range are still being read, so their requests are missing from the lines.": "この期間のうち {{count}} 時間分はまだ読み込み中で、そのリクエストは線に含まれていません。",
+    "The last day, by model": "直近1日・モデル別",
+    "Flags": "フラグ",
+    "{{change}}, against {{baseline}} before": "{{change}}（それ以前は {{baseline}}）",
+    "{{change}} against the 7 days before, inputs {{band}}": "直近7日比 {{change}}、入力 {{band}}",
+    "Cache hit rate by vendor": "ベンダー別キャッシュヒット率",
+    "{{count}} models changed sharply on the last day: {{models}}": "直近1日に {{count}} モデルが急変：{{models}}"
   }
 }

@@ -9923,6 +9923,24 @@
     "Payment conversion": "Conversion en paiement",
     "{{paid}} of {{registered}} sign-ups so far": "{{paid}} des {{registered}} inscrits ont payé (à ce jour)",
     "{{paid}} of {{registered}} aged sign-ups": "{{paid}} des {{registered}} inscrits assez anciens ont payé",
-    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "Inscrits ayant terminé une commande par la passerelle, parmi ceux assez anciens pour avoir pu le faire."
+    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "Inscrits ayant terminé une commande par la passerelle, parmi ceux assez anciens pour avoir pu le faire.",
+    "Model behavior": "Comportement des modèles",
+    "Output length": "Longueur de la sortie",
+    "Upstream errors": "Erreurs amont",
+    "On the last day {{count}} model readings moved past a threshold: {{red}} red.": "Au dernier jour, {{count}} mesures ont franchi un seuil, dont {{red}} en rouge.",
+    "No model moved past 40% against its previous seven days.": "Aucun modèle n’a varié de plus de 40 % par rapport à ses sept jours précédents.",
+    "Per model and day: the median output tokens, reasoning tokens, first-token time and total time, the upstream errors, and the share of input read from the cache. A reading that moved more than 40% (yellow) or 60% (red) against the seven days before is flagged, when both sides have at least 50 requests. Requests are compared only with requests of a similar input size, so a day of longer prompts is not read as a model that got wordier. Customers only.": "Par modèle et par jour : médianes des tokens de sortie, des tokens de raisonnement, du délai du premier token et de la durée totale, erreurs amont et part de l’entrée lue dans le cache. Une mesure est signalée quand elle a varié de plus de 40 % (jaune) ou 60 % (rouge) par rapport aux sept jours précédents, avec au moins 50 requêtes de chaque côté. Les requêtes ne sont comparées qu’à des requêtes d’entrée de taille voisine : un jour de prompts plus longs n’est donc pas pris pour un modèle devenu bavard. Clients uniquement.",
+    "Models that moved on the last day": "Modèles qui ont bougé au dernier jour",
+    "No model has enough requests in this range": "Aucun modèle n’a assez de requêtes sur cette période",
+    "Metric": "Mesure",
+    "Models shown": "Modèles affichés",
+    "Reasoning tokens are recorded only for requests made after this release, so earlier days have none.": "Les tokens de raisonnement ne sont enregistrés que pour les requêtes faites après cette version ; les jours antérieurs n’en ont pas.",
+    "{{count}} hours of this range are still being read, so their requests are missing from the lines.": "{{count}} heures de cette période sont encore en cours de lecture ; leurs requêtes manquent donc sur les courbes.",
+    "The last day, by model": "Dernier jour, par modèle",
+    "Flags": "Alertes",
+    "{{change}}, against {{baseline}} before": "{{change}}, contre {{baseline}} avant",
+    "{{change}} against the 7 days before, inputs {{band}}": "{{change}} par rapport aux 7 jours précédents, entrées {{band}}",
+    "Cache hit rate by vendor": "Taux de succès du cache par fournisseur",
+    "{{count}} models changed sharply on the last day: {{models}}": "Au dernier jour, {{count}} modèles ont fortement varié : {{models}}"
   }
 }

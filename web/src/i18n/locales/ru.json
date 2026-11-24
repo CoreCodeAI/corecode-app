@@ -9923,6 +9923,24 @@
     "Payment conversion": "Конверсия в оплату",
     "{{paid}} of {{registered}} sign-ups so far": "{{paid}} из {{registered}} регистраций оплатили (на данный момент)",
     "{{paid}} of {{registered}} aged sign-ups": "{{paid}} из {{registered}} достаточно старых регистраций оплатили",
-    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "Регистрации, завершившие заказ через шлюз, среди регистраций, достаточно давних, чтобы успеть заплатить."
+    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "Регистрации, завершившие заказ через шлюз, среди регистраций, достаточно давних, чтобы успеть заплатить.",
+    "Model behavior": "Поведение моделей",
+    "Output length": "Длина ответа",
+    "Upstream errors": "Ошибки апстрима",
+    "On the last day {{count}} model readings moved past a threshold: {{red}} red.": "За последний день {{count}} показателей вышли за порог, из них красных: {{red}}.",
+    "No model moved past 40% against its previous seven days.": "Ни одна модель не изменилась больше чем на 40% относительно предыдущих семи дней.",
+    "Per model and day: the median output tokens, reasoning tokens, first-token time and total time, the upstream errors, and the share of input read from the cache. A reading that moved more than 40% (yellow) or 60% (red) against the seven days before is flagged, when both sides have at least 50 requests. Requests are compared only with requests of a similar input size, so a day of longer prompts is not read as a model that got wordier. Customers only.": "По моделям и дням: медианы выходных токенов, токенов рассуждений, времени до первого токена и общего времени, ошибки апстрима и доля входа, прочитанная из кэша. Показатель отмечается, если он изменился больше чем на 40% (жёлтый) или 60% (красный) относительно предыдущих семи дней и с каждой стороны не меньше 50 запросов. Запросы сравниваются только с запросами похожего размера входа, поэтому день с более длинными промптами не принимается за то, что модель стала многословнее. Только клиенты.",
+    "Models that moved on the last day": "Модели, изменившиеся за последний день",
+    "No model has enough requests in this range": "В этом периоде нет моделей с достаточным числом запросов",
+    "Metric": "Показатель",
+    "Models shown": "Показанные модели",
+    "Reasoning tokens are recorded only for requests made after this release, so earlier days have none.": "Токены рассуждений записываются только для запросов после этого релиза, поэтому у более ранних дней их нет.",
+    "{{count}} hours of this range are still being read, so their requests are missing from the lines.": "Часы этого периода ({{count}}) ещё читаются, поэтому их запросов нет на линиях.",
+    "The last day, by model": "Последний день по моделям",
+    "Flags": "Отметки",
+    "{{change}}, against {{baseline}} before": "{{change}}, раньше {{baseline}}",
+    "{{change}} against the 7 days before, inputs {{band}}": "{{change}} к предыдущим 7 дням, вход {{band}}",
+    "Cache hit rate by vendor": "Доля попаданий в кэш по вендорам",
+    "{{count}} models changed sharply on the last day: {{models}}": "За последний день резко изменились модели ({{count}}): {{models}}"
   }
 }

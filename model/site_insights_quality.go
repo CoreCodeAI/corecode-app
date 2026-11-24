@@ -36,6 +36,12 @@ type VendorQuality struct {
 	ErrorRate float64  `json:"error_rate"`
 	TTFTP50   int64    `json:"ttft_p50_ms"`
 	TTFTP95   int64    `json:"ttft_p95_ms"`
+	// CacheRead and CacheInput are the vendor's input tokens read from the
+	// cache and all its input tokens, whatever the model filter selects, so
+	// CacheShare is the hit rate of every model the vendor sells.
+	CacheRead  int64   `json:"cache_read"`
+	CacheInput int64   `json:"cache_input"`
+	CacheShare float64 `json:"cache_share"`
 }
 
 // CacheDay is one day of input tokens split by how the cache served them.
@@ -295,6 +301,9 @@ type logOtherFields struct {
 	CacheCreationTokens   int64 `json:"cache_creation_tokens"`
 	CacheCreationTokens5m int64 `json:"cache_creation_tokens_5m"`
 	CacheCreationTokens1h int64 `json:"cache_creation_tokens_1h"`
+	// ReasoningTokens is the reasoning part of the completion tokens, recorded
+	// when the upstream reports it and above zero (PostTextConsumeQuota).
+	ReasoningTokens int64 `json:"reasoning_tokens"`
 	// PromptIncludesCache is billing's rule for the log's usage, recorded at
 	// billing time; nil on a log from before it was (uncachedPrompt).
 	PromptIncludesCache *bool  `json:"prompt_includes_cache"`
@@ -602,20 +611,26 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 		vendor.quality.Models = append(vendor.quality.Models, quality.Model)
 		vendor.quality.Requests += quality.Requests
 		vendor.quality.Errors += quality.Errors
+		vendor.quality.CacheRead += bucket.cache
+		vendor.quality.CacheInput += bucket.input
 		vendor.ttft.merge(bucket.ttft)
 		everything.quality.Requests += quality.Requests
 		everything.quality.Errors += quality.Errors
+		everything.quality.CacheRead += bucket.cache
+		everything.quality.CacheInput += bucket.input
 		everything.ttft.merge(bucket.ttft)
 	}
 	result.AllModels = everything.quality
 	result.AllModels.ErrorRate = ratio(float64(result.AllModels.Errors), float64(result.AllModels.Requests))
 	result.AllModels.TTFTP50, result.AllModels.TTFTP95 = everything.ttft.percentile(0.5), everything.ttft.percentile(0.95)
+	result.AllModels.CacheShare = ratio(float64(result.AllModels.CacheRead), float64(result.AllModels.CacheInput))
 	result.Vendors = []VendorQuality{}
 	for _, bucket := range vendors {
 		vendor := bucket.quality
 		slices.Sort(vendor.Models)
 		vendor.ErrorRate = ratio(float64(vendor.Errors), float64(vendor.Requests))
 		vendor.TTFTP50, vendor.TTFTP95 = bucket.ttft.percentile(0.5), bucket.ttft.percentile(0.95)
+		vendor.CacheShare = ratio(float64(vendor.CacheRead), float64(vendor.CacheInput))
 		result.Vendors = append(result.Vendors, vendor)
 	}
 	slices.SortFunc(result.Vendors, func(a, b VendorQuality) int {

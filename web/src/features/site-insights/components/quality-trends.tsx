@@ -174,10 +174,18 @@ export function VendorFailureTrend(props: {
  * Where the range's input tokens came from: cache reads, cache writes and the
  * rest, as one ring beside the daily bars. The same days the bars draw, summed.
  */
-export function CacheMixPanel(props: { data: QualityInsights | undefined }) {
+export function CacheMixPanel(props: {
+  data: QualityInsights | undefined
+  vendorName?: (vendor: string) => string
+}) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const daily = props.data?.daily ?? []
+  // Each vendor's own hit rate, over every model it sells: the site's figure
+  // pools Claude's long cached prompts with everyone else's.
+  const rates = (props.data?.vendors ?? [])
+    .filter((vendor) => (vendor.cache_input ?? 0) > 0)
+    .sort((a, b) => (b.cache_input ?? 0) - (a.cache_input ?? 0))
   const sum = (pick: (day: (typeof daily)[number]) => number) =>
     daily.reduce((total, day) => total + pick(day), 0)
   return (
@@ -214,6 +222,38 @@ export function CacheMixPanel(props: { data: QualityInsights | undefined }) {
           },
         ]}
       />
+      {rates.length > 0 && (
+        <ul
+          aria-label={t('Cache hit rate by vendor')}
+          className='mt-3 grid gap-1.5 border-t pt-3'
+        >
+          <li className='text-muted-foreground text-xs'>
+            {t('Cache hit rate by vendor')}
+          </li>
+          {rates.map((vendor) => (
+            <li
+              key={vendor.vendor}
+              className='grid grid-cols-[5rem_1fr_3.5rem] items-center gap-2 text-xs'
+            >
+              <span className='truncate'>
+                {props.vendorName?.(vendor.vendor) ?? vendor.vendor}
+              </span>
+              <span className='bg-muted h-1.5 overflow-hidden rounded-full'>
+                <span
+                  className='block h-full rounded-full'
+                  style={{
+                    width: `${Math.min(100, (vendor.cache_share ?? 0) * 100)}%`,
+                    background: vendorColor(vendor.vendor),
+                  }}
+                />
+              </span>
+              <span className='text-right tabular-nums'>
+                {fmt.pct(vendor.cache_share ?? 0)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </Panel>
   )
 }

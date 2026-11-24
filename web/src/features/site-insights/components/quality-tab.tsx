@@ -78,11 +78,17 @@ import {
   withRemainder,
   type QualityAttempts,
 } from '../quality-analysis'
-import type { BusinessInsights, QualityInsights, VendorQuality } from '../types'
+import type {
+  BusinessInsights,
+  ModelBehavior,
+  QualityInsights,
+  VendorQuality,
+} from '../types'
 import { useQualityVerdict } from '../verdicts'
 import { ModelMap } from './advanced-charts'
 import { ClientsPanel } from './business-panels'
 import { SampleNote, StaleNote, TabLink, type Finding } from './insight-kit'
+import { ModelBehaviorPanel } from './quality-behavior'
 import {
   DailyFailurePanel,
   FailureDriversPanel,
@@ -354,6 +360,8 @@ export function QualityTab(props: {
   previous?: QualityInsights
   /** Read for the clients panel, which moved here from its own tab. */
   business?: BusinessInsights
+  /** The model-behavior view; absent from a caller that does not read it. */
+  behavior?: ModelBehavior
   models: { selected: string[]; onChange: (models: string[]) => void }
   range?: InsightsRangeInfo
   onOpen?: (tab: InsightsTab) => void
@@ -634,6 +642,13 @@ export function QualityTab(props: {
           range={range}
         />
       </div>
+      {(props.behavior || props.sources?.behavior) && (
+        <ModelBehaviorPanel
+          data={props.behavior}
+          source={props.sources?.behavior}
+          range={range}
+        />
+      )}
       <AttentionSummary
         items={findings}
         targetId={ATTENTION_ID}
@@ -761,7 +776,7 @@ export function QualityTab(props: {
             }))}
           />
         </Panel>
-        <CacheMixPanel data={data} />
+        <CacheMixPanel data={data} vendorName={vendorName} />
       </div>
       {data && (
         <div

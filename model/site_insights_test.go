@@ -18,7 +18,7 @@ import (
 func useInsightsTestDB(t *testing.T, dialect string) {
 	t.Helper()
 	useAffiliateTestDB(t, dialect)
-	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &InsightKeyHour{}, &Token{}, &UpstreamCost{}, &UpstreamBillDay{}, &UserConcurrencyRejection{}, &Task{}, &Checkin{}, &RiskGateEvent{}, &ViolationRecord{}, &Option{}, &Channel{}, &Ability{}}
+	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &InsightKeyHour{}, &InsightBehaviorHour{}, &Token{}, &UpstreamCost{}, &UpstreamBillDay{}, &UserConcurrencyRejection{}, &Task{}, &Checkin{}, &RiskGateEvent{}, &ViolationRecord{}, &Option{}, &Channel{}, &Ability{}}
 	require.NoError(t, DB.AutoMigrate(extra...))
 	resetInsightReadCaches()
 	t.Cleanup(func() {
@@ -239,11 +239,11 @@ func TestSiteInsightsDatabaseMatrix(t *testing.T) {
 			assert.Equal(t, QualityHour{Hour: day1, Requests: 2, Errors: 1, ErrorRate: 0.5, ServiceRequests: int64Ptr(2), ServiceErrors: int64Ptr(1)}, sonnetOnly.Hourly[0], "the hourly series follows the filter")
 			assert.EqualValues(t, 2, sumOf(sonnetOnly.Hourly, func(h QualityHour) float64 { return float64(h.Requests) }))
 			assert.Equal(t, capacity.ErrorCategories, quality.ErrorCategories, "customers' failures, as on the capacity view")
-			assert.Equal(t, VendorQuality{Requests: 5, Errors: 2, ErrorRate: 0.4, TTFTP50: quality.TTFTP50, TTFTP95: quality.TTFTP95},
+			assert.Equal(t, VendorQuality{Requests: 5, Errors: 2, ErrorRate: 0.4, TTFTP50: quality.TTFTP50, TTFTP95: quality.TTFTP95, CacheRead: 80, CacheInput: 115, CacheShare: quality.CacheShare},
 				sonnetOnly.AllModels, "the all-models card ignores the filter")
 			assert.Equal(t, []VendorQuality{{
 				Vendor: VendorOther, Models: []string{"opus", "sonnet"}, Requests: quality.Requests, Errors: quality.Errors,
-				ErrorRate: quality.ErrorRate, TTFTP50: quality.TTFTP50, TTFTP95: quality.TTFTP95,
+				ErrorRate: quality.ErrorRate, TTFTP50: quality.TTFTP50, TTFTP95: quality.TTFTP95, CacheRead: 80, CacheInput: 115, CacheShare: quality.CacheShare,
 			}}, quality.Vendors, "one vendor holds every model, so its figures are the site's")
 
 			business, err := GetBusinessInsights(r)

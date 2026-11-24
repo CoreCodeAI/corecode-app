@@ -9923,6 +9923,24 @@
     "Payment conversion": "Payment conversion",
     "{{paid}} of {{registered}} sign-ups so far": "{{paid}} of {{registered}} sign-ups so far",
     "{{paid}} of {{registered}} aged sign-ups": "{{paid}} of {{registered}} aged sign-ups",
-    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance."
+    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.",
+    "Model behavior": "Model behavior",
+    "Output length": "Output length",
+    "Upstream errors": "Upstream errors",
+    "On the last day {{count}} model readings moved past a threshold: {{red}} red.": "On the last day {{count}} model readings moved past a threshold: {{red}} red.",
+    "No model moved past 40% against its previous seven days.": "No model moved past 40% against its previous seven days.",
+    "Per model and day: the median output tokens, reasoning tokens, first-token time and total time, the upstream errors, and the share of input read from the cache. A reading that moved more than 40% (yellow) or 60% (red) against the seven days before is flagged, when both sides have at least 50 requests. Requests are compared only with requests of a similar input size, so a day of longer prompts is not read as a model that got wordier. Customers only.": "Per model and day: the median output tokens, reasoning tokens, first-token time and total time, the upstream errors, and the share of input read from the cache. A reading that moved more than 40% (yellow) or 60% (red) against the seven days before is flagged, when both sides have at least 50 requests. Requests are compared only with requests of a similar input size, so a day of longer prompts is not read as a model that got wordier. Customers only.",
+    "Models that moved on the last day": "Models that moved on the last day",
+    "No model has enough requests in this range": "No model has enough requests in this range",
+    "Metric": "Metric",
+    "Models shown": "Models shown",
+    "Reasoning tokens are recorded only for requests made after this release, so earlier days have none.": "Reasoning tokens are recorded only for requests made after this release, so earlier days have none.",
+    "{{count}} hours of this range are still being read, so their requests are missing from the lines.": "{{count}} hours of this range are still being read, so their requests are missing from the lines.",
+    "The last day, by model": "The last day, by model",
+    "Flags": "Flags",
+    "{{change}}, against {{baseline}} before": "{{change}}, against {{baseline}} before",
+    "{{change}} against the 7 days before, inputs {{band}}": "{{change}} against the 7 days before, inputs {{band}}",
+    "Cache hit rate by vendor": "Cache hit rate by vendor",
+    "{{count}} models changed sharply on the last day: {{models}}": "{{count}} models changed sharply on the last day: {{models}}"
   }
 }
