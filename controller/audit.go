@@ -29,6 +29,7 @@ var auditContentTemplates = map[string]string{
 	"user.quota_replay":         "Replayed a user quota adjustment without changing the balance",
 	"user.topup_offline":        "Recorded an offline payment of ${money} for ${amount} quota dollars",
 	"user.topup_refund":         "Marked ${count} top-up orders refunded (${money})",
+	"invoice.admin_create":      "Filed invoice application ${invoice_id} for the user",
 	"user.binding_clear":        "Cleared ${bindingType} binding for user ${username}",
 	"user.2fa_disable":          "Force-disabled two-factor authentication for the user",
 	"user.passkey_register":     "Registered a passkey",

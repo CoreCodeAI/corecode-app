@@ -10127,6 +10127,13 @@
     "Read {{time}}": "{{time}} 조회",
     "{{host}}: {{days}} days, {{balance}} left": "{{host}}: {{days}}일, {{balance}} 남음",
     "{{count}} upstream accounts run out within 3 days": "업스트림 계정 {{count}}개가 3일 안에 소진됩니다",
-    "{{list}}. Top up before requests start to fail.": "{{list}}. 요청이 실패하기 전에 충전하세요."
+    "{{list}}. Top up before requests start to fail.": "{{list}}. 요청이 실패하기 전에 충전하세요.",
+    "Collected offline": "오프라인 수령",
+    "The tax is recorded as collected offline. Nothing is deducted from the user's balance.": "세금은 오프라인 수령으로 기록되며 사용자 잔액에서 차감되지 않습니다.",
+    "File an application for a user": "사용자 대신 신청",
+    "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.": "콘솔에서 직접 신청할 수 없는 고객용입니다. 세금은 오프라인 수령으로 기록되며 사용자 잔액에서 차감되지 않습니다.",
+    "Enter a user ID": "사용자 ID를 입력하세요",
+    "File for a user": "대리 신청",
+    "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.": "사용자는 인보이스 센터와 이메일에서 이 사유를 확인합니다. 세금은 오프라인으로 수령했으므로 잔액으로 환불되지 않습니다. 주문은 다시 발행 가능해집니다."
   }
 }

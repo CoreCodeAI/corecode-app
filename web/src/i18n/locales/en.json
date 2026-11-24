@@ -10127,6 +10127,13 @@
     "Read {{time}}": "Read {{time}}",
     "{{host}}: {{days}} days, {{balance}} left": "{{host}}: {{days}} days, {{balance}} left",
     "{{count}} upstream accounts run out within 3 days": "{{count}} upstream accounts run out within 3 days",
-    "{{list}}. Top up before requests start to fail.": "{{list}}. Top up before requests start to fail."
+    "{{list}}. Top up before requests start to fail.": "{{list}}. Top up before requests start to fail.",
+    "Collected offline": "Collected offline",
+    "The tax is recorded as collected offline. Nothing is deducted from the user's balance.": "The tax is recorded as collected offline. Nothing is deducted from the user's balance.",
+    "File an application for a user": "File an application for a user",
+    "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.": "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.",
+    "Enter a user ID": "Enter a user ID",
+    "File for a user": "File for a user",
+    "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.": "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again."
   }
 }

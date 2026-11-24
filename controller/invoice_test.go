@@ -82,7 +82,7 @@ func useInvoiceTestDB(t *testing.T, dialect string) {
 	common.QuotaPerUnit = 500000
 
 	invoiceTables := []any{&model.Invoice{}, &model.InvoiceItem{}, &model.InvoiceFile{}, &model.InvoiceTaxPayment{}, &model.InvoiceOrderAmount{}}
-	tables := append([]any{&model.TopUp{}, &model.SubscriptionOrder{}, &model.SubscriptionPlan{}, &model.User{}, &model.Log{}}, invoiceTables...)
+	tables := append([]any{&model.TopUp{}, &model.SubscriptionOrder{}, &model.SubscriptionPlan{}, &model.User{}, &model.Log{}, &model.AuditLog{}}, invoiceTables...)
 	require.False(t, db.Migrator().HasTable(&model.Invoice{}), "use an empty test database")
 	require.NoError(t, db.AutoMigrate(tables...))
 	// A second migration must find nothing to change.
@@ -571,6 +571,71 @@ func TestInvoiceOfflineOrders(t *testing.T) {
 			assert.Equal(t, int64(20000), invoice.TaxCents)
 			assert.NotContains(t, invoiceableKeys(t, 11), "topup:301")
 			assert.Contains(t, invoiceableKeys(t, 11), "topup:302")
+		})
+	}
+}
+
+// TestInvoiceFiledByAnAdministrator: an administrator files an application
+// for a customer, with the tax recorded as collected offline. Nothing leaves
+// the balance, the application goes straight to review, rejecting it returns
+// nothing, and a customer cannot choose an offline tax.
+func TestInvoiceFiledByAnAdministrator(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInvoiceTestDB(t, dialect)
+			file := func(body string) map[string]any {
+				return invoiceJSON(t, callInvoice(t, CreateInvoiceAdmin, http.MethodPost, "/api/invoice/admin", body, 1))
+			}
+			forUser := func(userId int, body string) string {
+				return `{"user_id":` + strconv.Itoa(userId) + `,` + strings.TrimPrefix(body, "{")
+			}
+			epayOrder := orderRef(model.InvoiceOrderTopUp, invoiceOrders.epay)
+
+			response := invoiceJSON(t, callInvoice(t, GetInvoiceOrdersAdmin, http.MethodGet, "/api/invoice/admin/orders?user_id=11", "", 1))
+			require.Equal(t, true, response["success"], response)
+			data := response["data"].(map[string]any)
+			assert.Equal(t, "user11", data["user"].(map[string]any)["username"])
+			assert.Len(t, data["orders"], len(invoiceableKeys(t, 11)))
+			response = invoiceJSON(t, callInvoice(t, GetInvoiceOrdersAdmin, http.MethodGet, "/api/invoice/admin/orders?user_id=99", "", 1))
+			assert.Equal(t, "User does not exist", response["message_key"])
+
+			// A customer cannot pick the offline method for themselves.
+			response = submitInvoice(t, 11, company(epayOrder, model.InvoiceTaxOffline))
+			assert.Equal(t, false, response["success"], response)
+			assert.Contains(t, invoiceableKeys(t, 11), "topup:101")
+
+			// The administrator's form is checked as the customer's is.
+			response = file(forUser(11, strings.Replace(company(epayOrder, ""), "finance@example.com", "weixin@申德盈瑞", 1)))
+			assert.Equal(t, "Invalid email address", response["message_key"])
+			response = file(forUser(12, company(epayOrder, "")))
+			assert.Equal(t, "Some selected orders cannot be invoiced. Refresh the order list and try again.", response["message_key"], "another account's order")
+
+			// ¥100 carries ¥4.00 of tax, collected offline: the balance stays.
+			id := submittedId(t, file(forUser(11, company(epayOrder, ""))))
+			invoice := storedInvoice(t, id)
+			assert.Equal(t, 11, invoice.UserId)
+			assert.Equal(t, model.InvoiceStatusPendingReview, invoice.Status)
+			assert.Equal(t, model.InvoiceTaxOffline, invoice.TaxMethod)
+			assert.Equal(t, int64(400), invoice.TaxCents)
+			assert.Zero(t, invoice.TaxQuota)
+			assert.NotZero(t, invoice.TaxPaidTime)
+			assert.Equal(t, "示例科技有限公司", invoice.Title)
+			assert.Equal(t, 5000000, userQuota(t, 11))
+			assert.NotContains(t, invoiceableKeys(t, 11), "topup:101")
+
+			var audits []model.AuditLog
+			require.NoError(t, model.LOG_DB.Where("action = ?", "invoice.admin_create").Find(&audits).Error)
+			require.Len(t, audits, 1)
+			params, err := common.Marshal(audits[0].Other.Op.Params)
+			require.NoError(t, err)
+			assert.Contains(t, string(params), `"invoice_id":`+strconv.Itoa(id))
+			assert.Contains(t, string(params), `"target_user_id":11`)
+
+			// The tax never reached the balance, so rejecting returns none.
+			response = invoiceJSON(t, callInvoice(t, RejectInvoiceAdmin, http.MethodPost, "/api/invoice/admin/"+strconv.Itoa(id)+"/reject", `{"reason":"抬头有误"}`, 1))
+			require.Equal(t, true, response["success"], response)
+			assert.Equal(t, 5000000, userQuota(t, 11))
+			assert.Contains(t, invoiceableKeys(t, 11), "topup:101")
 		})
 	}
 }

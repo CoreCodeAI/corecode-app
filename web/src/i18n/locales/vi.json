@@ -10127,6 +10127,13 @@
     "Read {{time}}": "Đọc lúc {{time}}",
     "{{host}}: {{days}} days, {{balance}} left": "{{host}}: {{days}} ngày, còn {{balance}}",
     "{{count}} upstream accounts run out within 3 days": "{{count}} tài khoản thượng nguồn sẽ hết trong 3 ngày",
-    "{{list}}. Top up before requests start to fail.": "{{list}}. Hãy nạp tiền trước khi các yêu cầu bắt đầu lỗi."
+    "{{list}}. Top up before requests start to fail.": "{{list}}. Hãy nạp tiền trước khi các yêu cầu bắt đầu lỗi.",
+    "Collected offline": "Đã thu ngoại tuyến",
+    "The tax is recorded as collected offline. Nothing is deducted from the user's balance.": "Thuế được ghi nhận là đã thu ngoại tuyến. Không trừ vào số dư của người dùng.",
+    "File an application for a user": "Nộp đơn thay người dùng",
+    "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.": "Dành cho khách hàng không thể tự nộp đơn trong bảng điều khiển. Thuế được ghi nhận là đã thu ngoại tuyến và không trừ vào số dư của người dùng.",
+    "Enter a user ID": "Nhập ID người dùng",
+    "File for a user": "Nộp thay người dùng",
+    "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.": "Người dùng thấy lý do này trong trung tâm hóa đơn và email. Thuế đã được thu ngoại tuyến nên không hoàn vào số dư. Các đơn hàng có thể xuất hóa đơn trở lại."
   }
 }

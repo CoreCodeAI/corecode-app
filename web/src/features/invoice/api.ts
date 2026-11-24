@@ -20,6 +20,7 @@ import { api } from '@/lib/api'
 import { createServerError } from '@/lib/server-error-message'
 
 import type {
+  InvoiceAdminSubmission,
   InvoiceConfig,
   InvoiceDetail,
   InvoiceFilters,
@@ -27,7 +28,8 @@ import type {
   InvoicePaymentStart,
   InvoiceSubmission,
   InvoiceSummary,
-  InvoiceTaxMethod,
+  InvoiceCustomerTaxMethod,
+  InvoiceUserOrders,
   InvoiceableOrder,
   Invoice,
 } from './types'
@@ -93,7 +95,7 @@ export function submitInvoice(
 
 export function payInvoiceTax(
   id: number,
-  method: InvoiceTaxMethod
+  method: InvoiceCustomerTaxMethod
 ): Promise<InvoicePaymentStart> {
   return read(
     api.post(`/api/invoice/self/${id}/pay`, { payment_method: method }),
@@ -156,6 +158,24 @@ export function getAllInvoices(
   return read(
     api.get('/api/invoice/admin', { params: { ...filters, ...page } }),
     'Failed to load'
+  )
+}
+
+export function getInvoiceOrdersAdmin(
+  userId: number
+): Promise<InvoiceUserOrders> {
+  return read(
+    api.get('/api/invoice/admin/orders', { params: { user_id: userId } }),
+    'Failed to load'
+  )
+}
+
+export function createInvoiceAdmin(
+  submission: InvoiceAdminSubmission
+): Promise<void> {
+  return check(
+    api.post('/api/invoice/admin', submission),
+    'Failed to submit the application'
   )
 }
 

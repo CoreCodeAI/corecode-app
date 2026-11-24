@@ -101,6 +101,21 @@ export function InvoiceReviewDialog(props: {
     if (fileInput.current) fileInput.current.value = ''
   }
 
+  let reasonHelp = t(
+    'The application leaves both lists and its file is removed. Its orders become invoiceable again. The reason is kept on the record.'
+  )
+  if (reasonAction === 'reject') {
+    // A tax collected offline never reached the balance, so none returns.
+    reasonHelp =
+      invoice?.tax_method === 'offline'
+        ? t(
+            'The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.'
+          )
+        : t(
+            'The user sees this reason in the invoice center and the email. Paid tax is returned to the balance and the orders become invoiceable again.'
+          )
+  }
+
   async function submitReason() {
     const trimmed = reason.trim()
     if (!reasonAction || trimmed === '') return
@@ -213,15 +228,7 @@ export function InvoiceReviewDialog(props: {
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
               />
-              <p className='text-muted-foreground text-xs'>
-                {reasonAction === 'reject'
-                  ? t(
-                      'The user sees this reason in the invoice center and the email. Paid tax is returned to the balance and the orders become invoiceable again.'
-                    )
-                  : t(
-                      'The application leaves both lists and its file is removed. Its orders become invoiceable again. The reason is kept on the record.'
-                    )}
-              </p>
+              <p className='text-muted-foreground text-xs'>{reasonHelp}</p>
               <div className='flex justify-end gap-2'>
                 <Button
                   variant='ghost'

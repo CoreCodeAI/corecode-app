@@ -10127,6 +10127,13 @@
     "Read {{time}}": "Lu {{time}}",
     "{{host}}: {{days}} days, {{balance}} left": "{{host}} : {{days}} jours, {{balance}} restants",
     "{{count}} upstream accounts run out within 3 days": "{{count}} comptes amont seront épuisés d’ici 3 jours",
-    "{{list}}. Top up before requests start to fail.": "{{list}}. Rechargez avant que les requêtes n’échouent."
+    "{{list}}. Top up before requests start to fail.": "{{list}}. Rechargez avant que les requêtes n’échouent.",
+    "Collected offline": "Encaissée hors ligne",
+    "The tax is recorded as collected offline. Nothing is deducted from the user's balance.": "La taxe est enregistrée comme encaissée hors ligne. Rien n’est déduit du solde de l’utilisateur.",
+    "File an application for a user": "Déposer une demande pour un utilisateur",
+    "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.": "Pour un client qui ne peut pas faire la demande dans la console. La taxe est enregistrée comme encaissée hors ligne et rien n’est déduit du solde de l’utilisateur.",
+    "Enter a user ID": "Saisissez un ID utilisateur",
+    "File for a user": "Demande pour un utilisateur",
+    "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.": "L’utilisateur voit ce motif dans le centre de facturation et dans l’e-mail. La taxe a été encaissée hors ligne et n’est pas restituée sur le solde. Les commandes redeviennent facturables."
   }
 }
