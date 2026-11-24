@@ -9827,6 +9827,23 @@
     "{{count}} yellow": "{{count}} yellow",
     "{{demand}} forecast demand of {{supply}} the pool can spend.": "{{demand}} forecast demand of {{supply}} the pool can spend.",
     "{{failed}} of {{requests}}": "{{failed}} of {{requests}}",
-    "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.": "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}."
+    "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.": "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.",
+    "No balance is read for this upstream": "No balance is read for this upstream",
+    "{{count}} more upstreams are in the table below": "{{count}} more upstreams are in the table below",
+    "Upstream spend by channel": "Upstream spend by channel",
+    "No upstream cost is known for this range.": "No upstream cost is known for this range.",
+    "Hourly consumption": "Hourly consumption",
+    "Revenue earned and consumption": "Revenue earned and consumption",
+    "No customer consumed anything in this window": "No customer consumed anything in this window",
+    "Share of customer consumption": "Share of customer consumption",
+    "Top {{count}} customers": "Top {{count}} customers",
+    "{{count}} customers consumed in this window, {{total}} in all.": "{{count}} customers consumed in this window, {{total}} in all.",
+    "Customer concentration": "Customer concentration",
+    "Each hour’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the hours, the same cost the table below reads.": "Each hour’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the hours, the same cost the table below reads.",
+    "Each day’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the days, the same cost the table below reads.": "Each day’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the days, the same cost the table below reads.",
+    "Each hour’s consumption at list price, root and staff’s internal use included, in yuan.": "Each hour’s consumption at list price, root and staff’s internal use included, in yuan.",
+    "Each day’s revenue earned beside consumption at list price, root and staff’s internal use included, in yuan.": "Each day’s revenue earned beside consumption at list price, root and staff’s internal use included, in yuan.",
+    "The share of what customers consumed in the window, at new-api’s charge, that the biggest five, ten and twenty took. Root’s and staff’s own use is not counted.": "The share of what customers consumed in the window, at new-api’s charge, that the biggest five, ten and twenty took. Root’s and staff’s own use is not counted.",
+    "Plan book, gift watch, orders, wallet credit, balances and adjustments, and consumption by user": "Plan book, gift watch, orders, wallet credit, balances and adjustments, and consumption by user"
   }
 }

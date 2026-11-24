@@ -30,7 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-import { readSections, type Section } from './sections'
+import { readSections, revealPanel, type Section } from './sections'
 
 /**
  * A menu of the open tab's panels that scrolls to the one picked, so a long
@@ -71,7 +71,10 @@ export function SectionMenu(props: {
               // Two panels may share a title; their place tells them apart.
               // eslint-disable-next-line react/no-array-index-key
               key={`${index}:${section.title}`}
-              onClick={() => section.element.scrollIntoView({ block: 'start' })}
+              onClick={() => {
+                revealPanel(section.element)
+                section.element.scrollIntoView({ block: 'start' })
+              }}
             >
               <span className='truncate'>{section.title}</span>
             </DropdownMenuItem>

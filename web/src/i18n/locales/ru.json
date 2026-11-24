@@ -9827,6 +9827,23 @@
     "{{count}} yellow": "{{count}} жёлтых",
     "{{demand}} forecast demand of {{supply}} the pool can spend.": "Прогноз спроса {{demand}} при {{supply}}, которые может потратить пул.",
     "{{failed}} of {{requests}}": "{{failed}} из {{requests}}",
-    "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.": "У {{vendor}} наибольшая доля ошибок: {{rate}} из {{count}} запросов."
+    "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.": "У {{vendor}} наибольшая доля ошибок: {{rate}} из {{count}} запросов.",
+    "No balance is read for this upstream": "Баланс этого апстрима не считывается",
+    "{{count}} more upstreams are in the table below": "Ещё {{count}} апстримов — в таблице ниже",
+    "Upstream spend by channel": "Расходы по апстримам",
+    "No upstream cost is known for this range.": "За этот период стоимость апстримов неизвестна.",
+    "Hourly consumption": "Потребление по часам",
+    "Revenue earned and consumption": "Признанная выручка и потребление",
+    "No customer consumed anything in this window": "За это окно ни один клиент ничего не потребил",
+    "Share of customer consumption": "Доля потребления клиентов",
+    "Top {{count}} customers": "Топ-{{count}} клиентов",
+    "{{count}} customers consumed in this window, {{total}} in all.": "За это окно потребили {{count}} клиентов, всего {{total}}.",
+    "Customer concentration": "Концентрация клиентов",
+    "Each hour’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the hours, the same cost the table below reads.": "Стоимость каждого апстрима по часам, стопкой: {{count}} самых дорогих названы, остальные — одна серия. Это счёт апстрима или его месячная плата, разнесённая по часам, — та же стоимость, что и в таблице ниже.",
+    "Each day’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the days, the same cost the table below reads.": "Стоимость каждого апстрима по дням, стопкой: {{count}} самых дорогих названы, остальные — одна серия. Это счёт апстрима или его месячная плата, разнесённая по дням, — та же стоимость, что и в таблице ниже.",
+    "Each hour’s consumption at list price, root and staff’s internal use included, in yuan.": "Потребление по каждому часу по прайсу, включая внутреннее использование root и сотрудников, в юанях.",
+    "Each day’s revenue earned beside consumption at list price, root and staff’s internal use included, in yuan.": "Признанная выручка по дням рядом с потреблением по прайсу, включая внутреннее использование root и сотрудников, в юанях.",
+    "The share of what customers consumed in the window, at new-api’s charge, that the biggest five, ten and twenty took. Root’s and staff’s own use is not counted.": "Доля потребления клиентов за окно (по начислению new-api), которую заняли 5, 10 и 20 крупнейших клиентов. Собственное использование root и сотрудников не учитывается.",
+    "Plan book, gift watch, orders, wallet credit, balances and adjustments, and consumption by user": "Книга планов, контроль подарков, заказы, кредиты кошелька, балансы и корректировки, потребление по пользователям"
   }
 }

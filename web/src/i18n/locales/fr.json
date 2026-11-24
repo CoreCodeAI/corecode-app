@@ -9827,6 +9827,23 @@
     "{{count}} yellow": "{{count}} en jaune",
     "{{demand}} forecast demand of {{supply}} the pool can spend.": "Demande prévue {{demand}} sur {{supply}} que le pool peut dépenser.",
     "{{failed}} of {{requests}}": "{{failed}} sur {{requests}}",
-    "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.": "{{vendor}} a le plus grand taux d’échec : {{rate}} de {{count}} requêtes."
+    "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.": "{{vendor}} a le plus grand taux d’échec : {{rate}} de {{count}} requêtes.",
+    "No balance is read for this upstream": "Aucun solde n’est lu pour cet amont",
+    "{{count}} more upstreams are in the table below": "{{count}} autres amonts figurent dans le tableau ci-dessous",
+    "Upstream spend by channel": "Dépenses par amont",
+    "No upstream cost is known for this range.": "Aucun coût amont connu sur cette période.",
+    "Hourly consumption": "Consommation par heure",
+    "Revenue earned and consumption": "Revenu comptabilisé et consommation",
+    "No customer consumed anything in this window": "Aucun client n’a consommé sur cette fenêtre",
+    "Share of customer consumption": "Part de la consommation des clients",
+    "Top {{count}} customers": "{{count}} premiers clients",
+    "{{count}} customers consumed in this window, {{total}} in all.": "{{count}} clients ont consommé sur cette fenêtre, {{total}} au total.",
+    "Customer concentration": "Concentration des clients",
+    "Each hour’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the hours, the same cost the table below reads.": "Coût de chaque amont par heure, empilé : les {{count}} plus coûteux sont nommés, les autres forment une seule série. C’est la facture de l’amont, ou son abonnement mensuel réparti sur les heures, le même coût que lit le tableau ci-dessous.",
+    "Each day’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the days, the same cost the table below reads.": "Coût de chaque amont par jour, empilé : les {{count}} plus coûteux sont nommés, les autres forment une seule série. C’est la facture de l’amont, ou son abonnement mensuel réparti sur les jours, le même coût que lit le tableau ci-dessous.",
+    "Each hour’s consumption at list price, root and staff’s internal use included, in yuan.": "Consommation de chaque heure au tarif public, usage interne de root et du personnel compris, en yuans.",
+    "Each day’s revenue earned beside consumption at list price, root and staff’s internal use included, in yuan.": "Revenu comptabilisé de chaque jour à côté de la consommation au tarif public, usage interne de root et du personnel compris, en yuans.",
+    "The share of what customers consumed in the window, at new-api’s charge, that the biggest five, ten and twenty took. Root’s and staff’s own use is not counted.": "Part de la consommation des clients sur la fenêtre, au tarif facturé par new-api, prise par les 5, 10 et 20 plus gros clients. L’usage de root et du personnel n’est pas compté.",
+    "Plan book, gift watch, orders, wallet credit, balances and adjustments, and consumption by user": "Carnet de forfaits, suivi des cadeaux, commandes, crédit de portefeuille, soldes et ajustements, consommation par utilisateur"
   }
 }

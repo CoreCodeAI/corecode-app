@@ -25,7 +25,8 @@ func TestUpstreamInsightsDatabaseMatrix(t *testing.T) {
 			mapping := `{"gpt-6.1-sol":"gpt-6.1-sol-up"}`
 			require.NoError(t, DB.Create(&[]Channel{
 				{Id: 2, Name: "engine-gpt", Type: 1, Key: "k2", Status: common.ChannelStatusEnabled, BaseURL: &engine, Priority: &high},
-				{Id: 7, Name: "relay", Type: 1, Key: "k7", Status: common.ChannelStatusEnabled, BaseURL: &relay, Priority: &low, ModelMapping: &mapping},
+				{Id: 7, Name: "relay", Type: 1, Key: "k7", Status: common.ChannelStatusEnabled, BaseURL: &relay, Priority: &low, ModelMapping: &mapping,
+					Balance: 12.5, BalanceUpdatedTime: 1759247000},
 				{Id: 9, Name: "idle", Type: 1, Key: "k9", Status: common.ChannelStatusEnabled, BaseURL: &relay},
 				{Id: 11, Name: "retired", Type: 1, Key: "k11", Status: common.ChannelStatusManuallyDisabled, BaseURL: &relay},
 				{Id: 12, Name: "broken", Type: 1, Key: "k12", Status: common.ChannelStatusAutoDisabled, BaseURL: &relay,
@@ -117,6 +118,9 @@ func TestUpstreamInsightsDatabaseMatrix(t *testing.T) {
 			assert.InDelta(t, 0.01, relayRow.UnmatchedCostUSD, 1e-9, "the bill no model row takes")
 			assert.Equal(t, hour1+301, relayRow.LatestCostAt)
 			assert.Equal(t, "GPT特惠", relayRow.UpstreamGroup)
+			assert.InDelta(t, 12.5, relayRow.Balance, 1e-9, "the balance last read from the upstream")
+			assert.Equal(t, int64(1759247000), relayRow.BalanceUpdatedAt)
+			assert.Zero(t, engineRow.BalanceUpdatedAt, "a channel never read has no read time, whatever its balance")
 			assert.InDelta(t, 0.09, relayRow.UpstreamRatio, 1e-9)
 			assert.EqualValues(t, 900, relayRow.TTFTP50)
 			assert.EqualValues(t, 40, relayRow.CacheRead)

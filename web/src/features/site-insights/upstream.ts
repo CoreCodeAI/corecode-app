@@ -790,3 +790,53 @@ export function routingHints(
   }
   return hints
 }
+
+/** The channels the spend chart names, as many as it has colors for; the rest are one series. */
+export const SPEND_SERIES = 4
+
+/**
+ * Each slot's (a day's or an hour's) cost per upstream: the channels that
+ * cost most over the slots named, then one series for the rest. A channel
+ * that cost nothing has no series.
+ */
+export function upstreamSpendSeries<
+  R extends { channel_id: number; cost_usd: number },
+>(rows: R[], slotOf: (row: R) => number, slots: number[]) {
+  const spent = new Map<number, number>()
+  for (const row of rows) {
+    spent.set(row.channel_id, (spent.get(row.channel_id) ?? 0) + row.cost_usd)
+  }
+  const ranked = [...spent.entries()]
+    .filter(([, cost]) => cost > 0)
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+    .map(([id]) => id)
+  const named = ranked.slice(0, SPEND_SERIES)
+  const hasOther = ranked.length > SPEND_SERIES
+  const width = named.length + (hasOther ? 1 : 0)
+  const bySlot = new Map(
+    slots.map((slot) => [slot, Array.from({ length: width }, () => 0)])
+  )
+  for (const row of rows) {
+    const costs = bySlot.get(slotOf(row))
+    if (!costs || row.cost_usd <= 0) continue
+    const at = named.indexOf(row.channel_id)
+    if (at >= 0) costs[at] += row.cost_usd
+    else if (hasOther) costs[named.length] += row.cost_usd
+  }
+  return {
+    named,
+    hasOther,
+    slots: slots.map((slot) => {
+      const costs = bySlot.get(slot) ?? []
+      return { slot, costs, total: costs.reduce((a, b) => a + b, 0) }
+    }),
+  }
+}
+
+/** A channel's balance as last read, or null when none has ever been. */
+export function readBalance(
+  channel: UpstreamChannel
+): { amount: number; at: number } | null {
+  if (!channel.balance_updated_at) return null
+  return { amount: channel.balance ?? 0, at: channel.balance_updated_at }
+}

@@ -33,3 +33,16 @@ export function readSections(container: HTMLElement | null): Section[] {
     }
   )
 }
+
+/** What a panel is told to open its folded group on. */
+export const REVEAL_EVENT = 'site-insights:reveal'
+
+/**
+ * Opens the folded group holding a panel, if it sits in one, so the panel
+ * can be scrolled to. The group is open once this returns.
+ */
+export function revealPanel(element: Element): void {
+  element
+    .closest('[data-details-group]')
+    ?.dispatchEvent(new CustomEvent(REVEAL_EVENT))
+}

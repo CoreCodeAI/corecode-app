@@ -9827,6 +9827,23 @@
     "{{count}} yellow": "{{count}} mục vàng",
     "{{demand}} forecast demand of {{supply}} the pool can spend.": "Nhu cầu dự báo {{demand}} trên {{supply}} pool có thể chi.",
     "{{failed}} of {{requests}}": "{{failed}} trên {{requests}}",
-    "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.": "{{vendor}} có tỷ lệ lỗi cao nhất: {{rate}} trên {{count}} yêu cầu."
+    "{{vendor}} failed the largest share of its requests: {{rate}} of {{count}}.": "{{vendor}} có tỷ lệ lỗi cao nhất: {{rate}} trên {{count}} yêu cầu.",
+    "No balance is read for this upstream": "Không đọc số dư của upstream này",
+    "{{count}} more upstreams are in the table below": "{{count}} upstream khác ở bảng bên dưới",
+    "Upstream spend by channel": "Chi phí theo upstream",
+    "No upstream cost is known for this range.": "Không có chi phí upstream nào được biết trong khoảng này.",
+    "Hourly consumption": "Mức tiêu thụ theo giờ",
+    "Revenue earned and consumption": "Doanh thu ghi nhận và mức tiêu thụ",
+    "No customer consumed anything in this window": "Không khách hàng nào tiêu thụ trong khoảng này",
+    "Share of customer consumption": "Tỷ trọng mức tiêu thụ của khách hàng",
+    "Top {{count}} customers": "Top {{count}} khách hàng",
+    "{{count}} customers consumed in this window, {{total}} in all.": "{{count}} khách hàng đã tiêu thụ trong khoảng này, tổng cộng {{total}}.",
+    "Customer concentration": "Mức tập trung khách hàng",
+    "Each hour’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the hours, the same cost the table below reads.": "Chi phí mỗi upstream theo giờ, xếp chồng: {{count}} upstream tốn nhiều nhất được nêu tên, phần còn lại gộp thành một chuỗi. Đó là hóa đơn của upstream, hoặc phí tháng chia theo giờ, cùng khoản chi phí mà bảng bên dưới đọc.",
+    "Each day’s cost on each upstream, stacked: the {{count}} that cost most are named and the rest are one series. It is what the upstream billed, or its monthly fee spread over the days, the same cost the table below reads.": "Chi phí mỗi upstream theo ngày, xếp chồng: {{count}} upstream tốn nhiều nhất được nêu tên, phần còn lại gộp thành một chuỗi. Đó là hóa đơn của upstream, hoặc phí tháng chia theo ngày, cùng khoản chi phí mà bảng bên dưới đọc.",
+    "Each hour’s consumption at list price, root and staff’s internal use included, in yuan.": "Mức tiêu thụ mỗi giờ theo giá niêm yết, gồm cả nội bộ của root và nhân viên, tính bằng nhân dân tệ.",
+    "Each day’s revenue earned beside consumption at list price, root and staff’s internal use included, in yuan.": "Doanh thu ghi nhận mỗi ngày đặt cạnh mức tiêu thụ theo giá niêm yết, gồm cả nội bộ của root và nhân viên, tính bằng nhân dân tệ.",
+    "The share of what customers consumed in the window, at new-api’s charge, that the biggest five, ten and twenty took. Root’s and staff’s own use is not counted.": "Tỷ trọng mức tiêu thụ của khách hàng trong khoảng (theo mức tính của new-api) do 5, 10 và 20 khách hàng lớn nhất chiếm. Không tính phần dùng của root và nhân viên.",
+    "Plan book, gift watch, orders, wallet credit, balances and adjustments, and consumption by user": "Sổ gói, theo dõi quà tặng, đơn hàng, tín dụng ví, số dư và điều chỉnh, mức tiêu thụ theo người dùng"
   }
 }
