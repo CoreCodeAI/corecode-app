@@ -495,6 +495,10 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		other.SetAdmin("reject_reason", adminRejectReason)
 	}
 	appendUpstreamRefusalForLog(ctx, other)
+	if billingUsage != nil && billingUsage.CompletionTokenDetails.ReasoningTokens > 0 {
+		// The model-behavior view tracks how much a model thinks.
+		other.SetPublic("reasoning_tokens", billingUsage.CompletionTokenDetails.ReasoningTokens)
+	}
 	if summary.ImageTokens != 0 {
 		other.SetPublic("image", true)
 		other.SetPublic("image_ratio", summary.ImageRatio)

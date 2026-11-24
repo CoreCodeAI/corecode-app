@@ -9923,6 +9923,24 @@
     "Payment conversion": "Tỷ lệ chuyển đổi thanh toán",
     "{{paid}} of {{registered}} sign-ups so far": "{{paid}} trong {{registered}} đăng ký đã trả tiền (đến nay)",
     "{{paid}} of {{registered}} aged sign-ups": "{{paid}} trong {{registered}} đăng ký đủ lâu đã trả tiền",
-    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "Các đăng ký đã hoàn tất đơn qua cổng, trên số đăng ký đủ lâu để có cơ hội trả tiền."
+    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "Các đăng ký đã hoàn tất đơn qua cổng, trên số đăng ký đủ lâu để có cơ hội trả tiền.",
+    "Model behavior": "Hành vi mô hình",
+    "Output length": "Độ dài đầu ra",
+    "Upstream errors": "Lỗi thượng nguồn",
+    "On the last day {{count}} model readings moved past a threshold: {{red}} red.": "Trong ngày gần nhất có {{count}} chỉ số vượt ngưỡng, trong đó {{red}} chỉ số màu đỏ.",
+    "No model moved past 40% against its previous seven days.": "Không mô hình nào thay đổi quá 40% so với bảy ngày trước đó.",
+    "Per model and day: the median output tokens, reasoning tokens, first-token time and total time, the upstream errors, and the share of input read from the cache. A reading that moved more than 40% (yellow) or 60% (red) against the seven days before is flagged, when both sides have at least 50 requests. Requests are compared only with requests of a similar input size, so a day of longer prompts is not read as a model that got wordier. Customers only.": "Theo mô hình và ngày: trung vị token đầu ra, token suy luận, thời gian đến token đầu tiên và tổng thời gian, lỗi thượng nguồn, và tỷ lệ đầu vào đọc từ cache. Một chỉ số được đánh dấu khi thay đổi hơn 40% (vàng) hoặc 60% (đỏ) so với bảy ngày trước, khi mỗi bên có ít nhất 50 yêu cầu. Yêu cầu chỉ được so với yêu cầu có kích thước đầu vào tương tự, nên một ngày có prompt dài hơn không bị hiểu nhầm là mô hình nói nhiều hơn. Chỉ tính khách hàng.",
+    "Models that moved on the last day": "Mô hình biến động trong ngày gần nhất",
+    "No model has enough requests in this range": "Không có mô hình nào đủ yêu cầu trong khoảng thời gian này",
+    "Metric": "Chỉ số",
+    "Models shown": "Mô hình hiển thị",
+    "Reasoning tokens are recorded only for requests made after this release, so earlier days have none.": "Token suy luận chỉ được ghi cho các yêu cầu sau bản phát hành này, nên các ngày trước đó không có.",
+    "{{count}} hours of this range are still being read, so their requests are missing from the lines.": "{{count}} giờ của khoảng thời gian này vẫn đang được đọc, nên yêu cầu của chúng chưa có trên các đường.",
+    "The last day, by model": "Ngày gần nhất, theo mô hình",
+    "Flags": "Cờ",
+    "{{change}}, against {{baseline}} before": "{{change}}, trước đó là {{baseline}}",
+    "{{change}} against the 7 days before, inputs {{band}}": "{{change}} so với 7 ngày trước, đầu vào {{band}}",
+    "Cache hit rate by vendor": "Tỷ lệ trúng cache theo nhà cung cấp",
+    "{{count}} models changed sharply on the last day: {{models}}": "Trong ngày gần nhất có {{count}} mô hình biến động mạnh: {{models}}"
   }
 }

@@ -56,6 +56,7 @@ import type {
   EnginePool,
   FinanceInsights,
   QualityInsights,
+  ModelBehavior,
   RiskInsights,
   UpstreamInsights,
 } from '../types'
@@ -76,15 +77,16 @@ import {
 import { TabCards, WhatChanged } from './overview-insights'
 import { KpiGrid, TopCustomersPanel } from './overview-kpis'
 import { overviewTrends } from './overview-series'
-import { AttentionPanel, StatusBar } from './overview-status'
-import { useOverviewVerdicts } from './overview-verdicts'
-import { OverviewTrendCharts } from './overview-trend-charts'
 import {
+  overviewBehaviorSignals,
   overviewQuotaSignals,
   overviewServiceSignals,
   peakTone,
   poolPeakAgainstSlots,
 } from './overview-signals'
+import { AttentionPanel, StatusBar } from './overview-status'
+import { OverviewTrendCharts } from './overview-trend-charts'
+import { useOverviewVerdicts } from './overview-verdicts'
 import { rankClusters, riskRangeStart } from './risk-analysis'
 import { MetricGrid, Panel, type MetricItem } from './shared'
 
@@ -157,6 +159,7 @@ export function OverviewTab(props: {
   const risk = now<RiskInsights>('risk')
   const upstream = now<UpstreamInsights>('upstream')
   const activity = now<ActivityInsights>('activity')
+  const behavior = now<ModelBehavior>('model-behavior')
   const previousCapacity = before<CapacityInsights>('capacity')
   const previousQuality = before<QualityInsights>('quality')
   const previousFinance = before<FinanceInsights>('finance')
@@ -200,9 +203,13 @@ export function OverviewTab(props: {
       previousFinance,
     }),
     ...overviewQuotaSignals(t, fmt, props.outlook),
+    ...overviewBehaviorSignals(t, behavior),
   ]
 
   OVERVIEW_VIEWS.forEach((view, index) => {
+    // The behavior view is a bonus signal: an older server lacks it, and its
+    // failure is no reason to flag the whole overview.
+    if (view === 'model-behavior') return
     if (current[index].isError) {
       signals.push({
         key: `error-${view}`,
@@ -633,9 +640,7 @@ export function OverviewTab(props: {
       trend: trends.consumption,
       trendFormat: fmt.cny,
       trendBars: true,
-      hint: finance
-        ? t('At list price, root and staff included.')
-        : undefined,
+      hint: finance ? t('At list price, root and staff included.') : undefined,
     },
     {
       label: t('Requests'),

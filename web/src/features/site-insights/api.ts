@@ -34,6 +34,7 @@ import type {
   GrowthInsights,
   InsightsRange,
   KeyInsights,
+  ModelBehavior,
   PoolProvider,
   PoolUsage,
   QualityInsights,
@@ -56,6 +57,7 @@ export type InsightsView =
   | 'channels'
   | 'upstream'
   | 'customers'
+  | 'model-behavior'
 
 export type InsightsByView = {
   capacity: CapacityInsights
@@ -70,6 +72,7 @@ export type InsightsByView = {
   channels: ChannelInsights
   upstream: UpstreamInsights
   customers: CustomerInsights
+  'model-behavior': ModelBehavior
 }
 
 /** The longest range, in days, each view's endpoint accepts. */
@@ -87,6 +90,7 @@ export const VIEW_MAX_DAYS: Record<InsightsView, number> = {
   channels: 366,
   upstream: 92,
   customers: 366,
+  'model-behavior': 92,
 }
 
 export async function getInsights<V extends InsightsView>(

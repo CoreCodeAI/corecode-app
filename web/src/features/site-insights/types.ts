@@ -1436,6 +1436,14 @@ export type VendorQuality = {
   error_rate: number
   ttft_p50_ms: number
   ttft_p95_ms: number
+  /**
+   * Input tokens read from the cache and all input tokens, whatever the model
+   * filter selects, and their ratio: the hit rate of every model the vendor
+   * sells. Absent from an older server.
+   */
+  cache_read?: number
+  cache_input?: number
+  cache_share?: number
 }
 
 export type QualityInsights = StaleHours & {
@@ -1689,4 +1697,63 @@ export type UpstreamInsights = StaleHours & {
   truncated: boolean
   /** Ranges of 3 days or less; absent before the server's release. */
   hourly?: UpstreamHour[] | null
+}
+
+/** A metric of a model's day the model-behavior view judges. */
+export type BehaviorMetric =
+  | 'output'
+  | 'reasoning'
+  | 'ttft'
+  | 'latency'
+  | 'errors'
+
+/**
+ * A metric that moved past 40% (yellow) or 60% (red) against the same input
+ * band's seven earlier days. Band 0 is the error rate, which has none.
+ */
+export type BehaviorFlag = {
+  metric: BehaviorMetric
+  level: 'yellow' | 'red'
+  band: number
+  value: number
+  baseline: number
+  /** Value over baseline, less one. */
+  change: number
+  samples: number
+}
+
+export type BehaviorDay = {
+  day: number
+  requests: number
+  output_p50: number
+  /** Over the requests that recorded reasoning tokens; 0 when none did. */
+  reasoning_p50: number
+  /** The part of the day's requests that recorded reasoning tokens. */
+  reasoning_share: number
+  ttft_p50_ms: number
+  latency_p50_s: number
+  /** Failed tries the upstream answers for. */
+  tries: number
+  error_rate: number
+  statuses: NamedCount[]
+  cache_share: number
+  flags: BehaviorFlag[]
+}
+
+export type BehaviorModel = {
+  model: string
+  vendor: string
+  requests: number
+  daily: BehaviorDay[]
+}
+
+export type ModelBehavior = {
+  logs_since?: number | null
+  models: BehaviorModel[]
+  /** The last day's flags, red first. */
+  alerts: (BehaviorFlag & { model: string })[]
+  /** Upper bounds, in input tokens, of input bands 1 to 3; band 4 is above. */
+  band_limits: number[]
+  /** Final hours of the range not stored yet; the figures cover the rest. */
+  missing_hours: number
 }

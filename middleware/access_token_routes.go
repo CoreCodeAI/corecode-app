@@ -277,6 +277,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	// router/api-router.go: /api/site-insights, root only
 	"GET /api/site-insights/capacity":                                                        accessTokenScopeRule("ops:read"),
 	"GET /api/site-insights/quality":                                                         accessTokenScopeRule("ops:read"),
+	"GET /api/site-insights/model-behavior":                                                  accessTokenScopeRule("ops:read"),
 	"GET /api/site-insights/pool":                                                            accessTokenScopeRule("ops:read"),
 	"GET /api/site-insights/pool-usage":                                                      accessTokenScopeRule("ops:read"),
 	"GET /api/site-insights/pool-outlook":                                                    accessTokenScopeRule("ops:read"),

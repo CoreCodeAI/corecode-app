@@ -32,6 +32,7 @@ import {
   joinSentences,
   MIN_ORDERS,
   MIN_TASKS,
+  SECTIONS,
   SMALL_SAMPLE,
 } from '../lib'
 import { serviceFailureRate, unservedOf } from '../quality-analysis'
@@ -39,6 +40,7 @@ import type {
   CapacityInsights,
   EngineOutlook,
   FinanceInsights,
+  ModelBehavior,
   NamedCount,
   OrderMethodFunnel,
   QualityInsights,
@@ -46,6 +48,10 @@ import type {
 } from '../types'
 import { quotaBinding, quotaSentences } from './outlook'
 import { FAILING_RATE, type InsightsFormat } from './overview-analysis'
+import {
+  behaviorMetricLabels,
+  signedPercent,
+} from './quality-behavior-analysis'
 
 /** A completion rate under this share of the previous period's has fallen. */
 export const COMPLETION_DROP_SHARE = 0.5
@@ -433,6 +439,42 @@ export function overviewQuotaSignals(
       detail: lines.add,
       tab: 'pool',
       impact: binding.demand_usd,
+    },
+  ]
+}
+
+/**
+ * Models whose behavior moved past 60% on the last day against their seven
+ * days before: how long they answer, how long they think, how fast they start,
+ * or how often their upstream fails. One signal names them; yellow readings
+ * stay on the quality tab.
+ */
+export function overviewBehaviorSignals(
+  t: TFunction,
+  behavior: ModelBehavior | undefined
+): Finding[] {
+  const red = (behavior?.alerts ?? []).filter((alert) => alert.level === 'red')
+  if (red.length === 0) return []
+  const labels = behaviorMetricLabels(t)
+  const models = [...new Set(red.map((alert) => alert.model))]
+  return [
+    {
+      key: 'model-behavior',
+      tone: 'danger',
+      title: t('{{count}} models changed sharply on the last day: {{models}}', {
+        count: models.length,
+        models: models.slice(0, TASK_MODEL_LIMIT).join(', '),
+      }),
+      detail: red
+        .slice(0, TASK_MODEL_LIMIT + 1)
+        .map(
+          (alert) =>
+            `${alert.model} ${labels[alert.metric]} ${signedPercent(alert.change)}`
+        )
+        .join(', '),
+      tab: 'quality',
+      section: SECTIONS.modelBehavior,
+      impact: red.reduce((sum, alert) => sum + alert.samples, 0),
     },
   ]
 }

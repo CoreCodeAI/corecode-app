@@ -406,6 +406,7 @@ func migrateDB() error {
 		&InsightModelHour{},
 		&InsightChannelHour{},
 		&InsightKeyHour{},
+		&InsightBehaviorHour{},
 		&UpstreamCost{},
 		&UpstreamBillDay{},
 		&RivalSite{},

@@ -9923,6 +9923,24 @@
     "Payment conversion": "付费转化率",
     "{{paid}} of {{registered}} sign-ups so far": "{{registered}} 个注册中已有 {{paid}} 个付费（截至目前）",
     "{{paid}} of {{registered}} aged sign-ups": "{{registered}} 个成熟注册中有 {{paid}} 个付费",
-    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "完成过网关订单的注册，占已经过了足够时间的注册的比例。"
+    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "完成过网关订单的注册，占已经过了足够时间的注册的比例。",
+    "Model behavior": "模型行为",
+    "Output length": "输出长度",
+    "Upstream errors": "上游报错",
+    "On the last day {{count}} model readings moved past a threshold: {{red}} red.": "最近一天有 {{count}} 项读数越过阈值，其中 {{red}} 项红色。",
+    "No model moved past 40% against its previous seven days.": "没有模型相对前 7 天变化超过 40%。",
+    "Per model and day: the median output tokens, reasoning tokens, first-token time and total time, the upstream errors, and the share of input read from the cache. A reading that moved more than 40% (yellow) or 60% (red) against the seven days before is flagged, when both sides have at least 50 requests. Requests are compared only with requests of a similar input size, so a day of longer prompts is not read as a model that got wordier. Customers only.": "按模型和天：输出 token、思考 token、首字时间和总耗时的中位数，上游报错，以及缓存读占输入的比例。某项读数相对前 7 天变化超过 40%（黄）或 60%（红），且两边各有至少 50 次请求时标出。请求只和输入长度相近的请求比较，所以一天里长提示词变多，不会被当成模型变啰嗦。仅统计客户。",
+    "Models that moved on the last day": "最近一天有突变的模型",
+    "No model has enough requests in this range": "这个时间范围内没有请求量足够的模型",
+    "Metric": "指标",
+    "Models shown": "显示的模型",
+    "Reasoning tokens are recorded only for requests made after this release, so earlier days have none.": "思考 token 只从这次发布之后的请求开始记录，更早的日子没有数据。",
+    "{{count}} hours of this range are still being read, so their requests are missing from the lines.": "这个时间范围里还有 {{count}} 个小时在读取中，它们的请求暂未画进曲线。",
+    "The last day, by model": "最近一天，按模型",
+    "Flags": "标记",
+    "{{change}}, against {{baseline}} before": "{{change}}，此前为 {{baseline}}",
+    "{{change}} against the 7 days before, inputs {{band}}": "相对前 7 天 {{change}}，输入 {{band}}",
+    "Cache hit rate by vendor": "各厂商缓存命中率",
+    "{{count}} models changed sharply on the last day: {{models}}": "最近一天有 {{count}} 个模型突变：{{models}}"
   }
 }

@@ -9923,6 +9923,24 @@
     "Payment conversion": "付費轉化率",
     "{{paid}} of {{registered}} sign-ups so far": "{{registered}} 個註冊中已有 {{paid}} 個付費（截至目前）",
     "{{paid}} of {{registered}} aged sign-ups": "{{registered}} 個成熟註冊中有 {{paid}} 個付費",
-    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "完成過閘道訂單的註冊，佔已經過了足夠時間的註冊的比例。"
+    "Sign-ups that completed a gateway order, over the sign-ups old enough to have had the chance.": "完成過閘道訂單的註冊，佔已經過了足夠時間的註冊的比例。",
+    "Model behavior": "模型行為",
+    "Output length": "輸出長度",
+    "Upstream errors": "上游報錯",
+    "On the last day {{count}} model readings moved past a threshold: {{red}} red.": "最近一天有 {{count}} 項讀數越過閾值，其中 {{red}} 項紅色。",
+    "No model moved past 40% against its previous seven days.": "沒有模型相對前 7 天變化超過 40%。",
+    "Per model and day: the median output tokens, reasoning tokens, first-token time and total time, the upstream errors, and the share of input read from the cache. A reading that moved more than 40% (yellow) or 60% (red) against the seven days before is flagged, when both sides have at least 50 requests. Requests are compared only with requests of a similar input size, so a day of longer prompts is not read as a model that got wordier. Customers only.": "按模型和天：輸出 token、思考 token、首字時間和總耗時的中位數，上游報錯，以及快取讀占輸入的比例。某項讀數相對前 7 天變化超過 40%（黃）或 60%（紅），且兩邊各有至少 50 次請求時標出。請求只和輸入長度相近的請求比較，所以一天裡長提示詞變多，不會被當成模型變囉嗦。僅統計客戶。",
+    "Models that moved on the last day": "最近一天有突變的模型",
+    "No model has enough requests in this range": "這個時間範圍內沒有請求量足夠的模型",
+    "Metric": "指標",
+    "Models shown": "顯示的模型",
+    "Reasoning tokens are recorded only for requests made after this release, so earlier days have none.": "思考 token 只從這次發佈之後的請求開始記錄，更早的日子沒有資料。",
+    "{{count}} hours of this range are still being read, so their requests are missing from the lines.": "這個時間範圍裡還有 {{count}} 個小時在讀取中，它們的請求暫未畫進曲線。",
+    "The last day, by model": "最近一天，按模型",
+    "Flags": "標記",
+    "{{change}}, against {{baseline}} before": "{{change}}，此前為 {{baseline}}",
+    "{{change}} against the 7 days before, inputs {{band}}": "相對前 7 天 {{change}}，輸入 {{band}}",
+    "Cache hit rate by vendor": "各廠商快取命中率",
+    "{{count}} models changed sharply on the last day: {{models}}": "最近一天有 {{count}} 個模型突變：{{models}}"
   }
 }

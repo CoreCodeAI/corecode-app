@@ -40,7 +40,7 @@ import type {
 /** A tab of the page: one view, or the overview that reads several. */
 export type InsightsTab =
   | 'overview'
-  | Exclude<InsightsView, 'business' | 'keys' | 'customers'>
+  | Exclude<InsightsView, 'business' | 'keys' | 'customers' | 'model-behavior'>
 
 /** Tabs in the order shown, grouped by what they answer. */
 export const INSIGHTS_TAB_GROUPS: { key: string; tabs: InsightsTab[] }[] = [
@@ -57,6 +57,7 @@ export const SECTIONS = {
   models: 'by-model',
   limitRejections: 'limit-rejections',
   checkouts: 'checkouts',
+  modelBehavior: 'model-behavior',
 } as const
 
 /** The views the overview reads its signals from. */
@@ -68,6 +69,7 @@ export const OVERVIEW_VIEWS = [
   'risk',
   'upstream',
   'activity',
+  'model-behavior',
 ] as const satisfies readonly InsightsView[]
 
 /** A range of this many days or fewer reads by the hour. */
@@ -273,6 +275,8 @@ export type InsightsSources = {
   keys?: SourceState
   /** The activity tab's customers view; absent on other tabs. */
   customers?: SourceState
+  /** The quality tab's model-behavior view; absent on other tabs. */
+  behavior?: SourceState
 }
 
 /** A query's state as a SourceState; a disabled query reads as pending. */
