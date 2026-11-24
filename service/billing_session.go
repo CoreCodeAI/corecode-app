@@ -389,10 +389,10 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIErro
 		s.releaseFunding()
 		logger.LogInfo(c, common.LogText("user %d refused: reserved %s of %s, shortfall above the cap (funding=%s)", s.relayInfo.UserId, logger.FormatQuota(held), logger.FormatQuota(effectiveQuota), s.funding.Source()))
 		message := &quotaMessage{
-			text:  i18n.T(c, i18n.MsgQuotaShortfallAboveCap, map[string]any{"Available": logger.FormatQuota(held), "Required": logger.FormatQuota(effectiveQuota)}),
+			text:  i18n.TBilingual(c, i18n.MsgQuotaShortfallAboveCap, map[string]any{"Available": logger.FormatQuotaBrief(held), "Required": logger.FormatQuotaBrief(effectiveQuota)}),
 			cause: errShortfallAboveCap,
 		}
-		return types.NewErrorWithStatusCode(message, types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+		return types.NewErrorWithStatusCode(message, types.ErrorCodeInsufficientUserQuota, http.StatusPaymentRequired,
 			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 	}
 
@@ -486,14 +486,14 @@ func (s *BillingSession) fundingError(c *gin.Context, err error) *types.NewAPIEr
 			userQuota = 0
 		}
 		return types.NewErrorWithStatusCode(
-			errors.New(i18n.T(c, i18n.MsgQuotaUserInsufficient, map[string]any{"Remaining": logger.FormatQuota(userQuota)})),
-			types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+			errors.New(i18n.TBilingual(c, i18n.MsgQuotaUserInsufficient, map[string]any{"Remaining": logger.FormatQuotaBrief(userQuota)})),
+			types.ErrorCodeInsufficientUserQuota, http.StatusPaymentRequired,
 			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 	}
 	errMsg := err.Error()
 	if strings.Contains(errMsg, "no active subscription") || strings.Contains(errMsg, "subscription quota insufficient") {
-		message := &quotaMessage{text: i18n.T(c, i18n.MsgQuotaSubscriptionInsufficient, map[string]any{"Error": errMsg}), cause: err}
-		return types.NewErrorWithStatusCode(message, types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+		message := &quotaMessage{text: i18n.TBilingual(c, i18n.MsgQuotaSubscriptionInsufficient), cause: err}
+		return types.NewErrorWithStatusCode(message, types.ErrorCodeInsufficientUserQuota, http.StatusPaymentRequired, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 	}
 	return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
 }
@@ -519,7 +519,7 @@ func (s *BillingSession) reserveFunding(delta int, requireAvailableQuota bool) e
 			// submission. Reserve atomically instead of admitting wallet debt.
 			if err := funding.PreConsume(delta); err != nil {
 				if errors.Is(err, ErrInsufficientWalletQuota) {
-					return types.NewErrorWithStatusCode(err, types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+					return types.NewErrorWithStatusCode(err, types.ErrorCodeInsufficientUserQuota, http.StatusPaymentRequired, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 				}
 				return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
 			}
@@ -537,9 +537,9 @@ func (s *BillingSession) reserveFunding(delta int, requireAvailableQuota bool) e
 	case *SubscriptionFunding:
 		if err := model.PostConsumeUserSubscriptionDelta(funding.subscriptionId, int64(delta)); err != nil {
 			return types.NewErrorWithStatusCode(
-				errors.New(i18n.Translate(s.lang, i18n.MsgQuotaSubscriptionInsufficient, map[string]any{"Error": err.Error()})),
+				errors.New(i18n.TranslateBilingual(s.lang, i18n.MsgQuotaSubscriptionInsufficient)),
 				types.ErrorCodeInsufficientUserQuota,
-				http.StatusForbidden,
+				http.StatusPaymentRequired,
 				types.ErrOptionWithSkipRetry(),
 				types.ErrOptionWithNoRecordErrorLog(),
 			)
@@ -696,14 +696,14 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		}
 		if userQuota <= 0 {
 			return nil, types.NewErrorWithStatusCode(
-				errors.New(i18n.T(c, i18n.MsgQuotaUserInsufficient, map[string]any{"Remaining": logger.FormatQuota(userQuota)})),
-				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+				errors.New(i18n.TBilingual(c, i18n.MsgQuotaUserInsufficient, map[string]any{"Remaining": logger.FormatQuotaBrief(userQuota)})),
+				types.ErrorCodeInsufficientUserQuota, http.StatusPaymentRequired,
 				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 		}
 		if userQuota-preConsumedQuota < 0 && !allowShortfall {
 			return nil, types.NewErrorWithStatusCode(
-				errors.New(i18n.T(c, i18n.MsgQuotaPreConsumeInsufficient, map[string]any{"Remaining": logger.FormatQuota(userQuota), "Required": logger.FormatQuota(preConsumedQuota)})),
-				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+				errors.New(i18n.TBilingual(c, i18n.MsgQuotaPreConsumeInsufficient, map[string]any{"Remaining": logger.FormatQuotaBrief(userQuota), "Required": logger.FormatQuotaBrief(preConsumedQuota)})),
+				types.ErrorCodeInsufficientUserQuota, http.StatusPaymentRequired,
 				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 		}
 		relayInfo.UserQuota = userQuota
@@ -773,12 +773,12 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 			return nil
 		}
 		return types.NewErrorWithStatusCode(
-			errors.New(i18n.T(c, i18n.MsgQuotaSubscriptionAndWalletInsufficient, map[string]any{
-				"Required":     logger.FormatQuota(int(short.Need)),
-				"Subscription": logger.FormatQuota(int(short.Remaining)),
-				"Wallet":       logger.FormatQuota(wallet),
+			errors.New(i18n.TBilingual(c, i18n.MsgQuotaSubscriptionAndWalletInsufficient, map[string]any{
+				"Required":     logger.FormatQuotaBrief(int(short.Need)),
+				"Subscription": logger.FormatQuotaBrief(int(short.Remaining)),
+				"Wallet":       logger.FormatQuotaBrief(wallet),
 			})),
-			types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+			types.ErrorCodeInsufficientUserQuota, http.StatusPaymentRequired,
 			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 	}
 

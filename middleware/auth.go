@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -369,6 +370,37 @@ func setDashboardAuthContext(c *gin.Context, user *model.UserBase, identity serv
 	c.Set("session_version", identity.SessionVersion)
 	c.Set(authIdentityContextKey, identity)
 	user.WriteContext(c)
+	if !useAccessToken {
+		rememberLanguageHint(c, user)
+	}
+}
+
+// languageHintAttempts holds the last hint this process tried to record for
+// each user, so a stale user cache cannot turn every console request into a
+// write attempt.
+var languageHintAttempts sync.Map
+
+// rememberLanguageHint records the language of a console browser on a user who
+// saved none, so errors that reach their API clients (which send no
+// Accept-Language) speak the language they read the console in. It writes only
+// when the browser's language differs from the recorded one, and never over a
+// saved language.
+func rememberLanguageHint(c *gin.Context, user *model.UserBase) {
+	hint := i18n.ParseAcceptLanguage(c.GetHeader("Accept-Language"))
+	if hint == "" {
+		return
+	}
+	setting := user.GetSetting()
+	if setting.Language != "" || setting.LanguageHint == hint {
+		return
+	}
+	if last, ok := languageHintAttempts.Load(user.Id); ok && last == hint {
+		return
+	}
+	languageHintAttempts.Store(user.Id, hint)
+	if _, err := model.SetUserLanguageHint(user.Id, user.Setting, hint); err != nil {
+		common.SysLog(common.LogText("failed to record the language hint of user %d: %s", user.Id, err.Error()))
+	}
 }
 
 // abortWithWebMessage answers a web console request; the web console

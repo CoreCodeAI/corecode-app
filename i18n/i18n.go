@@ -92,6 +92,26 @@ func T(c *gin.Context, key string, args ...map[string]any) string {
 	return Translate(StatedLang(c), key, args...)
 }
 
+// GlossSuffix turns a quota refusal's key into the key of its English summary.
+const GlossSuffix = "_gloss"
+
+// TBilingual is T for a refusal the reader must act on whoever they are. A
+// reader who stated no language gets the Chinese text with the English gloss
+// in brackets, unless DEFAULT_LANGUAGE names the language of such readers.
+func TBilingual(c *gin.Context, key string, args ...map[string]any) string {
+	return TranslateBilingual(StatedLang(c), key, args...)
+}
+
+// TranslateBilingual is Translate for a refusal the reader must act on. An
+// empty language gets the Chinese text followed by the English gloss
+// (key + GlossSuffix) in brackets, unless DEFAULT_LANGUAGE is set.
+func TranslateBilingual(lang, key string, args ...map[string]any) string {
+	if lang != "" || common.DefaultLanguage != "" {
+		return Translate(lang, key, args...)
+	}
+	return Translate(LangZhCN, key, args...) + "（" + Translate(LangEn, key+GlossSuffix, args...) + "）"
+}
+
 // Translate translates a message key for the specified language. An empty
 // language means the reader stated none and gets common.DefaultLanguage.
 func Translate(lang, key string, args ...map[string]any) string {
@@ -127,7 +147,8 @@ func SetUserLangLoader(loader func(userId int) string) {
 
 // StatedLang returns the language the reader of a request stated, or "" when
 // there is none. It checks multiple sources in priority order:
-// 1. User settings (ContextKeyUserSetting) - if already loaded (e.g., by TokenAuth)
+// 1. User settings (ContextKeyUserSetting) - if already loaded (e.g., by TokenAuth):
+// the saved language, then the language guessed from the console browser
 // 2. Lazy load user language from cache/DB using user ID, when step 1 found no settings
 // 3. Language set by middleware (ContextKeyLanguage) - from Accept-Language header
 // 4. The Accept-Language header
@@ -140,6 +161,14 @@ func StatedLang(c *gin.Context) string {
 	userSetting, settingLoaded := common.GetContextKeyType[dto.UserSetting](c, constant.ContextKeyUserSetting)
 	if settingLoaded && userSetting.Language != "" {
 		normalized := normalizeLang(userSetting.Language)
+		if IsSupported(normalized) {
+			return normalized
+		}
+	}
+	// The hint is what the customer's console browser asked for. It stands in
+	// for a language they never saved, never for one they did.
+	if settingLoaded && userSetting.Language == "" && userSetting.LanguageHint != "" {
+		normalized := normalizeLang(userSetting.LanguageHint)
 		if IsSupported(normalized) {
 			return normalized
 		}

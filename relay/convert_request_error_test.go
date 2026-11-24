@@ -88,7 +88,7 @@ func TestImageRequestReservesFinalQuantityBeforeUpstream(t *testing.T) {
 		{name: "pass-through file vendor count revalidated", body: `{"model":"flux","prompt":"cat","batch_size":1}`, storedBody: `{"model":"flux","prompt":"cat","batch_size":129}`, passThrough: true, status: http.StatusBadRequest,
 			channelType: constant.ChannelTypeSiliconFlow, model: "flux", member: "batch_size"},
 		{name: "oversized override rejected", body: `{"model":"gpt-image-2","n":1}`, override: 129, status: http.StatusBadRequest},
-		{name: "insufficient reservation blocks upstream", body: `{"model":"gpt-image-2","n":1}`, override: 4, count: 4, insufficient: true, status: http.StatusForbidden},
+		{name: "insufficient reservation blocks upstream", body: `{"model":"gpt-image-2","n":1}`, override: 4, count: 4, insufficient: true, status: http.StatusPaymentRequired},
 		{name: "retry drops the previous attempt's quantity", body: `{"model":"gpt-image-2","n":1}`, count: 1, retryReset: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

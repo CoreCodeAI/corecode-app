@@ -374,11 +374,11 @@ func TestPreConsumeShortfallAcrossWalletAndSubscription(t *testing.T) {
 				{name: "an empty wallet takes the overage past the subscription", preference: "subscription_first", wallet: 0, subLeft: 2000, overflow: true,
 					wantHeld: 1500, wantWallet: -250, wantSubUsed: 2000, wantOverflowSrc: "wallet", wantOverflowPart: 250},
 				{name: "an empty wallet does not admit what the subscription cannot hold", preference: "subscription_first", wallet: 0, subLeft: 1000, overflow: true,
-					wantMessage: "Not enough quota for this request: it needs ＄0.003000 reserved and is charged its actual usage when it ends; the subscription has ＄0.002000 left and the wallet holds ＄0.000000"},
+					wantMessage: "额度不足：本次需预扣 <$0.01，订阅剩 <$0.01、钱包 $0。请充值：https://corecode.live/wallet（Insufficient quota: needs <$0.01, subscription <$0.01, wallet $0）"},
 				{name: "wallet first names both sources when neither holds the estimate", preference: "wallet_first", wallet: 0, subLeft: 1000,
-					wantMessage: "Not enough quota for this request: it needs ＄0.003000 reserved and is charged its actual usage when it ends; the subscription has ＄0.002000 left and the wallet holds ＄0.000000"},
+					wantMessage: "额度不足：本次需预扣 <$0.01，订阅剩 <$0.01、钱包 $0。请充值：https://corecode.live/wallet（Insufficient quota: needs <$0.01, subscription <$0.01, wallet $0）"},
 				{name: "a wallet refusal without a subscription keeps its message", preference: "subscription_first", wallet: 0, subLeft: -1,
-					wantMessage: "Insufficient user quota, remaining quota: ＄0.000000"},
+					wantMessage: "额度不足：钱包 $0。请充值：https://corecode.live/wallet（Insufficient quota: wallet $0）"},
 				{name: "plan without wallet overflow keeps full reservation", preference: "subscription_first", wallet: 5000, subLeft: 1000},
 				{name: "a failed subscription charge falls to the overflow wallet", preference: "subscription_first", wallet: 5000, subLeft: 2000, overflow: true, subscriptionGone: true,
 					wantHeld: 1500, wantWallet: 4250, wantOverflowSrc: "wallet", wantOverflowPart: 750},
@@ -412,6 +412,7 @@ func TestPreConsumeShortfallAcrossWalletAndSubscription(t *testing.T) {
 					if tc.wantHeld == 0 {
 						require.NotNil(t, apiErr)
 						assert.Equal(t, types.ErrorCodeInsufficientUserQuota, apiErr.GetErrorCode())
+						assert.Equal(t, http.StatusPaymentRequired, apiErr.StatusCode)
 						if tc.wantMessage != "" {
 							assert.Equal(t, tc.wantMessage, apiErr.Error())
 						}
@@ -555,15 +556,16 @@ func TestPreConsumeShortfallCap(t *testing.T) {
 						assert.Equal(t, types.ErrorCodeInsufficientUserQuota, apiErr.GetErrorCode())
 						// The refusal names the combined hold, not the balance a
 						// fallback to one source reads afterwards.
-						want := i18n.T(ctx, i18n.MsgQuotaShortfallAboveCap, map[string]any{
-							"Available": logger.FormatQuota(tc.available), "Required": logger.FormatQuota(1500),
+						want := i18n.TBilingual(ctx, i18n.MsgQuotaShortfallAboveCap, map[string]any{
+							"Available": logger.FormatQuotaBrief(tc.available), "Required": logger.FormatQuotaBrief(1500),
 						})
 						if tc.eachSource {
-							want = i18n.T(ctx, i18n.MsgQuotaSubscriptionAndWalletInsufficient, map[string]any{
-								"Required": logger.FormatQuota(1500), "Subscription": logger.FormatQuota(tc.subLeft), "Wallet": logger.FormatQuota(tc.wallet),
+							want = i18n.TBilingual(ctx, i18n.MsgQuotaSubscriptionAndWalletInsufficient, map[string]any{
+								"Required": logger.FormatQuotaBrief(1500), "Subscription": logger.FormatQuotaBrief(tc.subLeft), "Wallet": logger.FormatQuotaBrief(tc.wallet),
 							})
 						}
 						assert.Equal(t, want, apiErr.Error())
+						assert.Equal(t, http.StatusPaymentRequired, apiErr.StatusCode)
 						assert.Eventually(t, func() bool {
 							if db.First(&user, user.Id).Error != nil || user.Quota != tc.wallet {
 								return false

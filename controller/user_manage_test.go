@@ -967,3 +967,63 @@ func TestUpdateUserSettingKeepsWhatTheRequestLeavesOut(t *testing.T) {
 		})
 	}
 }
+
+// The language hint is a compare-and-swap on the stored setting text: it lands
+// on a user with no setting (empty or NULL) or a setting without a language, and
+// is refused when the user saved a language or the text moved since it was read.
+func TestSetUserLanguageHintDatabaseMatrix(t *testing.T) {
+	for _, dialect := range []struct{ kind, env string }{{"sqlite", ""}, {"mysql", "TEST_MYSQL_DSN"}, {"postgres", "TEST_POSTGRES_DSN"}} {
+		t.Run(dialect.kind, func(t *testing.T) {
+			if dialect.env != "" && os.Getenv(dialect.env) == "" {
+				t.Skip("set " + dialect.env + " to run this database")
+			}
+			db := modelManagementDB(t, dialect.kind, os.Getenv(dialect.env))
+			create := func(name, setting string) model.User {
+				user := model.User{Username: name, Group: "default", AffCode: name + "-aff", Setting: setting}
+				require.NoError(t, db.Create(&user).Error)
+				return user
+			}
+			stored := func(id int) dto.UserSetting {
+				var user model.User
+				require.NoError(t, db.First(&user, id).Error)
+				return user.GetSetting()
+			}
+
+			empty := create("hint-empty", "")
+			written, err := model.SetUserLanguageHint(empty.Id, "", "zh-CN")
+			require.NoError(t, err)
+			assert.True(t, written)
+			assert.Equal(t, "zh-CN", stored(empty.Id).LanguageHint)
+
+			null := create("hint-null", "")
+			require.NoError(t, db.Model(&model.User{}).Where("id = ?", null.Id).Update("setting", nil).Error)
+			written, err = model.SetUserLanguageHint(null.Id, "", "zh-TW")
+			require.NoError(t, err)
+			assert.True(t, written, "a NULL setting counts as empty")
+			assert.Equal(t, "zh-TW", stored(null.Id).LanguageHint)
+
+			other := create("hint-other", `{"gotify_priority":5,"sidebar_modules":"{}"}`)
+			written, err = model.SetUserLanguageHint(other.Id, other.Setting, "en")
+			require.NoError(t, err)
+			assert.True(t, written)
+			assert.Equal(t, dto.UserSetting{GotifyPriority: 5, SidebarModules: "{}", LanguageHint: "en"}, stored(other.Id), "other settings survive")
+
+			saved := create("hint-saved", `{"language":"zhTW"}`)
+			written, err = model.SetUserLanguageHint(saved.Id, saved.Setting, "en")
+			require.NoError(t, err)
+			assert.False(t, written, "a saved language is never overwritten")
+			assert.Equal(t, dto.UserSetting{Language: "zhTW"}, stored(saved.Id))
+
+			stale := create("hint-stale", `{"gotify_priority":1}`)
+			require.NoError(t, model.UpdateUserSetting(stale.Id, dto.UserSetting{Language: "en", GotifyPriority: 1}))
+			written, err = model.SetUserLanguageHint(stale.Id, stale.Setting, "zh-CN")
+			require.NoError(t, err)
+			assert.False(t, written, "a setting saved after it was read is not overwritten")
+			assert.Equal(t, dto.UserSetting{Language: "en", GotifyPriority: 1}, stored(stale.Id))
+
+			written, err = model.SetUserLanguageHint(empty.Id, empty.Setting, "zh-CN")
+			require.NoError(t, err)
+			assert.False(t, written, "the same hint is not written again")
+		})
+	}
+}

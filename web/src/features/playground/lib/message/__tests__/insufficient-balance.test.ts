@@ -35,14 +35,17 @@ function failed(content: string, errorCode?: string | null): Message {
   }
 }
 
-it('recognises the server code for an insufficient wallet', () => {
-  const message = failed('whatever the server said', 'insufficient_user_quota')
+it.each(['insufficient_quota', 'insufficient_user_quota'])(
+  'recognises the server code %s for an insufficient wallet',
+  (code) => {
+    const message = failed('whatever the server said', code)
 
-  expect(isInsufficientBalanceError(message)).toBe(true)
-  expect(getMessageErrorState(message, false)?.kind).toBe(
-    'insufficient-balance'
-  )
-})
+    expect(isInsufficientBalanceError(message)).toBe(true)
+    expect(getMessageErrorState(message, false)?.kind).toBe(
+      'insufficient-balance'
+    )
+  }
+)
 
 it('falls back to the wording when the code was lost', () => {
   expect(isInsufficientBalanceError(failed('用户额度不足, 剩余额度: 0'))).toBe(
@@ -51,6 +54,18 @@ it('falls back to the wording when the code was lost', () => {
   expect(
     isInsufficientBalanceError(
       failed('Insufficient user quota, remaining quota: 0')
+    )
+  ).toBe(true)
+  expect(
+    isInsufficientBalanceError(
+      failed('额度不足：钱包 $0。请充值：https://corecode.live/wallet')
+    )
+  ).toBe(true)
+  expect(
+    isInsufficientBalanceError(
+      failed(
+        'Insufficient quota: wallet $0. Top up: https://corecode.live/wallet'
+      )
     )
   ).toBe(true)
 })

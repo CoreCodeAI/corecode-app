@@ -220,6 +220,42 @@ func UpdateUserSetting(userId int, setting dto.UserSetting) error {
 	return PublishUserAuthCache(userId)
 }
 
+// SetUserLanguageHint records hint as the language a console browser asked for
+// in the setting of a user who saved no language. current is the setting text
+// the caller read; the write applies only while the stored text still equals
+// it, so a setting the user saved in between is never overwritten. It reports
+// whether the hint was written.
+func SetUserLanguageHint(userId int, current string, hint string) (bool, error) {
+	if userId == 0 {
+		return false, common.NewMessage("ID is empty!")
+	}
+	setting := dto.UserSetting{}
+	if current != "" {
+		if err := common.Unmarshal([]byte(current), &setting); err != nil {
+			return false, err
+		}
+	}
+	if setting.Language != "" || setting.LanguageHint == hint {
+		return false, nil
+	}
+	setting.LanguageHint = hint
+	settingBytes, err := common.Marshal(setting)
+	if err != nil {
+		return false, err
+	}
+	query := DB.Model(&User{}).Where("id = ?", userId)
+	if current == "" {
+		query = query.Where("(setting = '' OR setting IS NULL)")
+	} else {
+		query = query.Where("setting = ?", current)
+	}
+	result := query.Update("setting", string(settingBytes))
+	if result.Error != nil || result.RowsAffected == 0 {
+		return false, result.Error
+	}
+	return true, PublishUserAuthCache(userId)
+}
+
 // userBindColumns 允许通过 UpdateUserBindColumn 更新的第三方账号绑定列白名单。
 // 列名只可能来自代码内部的 provider 实现，白名单是防御纵深，不依赖调用方自律。
 var userBindColumns = map[string]bool{
