@@ -438,12 +438,20 @@ export interface CompleteOrderRequest {
  */
 export type AffiliateTier = '' | 'retail' | 'distributor'
 
+/**
+ * How an affiliate earns: a percent of invitees' paid use, or a fixed bonus
+ * per invitee for both sides. Empty only for a row the server has not
+ * migrated yet.
+ */
+export type AffiliateReward = '' | 'commission' | 'bonus'
+
 /** The user's affiliate account. Amounts are quota units. */
 export interface AffiliateAccount {
   id: number
   user_id: number
-  /** Commission rate in percent */
+  /** Commission rate in percent; on the bonus reward it only grants invites */
   rate: number
+  reward?: AffiliateReward
   /** Promotion channel of either tier: cash withdrawals */
   channel: boolean
   tier: AffiliateTier
@@ -467,6 +475,10 @@ export interface AffiliateSummary {
   invitee_count: number
   balance_money: number
   earned_money: number
+  /** On the bonus reward: what the user and each invitee receive, in quota */
+  invite_bonus_quota?: number
+  /** On the bonus reward: what invitees' payments have earned, in quota */
+  invite_bonus_earned?: number
 }
 
 /**

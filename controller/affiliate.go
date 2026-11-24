@@ -13,9 +13,9 @@ import (
 )
 
 // affiliateSummary is what the wallet shows about the invitation program:
-// the program terms and the user's rate, code and commission. While the
-// program is on, every user has the default rate unless an administrator
-// changed it.
+// the program terms and the user's rate, code and commission, or, on the
+// bonus reward, the bonus and what it has earned them. While the program is
+// on, every user has the default rate unless an administrator changed it.
 type affiliateSummary struct {
 	Enabled         bool             `json:"enabled"`
 	SelfServeRate   int              `json:"self_serve_rate"`
@@ -26,6 +26,11 @@ type affiliateSummary struct {
 	InviteeCount    int64            `json:"invitee_count"`
 	BalanceMoney    float64          `json:"balance_money"`
 	EarnedMoney     float64          `json:"earned_money"`
+	// InviteBonusQuota is what an inviter on the bonus reward and each
+	// invitee receive, and InviteBonusEarned what the user's invitees'
+	// payments have earned them, both in quota.
+	InviteBonusQuota  int   `json:"invite_bonus_quota"`
+	InviteBonusEarned int64 `json:"invite_bonus_earned"`
 }
 
 func buildAffiliateSummary(userId int) (*affiliateSummary, error) {
@@ -59,6 +64,14 @@ func buildAffiliateSummary(userId int) (*affiliateSummary, error) {
 	summary.InviteeCount, err = model.CountAffiliateInvitees(userId)
 	if err != nil {
 		return nil, err
+	}
+	if affiliate.Reward == model.AffiliateRewardBonus {
+		if summary.InviteBonusQuota, err = model.AffiliateInviteBonusQuota(); err != nil {
+			return nil, err
+		}
+		if summary.InviteBonusEarned, err = model.SumAffiliateInviteBonuses(userId); err != nil {
+			return nil, err
+		}
 	}
 	return summary, nil
 }

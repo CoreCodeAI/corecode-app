@@ -37,6 +37,8 @@ const AFFILIATE_DEFAULTS: AffiliateValues = {
   'affiliate_setting.gift_plan_id': 0,
   'affiliate_setting.retail_gift_plan_id': 0,
   'affiliate_setting.gift_daily_cap': 50,
+  'affiliate_setting.gift_ip_limit': 5,
+  'affiliate_setting.invite_bonus': 5,
   'affiliate_setting.gift_blocked_email_domains': '',
   'affiliate_setting.reserved_code_words':
     'corecode\nalphafox\nanthropic\nclaude\nofficial\nguanfang\nadmin\nsupport\nkefu',

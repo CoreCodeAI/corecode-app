@@ -66,7 +66,7 @@ func useAffiliateTestDB(t *testing.T, dialect string) {
 	*operation_setting.GetAffiliateSetting() = operation_setting.AffiliateSetting{
 		Enabled: true, SelfServeRate: 10, MaxRate: 30, SecondLevelRate: 5, MinWithdrawal: 100,
 	}
-	tables := []any{&User{}, &TopUp{}, &Log{}, &Affiliate{}, &AffiliateReferral{}, &AffiliateCommission{}, &AffiliateWithdrawal{}, &AffiliateSignupGift{}, &AffiliateRetiredCode{},
+	tables := []any{&User{}, &TopUp{}, &Log{}, &Affiliate{}, &AffiliateReferral{}, &AffiliateCommission{}, &AffiliateWithdrawal{}, &AffiliateSignupGift{}, &AffiliateInviteBonus{}, &AffiliateRetiredCode{},
 		&SubscriptionPlan{}, &SubscriptionOrder{}, &UserSubscription{}, &UserSession{}, &SubscriptionAddressExemption{}, &AffiliateAddressExemption{}, &SubscriptionPreConsumeRecord{}}
 	for _, table := range tables {
 		require.False(t, db.Migrator().HasTable(table), "use an empty test database")
@@ -89,6 +89,16 @@ func registerAffiliateTestUser(t *testing.T, name string, inviterCode string) *U
 	require.NoError(t, user.Insert(InviterIdForAffCode(inviterCode)))
 	require.NoError(t, DB.First(user, user.Id).Error)
 	return user
+}
+
+// keepAffiliateTestCommission puts users on the commission reward, as
+// MigrateAffiliateRewards does for those who had invited someone.
+func keepAffiliateTestCommission(t *testing.T, users ...*User) {
+	t.Helper()
+	for _, user := range users {
+		require.NoError(t, EnsureDefaultAffiliate(user.Id))
+		require.NoError(t, DB.Model(&Affiliate{}).Where("user_id = ?", user.Id).Update("reward", AffiliateRewardCommission).Error)
+	}
 }
 
 func payAffiliateTestTopUp(t *testing.T, userId int, money float64, provider string) {
@@ -167,13 +177,17 @@ func TestAffiliateCommissionDatabaseMatrix(t *testing.T) {
 			var referral AffiliateReferral
 			require.NoError(t, DB.Where("user_id = ?", b.Id).First(&referral).Error, "a sign-up with an affiliate's code starts counting at once")
 
-			// B has the default 10% without paying or applying.
+			// B has the default 10% without paying or applying, on the bonus
+			// reward; B is kept on the commission as a user who had invited
+			// someone when the bonus began.
 			require.NoError(t, EnsureDefaultAffiliate(b.Id))
 			require.NoError(t, EnsureDefaultAffiliate(b.Id), "ensuring twice keeps one row")
 			bAffiliate, err := GetAffiliate(b.Id)
 			require.NoError(t, err)
 			assert.Equal(t, 10, bAffiliate.Rate)
 			assert.False(t, bAffiliate.Channel)
+			assert.Equal(t, AffiliateRewardBonus, bAffiliate.Reward)
+			keepAffiliateTestCommission(t, b)
 			payAffiliateTestTopUp(t, b.Id, 60, PaymentProviderEpay)
 			payAffiliateTestTopUp(t, b.Id, 500, PaymentProviderBalance)
 			require.NoError(t, DB.Create(&TopUp{UserId: b.Id, Money: 900, Status: common.TopUpStatusPending, TradeNo: "aff-test-pending"}).Error)
@@ -348,6 +362,7 @@ func TestAffiliateCommissionDatabaseMatrix(t *testing.T) {
 			y := registerAffiliateTestUser(t, "aff_y", x.AffCode)
 			assert.Equal(t, x.Id, y.InviterId)
 			operation_setting.GetAffiliateSetting().Enabled = true
+			keepAffiliateTestCommission(t, x)
 			backfilled, err := StartMissingAffiliateReferrals(100)
 			require.NoError(t, err)
 			assert.Positive(t, backfilled)
@@ -523,35 +538,32 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 			_, err = AdminBindSubscription(d1.Id, trial.Id, "")
 			require.NoError(t, err)
 
-			// A second sign-up from an address that received a gift in the last
-			// 24 hours receives none; the row records why.
-			r2 := registerAffiliateTestUser(t, "aff_r2", r.AffCode)
-			plan, _, err = GiveAffiliateSignupGift(r2.Id, r.Id, fmt.Sprintf("203.0.%d.113", ip), true)
-			require.NoError(t, err)
-			assert.Nil(t, plan)
-			assert.Equal(t, AffiliateSignupGiftIpUsed, giftStatus(r2))
-			r3 := registerAffiliateTestUser(t, "aff_r3", r.AffCode)
-			require.NoError(t, DB.Model(&AffiliateSignupGift{}).Where("user_id = ?", r1.Id).
-				Update("created_at", common.GetTimestamp()-affiliateSignupGiftWindow-1).Error)
-			require.NoError(t, DB.Model(&AffiliateSignupGift{}).Where("user_id = ?", r2.Id).Update("ip", "").Error)
+			// An address receives GiftIpLimit gifts in 30 days; the next
+			// sign-up from it receives none, and the row records why.
+			setting.GiftIpLimit = 2
 			r1Ip := fmt.Sprintf("203.0.%d.113", ip)
+			r2 := registerAffiliateTestUser(t, "aff_r2", r.AffCode)
+			plan, _, err = GiveAffiliateSignupGift(r2.Id, r.Id, r1Ip, true)
+			require.NoError(t, err)
+			require.NotNil(t, plan, "the address's second gift is within the limit")
+			r3 := registerAffiliateTestUser(t, "aff_r3", r.AffCode)
 			plan, _, err = GiveAffiliateSignupGift(r3.Id, r.Id, r1Ip, true)
 			require.NoError(t, err)
-			require.NotNil(t, plan, "an address's earlier gift stops counting after 24 hours")
+			assert.Nil(t, plan)
+			assert.Equal(t, AffiliateSignupGiftIpUsed, giftStatus(r3))
 
-			// Another address in a gifted /24 receives nothing; an older row
-			// without a network still counts by its address.
+			// A gift older than 30 days stops counting, and only the address
+			// itself counts, not its /24.
+			require.NoError(t, DB.Model(&AffiliateSignupGift{}).Where("user_id = ?", r1.Id).
+				Update("created_at", common.GetTimestamp()-affiliateGiftAddressWindow-1).Error)
 			r6 := registerAffiliateTestUser(t, "aff_r6", r.AffCode)
-			plan, _, err = GiveAffiliateSignupGift(r6.Id, r.Id, fmt.Sprintf("203.0.%d.200", ip), true)
+			plan, _, err = GiveAffiliateSignupGift(r6.Id, r.Id, r1Ip, true)
 			require.NoError(t, err)
-			assert.Nil(t, plan, "the address shares r3's /24")
-			assert.Equal(t, AffiliateSignupGiftIpUsed, giftStatus(r6))
-			require.NoError(t, DB.Model(&AffiliateSignupGift{}).Where("user_id = ?", r3.Id).Update("network", "").Error)
+			require.NotNil(t, plan, "r1's gift is older than 30 days and r3's was withheld")
 			r7 := registerAffiliateTestUser(t, "aff_r7", r.AffCode)
-			plan, _, err = GiveAffiliateSignupGift(r7.Id, r.Id, r1Ip, true)
+			plan, _, err = GiveAffiliateSignupGift(r7.Id, r.Id, fmt.Sprintf("203.0.%d.200", ip), true)
 			require.NoError(t, err)
-			assert.Nil(t, plan, "a row from before networks were stored matches by address")
-			assert.Equal(t, AffiliateSignupGiftIpUsed, giftStatus(r7))
+			assert.NotNil(t, plan, "another address in the same /24")
 
 			// A sign-up by email rather than an OAuth provider receives
 			// nothing; the row records why, and the address stays free.
@@ -575,7 +587,7 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 
 			// The daily cap counts one channel's gifts; concurrent sign-ups
 			// through that channel never pass it.
-			setting.GiftDailyCap = 5
+			setting.GiftDailyCap = 7
 			var given int64
 			countGiven := func() {
 				t.Helper()
@@ -583,7 +595,7 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 					r.Id, AffiliateSignupGiftGiven, common.GetTimestamp()-affiliateSignupGiftWindow).Count(&given).Error)
 			}
 			countGiven()
-			require.EqualValues(t, 3, given, "R's gifts inside the window: r3, aff_oauth and r5")
+			require.EqualValues(t, 5, given, "R's gifts inside the window: r2, r6, r7, aff_oauth and r5")
 			users := make([]*User, 0, 8)
 			for i := range 8 {
 				users = append(users, registerAffiliateTestUser(t, fmt.Sprintf("aff_cap%d", i), r.AffCode))
@@ -597,7 +609,7 @@ func TestAffiliateSignupGiftDatabaseMatrix(t *testing.T) {
 			}
 			wg.Wait()
 			countGiven()
-			assert.EqualValues(t, 5, given)
+			assert.EqualValues(t, 7, given)
 			var capped int64
 			require.NoError(t, DB.Model(&AffiliateSignupGift{}).Where("inviter_id = ? AND status = ?", r.Id, AffiliateSignupGiftCapReached).Count(&capped).Error)
 			assert.EqualValues(t, 6, capped, "two of the eight fit under the cap")
@@ -711,6 +723,7 @@ func TestAffiliateTiersDatabaseMatrix(t *testing.T) {
 			require.NoError(t, err)
 			assert.True(t, retail.Channel, "both tiers are channels")
 			b := registerAffiliateTestUser(t, "aff_b", r.AffCode)
+			keepAffiliateTestCommission(t, b)
 			c := registerAffiliateTestUser(t, "aff_c", b.AffCode)
 			payAffiliateTestTopUp(t, b.Id, 100, PaymentProviderEpay)
 			payAffiliateTestTopUp(t, c.Id, 100, PaymentProviderEpay)
@@ -751,6 +764,7 @@ func TestSetUserInviterDatabaseMatrix(t *testing.T) {
 			b := registerAffiliateTestUser(t, "aff_b", a.AffCode)
 			d := registerAffiliateTestUser(t, "aff_d", b.AffCode)
 			c := registerAffiliateTestUser(t, "aff_c", "")
+			keepAffiliateTestCommission(t, a, b)
 			payAffiliateTestTopUp(t, c.Id, 100, PaymentProviderEpay)
 			consumeAffiliateTestQuota(t, c.Id, 50)
 

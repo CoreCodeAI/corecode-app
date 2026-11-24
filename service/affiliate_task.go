@@ -24,9 +24,9 @@ var (
 	affiliateSettleRunning atomic.Bool
 )
 
-// StartAffiliateSettlementTask settles invite commission every hour on the
-// master node. Settlement is idempotent per invitee, so a second instance
-// running it would pay nothing twice.
+// StartAffiliateSettlementTask settles invite commission and invite bonuses
+// every hour on the master node. Both are idempotent per invitee, so a second
+// instance running it would pay nothing twice.
 func StartAffiliateSettlementTask() {
 	affiliateSettleOnce.Do(func() {
 		if !common.IsMasterNode {
@@ -46,9 +46,10 @@ func StartAffiliateSettlementTask() {
 }
 
 // RunAffiliateSettlementOnce starts counting for invitees that have no
-// referral yet, then settles every invitee whose consumption grew. With the
-// program off it still moves the marks, so consumption while it was off never
-// earns commission later.
+// referral yet, settles every invitee whose consumption grew, and gives the
+// invite bonus to inviters whose invitees have paid. With the program off it
+// still moves the marks, so consumption while it was off never earns
+// commission later, and it gives no bonus.
 func RunAffiliateSettlementOnce() {
 	if !affiliateSettleRunning.CompareAndSwap(false, true) {
 		return
@@ -93,5 +94,33 @@ func RunAffiliateSettlementOnce() {
 	}
 	if settled > 0 {
 		logger.LogInfo(ctx, common.LogText("affiliate settlement: settled=%d credited=%d", settled, credited))
+	}
+	if !operation_setting.GetAffiliateSetting().Enabled {
+		return
+	}
+	bonuses, afterId := 0, 0
+	for {
+		userIds, err := model.AffiliateInviteBonusesDue(afterId, affiliateSettleBatchSize)
+		if err != nil {
+			logger.LogWarn(ctx, common.LogText("affiliate invite bonus query failed: %v", err))
+			return
+		}
+		for _, userId := range userIds {
+			given, err := model.PayAffiliateInviteBonus(userId)
+			if err != nil {
+				logger.LogWarn(ctx, common.LogText("affiliate invite bonus failed for user %d: %v", userId, err))
+				continue
+			}
+			if given {
+				bonuses++
+			}
+		}
+		if len(userIds) < affiliateSettleBatchSize {
+			break
+		}
+		afterId = userIds[len(userIds)-1]
+	}
+	if bonuses > 0 {
+		logger.LogInfo(ctx, common.LogText("affiliate invite bonus: given=%d", bonuses))
 	}
 }

@@ -8,11 +8,12 @@ import (
 	"github.com/QuantumNous/new-api/setting/config"
 )
 
-// AffiliateSetting runs the invite commission program. An affiliate earns
-// their own rate on what the users they invited paid for and then consumed;
-// a distributor channel also earns SecondLevelRate on the users its invitees
-// invite. Rates are whole percents; money amounts are in the payment
-// currency.
+// AffiliateSetting runs the invitation program. An affiliate on the
+// commission reward earns their own rate on what the users they invited paid
+// for and then consumed; one on the bonus reward earns InviteBonus once per
+// invitee instead. A distributor channel also earns SecondLevelRate on the
+// users its invitees invite. Rates are whole percents; money amounts are in
+// the payment currency.
 type AffiliateSetting struct {
 	Enabled bool `json:"enabled"`
 	// SelfServeRate is the default rate every user has while the program is
@@ -28,9 +29,17 @@ type AffiliateSetting struct {
 	// sign up; 0 gives that tier's invitees nothing.
 	GiftPlanId       int `json:"gift_plan_id"`
 	RetailGiftPlanId int `json:"retail_gift_plan_id"`
-	// GiftDailyCap bounds the sign-up gifts one channel's invitees receive in
+	// GiftDailyCap bounds the sign-up gifts one inviter's invitees receive in
 	// 24 hours; 0 is no bound.
 	GiftDailyCap int `json:"gift_daily_cap"`
+	// GiftIpLimit bounds the sign-up gifts, a channel's plan or the invite
+	// bonus, given to sign-ups from one address in 30 days; 0 is no bound.
+	GiftIpLimit int `json:"gift_ip_limit"`
+	// InviteBonus is what an inviter on the bonus reward and each of their
+	// invitees receive, in display currency: the invitee when they sign up,
+	// the inviter once the invitee has paid at least as much. 0 gives
+	// nothing.
+	InviteBonus float64 `json:"invite_bonus"`
 	// GiftBlockedEmailDomains lists address domains, one per line or comma
 	// separated, whose sign-ups receive no gift.
 	GiftBlockedEmailDomains string `json:"gift_blocked_email_domains"`
@@ -45,6 +54,8 @@ var affiliateSetting = AffiliateSetting{
 	SecondLevelRate:   5,
 	MinWithdrawal:     100,
 	GiftDailyCap:      50,
+	GiftIpLimit:       5,
+	InviteBonus:       5,
 	ReservedCodeWords: "corecode\nalphafox\nanthropic\nclaude\nofficial\nguanfang\nadmin\nsupport\nkefu",
 }
 
@@ -64,9 +75,13 @@ func ValidateAffiliateOption(field string, value string) error {
 		if number, err := strconv.Atoi(value); err != nil || number < 0 || number > 100 {
 			return fmt.Errorf("Affiliate %s must be a whole percent between 0 and 100", field)
 		}
-	case "min_withdrawal", "gift_plan_id", "retail_gift_plan_id", "gift_daily_cap":
+	case "min_withdrawal", "gift_plan_id", "retail_gift_plan_id", "gift_daily_cap", "gift_ip_limit":
 		if number, err := strconv.Atoi(value); err != nil || number < 0 {
 			return fmt.Errorf("Affiliate %s must be a non-negative whole number", field)
+		}
+	case "invite_bonus":
+		if number, err := strconv.ParseFloat(value, 64); err != nil || number < 0 || number > 1000 {
+			return fmt.Errorf("Affiliate %s must be an amount between 0 and 1000", field)
 		}
 	}
 	return nil
