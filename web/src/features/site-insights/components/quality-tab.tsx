@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
@@ -81,13 +82,7 @@ import type { BusinessInsights, QualityInsights, VendorQuality } from '../types'
 import { useQualityVerdict } from '../verdicts'
 import { ModelMap } from './advanced-charts'
 import { ClientsPanel } from './business-panels'
-import {
-  Findings,
-  SampleNote,
-  StaleNote,
-  TabLink,
-  type Finding,
-} from './insight-kit'
+import { SampleNote, StaleNote, TabLink, type Finding } from './insight-kit'
 import {
   DailyFailurePanel,
   FailureDriversPanel,
@@ -97,6 +92,7 @@ import {
   VendorFailuresPanel,
 } from './quality-insights'
 import { RefusalsPanel, TaskOutcomesPanel } from './quality-tasks'
+import { CacheMixPanel, VendorFailureTrend } from './quality-trends'
 import {
   BarSeries,
   Breakdown,
@@ -108,10 +104,25 @@ import {
   type Tone,
   Verdict,
 } from './shared'
+import { MiniBar } from './stack-bar'
+import { AttentionPanel, AttentionSummary, FoldedBreakdown } from './tab-fold'
 import { TTFTTrendPanel } from './ttft-trend-panel'
 
 // The model map's own floor: models with fewer requests are noise there.
 const MAP_MIN_REQUESTS = 20
+
+/** The anchor the attention line jumps to. */
+const ATTENTION_ID = 'quality-attention'
+
+/** The failure rate the mini bar's end stands for: past it, a model is far into red. */
+const RATE_BAR_MAX = 0.1
+
+const RATE_FILLS: Record<Tone, string> = {
+  default: 'bg-muted-foreground/50',
+  good: 'bg-emerald-500/70',
+  warning: 'bg-amber-500/80',
+  danger: 'bg-destructive/80',
+}
 
 const RATE_TONES: Record<Tone, string> = {
   default: '',
@@ -354,6 +365,8 @@ export function QualityTab(props: {
   const definitions = useInsightsDefinitions()
   const partialDay = usePartialDays('quality')
   const modelMapLabels = useVendorLabels()
+  const vendorName = useVendorName()
+  const [attentionOpen, setAttentionOpen] = useState(false)
   // A previous period before the logs begin has no data: no change is shown.
   const previousMissing = props.range
     ? previousBeforeLogs(props.range, props.data?.logs_since)
@@ -604,6 +617,39 @@ export function QualityTab(props: {
             },
             tone: (data?.ttft_p95_ms ?? 0) > 10000 ? 'warning' : 'default',
           },
+        ]}
+      />
+      <div className='grid gap-4 lg:grid-cols-2 lg:[&>:only-child]:col-span-2'>
+        <VendorFailureTrend
+          data={data}
+          vendorName={vendorName}
+          staleHours={data?.stale_hours}
+          source={props.sources?.view}
+          range={range}
+        />
+        <TTFTTrendPanel
+          series={data?.ttft_vendors}
+          staleHours={data?.stale_hours}
+          source={props.sources?.view}
+          range={range}
+        />
+      </div>
+      <AttentionSummary
+        items={findings}
+        targetId={ATTENTION_ID}
+        onShow={() => setAttentionOpen(true)}
+      />
+      {data && hourly && range && (
+        <QualityHourlyPanels
+          rows={hourly}
+          previous={previous}
+          range={range}
+          rate={serviceRate ?? data.error_rate}
+        />
+      )}
+      <MetricGrid
+        loading={loading}
+        items={[
           {
             label: t('Cache read share'),
             missing,
@@ -676,13 +722,55 @@ export function QualityTab(props: {
         </div>
       )}
       <TruncatedNotice show={!!data?.truncated} />
-      {findings.length > 0 && (
-        <Panel title={t('Where to look')}>
-          <Findings items={findings} onOpen={props.onOpen} />
+      <div className='grid gap-4 lg:grid-cols-2'>
+        <Panel
+          title={t('Input tokens by cache use')}
+          help={
+            corrected
+              ? t(
+                  'Input tokens per day: cache reads, cache writes and the rest. A prompt count that already includes cached tokens has them taken out of the rest.'
+                )
+              : t(
+                  'Input tokens per day: cache reads, cache writes and the rest. On this server GPT’s cached tokens are also inside the rest, so the rest reads high.'
+                )
+          }
+        >
+          <BarSeries
+            ariaLabel={t('Input tokens by cache use')}
+            series={[
+              { label: t('Cache read'), compact: fmt.numCompact },
+              { label: t('Cache write'), compact: fmt.numCompact },
+              { label: t('Uncached'), muted: true, compact: fmt.numCompact },
+            ]}
+            points={daily.map((day) => ({
+              key: day.day,
+              title: fmt.day(day.day),
+              values: [day.read, day.write, day.uncached],
+              partial: partialDay(day.day, [day.read, day.write, day.uncached]),
+              missing: beforeLogs(day.day, 86400, data?.logs_since),
+              extra: [
+                {
+                  label: t('Cache read share'),
+                  value: fmt.pct(day.read_share),
+                },
+                {
+                  label: t('TTFT p50'),
+                  value: fmt.measuredMs(day.ttft_p50_ms),
+                },
+              ],
+            }))}
+          />
         </Panel>
-      )}
+        <CacheMixPanel data={data} />
+      </div>
       {data && (
-        <div className='grid gap-4 lg:grid-cols-2'>
+        <div
+          className={cn(
+            'grid gap-4',
+            hourly ? 'lg:grid-cols-2' : 'lg:grid-cols-3'
+          )}
+        >
+          {!hourly && <DailyFailurePanel data={data} />}
           <FailureDriversPanel
             data={data}
             previous={previous}
@@ -692,6 +780,60 @@ export function QualityTab(props: {
           <FailureOwnersPanel data={data} onOpen={props.onOpen} />
         </div>
       )}
+      <div className='grid gap-4 lg:grid-cols-3'>
+        <Panel
+          title={t('Failures by status code')}
+          description={triesLine}
+          help={
+            customersOnly
+              ? t(
+                  'Each failed try by its HTTP status, customers only. A request retried on another channel counts once for each failed try, so the total is the failed tries, not the failed requests.'
+                )
+              : t(
+                  'Each failed try by its HTTP status, every account’s, root included. A request retried on another channel counts once for each failed try, so the total is the failed tries, not the failed requests.'
+                )
+          }
+        >
+          <FoldedBreakdown
+            items={data?.status_codes}
+            state={stateOf(data?.status_codes)}
+            empty={t('No failed requests in this range')}
+            restLabel={t('Other statuses')}
+          />
+        </Panel>
+        <Panel
+          title={t('Failure reasons')}
+          description={triesLine}
+          help={
+            customersOnly
+              ? t(
+                  'The most common failed-try messages over every model, customers only. Only the top ones are kept; the rest are summed as other reasons. Each share is of the failed tries, not of the failed requests.'
+                )
+              : t(
+                  'The most common failed-try messages over every model, every account’s, root included. Only the top ones are kept; the rest are summed as other reasons. Each share is of the failed tries, not of the failed requests.'
+                )
+          }
+        >
+          <FoldedBreakdown
+            items={data ? reasons.items : undefined}
+            state={stateOf(data?.error_reasons)}
+            empty={t('No failed requests in this range')}
+            restLabel={t('Remaining reasons')}
+          />
+        </Panel>
+        <Panel
+          title={t('How streams ended')}
+          help={t(
+            'Every customer stream’s ending over every model; root and staff are left out. eof, done and handler_stop are normal; client_gone, ping_fail and cancelled are the client leaving.'
+          )}
+        >
+          <Breakdown
+            items={data?.stream_ends}
+            state={stateOf(data?.stream_ends)}
+            empty={t('No streamed requests in this range')}
+          />
+        </Panel>
+      </div>
       {(data?.tasks || data?.refusals) && (
         <div className='grid gap-4'>
           {data.tasks && (
@@ -706,20 +848,6 @@ export function QualityTab(props: {
           )}
         </div>
       )}
-      {data && hourly && range && (
-        <QualityHourlyPanels
-          rows={hourly}
-          previous={previous}
-          range={range}
-          rate={serviceRate ?? data.error_rate}
-        />
-      )}
-      <TTFTTrendPanel
-        series={data?.ttft_vendors}
-        staleHours={data?.stale_hours}
-        source={props.sources?.view}
-        range={range}
-      />
       <Panel
         title={t('Model map')}
         help={t(
@@ -802,14 +930,21 @@ export function QualityTab(props: {
               label: t('Failure rate'),
               align: 'right',
               render: (row) => (
-                <span
-                  className={cn(
-                    row.requests >= SMALL_SAMPLE &&
-                      failsAboveSite(row, siteRate) &&
-                      RATE_TONES[failureTone(row.error_rate)]
-                  )}
-                >
-                  {fmt.pct(row.error_rate)}
+                <span className='inline-flex items-center justify-end gap-2'>
+                  <MiniBar
+                    value={row.error_rate}
+                    max={RATE_BAR_MAX}
+                    className={RATE_FILLS[failureTone(row.error_rate)]}
+                  />
+                  <span
+                    className={cn(
+                      row.requests >= SMALL_SAMPLE &&
+                        failsAboveSite(row, siteRate) &&
+                        RATE_TONES[failureTone(row.error_rate)]
+                    )}
+                  >
+                    {fmt.pct(row.error_rate)}
+                  </span>
                 </span>
               ),
             },
@@ -876,99 +1011,6 @@ export function QualityTab(props: {
           ]}
         />
       </Panel>
-      <div className='grid gap-4 lg:grid-cols-2'>
-        <Panel
-          title={t('Input tokens by cache use')}
-          help={
-            corrected
-              ? t(
-                  'Input tokens per day: cache reads, cache writes and the rest. A prompt count that already includes cached tokens has them taken out of the rest.'
-                )
-              : t(
-                  'Input tokens per day: cache reads, cache writes and the rest. On this server GPT’s cached tokens are also inside the rest, so the rest reads high.'
-                )
-          }
-        >
-          <BarSeries
-            ariaLabel={t('Input tokens by cache use')}
-            series={[
-              { label: t('Cache read'), compact: fmt.numCompact },
-              { label: t('Cache write'), compact: fmt.numCompact },
-              { label: t('Uncached'), muted: true, compact: fmt.numCompact },
-            ]}
-            points={daily.map((day) => ({
-              key: day.day,
-              title: fmt.day(day.day),
-              values: [day.read, day.write, day.uncached],
-              partial: partialDay(day.day, [day.read, day.write, day.uncached]),
-              missing: beforeLogs(day.day, 86400, data?.logs_since),
-              extra: [
-                {
-                  label: t('Cache read share'),
-                  value: fmt.pct(day.read_share),
-                },
-                {
-                  label: t('TTFT p50'),
-                  value: fmt.measuredMs(day.ttft_p50_ms),
-                },
-              ],
-            }))}
-          />
-        </Panel>
-        {!hourly && data && <DailyFailurePanel data={data} />}
-      </div>
-      <div className='grid gap-4 lg:grid-cols-3'>
-        <Panel
-          title={t('Failures by status code')}
-          description={triesLine}
-          help={
-            customersOnly
-              ? t(
-                  'Each failed try by its HTTP status, customers only. A request retried on another channel counts once for each failed try, so the total is the failed tries, not the failed requests.'
-                )
-              : t(
-                  'Each failed try by its HTTP status, every account’s, root included. A request retried on another channel counts once for each failed try, so the total is the failed tries, not the failed requests.'
-                )
-          }
-        >
-          <Breakdown
-            items={data?.status_codes}
-            state={stateOf(data?.status_codes)}
-            empty={t('No failed requests in this range')}
-          />
-        </Panel>
-        <Panel
-          title={t('Failure reasons')}
-          description={triesLine}
-          help={
-            customersOnly
-              ? t(
-                  'The most common failed-try messages over every model, customers only. Only the top ones are kept; the rest are summed as other reasons. Each share is of the failed tries, not of the failed requests.'
-                )
-              : t(
-                  'The most common failed-try messages over every model, every account’s, root included. Only the top ones are kept; the rest are summed as other reasons. Each share is of the failed tries, not of the failed requests.'
-                )
-          }
-        >
-          <Breakdown
-            items={data ? reasons.items : undefined}
-            state={stateOf(data?.error_reasons)}
-            empty={t('No failed requests in this range')}
-          />
-        </Panel>
-        <Panel
-          title={t('How streams ended')}
-          help={t(
-            'Every customer stream’s ending over every model; root and staff are left out. eof, done and handler_stop are normal; client_gone, ping_fail and cancelled are the client leaving.'
-          )}
-        >
-          <Breakdown
-            items={data?.stream_ends}
-            state={stateOf(data?.stream_ends)}
-            empty={t('No streamed requests in this range')}
-          />
-        </Panel>
-      </div>
       {data?.vendor_failures && (
         <VendorFailuresPanel vendors={data.vendor_failures} />
       )}
@@ -990,6 +1032,13 @@ export function QualityTab(props: {
           />
         </Panel>
       )}
+      <AttentionPanel
+        id={ATTENTION_ID}
+        items={findings}
+        open={attentionOpen}
+        onOpenChange={setAttentionOpen}
+        onOpen={props.onOpen}
+      />
     </div>
   )
 }

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -369,7 +369,7 @@ describe('QualityTab round 2', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows refusals before a channel with where to act', () => {
+  it('shows refusals before a channel with where to act', async () => {
     render(
       <QualityTab data={media} models={{ selected: [], onChange: vi.fn() }} />
     )
@@ -377,6 +377,8 @@ describe('QualityTab round 2', () => {
     expect(
       screen.getByRole('link', { name: 'Risk Control →' })
     ).toHaveAttribute('href', '/risk-control#audit')
+    // The findings at the foot of the page list the red ones until asked for all.
+    await userEvent.click(screen.getByRole('button', { name: /See the list/ }))
     expect(
       screen.getByText('12 requests found no channel for their model.')
     ).toBeInTheDocument()
@@ -759,3 +761,125 @@ function figuresOf(vendor: string, requests: number, errors: number) {
     error_rate: errors / requests,
   })
 }
+
+describe('QualityTab charts before words', () => {
+  const end = 1_800_000_000
+  const daysOf = (count: number) =>
+    Array.from({ length: count }, (_, index) => end - (count - index) * 86400)
+  const dayRow = (at: number, requests: number, errors: number) => ({
+    day: at,
+    read: requests * 6,
+    write: requests * 2,
+    uncached: requests * 2,
+    read_share: 0.6,
+    ttft_p50_ms: 900,
+    error_rate: errors / requests,
+    requests,
+    errors,
+  })
+  const days = daysOf(3)
+  const withTrends: QualityInsights = {
+    ...data,
+    requests: 900,
+    errors: 36,
+    error_rate: 0.04,
+    daily: days.map((at) => dayRow(at, 300, 12)),
+    vendor_trends: [
+      {
+        vendor: 'claude',
+        daily: days.map((at) => ({ start: at, requests: 200, errors: 4 })),
+      },
+      {
+        vendor: 'codex',
+        daily: days.map((at) => ({ start: at, requests: 100, errors: 8 })),
+      },
+    ],
+    ttft_vendors: [
+      {
+        vendor: 'claude',
+        daily: days.map((at) => ({
+          start: at,
+          requests: 200,
+          ttft_p50_ms: 900,
+          ttft_p95_ms: 4000,
+        })),
+      },
+    ],
+    // One finding that is red: the failing vendor.
+    vendors: [figuresOf('codex', 300, 24), figuresOf('claude', 600, 12)],
+  }
+
+  function renderTrends(extra: Partial<QualityInsights> = {}) {
+    return render(
+      <QualityTab
+        data={{ ...withTrends, ...extra }}
+        range={{ start: days[0], end, days: 3, hourly: false }}
+        models={{ selected: [], onChange: vi.fn() }}
+      />
+    )
+  }
+
+  it('draws each vendor’s failure rate over the days beside the first-token trend, before any list', () => {
+    renderTrends()
+    const trend = screen.getByRole('group', { name: 'Failure rate by vendor' })
+    expect(trend).toBeInTheDocument()
+    // One line per vendor with enough requests, and the all-models line.
+    expect(within(trend).getByText('Claude')).toBeInTheDocument()
+    expect(within(trend).getByText('GPT')).toBeInTheDocument()
+    expect(within(trend).getByText('All models')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'GPT failed the largest share of its requests: 8% of 300.'
+      )
+    ).toBeInTheDocument()
+    const titles = screen
+      .getAllByRole('heading', { level: 3 })
+      .map((heading) => heading.textContent)
+    expect(titles.indexOf('Failure rate by vendor')).toBeLessThan(
+      titles.indexOf('Failures by status code')
+    )
+    expect(titles.indexOf('First-token delay trend')).toBeLessThan(
+      titles.indexOf('Model map')
+    )
+  })
+
+  it('draws no vendor chart on a server that sends no vendor series', () => {
+    renderTrends({ vendor_trends: undefined })
+    expect(
+      screen.queryByRole('group', { name: 'Failure rate by vendor' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('puts the findings last, one line of them above, and opens the list from that line', async () => {
+    renderTrends()
+    expect(screen.getByText(/^Needs attention: \d+/)).toBeInTheDocument()
+    const titles = screen
+      .getAllByRole('heading', { level: 3 })
+      .map((heading) => heading.textContent)
+    expect(titles.at(-1)).toBe('Where to look')
+    await userEvent.click(screen.getByRole('button', { name: /See the list/ }))
+    expect(
+      screen.getByRole('button', { name: 'Show fewer' })
+    ).toBeInTheDocument()
+  })
+
+  it('shows the cache mix as a ring and folds the failure categories', () => {
+    renderTrends({
+      error_categories: [{ name: 'upstream_rate_limit', count: 30 }],
+    })
+    expect(screen.getByText('Cache mix')).toBeInTheDocument()
+    const categories = screen.getByText('By category')
+    expect(categories.closest('details')).not.toHaveAttribute('open')
+  })
+
+  it('sums status codes past the fifth into one row and keeps them all behind a fold', () => {
+    renderTrends({
+      status_codes: Array.from({ length: 8 }, (_, index) => ({
+        name: String(500 + index),
+        count: 80 - index * 5,
+      })),
+    })
+    expect(screen.getByText('Other statuses')).toBeInTheDocument()
+    expect(screen.getByText('Show all 8')).toBeInTheDocument()
+  })
+})

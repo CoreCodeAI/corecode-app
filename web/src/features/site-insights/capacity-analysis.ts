@@ -40,7 +40,7 @@ import type { CapacityHour, EngineGroup, NamedCount } from './types'
 export const MIN_TREND_DAYS = 5
 
 // A day with this many hours is whole; a daylight-saving day has 23.
-const WHOLE_DAY_HOURS = 23
+export const WHOLE_DAY_HOURS = 23
 
 /**
  * The range's end in unix seconds: the range's own, or now when a tab is
@@ -336,6 +336,35 @@ export function dailyPeaks(
     .filter(([, entry]) => entry.hours >= WHOLE_DAY_HOURS)
     .sort(([a], [b]) => a - b)
     .map(([day, entry]) => ({ day, peak: entry.peak }))
+}
+
+/** One whole day's requests and the failed among them. */
+export type DayRequests = { day: number; requests: number; errors: number }
+
+/**
+ * Each whole day's requests over its closed hours, oldest first. A day the
+ * range cuts, such as its first and today, is left out, as dailyPeaks leaves
+ * it, so the two charts show the same days.
+ */
+export function dailyRequests(
+  hourly: CapacityHour[],
+  end: number,
+  dayOf: (hour: number) => number = localDay
+): DayRequests[] {
+  const days = new Map<number, DayRequests & { hours: number }>()
+  for (const row of hourly) {
+    if (isOpenHour(row.hour, end)) continue
+    const day = dayOf(row.hour)
+    const entry = days.get(day) ?? { day, requests: 0, errors: 0, hours: 0 }
+    entry.requests += row.requests
+    entry.errors += row.errors
+    entry.hours += 1
+    days.set(day, entry)
+  }
+  return [...days.values()]
+    .filter((entry) => entry.hours >= WHOLE_DAY_HOURS)
+    .sort((a, b) => a.day - b.day)
+    .map(({ day, requests, errors }) => ({ day, requests, errors }))
 }
 
 /** Where the daily peak is heading. */

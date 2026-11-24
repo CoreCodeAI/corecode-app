@@ -18,7 +18,7 @@ import (
 func useInsightsTestDB(t *testing.T, dialect string) {
 	t.Helper()
 	useAffiliateTestDB(t, dialect)
-	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &InsightKeyHour{}, &Token{}, &UpstreamCost{}, &UpstreamBillDay{}, &UserConcurrencyRejection{}, &Task{}, &Checkin{}, &RiskGateEvent{}, &Option{}, &Channel{}, &Ability{}}
+	extra := []any{&QuotaData{}, &AuditLog{}, &Redemption{}, &InsightHour{}, &InsightUserHour{}, &InsightModelHour{}, &InsightChannelHour{}, &InsightKeyHour{}, &Token{}, &UpstreamCost{}, &UpstreamBillDay{}, &UserConcurrencyRejection{}, &Task{}, &Checkin{}, &RiskGateEvent{}, &ViolationRecord{}, &Option{}, &Channel{}, &Ability{}}
 	require.NoError(t, DB.AutoMigrate(extra...))
 	resetInsightReadCaches()
 	t.Cleanup(func() {
@@ -1925,6 +1925,62 @@ func TestQualityTTFTSeriesMergesHoursByVendorAndDay(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, filtered.TTFTVendors, 1, "the model filter narrows the series as it narrows the daily figures")
 			assert.Equal(t, gpt, filtered.TTFTVendors[0].Vendor)
+		})
+	}
+}
+
+// Each vendor's requests and failures are counted by day and by hour from the
+// same hour rows as the headline, so the vendors' points add up to the daily
+// and hourly rows. A vendor with no request on a day has no point that day,
+// and the model filter narrows the series as it narrows the daily figures.
+func TestQualityVendorTrendsSplitDailyCountsByVendor(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInsightsTestDB(t, dialect)
+			const day1 = int64(1759190400)
+			r := InsightsRange{Start: day1, End: day1 + 2*86400}
+			alice := registerAffiliateTestUser(t, "alice", "")
+			served := func(at int64, modelName string) Log {
+				return Log{UserId: alice.Id, Username: "alice", Type: LogTypeConsume, CreatedAt: at, UseTime: 5, ChannelId: 3, ModelName: modelName, Other: `{}`}
+			}
+			failed := func(at int64, modelName string) Log {
+				return Log{UserId: alice.Id, Username: "alice", Type: LogTypeError, CreatedAt: at, UseTime: 5, ChannelId: 3, ModelName: modelName, Content: "status_code=502, upstream failed", Other: `{}`}
+			}
+			logs := []Log{
+				served(day1+100, "gpt-6"), served(day1+200, "gpt-6"), served(day1+5*3600, "gpt-6"), failed(day1+300, "gpt-6"),
+				served(day1+400, "claude-x"), served(day1+500, "claude-x"),
+				served(day1+86400+100, "gpt-6"),
+			}
+			require.NoError(t, LOG_DB.Create(&logs).Error)
+
+			quality, err := GetQualityInsights(r, nil)
+			require.NoError(t, err)
+			gpt, claude := ModelVendor("gpt-6"), ModelVendor("claude-x")
+			byVendor := make(map[string]VendorTrend)
+			var dailyRequests, dailyErrors int64
+			for _, trend := range quality.VendorTrends {
+				byVendor[trend.Vendor] = trend
+				for _, point := range trend.Daily {
+					dailyRequests += point.Requests
+					dailyErrors += point.Errors
+				}
+			}
+			require.Len(t, byVendor, 2)
+			assert.Equal(t, []VendorTrendPoint{
+				{Start: day1, Requests: 4, Errors: 1},
+				{Start: day1 + 86400, Requests: 1},
+			}, byVendor[gpt].Daily)
+			assert.Equal(t, []VendorTrendPoint{{Start: day1, Requests: 2}}, byVendor[claude].Daily,
+				"claude had no request on the second day, so it has no point there")
+			assert.Equal(t, quality.Requests, dailyRequests, "the vendors' daily requests add up to the headline")
+			assert.Equal(t, quality.Errors, dailyErrors, "the vendors' daily failures add up to the headline")
+			require.Len(t, byVendor[gpt].Hourly, 3, "hours 0, 5 and the first hour of the second day")
+			assert.Equal(t, VendorTrendPoint{Start: day1, Requests: 3, Errors: 1}, byVendor[gpt].Hourly[0])
+
+			filtered, err := GetQualityInsights(r, []string{"gpt-6"})
+			require.NoError(t, err)
+			require.Len(t, filtered.VendorTrends, 1, "the model filter narrows the series as it narrows the daily figures")
+			assert.Equal(t, gpt, filtered.VendorTrends[0].Vendor)
 		})
 	}
 }

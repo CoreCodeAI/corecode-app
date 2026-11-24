@@ -41,6 +41,8 @@ import type {
 } from '../types'
 import { SampleNote } from './insight-kit'
 import { Breakdown, Panel, SimpleTable, UserLabel } from './shared'
+import { StackBar, type StackSegment } from './stack-bar'
+import { Fold } from './tab-fold'
 
 const LINK = 'text-primary font-medium hover:underline'
 
@@ -72,6 +74,51 @@ function OpenTab(props: {
 }
 
 /**
+ * A task row's outcomes as the parts of one bar: succeeded, failed (timeouts
+ * apart, since they are part of failed), and still running. The task data
+ * carries no refund count, so none is drawn.
+ */
+function taskSegments(
+  row: TaskOutcome,
+  labels: {
+    succeeded: string
+    failed: string
+    timedOut: string
+    running: string
+  }
+): StackSegment[] {
+  return [
+    {
+      key: 'succeeded',
+      label: labels.succeeded,
+      value: row.succeeded,
+      className: 'bg-emerald-500/70',
+    },
+    {
+      key: 'failed',
+      label: labels.failed,
+      value: Math.max(0, row.failed - row.timed_out),
+      className: 'bg-destructive/80',
+    },
+    {
+      key: 'timed_out',
+      label: labels.timedOut,
+      value: row.timed_out,
+      className: 'bg-amber-500/80',
+    },
+    {
+      key: 'running',
+      label: labels.running,
+      value: row.running,
+      className: 'bg-muted-foreground/40',
+    },
+  ]
+}
+
+/** The models drawn as a bar of their own; the table behind the fold has the rest. */
+const TASK_BARS_SHOWN = 6
+
+/**
  * How the image and video tasks submitted in the range stand now, per
  * model: what finished, failed, timed out or still runs, and how long a
  * success took. A rate is coloured only from MIN_TASKS finished tasks.
@@ -88,6 +135,12 @@ export function TaskOutcomesPanel(props: {
   const total = props.tasks.total
   const rows = (props.tasks.models ?? []).filter((row) => row.submitted > 0)
   const preTask = preTaskFailures(props.media, total)
+  const taskLabels = {
+    succeeded: t('Succeeded'),
+    failed: t('Failed'),
+    timedOut: t('Timed out'),
+    running: t('Running'),
+  }
   const rateText = (row: TaskOutcome) =>
     finishedTasks(row) > 0 ? fmt.pct(row.failure_rate) : '—'
   let summary: string | undefined
@@ -149,95 +202,130 @@ export function TaskOutcomesPanel(props: {
             )}
           </SampleNote>
         )}
-        <SimpleTable
-          rows={rows}
-          rowKey={(row) => row.model ?? ''}
-          empty={t('No tasks submitted in this range')}
-          faded={(row) => !tasksJudged(row)}
-          columns={[
-            {
-              key: 'model',
-              label: t('Model'),
-              render: (row) => (
-                <span className='font-mono text-xs'>{row.model}</span>
-              ),
-            },
-            {
-              key: 'submitted',
-              label: t('Submitted'),
-              align: 'right',
-              render: (row) => fmt.num(row.submitted),
-            },
-            {
-              key: 'succeeded',
-              label: t('Succeeded'),
-              align: 'right',
-              render: (row) => fmt.num(row.succeeded),
-            },
-            {
-              key: 'failed',
-              label: t('Failed'),
-              hint: t('Timed-out tasks in brackets; they are part of failed.'),
-              align: 'right',
-              render: (row) =>
-                row.timed_out > 0
-                  ? `${fmt.num(row.failed)} (${fmt.num(row.timed_out)})`
-                  : fmt.num(row.failed),
-            },
-            {
-              key: 'running',
-              label: t('Running'),
-              hint: t(
-                'Not finished yet; in brackets, those running over 30 minutes.'
-              ),
-              align: 'right',
-              render: (row) => (
-                <span className={cn(row.stalled > 0 && TONES.warning)}>
-                  {row.stalled > 0
-                    ? `${fmt.num(row.running)} (${fmt.num(row.stalled)})`
-                    : fmt.num(row.running)}
-                </span>
-              ),
-            },
-            {
-              key: 'rate',
-              label: t('Failure rate'),
-              align: 'right',
-              render: (row) => (
-                <span
-                  className={cn(
-                    tasksJudged(row) && TONES[failureTone(row.failure_rate)]
-                  )}
-                >
-                  {rateText(row)}
-                </span>
-              ),
-            },
-            {
-              key: 'finish',
-              label: t('Time to finish p50 / p95'),
-              align: 'right',
-              render: (row) =>
-                row.succeeded > 0
-                  ? `${finish(row.finish_p50_s)} / ${finish(row.finish_p95_s)}`
-                  : '—',
-            },
-            {
-              key: 'reason',
-              label: t('Top failure reason'),
-              render: (row) => {
-                const top = row.reasons?.[0]
-                if (!top) return '—'
-                const text = `${top.name} (${fmt.num(top.count)})`
-                return (
-                  <span className='block max-w-40 truncate' title={text}>
-                    {text}
-                  </span>
-                )
+        {total.submitted > 0 && (
+          <div className='grid gap-3'>
+            <StackBar
+              ariaLabel={t('Image and video tasks')}
+              segments={taskSegments(total, taskLabels)}
+              barClassName='h-3.5'
+            />
+            {rows.length > 1 && (
+              <ul className='grid gap-1.5'>
+                {rows.slice(0, TASK_BARS_SHOWN).map((row) => (
+                  <li
+                    key={row.model}
+                    className='grid grid-cols-[minmax(0,10rem)_1fr_auto] items-center gap-2 text-xs'
+                  >
+                    <span className='truncate font-mono' title={row.model}>
+                      {row.model}
+                    </span>
+                    <StackBar
+                      bare
+                      ariaLabel={row.model ?? ''}
+                      segments={taskSegments(row, taskLabels)}
+                    />
+                    <span className='text-muted-foreground tabular-nums'>
+                      {fmt.num(row.submitted)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        <Fold summary={t('Show the table')}>
+          <SimpleTable
+            rows={rows}
+            rowKey={(row) => row.model ?? ''}
+            empty={t('No tasks submitted in this range')}
+            faded={(row) => !tasksJudged(row)}
+            columns={[
+              {
+                key: 'model',
+                label: t('Model'),
+                render: (row) => (
+                  <span className='font-mono text-xs'>{row.model}</span>
+                ),
               },
-            },
-          ]}
-        />
+              {
+                key: 'submitted',
+                label: t('Submitted'),
+                align: 'right',
+                render: (row) => fmt.num(row.submitted),
+              },
+              {
+                key: 'succeeded',
+                label: t('Succeeded'),
+                align: 'right',
+                render: (row) => fmt.num(row.succeeded),
+              },
+              {
+                key: 'failed',
+                label: t('Failed'),
+                hint: t(
+                  'Timed-out tasks in brackets; they are part of failed.'
+                ),
+                align: 'right',
+                render: (row) =>
+                  row.timed_out > 0
+                    ? `${fmt.num(row.failed)} (${fmt.num(row.timed_out)})`
+                    : fmt.num(row.failed),
+              },
+              {
+                key: 'running',
+                label: t('Running'),
+                hint: t(
+                  'Not finished yet; in brackets, those running over 30 minutes.'
+                ),
+                align: 'right',
+                render: (row) => (
+                  <span className={cn(row.stalled > 0 && TONES.warning)}>
+                    {row.stalled > 0
+                      ? `${fmt.num(row.running)} (${fmt.num(row.stalled)})`
+                      : fmt.num(row.running)}
+                  </span>
+                ),
+              },
+              {
+                key: 'rate',
+                label: t('Failure rate'),
+                align: 'right',
+                render: (row) => (
+                  <span
+                    className={cn(
+                      tasksJudged(row) && TONES[failureTone(row.failure_rate)]
+                    )}
+                  >
+                    {rateText(row)}
+                  </span>
+                ),
+              },
+              {
+                key: 'finish',
+                label: t('Time to finish p50 / p95'),
+                align: 'right',
+                render: (row) =>
+                  row.succeeded > 0
+                    ? `${finish(row.finish_p50_s)} / ${finish(row.finish_p95_s)}`
+                    : '—',
+              },
+              {
+                key: 'reason',
+                label: t('Top failure reason'),
+                render: (row) => {
+                  const top = row.reasons?.[0]
+                  if (!top) return '—'
+                  const text = `${top.name} (${fmt.num(top.count)})`
+                  return (
+                    <span className='block max-w-40 truncate' title={text}>
+                      {text}
+                    </span>
+                  )
+                },
+              },
+            ]}
+          />
+        </Fold>
         {(total.reasons?.length ?? 0) > 0 && (
           <div className='grid gap-2'>
             <h4 className='text-muted-foreground text-xs'>

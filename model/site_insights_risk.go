@@ -48,6 +48,13 @@ type CountPoint struct {
 	Count int64 `json:"count"`
 }
 
+// GateBlockPoint is the requests the risk gate blocked in one hour or day, by
+// the stage that blocked them; a stage with none is absent.
+type GateBlockPoint struct {
+	At     int64            `json:"at"`
+	Stages map[string]int64 `json:"stages"`
+}
+
 // DomainCount is how many accounts registered with one email domain.
 type DomainCount struct {
 	Domain      string `json:"domain"`
@@ -179,6 +186,16 @@ type RiskInsights struct {
 	UnpaidInviters      []InviterSpenders  `json:"unpaid_inviters"`
 	SignupGifts         []NamedCount       `json:"signup_gifts"`
 	GiftBlockInviters   []GiftBlockInviter `json:"gift_block_inviters"`
+	// GateBlocked counts the requests the risk gate blocked in the range and
+	// GateBlockSeries splits them by stage over the same hours or days as
+	// SignupSeries. Observe-mode hits and the rows of administrators and root
+	// are left out. Violations counts the violation incidents of the range, a
+	// strike or a warning starting one (later refusals of the same conversation
+	// merge into it), and ViolationSeries spreads them the same way.
+	GateBlocked     int64            `json:"gate_blocked"`
+	GateBlockSeries []GateBlockPoint `json:"gate_block_series"`
+	Violations      int64            `json:"violations"`
+	ViolationSeries []CountPoint     `json:"violation_series"`
 	// StaleHours counts the range's hours the unpaid spenders were read from
 	// that are still stored under an older rollup version; omitted when none,
 	// and when the range has no sign-ups, since the rollup is not read then.
@@ -410,12 +427,66 @@ func GetRiskInsights(r InsightsRange) (*RiskInsights, error) {
 	if err := fillSharedIPs(r, staff, result); err != nil {
 		return nil, err
 	}
+	if err := fillRiskBlocks(r, step, floor, staffIDs, result); err != nil {
+		return nil, err
+	}
 	debtors, err := readDebtors()
 	if err != nil {
 		return nil, err
 	}
 	result.Debtors = debtors
 	return result, nil
+}
+
+// fillRiskBlocks counts the requests the risk gate blocked and the violation
+// incidents of the range, by the hour or day of the sign-up series, every step
+// present with zero when nothing happened in it.
+func fillRiskBlocks(r InsightsRange, step int64, floor func(int64) int64, staffIDs []int, result *RiskInsights) error {
+	// Rows recorded before administrators were left out of risk control stay
+	// in the tables, so the staff's are dropped here.
+	withoutStaff := func(query *gorm.DB) *gorm.DB {
+		if len(staffIDs) == 0 {
+			return query
+		}
+		return query.Where("user_id NOT IN ?", staffIDs)
+	}
+	var blocks []struct {
+		CreatedAt int64
+		Stage     string
+	}
+	err := withoutStaff(DB.Model(&RiskGateEvent{})).Select("created_at, stage").
+		Where("created_at >= ? AND created_at < ? AND action = ?", r.Start, r.End, RiskGateActionBlocked).
+		Scan(&blocks).Error
+	if err != nil {
+		return err
+	}
+	var incidents []int64
+	err = withoutStaff(DB.Model(&ViolationRecord{})).
+		Where("created_at >= ? AND created_at < ? AND action IN ? AND mode <> ?", r.Start, r.End, violationIncidentActions, ViolationModeExempt).
+		Pluck("created_at", &incidents).Error
+	if err != nil {
+		return err
+	}
+	stages := make(map[int64]map[string]int64)
+	violations := make(map[int64]int64)
+	for at := floor(r.Start); at < r.End; at += step {
+		stages[at] = map[string]int64{}
+		violations[at] = 0
+	}
+	for _, block := range blocks {
+		stages[floor(block.CreatedAt)][block.Stage]++
+	}
+	for _, at := range incidents {
+		violations[floor(at)]++
+	}
+	result.GateBlocked, result.Violations = int64(len(blocks)), int64(len(incidents))
+	for at, byStage := range stages {
+		result.GateBlockSeries = append(result.GateBlockSeries, GateBlockPoint{At: at, Stages: byStage})
+		result.ViolationSeries = append(result.ViolationSeries, CountPoint{At: at, Count: violations[at]})
+	}
+	slices.SortFunc(result.GateBlockSeries, func(a, b GateBlockPoint) int { return cmp.Compare(a.At, b.At) })
+	slices.SortFunc(result.ViolationSeries, func(a, b CountPoint) int { return cmp.Compare(a.At, b.At) })
+	return nil
 }
 
 // fillAliasClusters counts the sign-ups whose inbox another customer, of any

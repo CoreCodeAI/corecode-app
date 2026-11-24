@@ -50,6 +50,8 @@ import {
 import type { QualityHour, QualityInsights, VendorFailure } from '../types'
 import { Drivers, SampleNote } from './insight-kit'
 import { BarSeries, Breakdown, Panel } from './shared'
+import { StackBar } from './stack-bar'
+import { Fold } from './tab-fold'
 
 function span(
   rows: QualityHour[],
@@ -300,6 +302,15 @@ export function FailureDriversPanel(props: {
   )
 }
 
+/** Each owner's fill on the bar: red for ours, amber for what routing missed. */
+const OWNER_FILLS: Record<FailureOwner, string> = {
+  ours: 'bg-destructive/80',
+  routing: 'bg-amber-500/80',
+  upstream: 'bg-sky-500/70',
+  client: 'bg-muted-foreground/50',
+  other: 'bg-muted-foreground/25',
+}
+
 const OWNER_TABS: Partial<Record<FailureOwner, InsightsTab>> = {
   ours: 'capacity',
   routing: 'upstream',
@@ -353,6 +364,17 @@ export function FailureOwnersPanel(props: {
         </p>
       ) : (
         <div className='grid gap-4'>
+          <StackBar
+            ariaLabel={t('Whose failures')}
+            bare
+            barClassName='h-3.5'
+            segments={owners.map((item) => ({
+              key: item.owner,
+              label: ownerLabels[item.owner],
+              value: item.count,
+              className: OWNER_FILLS[item.owner],
+            }))}
+          />
           <ul className='grid gap-1.5 text-sm'>
             {owners.map((item) => {
               const tab = OWNER_TABS[item.owner]
@@ -381,11 +403,13 @@ export function FailureOwnersPanel(props: {
               )
             })}
           </ul>
-          <Breakdown
-            items={categories}
-            label={categoryLabel}
-            empty={t('No failed requests in this range')}
-          />
+          <Fold summary={t('By category')}>
+            <Breakdown
+              items={categories}
+              label={categoryLabel}
+              empty={t('No failed requests in this range')}
+            />
+          </Fold>
         </div>
       )}
     </Panel>

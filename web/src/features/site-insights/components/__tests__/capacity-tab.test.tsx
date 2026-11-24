@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -35,6 +35,7 @@ import {
 } from '../../capacity-analysis'
 import type { CapacityHour, CapacityInsights, EngineGroup } from '../../types'
 import { CapacityTab } from '../capacity-tab'
+import { outlook } from './outlook-fixture'
 
 vi.mock('@tanstack/react-router', () => ({
   Link: (props: { children: ReactNode }) => <a href='#'>{props.children}</a>,
@@ -594,5 +595,87 @@ describe('capacity on the pool’s own terms', () => {
     expect(screen.queryByText('No failed requests in this range')).toBeNull()
     expect(screen.queryByText('No requests in this range')).toBeNull()
     expect(screen.getAllByText('Could not be read').length).toBeGreaterThan(0)
+  })
+})
+
+describe('capacity tab first screen', () => {
+  const now = 30 * 86400
+  const week = { start: now - 7 * 86400, end: now, days: 7, hourly: false }
+  const day = { start: now - 86400, end: now, days: 1, hourly: true }
+  const weekOfHours = () =>
+    Array.from({ length: 7 * 24 }, (_, index) =>
+      hour(now - 7 * 86400 + index * HOUR, {
+        requests: 100,
+        errors: 2,
+        peak_concurrency: 4,
+      })
+    )
+  const titlesOf = () =>
+    screen
+      .getAllByRole('heading', { level: 3 })
+      .map((heading) => heading.textContent)
+
+  it('puts the supply gauge, daily requests and daily peak before the hourly chart on a week', () => {
+    const data = insights()
+    data.hourly = weekOfHours()
+    render(
+      <CapacityTab data={data} vendor='all' range={week} outlook={outlook()} />,
+      { wrapper }
+    )
+    const titles = titlesOf()
+    const first = titles.indexOf('Next 7 days: demand over supply')
+    expect(first).toBeGreaterThanOrEqual(0)
+    expect(titles.indexOf('Daily requests')).toBeGreaterThan(first)
+    expect(titles.indexOf('Daily peak concurrency')).toBeGreaterThan(first)
+    const hourlyAt = titles.indexOf('Hourly peak concurrency')
+    expect(titles.indexOf('Daily peak concurrency')).toBeLessThan(hourlyAt)
+    expect(titles.indexOf('Daily requests')).toBeLessThan(hourlyAt)
+    expect(screen.getByTestId('supply-ratio')).toHaveTextContent('181')
+  })
+
+  it('leaves the gauge out of a view without the Claude outlook, and keeps the charts', () => {
+    const data = insights()
+    data.hourly = weekOfHours()
+    render(
+      <CapacityTab
+        data={data}
+        vendor='codex'
+        range={week}
+        outlook={outlook()}
+      />,
+      { wrapper }
+    )
+    expect(titlesOf()).not.toContain('Next 7 days: demand over supply')
+    expect(titlesOf()).toContain('Daily requests')
+  })
+
+  it('keeps the hourly chart beside the gauge on a range under a week', () => {
+    const data = insights()
+    data.hourly = Array.from({ length: 24 }, (_, index) =>
+      hour(now - 86400 + index * HOUR, { peak_concurrency: 4 })
+    )
+    render(
+      <CapacityTab data={data} vendor='all' range={day} outlook={outlook()} />,
+      { wrapper }
+    )
+    const titles = titlesOf()
+    expect(titles.indexOf('Next 7 days: demand over supply')).toBeLessThan(
+      titles.indexOf('Hourly peak concurrency')
+    )
+    expect(titles).not.toContain('Daily requests')
+  })
+
+  it('gives the per-user limit card a trend of its own', () => {
+    const data = insights()
+    data.hourly = weekOfHours()
+    data.limit_rejections = [
+      { at: now - 3 * HOUR, count: 5 },
+      { at: now - 2 * HOUR, count: 9 },
+    ]
+    render(<CapacityTab data={data} vendor='all' range={week} />, { wrapper })
+    const card = screen.getByText('Per-user limit 429').closest('div')
+    const cell = card?.parentElement as HTMLElement
+    expect(within(cell).getByText('4')).toBeInTheDocument()
+    expect(cell.querySelector('svg')).toBeTruthy()
   })
 })

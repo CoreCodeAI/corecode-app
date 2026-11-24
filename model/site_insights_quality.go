@@ -116,7 +116,12 @@ type QualityInsights struct {
 	// when the range has hourly rows, over the selected models. A point with
 	// no streamed request is left out.
 	TTFTVendors []TTFTSeries `json:"ttft_vendors"`
-	StreamEnds  []NamedCount `json:"stream_ends"`
+	// VendorTrends is each vendor's requests and failed requests by day, and
+	// by hour when the range has hourly rows, over the selected models: the
+	// headline's counts split by vendor. A day or hour with no request is left
+	// out.
+	VendorTrends []VendorTrend `json:"vendor_trends"`
+	StreamEnds   []NamedCount  `json:"stream_ends"`
 	// StatusCodes and ErrorReasons count the customers' failed tries, every
 	// try of a request included, so their sums are FailedTries.
 	StatusCodes  []NamedCount `json:"status_codes"`
@@ -161,6 +166,24 @@ type TTFTPoint struct {
 	Requests int64 `json:"requests"`
 	TTFTP50  int64 `json:"ttft_p50_ms"`
 	TTFTP95  int64 `json:"ttft_p95_ms"`
+}
+
+// VendorTrend is one vendor's requests and failures over the range's days,
+// and over its hours when the range has hourly rows. They are the counts the
+// headline's Requests and Errors add up from, so the vendors' points sum to
+// the daily and hourly rows.
+type VendorTrend struct {
+	Vendor string             `json:"vendor"`
+	Daily  []VendorTrendPoint `json:"daily"`
+	Hourly []VendorTrendPoint `json:"hourly,omitempty"`
+}
+
+// VendorTrendPoint is one day or hour of a VendorTrend: Start is its start in
+// unix seconds.
+type VendorTrendPoint struct {
+	Start    int64 `json:"start"`
+	Requests int64 `json:"requests"`
+	Errors   int64 `json:"errors"`
 }
 
 // VendorFailureBreakdown is one vendor's failed tries by reason and by status
@@ -433,6 +456,8 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	}
 	dailyTTFT := make(map[string]map[int64]histogram)
 	hourlyTTFT := make(map[string]map[int64]histogram)
+	dailyTrend := make(map[string]map[int64]*VendorTrendPoint)
+	hourlyTrend := make(map[string]map[int64]*VendorTrendPoint)
 	type hourBucket struct {
 		hour       QualityHour
 		ttft       histogram
@@ -532,12 +557,14 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 				day.day.Uncached += row.Uncached
 				day.ttft.merge(model.ttft)
 				mergeTTFT(dailyTTFT, ModelVendor(name), day.day.Day, model.ttft)
+				addVendorTrend(dailyTrend, ModelVendor(name), day.day.Day, row.Requests, row.Errors)
 			}
 			if slot != nil {
 				slot.hour.Requests += row.Requests
 				slot.hour.Errors += row.Errors
 				slot.ttft.merge(model.ttft)
 				mergeTTFT(hourlyTTFT, ModelVendor(name), slot.hour.Hour, model.ttft)
+				addVendorTrend(hourlyTrend, ModelVendor(name), slot.hour.Hour, row.Requests, row.Errors)
 			}
 		}
 	}
@@ -550,6 +577,7 @@ func GetQualityInsights(r InsightsRange, only []string) (*QualityInsights, error
 	}
 	result.ErrorCategories = sortedCounts(categories)
 	result.TTFTVendors = ttftSeriesOf(dailyTTFT, hourlyTTFT)
+	result.VendorTrends = vendorTrendsOf(dailyTrend, hourlyTrend)
 	result.TTFTP50, result.TTFTP95 = allTTFT.percentile(0.5), allTTFT.percentile(0.95)
 	type vendorBucket struct {
 		quality VendorQuality
@@ -647,6 +675,47 @@ func mergeTTFT(byVendor map[string]map[int64]histogram, vendor string, start int
 		byVendor[vendor][start] = histogram{}
 	}
 	byVendor[vendor][start].merge(ttft)
+}
+
+// addVendorTrend adds a model's requests and failures to the vendor's count at
+// start. A model with no request adds no point.
+func addVendorTrend(byVendor map[string]map[int64]*VendorTrendPoint, vendor string, start, requests, errors int64) {
+	if requests == 0 && errors == 0 {
+		return
+	}
+	if byVendor[vendor] == nil {
+		byVendor[vendor] = make(map[int64]*VendorTrendPoint)
+	}
+	point := byVendor[vendor][start]
+	if point == nil {
+		point = &VendorTrendPoint{Start: start}
+		byVendor[vendor][start] = point
+	}
+	point.Requests += requests
+	point.Errors += errors
+}
+
+// vendorTrendsOf lists each vendor that had a request in the range, by name,
+// with its daily and hourly points in start order.
+func vendorTrendsOf(daily, hourly map[string]map[int64]*VendorTrendPoint) []VendorTrend {
+	names := make([]string, 0, len(daily))
+	for name := range daily {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	pointsOf := func(byStart map[int64]*VendorTrendPoint) []VendorTrendPoint {
+		var points []VendorTrendPoint
+		for _, point := range byStart {
+			points = append(points, *point)
+		}
+		slices.SortFunc(points, func(a, b VendorTrendPoint) int { return cmp.Compare(a.Start, b.Start) })
+		return points
+	}
+	trends := make([]VendorTrend, 0, len(names))
+	for _, name := range names {
+		trends = append(trends, VendorTrend{Vendor: name, Daily: pointsOf(daily[name]), Hourly: pointsOf(hourly[name])})
+	}
+	return trends
 }
 
 // ttftSeriesOf lists each vendor that streamed a request in the range, by

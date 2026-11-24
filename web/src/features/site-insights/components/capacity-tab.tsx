@@ -33,6 +33,7 @@ import {
   poolPeakOf,
   rangeEnd,
 } from '../capacity-analysis'
+import { weekSupply } from '../capacity-supply'
 import {
   countsRequestsOnce,
   foldIntoWeek,
@@ -68,6 +69,7 @@ import {
   PeakTrendPanel,
   RejectionDiagnosisNote,
 } from './capacity-insights'
+import { DailyRequestsPanel, SupplyDemandPanel } from './capacity-supply'
 import { ConcurrencyLimitsPanel } from './concurrency-limits-panel'
 import { SampleNote, StaleNote } from './insight-kit'
 import {
@@ -384,6 +386,66 @@ export function CapacityTab(props: {
   if (engine.full >= POOL_FULL_DANGER) poolFullTone = 'danger'
   else if (engine.full > 0) poolFullTone = 'warning'
 
+  const hourlyPanel = (
+    <Panel
+      title={t('Hourly peak concurrency')}
+      description={peakSummary}
+      error={viewError}
+      help={joinSentences(
+        t(
+          'Reconstructed from request logs: each request was in flight from its start to its end.'
+        ),
+        t(
+          'Times are logged in whole seconds and each request holds at least one, so a burst of short requests reads higher than it was.'
+        ),
+        peakHelp
+      )}
+    >
+      <HourlyPeakChart
+        own={ownPeak}
+        hourly={hourly}
+        previous={previous?.hourly}
+        span={span}
+        end={end}
+        slots={slots}
+        logsSince={logsSince}
+      />
+    </Panel>
+  )
+  const heatmapPanel = (
+    <Panel
+      title={t('Peak concurrency by weekday and hour')}
+      help={
+        ownPeak
+          ? t(
+              "Each cell is the highest pool peak that hour reached on any matching day in the range. A red ring marks one past the pool's slots."
+            )
+          : t(
+              'Each cell is the highest concurrency that hour reached on any matching day in the range. A red ring marks one past the pool slots.'
+            )
+      }
+    >
+      <WeekHeatmap
+        cells={foldIntoWeek(
+          hourly
+            .filter((hour) => !beforeLogs(hour.hour, 3600, logsSince))
+            .map((hour) => ({
+              hour: hour.hour,
+              value: poolPeakOf(hour),
+            }))
+        )}
+        format={fmt.num}
+        limit={slots || undefined}
+        empty={t('No requests in this range')}
+      />
+    </Panel>
+  )
+  // The week ahead's gauge, for the Claude pool: another provider's view has
+  // no outlook of its own.
+  const gauge = weekSupply(
+    all || vendor === 'claude' ? props.outlook : undefined
+  )
+
   return (
     <div className='grid gap-4'>
       <ProviderSwitch
@@ -503,6 +565,7 @@ export function CapacityTab(props: {
             ? [
                 {
                   label: t('Per-user limit 429'),
+                  featured: true,
                   missing: failed,
                   value: fmt.num(data?.limit_rejection_total ?? 0),
                   help: t(
@@ -517,6 +580,13 @@ export function CapacityTab(props: {
                     (data?.limit_rejection_total ?? 0) > 0
                       ? ('warning' as const)
                       : ('default' as const),
+                  // Attempts per hour: the open hour is left out as it fills.
+                  trend: closed.map((hour) => ({
+                    title: axis.title(hour.hour),
+                    value: limitRejections.get(hour.hour) ?? 0,
+                    missing: beforeLogs(hour.hour, 3600, logsSince),
+                  })),
+                  trendBars: true,
                 },
               ]
             : []),
@@ -529,6 +599,38 @@ export function CapacityTab(props: {
           {t('The previous period could not be read, so no change is shown.')}
         </SampleNote>
       )}
+
+      {/* The charts that answer "is there room", before any table. */}
+      {weekly ? (
+        <div
+          className={cn(
+            'grid gap-4',
+            gauge ? 'lg:grid-cols-3' : 'lg:grid-cols-2'
+          )}
+        >
+          <SupplyDemandPanel
+            outlook={all || vendor === 'claude' ? props.outlook : undefined}
+          />
+          <DailyRequestsPanel hourly={hourly} end={end} logsSince={logsSince} />
+          <PeakTrendPanel
+            own={ownPeak}
+            hourly={hourly}
+            end={end}
+            slots={slots}
+            logsSince={logsSince}
+          />
+        </div>
+      ) : (
+        <div className={cn('grid gap-4', gauge && 'lg:grid-cols-3')}>
+          <SupplyDemandPanel
+            outlook={all || vendor === 'claude' ? props.outlook : undefined}
+          />
+          <div className='min-w-0 lg:[&:not(:only-child)]:col-span-2'>
+            {hourlyPanel}
+          </div>
+        </div>
+      )}
+      {weekly && hourlyPanel}
 
       {pool?.error && <p className='text-destructive text-xs'>{pool.error}</p>}
       {pool && !pool.configured && (
@@ -576,78 +678,18 @@ export function CapacityTab(props: {
         </p>
       )}
 
-      <Panel
-        title={t('Hourly peak concurrency')}
-        description={peakSummary}
-        error={viewError}
-        help={joinSentences(
-          t(
-            'Reconstructed from request logs: each request was in flight from its start to its end.'
-          ),
-          t(
-            'Times are logged in whole seconds and each request holds at least one, so a burst of short requests reads higher than it was.'
-          ),
-          peakHelp
-        )}
-      >
-        <HourlyPeakChart
-          own={ownPeak}
-          hourly={hourly}
-          previous={previous?.hourly}
-          span={span}
-          end={end}
-          slots={slots}
-          logsSince={logsSince}
-        />
-      </Panel>
-
-      {weekly ? (
-        <div className='grid gap-4 lg:grid-cols-2'>
-          <PeakTrendPanel
-            own={ownPeak}
+      {hourly.length > 0 && (
+        <div className={cn('grid gap-4', weekly && 'lg:grid-cols-2')}>
+          {weekly && heatmapPanel}
+          <FailureRatePanel
             hourly={hourly}
+            previous={previous?.hourly}
+            span={span}
             end={end}
-            slots={slots}
+            definition={requestDefinition}
             logsSince={logsSince}
           />
-          <Panel
-            title={t('Peak concurrency by weekday and hour')}
-            help={
-              ownPeak
-                ? t(
-                    "Each cell is the highest pool peak that hour reached on any matching day in the range. A red ring marks one past the pool's slots."
-                  )
-                : t(
-                    'Each cell is the highest concurrency that hour reached on any matching day in the range. A red ring marks one past the pool slots.'
-                  )
-            }
-          >
-            <WeekHeatmap
-              cells={foldIntoWeek(
-                hourly
-                  .filter((hour) => !beforeLogs(hour.hour, 3600, logsSince))
-                  .map((hour) => ({
-                    hour: hour.hour,
-                    value: poolPeakOf(hour),
-                  }))
-              )}
-              format={fmt.num}
-              limit={slots || undefined}
-              empty={t('No requests in this range')}
-            />
-          </Panel>
         </div>
-      ) : null}
-
-      {hourly.length > 0 && (
-        <FailureRatePanel
-          hourly={hourly}
-          previous={previous?.hourly}
-          span={span}
-          end={end}
-          definition={requestDefinition}
-          logsSince={logsSince}
-        />
       )}
 
       <div

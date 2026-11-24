@@ -18,6 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { cn } from '@/lib/utils'
+
 import {
   joinSentences,
   rangeSpan,
@@ -31,6 +33,7 @@ import {
   type InsightsTab,
 } from '../lib'
 import { previousDayPartial, usePartialDays } from '../partial-days'
+import { blocksAt } from '../risk-gate-stages'
 import type { RiskInsights } from '../types'
 import { useRiskVerdict } from '../verdicts'
 import { largestSurge, useSurgeText } from '../verdicts/risk'
@@ -52,6 +55,7 @@ import {
   unpaidSpend,
   usesGiftPart,
 } from './risk-analysis'
+import { GateBlocksPanel } from './risk-blocks'
 import {
   AliasClusterPanel,
   DebtPanel,
@@ -241,6 +245,51 @@ export function RiskTab(props: {
   const offTone: Tone =
     !restrictionOff && (data?.off_whitelist ?? 0) > 0 ? 'warning' : 'default'
 
+  // The gate's blocks and the violation incidents, from the servers that
+  // count them; while loading, the cards hold their places.
+  const blockItems: MetricItem[] = []
+  if (!data || data.gate_blocked != null) {
+    blockItems.push({
+      label: t('Gate blocks'),
+      featured: true,
+      value: fmt.num(data?.gate_blocked ?? 0),
+      missing: failed,
+      tone: (data?.gate_blocked ?? 0) > 0 ? 'warning' : 'default',
+      help: t(
+        'Requests the risk gate rejected in the range. Observe-mode hits passed and are not counted. Root and staff are left out.'
+      ),
+      delta: {
+        current: data?.gate_blocked ?? 0,
+        previous: previous?.gate_blocked,
+        better: 'down',
+      },
+      trend: (data?.gate_block_series ?? []).map((point, index) => ({
+        title: pointTitle(point.at),
+        value: blocksAt(point),
+        partial: daily ? partialDay(point.at, [blocksAt(point)]) : undefined,
+        previous: previous?.gate_block_series
+          ? blocksAt(previous.gate_block_series[index] ?? { at: 0, stages: {} })
+          : undefined,
+        previousPartial:
+          daily &&
+          previousDayPartial(index, previous?.gate_block_series?.length ?? 0),
+      })),
+      trendBars: true,
+    })
+  }
+  if (!data || data.violations != null) {
+    blockItems.push({
+      label: t('Violation incidents'),
+      value: fmt.num(data?.violations ?? 0),
+      missing: failed,
+      tone: (data?.violations ?? 0) > 0 ? 'warning' : 'default',
+      help: t(
+        'Incidents the violation guard started in the range: a warning, a strike, a suspension or a ban after an upstream usage-policy refusal. Later refusals of the same conversation merge into one. In observe mode it counts what enforcing would have done. Exempt accounts, root and staff are left out.'
+      ),
+      delta: signalDelta(data?.violations ?? 0, previous?.violations),
+    })
+  }
+
   const items: MetricItem[] = [
     {
       label: t('Sign-ups'),
@@ -273,6 +322,7 @@ export function RiskTab(props: {
             )
           : undefined,
     },
+    ...blockItems,
     {
       label: t('No successful request'),
       value: fmt.num(cohort?.zero ?? 0),
@@ -368,22 +418,30 @@ export function RiskTab(props: {
       <RiskControlLinks />
       <MetricGrid loading={!data && !failed} items={items} />
 
-      <Panel
-        title={t('Sign-ups over time')}
-        description={surge ? surgeText(surge, unit) : undefined}
-      >
-        {failed ? (
-          <p className='text-muted-foreground text-xs'>
-            {t('Could not be read')}
-          </p>
-        ) : (
-          <BarSeries
-            ariaLabel={t('Sign-ups over time')}
-            series={[{ label: t('Sign-ups') }]}
-            points={points}
-          />
+      <div
+        className={cn(
+          'grid gap-4',
+          (data ? data.gate_block_series != null : true) && 'lg:grid-cols-2'
         )}
-      </Panel>
+      >
+        <GateBlocksPanel data={data} range={props.range} failed={failed} />
+        <Panel
+          title={t('Sign-ups over time')}
+          description={surge ? surgeText(surge, unit) : undefined}
+        >
+          {failed ? (
+            <p className='text-muted-foreground text-xs'>
+              {t('Could not be read')}
+            </p>
+          ) : (
+            <BarSeries
+              ariaLabel={t('Sign-ups over time')}
+              series={[{ label: t('Sign-ups') }]}
+              points={points}
+            />
+          )}
+        </Panel>
+      </div>
 
       <SharedAddressPanel
         data={data}
