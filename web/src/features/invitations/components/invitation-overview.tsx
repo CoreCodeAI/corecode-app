@@ -44,17 +44,31 @@ export function InvitationOverview(props: InvitationOverviewProps) {
   const aff = useAffiliate()
   const account = aff.summary?.affiliate ?? null
 
-  const stats = [
+  // On the bonus reward both sides receive a fixed bonus in the wallet, so
+  // commission is shown only when some was earned before.
+  const onBonus = account?.reward === 'bonus'
+  const bonus = formatQuota(aff.summary?.invite_bonus_quota ?? 0)
+  const stats: [string, string][] = [
     [t('Invites'), formatNumber(props.inviteeCount, locale)],
     [t('Invitee spend'), formatQuota(props.totals.used_quota)],
-    [
-      props.secondLevel
-        ? t('Direct commission')
-        : t('Commission from invitees'),
-      formatQuota(props.totals.commission),
-    ],
-    [t('Commission balance'), formatQuota(account?.balance ?? 0)],
-  ] as const
+  ]
+  if (onBonus) {
+    stats.push([
+      t('Invite bonuses earned'),
+      formatQuota(aff.summary?.invite_bonus_earned ?? 0),
+    ])
+  }
+  if (!onBonus || (account?.earned ?? 0) > 0) {
+    stats.push(
+      [
+        props.secondLevel
+          ? t('Direct commission')
+          : t('Commission from invitees'),
+        formatQuota(props.totals.commission),
+      ],
+      [t('Commission balance'), formatQuota(account?.balance ?? 0)]
+    )
+  }
 
   let link: React.ReactNode = (
     <p className='text-muted-foreground text-xs'>
@@ -91,7 +105,11 @@ export function InvitationOverview(props: InvitationOverviewProps) {
         {account && account.rate > 0 && (
           <div className='flex flex-wrap items-center gap-2'>
             <StatusBadge
-              label={t('Rate {{rate}}%', { rate: account.rate })}
+              label={
+                onBonus
+                  ? t('{{bonus}} each', { bonus })
+                  : t('Rate {{rate}}%', { rate: account.rate })
+              }
               variant='success'
               copyable={false}
             />
@@ -105,6 +123,14 @@ export function InvitationOverview(props: InvitationOverviewProps) {
           </div>
         )}
         {link}
+        {onBonus && account && account.rate > 0 && (
+          <p className='text-muted-foreground text-xs'>
+            {t(
+              'Friends who sign up with your link get {{bonus}}, and you get {{bonus}} after their first payment.',
+              { bonus }
+            )}
+          </p>
+        )}
         <dl className='grid grid-cols-2 gap-3 sm:grid-cols-4'>
           {stats.map(([label, value]) => (
             <div key={label} className='min-w-0'>

@@ -130,3 +130,32 @@ it('removes the invite link when the rate is 0', async () => {
   ).toBeVisible()
   expect(screen.queryByLabelText('Referral link')).toBeNull()
 })
+
+it('shows the invite bonus instead of a rate on the bonus reward', async () => {
+  renderCard({
+    affiliate: account({ rate: 5, reward: 'bonus' }),
+    aff_code: 'BN01',
+    invite_bonus_quota: 2_500_000,
+    invite_bonus_earned: 5_000_000,
+  })
+  expect(await screen.findByLabelText('Referral link')).toBeVisible()
+  expect(screen.queryByText('Rate 5%')).toBeNull()
+  expect(screen.getByText(/each$/)).toBeVisible()
+  expect(screen.getByText(/after their first payment/)).toBeVisible()
+  expect(screen.getByText('Invite bonuses earned')).toBeVisible()
+  expect(screen.queryByText('Commission balance')).toBeNull()
+  expect(
+    screen.queryByRole('button', { name: 'Commission records' })
+  ).toBeNull()
+})
+
+it('keeps commission from before visible on the bonus reward', async () => {
+  renderCard({
+    affiliate: account({ reward: 'bonus', balance: 500_000, earned: 500_000 }),
+    aff_code: 'BN02',
+  })
+  expect(await screen.findByText('Commission balance')).toBeVisible()
+  expect(
+    screen.getByRole('button', { name: 'Transfer to balance' })
+  ).toBeEnabled()
+})

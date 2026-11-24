@@ -64,6 +64,8 @@ const affiliateSchema = z
     gift_plan_id: z.number().int().min(0),
     retail_gift_plan_id: z.number().int().min(0),
     gift_daily_cap: z.number().int().min(0),
+    gift_ip_limit: z.number().int().min(0),
+    invite_bonus: z.number().min(0).max(1000),
     gift_blocked_email_domains: z.string(),
     reserved_code_words: z.string(),
   })
@@ -83,6 +85,8 @@ export type AffiliateValues = {
   'affiliate_setting.gift_plan_id': number
   'affiliate_setting.retail_gift_plan_id': number
   'affiliate_setting.gift_daily_cap': number
+  'affiliate_setting.gift_ip_limit': number
+  'affiliate_setting.invite_bonus': number
   'affiliate_setting.gift_blocked_email_domains': string
   'affiliate_setting.reserved_code_words': string
 }
@@ -100,6 +104,8 @@ const toFormValues = (d: AffiliateValues): AffiliateFormValues => ({
   gift_plan_id: d['affiliate_setting.gift_plan_id'],
   retail_gift_plan_id: d['affiliate_setting.retail_gift_plan_id'],
   gift_daily_cap: d['affiliate_setting.gift_daily_cap'],
+  gift_ip_limit: d['affiliate_setting.gift_ip_limit'],
+  invite_bonus: d['affiliate_setting.invite_bonus'],
   gift_blocked_email_domains: d['affiliate_setting.gift_blocked_email_domains'],
   reserved_code_words: d['affiliate_setting.reserved_code_words'],
 })
@@ -113,6 +119,8 @@ const toOptionValues = (v: AffiliateFormValues): AffiliateValues => ({
   'affiliate_setting.gift_plan_id': v.gift_plan_id,
   'affiliate_setting.retail_gift_plan_id': v.retail_gift_plan_id,
   'affiliate_setting.gift_daily_cap': v.gift_daily_cap,
+  'affiliate_setting.gift_ip_limit': v.gift_ip_limit,
+  'affiliate_setting.invite_bonus': v.invite_bonus,
   'affiliate_setting.gift_blocked_email_domains':
     v.gift_blocked_email_domains.trim(),
   'affiliate_setting.reserved_code_words': v.reserved_code_words.trim(),
@@ -159,10 +167,12 @@ export function AffiliateForm(props: AffiliateFormProps) {
     }
   }
 
+  // A step below 1 accepts decimals, such as an amount of money.
   const numberField = (
     name: NumberName,
     label: string,
-    description: string
+    description: string,
+    step = 1
   ) => (
     <FormField
       control={form.control}
@@ -174,10 +184,14 @@ export function AffiliateForm(props: AffiliateFormProps) {
             <Input
               type='number'
               min={0}
-              step={1}
+              step={step}
               {...field}
               onChange={(e) =>
-                field.onChange(Number.parseInt(e.target.value, 10) || 0)
+                field.onChange(
+                  (step < 1
+                    ? Number.parseFloat(e.target.value)
+                    : Number.parseInt(e.target.value, 10)) || 0
+                )
               }
             />
           </FormControl>
@@ -238,7 +252,7 @@ export function AffiliateForm(props: AffiliateFormProps) {
                 <FormLabel>{t('Enable invitation program')}</FormLabel>
                 <FormDescription>
                   {t(
-                    'Every customer can invite and earns the default rate on what their invitees pay for and use. Turning it off hides the program; earned commission is kept.'
+                    'Every customer can invite. On the bonus reward both sides receive the invite bonus; on the commission reward the inviter earns their rate on what invitees pay for and use. Turning it off hides the program; earned commission is kept.'
                   )}
                 </FormDescription>
               </SettingsSwitchContent>
@@ -295,10 +309,25 @@ export function AffiliateForm(props: AffiliateFormProps) {
             )
           )}
           {numberField(
+            'invite_bonus',
+            t('Invite bonus'),
+            t(
+              'What a customer on the bonus reward and each user they invite receive in the wallet: the invitee at sign-up, the inviter once the invitee has paid at least as much. Channels, rates you set, and customers who had invited someone before the bonus keep their commission. 0 turns it off.'
+            ),
+            0.01
+          )}
+          {numberField(
+            'gift_ip_limit',
+            t('Gifts per address'),
+            t(
+              'The most sign-up gifts, a channel plan or the invite bonus, that sign-ups from one address receive in 30 days. 0 is no limit.'
+            )
+          )}
+          {numberField(
             'gift_daily_cap',
             t('Daily gifts per channel'),
             t(
-              'The most sign-up gifts one channel gives in 24 hours; later sign-ups still bind but receive nothing. 0 is no limit. One address receives at most one gift in 24 hours.'
+              "The most sign-up gifts one inviter's invitees receive in 24 hours; later sign-ups still bind but receive nothing. 0 is no limit."
             )
           )}
           <FormField

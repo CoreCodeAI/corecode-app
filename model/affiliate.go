@@ -15,9 +15,11 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// Affiliate is a user who may invite others and earn commission on what the
-// invitees pay for. Rate is the percent of a direct invitee's paid
-// consumption the affiliate earns. Tier makes the user a promotion channel:
+// Affiliate is a user who may invite others and earn from it. Reward decides
+// how: on the commission reward Rate is the percent of a direct invitee's
+// paid consumption the affiliate earns; on the bonus reward Rate only grants
+// invite rights, and the affiliate and each invitee receive the fixed
+// InviteBonus instead (affiliate_invite_bonus.go). Tier makes the user a promotion channel:
 // both tiers can withdraw in cash and their invitees receive the tier's gift
 // plan when they sign up, and a distributor also earns the second-level rate
 // from the users its invitees invite. Channel is true for either tier; it
@@ -32,6 +34,10 @@ type Affiliate struct {
 	Rate      int    `json:"rate" gorm:"not null"`
 	Channel   bool   `json:"channel" gorm:"not null"`
 	Tier      string `json:"tier" gorm:"type:varchar(16);not null;default:''"`
+	// Reward is AffiliateRewardCommission or AffiliateRewardBonus. A row from
+	// before rewards is empty until MigrateAffiliateRewards sets it, and is
+	// read as the bonus reward meanwhile.
+	Reward    string `json:"reward" gorm:"type:varchar(16);not null;default:''"`
 	GrantedBy int    `json:"granted_by" gorm:"not null"` // 0 when the user applied in the wallet
 	Balance   int64  `json:"balance" gorm:"type:bigint;not null;default:0"`
 	Earned    int64  `json:"earned" gorm:"type:bigint;not null;default:0"`
@@ -84,6 +90,30 @@ type AffiliateWithdrawal struct {
 	CreatedAt   int64   `json:"created_at" gorm:"autoCreateTime"`
 	ProcessedAt int64   `json:"processed_at"`
 	ProcessedBy int     `json:"processed_by"`
+}
+
+// The rewards an affiliate earns. Promotion channels, users an administrator
+// set a rate for, and users who had invited someone when the bonus began keep
+// the commission; everyone else invites on the bonus.
+const (
+	AffiliateRewardCommission = "commission"
+	AffiliateRewardBonus      = "bonus"
+)
+
+// MigrateAffiliateRewards gives every row without a reward one: the
+// commission to a channel, to a rate an administrator granted, and to a user
+// who has invited someone, the bonus to the rest. A row keeps its reward once
+// set, so the users who had invited no one when the bonus began stay on it
+// after they invite. It is idempotent, so two servers starting together both
+// run it safely.
+func MigrateAffiliateRewards() error {
+	err := DB.Model(&Affiliate{}).
+		Where("reward = ? AND (tier <> ? OR granted_by > 0 OR user_id IN (SELECT inviter_id FROM users WHERE inviter_id > 0))", "", "").
+		Update("reward", AffiliateRewardCommission).Error
+	if err != nil {
+		return err
+	}
+	return DB.Model(&Affiliate{}).Where("reward = ?", "").Update("reward", AffiliateRewardBonus).Error
 }
 
 // The promotion channel tiers; an ordinary inviter has none.
@@ -255,8 +285,9 @@ type affiliateCredit struct {
 }
 
 // affiliateCreditsFor lists who earns from an invitee's consumption: the
-// inviter at their own rate, and the inviter's inviter at the second-level
-// rate when that account is a distributor. Disabled accounts earn nothing.
+// inviter at their own rate when they are on the commission reward, and the
+// inviter's inviter at the second-level rate when that account is a
+// distributor. Disabled accounts earn nothing.
 func affiliateCreditsFor(tx *gorm.DB, inviterId int) ([]affiliateCredit, error) {
 	if inviterId == 0 {
 		return nil, nil
@@ -279,7 +310,7 @@ func affiliateCreditsFor(tx *gorm.DB, inviterId int) ([]affiliateCredit, error) 
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
-		if err == nil && affiliate.Rate > 0 {
+		if err == nil && affiliate.Rate > 0 && affiliate.Reward == AffiliateRewardCommission {
 			credits = append(credits, affiliateCredit{userId: inviter.Id, level: 1, rate: affiliate.Rate})
 		}
 	}
@@ -495,10 +526,11 @@ func ensureAffCodeWithTx(tx *gorm.DB, userId int) error {
 	return tx.Model(&User{}).Where("id = ?", userId).Update("aff_code", common.GetRandomString(4)).Error
 }
 
-// ensureDefaultAffiliateWithTx gives a user the default rate while the
-// program is on: every customer can invite without applying. An existing
-// row, including one an administrator set to rate 0, is left alone, so a
-// revoked user stays revoked. The rate is fixed when the row is created.
+// ensureDefaultAffiliateWithTx gives a user the default rate, on the bonus
+// reward, while the program is on: every customer can invite without
+// applying. An existing row, including one an administrator set to rate 0, is
+// left alone, so a revoked user stays revoked. The rate is fixed when the row
+// is created.
 func ensureDefaultAffiliateWithTx(tx *gorm.DB, userId int) error {
 	setting := operation_setting.GetAffiliateSetting()
 	if !setting.Enabled || setting.SelfServeRate <= 0 {
@@ -507,7 +539,7 @@ func ensureDefaultAffiliateWithTx(tx *gorm.DB, userId int) error {
 	if err := ensureAffCodeWithTx(tx, userId); err != nil {
 		return err
 	}
-	return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&Affiliate{UserId: userId, Rate: setting.SelfServeRate}).Error
+	return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&Affiliate{UserId: userId, Rate: setting.SelfServeRate, Reward: AffiliateRewardBonus}).Error
 }
 
 // EnsureDefaultAffiliate is ensureDefaultAffiliateWithTx in its own
@@ -519,8 +551,9 @@ func EnsureDefaultAffiliate(userId int) error {
 }
 
 // SetAffiliate is the administrator's grant: any rate up to the configured
-// maximum, and the channel tier, empty for an ordinary inviter. Rate 0
-// removes invite rights; the balance is kept.
+// maximum, and the channel tier, empty for an ordinary inviter. The grant puts
+// the user on the commission reward. Rate 0 removes invite rights; the
+// balance is kept.
 func SetAffiliate(userId int, rate int, tier string, adminId int) (*Affiliate, error) {
 	channel := tier != ""
 	var affiliate Affiliate
@@ -530,7 +563,7 @@ func SetAffiliate(userId int, rate int, tier string, adminId int) (*Affiliate, e
 		}
 		err := lockForUpdate(tx).Where("user_id = ?", userId).First(&affiliate).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			affiliate = Affiliate{UserId: userId, Rate: rate, Channel: channel, Tier: tier, GrantedBy: adminId}
+			affiliate = Affiliate{UserId: userId, Rate: rate, Channel: channel, Tier: tier, Reward: AffiliateRewardCommission, GrantedBy: adminId}
 			return tx.Create(&affiliate).Error
 		}
 		if err != nil {
@@ -539,8 +572,9 @@ func SetAffiliate(userId int, rate int, tier string, adminId int) (*Affiliate, e
 		affiliate.Rate = rate
 		affiliate.Channel = channel
 		affiliate.Tier = tier
+		affiliate.Reward = AffiliateRewardCommission
 		affiliate.GrantedBy = adminId
-		return tx.Model(&affiliate).Select("rate", "channel", "tier", "granted_by", "updated_at").Updates(&affiliate).Error
+		return tx.Model(&affiliate).Select("rate", "channel", "tier", "reward", "granted_by", "updated_at").Updates(&affiliate).Error
 	})
 	if err != nil {
 		return nil, err

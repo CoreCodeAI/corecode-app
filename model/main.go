@@ -391,6 +391,7 @@ func migrateDB() error {
 		&AffiliateCommission{},
 		&AffiliateWithdrawal{},
 		&AffiliateSignupGift{},
+		&AffiliateInviteBonus{},
 		&AffiliateRetiredCode{},
 		&EnterpriseApplication{},
 		&Feedback{},
@@ -429,6 +430,9 @@ func migrateDB() error {
 		return err
 	}
 	if err := MigrateAffiliateTiers(); err != nil {
+		return err
+	}
+	if err := MigrateAffiliateRewards(); err != nil {
 		return err
 	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {

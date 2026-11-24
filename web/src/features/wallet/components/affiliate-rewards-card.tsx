@@ -194,24 +194,42 @@ export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
   }
 
   const canInvite = account.rate > 0 && summary.aff_code !== ''
+  // On the bonus reward both sides receive a fixed bonus in the wallet;
+  // commission from before stays visible while any is left or was earned.
+  const onBonus = account.reward === 'bonus'
+  const showCommission = !onBonus || account.earned > 0
   // Payouts are priced like top-ups: one display unit of quota costs `price`.
   const moneyPerQuota =
     ((status?.price as number) || 1) /
     ((status?.quota_per_unit as number) || 500000)
-  const stats: Stat[] = [
-    [t('Invites'), String(summary.invitee_count)],
-    [t('Commission balance'), formatQuota(account.balance)],
-    [t('Total Earned'), formatQuota(account.earned)],
-  ]
-  const desc =
-    account.tier === 'distributor'
-      ? t(
-          'You earn {{rate}}% from your invitees and {{second}}% from the users they invite.',
-          { rate: account.rate, second: summary.second_level_rate }
-        )
-      : t('You earn {{rate}}% of what your invitees pay for and use.', {
-          rate: account.rate,
-        })
+  const stats: Stat[] = [[t('Invites'), String(summary.invitee_count)]]
+  if (onBonus) {
+    stats.push([
+      t('Invite bonuses earned'),
+      formatQuota(summary.invite_bonus_earned ?? 0),
+    ])
+  }
+  if (showCommission) {
+    stats.push(
+      [t('Commission balance'), formatQuota(account.balance)],
+      [t('Total Earned'), formatQuota(account.earned)]
+    )
+  }
+  const bonus = formatQuota(summary.invite_bonus_quota ?? 0)
+  let desc = t('You earn {{rate}}% of what your invitees pay for and use.', {
+    rate: account.rate,
+  })
+  if (onBonus) {
+    desc = t(
+      'Friends who sign up with your link get {{bonus}}, and you get {{bonus}} after their first payment.',
+      { bonus }
+    )
+  } else if (account.tier === 'distributor') {
+    desc = t(
+      'You earn {{rate}}% from your invitees and {{second}}% from the users they invite.',
+      { rate: account.rate, second: summary.second_level_rate }
+    )
+  }
 
   return (
     <CardShell>
@@ -224,9 +242,16 @@ export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
         }
         badges={
           <>
-            {canInvite && (
+            {canInvite && !onBonus && (
               <StatusBadge
                 label={t('Rate {{rate}}%', { rate: account.rate })}
+                variant='success'
+                copyable={false}
+              />
+            )}
+            {canInvite && onBonus && (
+              <StatusBadge
+                label={t('{{bonus}} each', { bonus })}
                 variant='success'
                 copyable={false}
               />
@@ -263,28 +288,34 @@ export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
 
       <Stats stats={stats} />
 
-      <div className='flex flex-wrap items-center gap-2'>
-        <Button
-          size='sm'
-          disabled={!compliant || account.balance <= 0}
-          onClick={() => setTransferOpen(true)}
-        >
-          {t('Transfer to balance')}
-        </Button>
-        {account.channel && (
+      {showCommission && (
+        <div className='flex flex-wrap items-center gap-2'>
           <Button
             size='sm'
-            variant='outline'
-            disabled={account.balance <= 0}
-            onClick={() => setWithdrawOpen(true)}
+            disabled={!compliant || account.balance <= 0}
+            onClick={() => setTransferOpen(true)}
           >
-            {t('Withdraw')}
+            {t('Transfer to balance')}
           </Button>
-        )}
-        <Button size='sm' variant='ghost' onClick={() => setRecordsOpen(true)}>
-          {t('Commission records')}
-        </Button>
-      </div>
+          {account.channel && (
+            <Button
+              size='sm'
+              variant='outline'
+              disabled={account.balance <= 0}
+              onClick={() => setWithdrawOpen(true)}
+            >
+              {t('Withdraw')}
+            </Button>
+          )}
+          <Button
+            size='sm'
+            variant='ghost'
+            onClick={() => setRecordsOpen(true)}
+          >
+            {t('Commission records')}
+          </Button>
+        </div>
+      )}
       {!compliant && (
         <p className='text-muted-foreground text-xs'>
           {t(

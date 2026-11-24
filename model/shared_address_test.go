@@ -315,7 +315,7 @@ func TestSelfInvitedCommissionDatabaseMatrix(t *testing.T) {
 			useAffiliateTestDB(t, dialect)
 			now := common.GetTimestamp()
 			inviter := registerAffiliateTestUser(t, "self_inviter", "")
-			require.NoError(t, EnsureDefaultAffiliate(inviter.Id))
+			keepAffiliateTestCommission(t, inviter)
 			own := registerAffiliateTestUser(t, "self_own", inviter.AffCode)
 			friend := registerAffiliateTestUser(t, "self_friend", inviter.AffCode)
 			for _, user := range []*User{own, friend} {
