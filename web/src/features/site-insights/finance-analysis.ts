@@ -438,6 +438,8 @@ export type FinanceMargins = {
   rate: number | null
   /** Upstream cost on channels with no customer revenue in the range, yuan. */
   unattributed: number
+  /** The recorded egress IP costs over the range, yuan: part of cost, in no row. */
+  ipCost: number
   /** The server sent upstream bills by vendor, so they are subtracted. */
   upstreamRead: boolean
   /** Accounts with no recorded price, counted as free. */
@@ -503,8 +505,10 @@ export function financeMargins(
   const unattributed =
     (data.upstream_unattributed_bill_usd ?? 0) +
     (data.upstream_unattributed_fee_usd ?? 0) * rate
+  const ipCost = (data.ip_cost_cny ?? 0) + (data.ip_cost_usd ?? 0) * rate
   const revenue = list.reduce((sum, row) => sum + row.revenue, 0)
-  const cost = list.reduce((sum, row) => sum + row.cost, 0) + unattributed
+  const cost =
+    list.reduce((sum, row) => sum + row.cost, 0) + unattributed + ipCost
   const margin = revenue - cost
   return {
     rows: list,
@@ -513,6 +517,7 @@ export function financeMargins(
     margin,
     rate: revenue > 0 ? margin / revenue : null,
     unattributed,
+    ipCost,
     upstreamRead: data.vendor_upstream != null,
     unpricedAccounts: list.reduce((sum, row) => sum + row.unpriced, 0),
     ungroupedAccounts: (data.plan_accounts ?? []).reduce(
@@ -538,6 +543,7 @@ export type WaterfallCost =
   | 'accounts'
   | 'bills'
   | 'fees'
+  | 'ips'
   | 'channels'
   | 'commission'
 
@@ -547,9 +553,9 @@ export type WaterfallStep = { key: WaterfallCost; amount: number }
 export type ProfitWaterfall = {
   /** The vendor panel's earned figure, in yuan. */
   revenue: number
-  /** Accounts, upstream bills, upstream fees, channel fees, then commission. */
+  /** Accounts, upstream bills, upstream fees, IP costs, channel fees, then commission. */
   steps: WaterfallStep[]
-  /** Revenue less the first three steps: the gross margin financeMargins reports. */
+  /** Revenue less the first four steps: the gross margin financeMargins reports. */
   grossMargin: number
   /** Revenue less every step. Not net profit: the panel lists what is still missing. */
   left: number
@@ -557,9 +563,11 @@ export type ProfitWaterfall = {
 
 /**
  * Revenue taken down to what is left, one cost the dashboard knows at a time.
- * Accounts, bills and fees are the gross margin's; the channel fee (real US
- * dollars, converted at the rate) and the commission credited as wallet quota
- * follow. Undefined on a server that does not send channel_fee_usd.
+ * Accounts, bills, fees and IP costs are the gross margin's; the channel fee
+ * (real US dollars, converted at the rate) and the commission credited as
+ * wallet quota follow. Commission earned by the exempt accounts, the site's
+ * own promotion accounts that never withdraw it, is not a cost. Undefined on a
+ * server that does not send channel_fee_usd.
  */
 export function profitWaterfall(
   data: FinanceInsights,
@@ -577,14 +585,19 @@ export function profitWaterfall(
       (data.upstream_unattributed_fee_usd ?? 0)) *
     rate
   const channels = data.channel_fee_usd * rate
-  const commission = data.commission_usd
-  const grossMargin = margins.revenue - accounts - bills - fees
+  const commission = Math.max(
+    data.commission_usd - (data.commission_exempt_usd ?? 0),
+    0
+  )
+  const ips = margins.ipCost
+  const grossMargin = margins.revenue - accounts - bills - fees - ips
   return {
     revenue: margins.revenue,
     steps: [
       { key: 'accounts', amount: accounts },
       { key: 'bills', amount: bills },
       { key: 'fees', amount: fees },
+      { key: 'ips', amount: ips },
       { key: 'channels', amount: channels },
       { key: 'commission', amount: commission },
     ],

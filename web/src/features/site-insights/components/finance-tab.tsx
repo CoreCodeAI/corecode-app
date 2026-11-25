@@ -45,6 +45,7 @@ import { previousDayPartial, usePartialDays } from '../partial-days'
 import type { BusinessInsights, FinanceInsights } from '../types'
 import { useFinanceVerdict } from '../verdicts'
 import { ModelMixPanel, VendorMarginPanel } from './business-panels'
+import { CommissionExemptPanel, IPCostsPanel } from './cost-ledgers'
 import {
   FinanceDriversPanel,
   GiftWatchPanel,
@@ -288,6 +289,10 @@ export function FinanceTab(props: {
 
       <VendorMarginPanel data={data} range={range} source={view} />
       <ProfitWaterfallPanel data={data} source={view} />
+      <div className='grid items-start gap-4 lg:grid-cols-[2fr_1fr]'>
+        <IPCostsPanel data={data} source={view} />
+        <CommissionExemptPanel data={data} source={view} />
+      </div>
       <ModelMarginPanel data={data} source={view} />
 
       <div className='grid items-start gap-4 lg:grid-cols-2'>

@@ -37,7 +37,7 @@ import { Panel } from './shared'
 
 /**
  * Revenue taken down to what is left, one cost at a time, each with its share
- * of revenue. The first three steps reproduce the vendor panel's gross margin;
+ * of revenue. The first four steps reproduce the vendor panel's gross margin;
  * the last figure is not net profit, and the note under it says what is missing.
  * Hidden on a server that does not send channel_fee_usd.
  */
@@ -62,8 +62,9 @@ export function ProfitWaterfallPanel(props: {
     accounts: t('Pool accounts'),
     bills: t('Upstream bills'),
     fees: t('Upstream monthly fees'),
+    ips: t('Egress IP costs'),
     channels: t('Promotion-channel fees'),
-    commission: t('Referral commission, as wallet quota'),
+    commission: t('Referral commission, exempt accounts left out'),
   }
   const costAmount = (key: WaterfallCost) =>
     waterfall?.steps.find((step) => step.key === key)?.amount ?? 0
@@ -97,7 +98,7 @@ export function ProfitWaterfallPanel(props: {
   const description =
     waterfall &&
     t(
-      'Earned {{revenue}}; gross margin {{margin}} ({{rate}}) after accounts, upstream bills and fees; {{left}} ({{leftRate}}) left after channel fees and commission.',
+      'Earned {{revenue}}; gross margin {{margin}} ({{rate}}) after accounts, upstream bills, fees and IP costs; {{left}} ({{leftRate}}) left after channel fees and commission.',
       {
         revenue: fmt.cny(waterfall.revenue),
         margin: fmt.cny(waterfall.grossMargin),
@@ -115,10 +116,10 @@ export function ProfitWaterfallPanel(props: {
       }
       help={joinSentences(
         t(
-          'Each step is a cost the dashboard records, in yuan, with its share of recognized revenue. The first three steps are the gross margin in the vendor panel above. Channel fees are real US dollars, converted at the site’s exchange rate as on the channels tab.'
+          'Each step is a cost the dashboard records, in yuan, with its share of recognized revenue. The first four steps are the gross margin in the vendor panel above. IP costs are the entries under IP costs below; channel fees are real US dollars, converted at the site’s exchange rate as on the channels tab.'
         ),
         t(
-          'Commission is credited to wallets as quota, not paid in cash. It is shown as the cost of that credit, not as a warning.'
+          'Commission is credited to wallets as quota, not paid in cash. Commission earned by the exempt accounts listed below, the site’s own promotion accounts, is left out; the rest is shown as the cost of that credit.'
         )
       )}
     >
@@ -141,6 +142,7 @@ export function ProfitWaterfallPanel(props: {
             )}
             {line('bills', costLabels.bills, costAmount('bills'), false)}
             {line('fees', costLabels.fees, costAmount('fees'), false)}
+            {line('ips', costLabels.ips, costAmount('ips'), false)}
             {line('gross', t('Gross margin'), waterfall.grossMargin, true)}
             {line(
               'channels',

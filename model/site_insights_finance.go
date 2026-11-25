@@ -263,6 +263,17 @@ type FinanceInsights struct {
 	// dollars, the sum of the channels view's FeeUSD (channelFeesIn). The
 	// console converts it at the site's rate, as the channels tab does.
 	ChannelFeeUSD float64 `json:"channel_fee_usd"`
+
+	// IPCostUSD and IPCostCNY are the recorded egress IP costs over the
+	// range, apart by the currency each is billed in; IPCosts is the stored
+	// list (ipCostsIn). The console converts the dollars at the site's rate.
+	IPCostUSD float64  `json:"ip_cost_usd"`
+	IPCostCNY float64  `json:"ip_cost_cny"`
+	IPCosts   []IPCost `json:"ip_costs"`
+	// CommissionExempt is the accounts whose commission is not a cost, and
+	// CommissionExemptUSD the part of CommissionUSD they earned in the range.
+	CommissionExempt    []UserRef `json:"commission_exempt"`
+	CommissionExemptUSD float64   `json:"commission_exempt_usd"`
 }
 
 // OrderMethodFunnel is the checkouts opened with one payment method in the
@@ -578,6 +589,17 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 		result.ChannelFeeUSD += fee
 	}
 	result.ChannelFeeUSD = roundTo(result.ChannelFeeUSD, 2)
+	if result.IPCosts, err = ReadIPCosts(); err != nil {
+		return nil, err
+	}
+	result.IPCostUSD, result.IPCostCNY = ipCostsIn(result.IPCosts, r.Start, r.End)
+	exempt, err := ReadCommissionExempt()
+	if err != nil {
+		return nil, err
+	}
+	if result.CommissionExempt, result.CommissionExemptUSD, err = readCommissionExempt(r, exempt); err != nil {
+		return nil, err
+	}
 	result.RedemptionUSD = quotaUSD(redemption.Total)
 	if err := fillGivenCredit(r, result); err != nil {
 		return nil, err

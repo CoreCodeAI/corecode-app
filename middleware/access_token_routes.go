@@ -293,6 +293,8 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/site-insights/user-spend":                                                      accessTokenScopeRule("billing:read"),
 	"GET /api/site-insights/channels":                                                        accessTokenScopeRule("billing:read"),
 	"PUT /api/site-insights/channel-costs":                                                   accessTokenScopeRule("billing:write"),
+	"PUT /api/site-insights/ip-costs":                                                        accessTokenScopeRule("billing:write"),
+	"PUT /api/site-insights/commission-exempt":                                               accessTokenScopeRule("billing:write"),
 	"GET /api/site-insights/upstream":                                                        accessTokenScopeRule("billing:read"),
 	"PUT /api/site-insights/upstream-fees":                                                   accessTokenScopeRule("billing:write"),
 	"GET /api/site-insights/upstream-runway":                                                 accessTokenScopeRule("billing:read"),

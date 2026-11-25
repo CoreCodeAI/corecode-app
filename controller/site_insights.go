@@ -444,6 +444,40 @@ func SetChannelCosts(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
+// SetIPCosts replaces the recorded egress IP costs.
+func SetIPCosts(c *gin.Context) {
+	var request struct {
+		Costs []model.IPCost `json:"costs"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.SaveIPCosts(request.Costs); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	forgetSettledInsights()
+	common.ApiSuccess(c, nil)
+}
+
+// SetCommissionExempt replaces the accounts whose commission is not a cost.
+func SetCommissionExempt(c *gin.Context) {
+	var request struct {
+		UserIDs []int `json:"user_ids"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.SaveCommissionExempt(request.UserIDs); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	forgetSettledInsights()
+	common.ApiSuccess(c, nil)
+}
+
 // GetUpstreamInsights compares the channels requests went to.
 func GetUpstreamInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxLogDays, settledRead("upstream", model.GetUpstreamInsights))
