@@ -136,6 +136,10 @@ commits (N1–N5 and the theme) above upstream `633b4c5b1`, which is
 - **A CoreCode page needs its prefix in `reservedRouteNamespaces`.**
   `TestReservedRouteNamespacesCoverConsolePages` was already failing on main
   for `/rival-prices`; the test is outside the packages CI runs.
+- **Check all CoreCode locales, including ones absent upstream.** The sync
+  through `6627f0e3f` adds fourteen marketplace strings. The seven upstream
+  dictionaries merge, but Korean has no upstream file to conflict with.
+  Translate the incoming keys there and run `src/i18n/locales.test.ts`.
 - **A new provider check also applies to CoreCode-only consumers.** The sync
   through `6627f0e3f` brings merchant ID validation to RSA Epay callbacks.
   The invoice callback shares the Epay client but is absent upstream, so it
