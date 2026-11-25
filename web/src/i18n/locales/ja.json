@@ -2713,7 +2713,7 @@
     "Filter by task ID": "タスクIDでフィルター",
     "Filter by user ID": "ユーザー ID で絞り込み",
     "Filter by username": "ユーザー名でフィルター",
-    "Filter by username, name or email...": "ユーザー名、名前またはメールアドレスでフィルター...",
+    "Filter by ID, username, name, email or remark...": "ID、ユーザー名、名前、メールアドレスまたは備考でフィルター...",
     "Filter mappings": "マッピングを絞り込む",
     "Filter models by provider, group, type, endpoint, and tags.": "プロバイダー、グループ、タイプ、エンドポイント、タグでモデルを絞り込みます。",
     "Filter models...": "モデルをフィルタリング...",

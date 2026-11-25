@@ -2713,7 +2713,7 @@
     "Filter by task ID": "Lọc theo ID nhiệm vụ",
     "Filter by user ID": "Lọc theo ID người dùng",
     "Filter by username": "Lọc theo tên người dùng",
-    "Filter by username, name or email...": "Lọc theo tên người dùng, tên hoặc email...",
+    "Filter by ID, username, name, email or remark...": "Lọc theo ID, tên người dùng, tên, email hoặc ghi chú...",
     "Filter mappings": "Lọc ánh xạ",
     "Filter models by provider, group, type, endpoint, and tags.": "Lọc mô hình theo nhà cung cấp, nhóm, loại, endpoint và thẻ.",
     "Filter models...": "Lọc mô hình...",

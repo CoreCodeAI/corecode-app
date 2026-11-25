@@ -2713,7 +2713,7 @@
     "Filter by task ID": "Filter by task ID",
     "Filter by user ID": "Filter by user ID",
     "Filter by username": "Filter by username",
-    "Filter by username, name or email...": "Filter by username, name or email...",
+    "Filter by ID, username, name, email or remark...": "Filter by ID, username, name, email or remark...",
     "Filter mappings": "Filter mappings",
     "Filter models by provider, group, type, endpoint, and tags.": "Filter models by provider, group, type, endpoint, and tags.",
     "Filter models...": "Filter models...",

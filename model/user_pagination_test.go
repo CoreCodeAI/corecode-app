@@ -75,3 +75,16 @@ func TestSearchUsersMatchesEmailFragmentInAnyCase(t *testing.T) {
 	assert.Equal(t, int64(1), total)
 	assert.Equal(t, []int{2}, collectUserIDs(users))
 }
+
+func TestSearchUsersMatchesRemarkFragmentInAnyCase(t *testing.T) {
+	truncateTables(t)
+	insertUsersForPaginationTest(t, 3)
+	require.NoError(t, DB.Model(&User{}).Where("id = ?", 3).Update("remark", "Studio 117.150.5.21 刷新人包").Error)
+
+	for _, keyword := range []string{"刷新人包", "studio", "117.150"} {
+		users, total, err := SearchUsers(keyword, "", nil, nil, 0, 20)
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), total, keyword)
+		assert.Equal(t, []int{3}, collectUserIDs(users), keyword)
+	}
+}
