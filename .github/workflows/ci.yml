@@ -72,14 +72,22 @@ jobs:
           mkdir -p web/dist
           : > web/dist/index.html
 
-      - name: Vet and test the Go module
+      # Every package, relay/, setting/ and pkg/ included: a list of chosen
+      # directories left the relay converters, billing expressions and plugins
+      # untested. tokenkit and relaykit are modules of their own, which ./...
+      # from the root compiles through its replace lines but never tests.
+      - name: Vet and test the Go modules
         run: |
           # The full output runs to thousands of log lines, so it goes to a file.
           # On failure print each failing test's own lines: the last 40 lines
           # alone ended at "FAIL <package>" and never named the test.
           set -euo pipefail
-          go vet ./...
-          if ! go test ./common/... ./controller/... ./middleware/... ./model/... ./router/... ./service/... > "$RUNNER_TEMP/go-test.log" 2>&1; then
+          status=0
+          for module in . tokenkit relaykit; do
+            (cd "$module" && go vet ./...) || status=1
+            (cd "$module" && go test ./...) >> "$RUNNER_TEMP/go-test.log" 2>&1 || status=1
+          done
+          if [ "$status" -ne 0 ]; then
             grep -E -A30 -- '^\s*--- FAIL|^panic:|^FAIL' "$RUNNER_TEMP/go-test.log" | head -400
             exit 1
           fi
@@ -135,6 +143,38 @@ jobs:
       - name: Check the core pages' first-load size
         working-directory: web
         run: bun run first-load:check
+
+  # The console's Vitest suite, which nothing ran on a pull request before
+  # 2026-11-25. Its 439 files took 7 minutes on one hosted runner (96 s on a
+  # 14-core laptop), so it runs in three shards beside web rather than as a step
+  # of it: corecode-infra's release-app.yml waits for check and web before it
+  # deploys, and a step there held every release back by those 7 minutes. These
+  # jobs gate the pull request; the deploy does not wait for them.
+  console-tests:
+    name: console tests ${{ matrix.shard }}/3
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - name: Test the console
+        working-directory: web
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -eu
+          bun install --frozen-lockfile
+          bun run test --shard="$SHARD/3"
 
   # Releases from main only. corecode-infra builds the commit while check and web
   # run, refuses a commit that is not on main, and deploys once both pass, so
