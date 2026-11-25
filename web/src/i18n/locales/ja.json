@@ -7227,6 +7227,7 @@
     "No groups": "グループなし",
     "No quota reading": "クォータ読み取り値なし",
     "Not schedulable": "スケジュール不可",
+    "{{group}} · {{eligible}} of {{accounts}} accounts schedulable": "{{group}} · スケジュール可能なアカウント {{eligible}} / {{accounts}}",
     "Observed {{time}}": "{{time}} に観測",
     "Quota budget": "クォータ予算",
     "Quota budget reached": "クォータ予算に到達",

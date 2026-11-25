@@ -583,6 +583,42 @@ describe('account order', () => {
     expect(rows()).toEqual(['#1', '#3', '#2'])
   })
 
+  it('heads each group in the engine’s order, and drops the headings for another order', async () => {
+    const user = userEvent.setup()
+    render(
+      <PoolTab
+        data={pool(
+          [group({ id: 1, name: 'one' }), group({ id: 2, name: 'two' })],
+          [
+            account({ credential_id: 1, group_id: 1, group: 'one' }),
+            account({ credential_id: 2, group_id: 2, group: 'two' }),
+            account({
+              credential_id: 3,
+              group_id: 1,
+              group: 'one',
+              eligible: false,
+              status: 'cooldown',
+            }),
+            account({ credential_id: 4, group_id: 2, group: 'two', five_hour: 50 }),
+          ]
+        )}
+      />
+    )
+    const headings = () =>
+      screen
+        .queryAllByRole('columnheader')
+        .filter((cell) => cell.getAttribute('scope') === 'colgroup')
+        .map((cell) => cell.textContent)
+    expect(headings()).toEqual([
+      'one · 1 of 2 accounts schedulable',
+      'two · 2 of 2 accounts schedulable',
+      'Not schedulable',
+    ])
+    expect(rows()).toEqual(['#1', '#2', '#4', '#3'])
+    await user.click(screen.getByRole('button', { name: 'Sort by Pool account' }))
+    expect(headings()).toEqual([])
+  })
+
   it('reverses the order from the direction button', async () => {
     const user = userEvent.setup()
     render(<PoolTab data={data()} />)

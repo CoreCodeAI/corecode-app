@@ -7227,6 +7227,7 @@
     "No groups": "暂无分组",
     "No quota reading": "额度读数缺失",
     "Not schedulable": "不可调度",
+    "{{group}} · {{eligible}} of {{accounts}} accounts schedulable": "{{group}} · {{accounts}} 个账号中 {{eligible}} 个可调度",
     "Observed {{time}}": "观测于 {{time}}",
     "Quota budget": "额度预算",
     "Quota budget reached": "额度预算已满",
