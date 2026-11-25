@@ -184,6 +184,13 @@ export function VendorMarginPanel(props: {
       )
     )
   }
+  if (margins && margins.ipCost > 0) {
+    notes.push(
+      t('{{amount}} of egress IP costs is in the total, in no vendor’s row.', {
+        amount: fmt.cny(margins.ipCost),
+      })
+    )
+  }
   // Only the pool now is known, so a long range sets past revenue against
   // today's accounts.
   if (data && days > SHORT_ROI_DAYS && rows.some((row) => row.accounts > 0)) {

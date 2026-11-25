@@ -26,6 +26,7 @@ import type {
   CampaignInsights,
   CapacityInsights,
   ChannelCost,
+  IPCost,
   ChannelInsights,
   CustomerInsights,
   EngineOutlook,
@@ -140,6 +141,27 @@ export async function saveChannelCosts(costs: ChannelCost[]) {
   )
   if (!res.data.success) {
     throw createServerError(res.data, 'Failed to save channel costs')
+  }
+}
+
+/** Replaces the recorded egress IP costs with costs. */
+export async function saveIPCosts(costs: IPCost[]) {
+  const res = await api.put<ApiResponse<null>>('/api/site-insights/ip-costs', {
+    costs,
+  })
+  if (!res.data.success) {
+    throw createServerError(res.data, 'Failed to save IP costs')
+  }
+}
+
+/** Replaces the accounts whose commission is not a cost. */
+export async function saveCommissionExempt(userIDs: number[]) {
+  const res = await api.put<ApiResponse<null>>(
+    '/api/site-insights/commission-exempt',
+    { user_ids: userIDs }
+  )
+  if (!res.data.success) {
+    throw createServerError(res.data, 'Failed to save commission exemptions')
   }
 }
 

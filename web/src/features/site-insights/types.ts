@@ -926,6 +926,13 @@ export type FinanceInsights = StaleHours & {
   upstream_unattributed_fee_usd?: number
   /** The promotion channels' fees over the range, in real US dollars: the channels tab's figure before the site's rate. Absent before the server's release. */
   channel_fee_usd?: number
+  /** The recorded egress IP costs over the range, the dollar and yuan entries apart; ip_costs is the stored list. Absent before the server's release. */
+  ip_cost_usd?: number
+  ip_cost_cny?: number
+  ip_costs?: IPCost[] | null
+  /** The accounts whose commission is not a cost, and what they earned in the range (part of commission_usd). Absent before the server's release. */
+  commission_exempt?: UserRef[] | null
+  commission_exempt_usd?: number
   groups?: GroupConsumption[] | null
   /** Each group's revenue and cost share, with the staff and unattributed rows. Absent before the server's release. */
   group_allocations?: GroupAllocation[] | null
@@ -1126,6 +1133,17 @@ export type SilentBucketName =
 export type SilentPayers = {
   payers: number
   buckets: { name: SilentBucketName; count: number }[]
+}
+
+/** An egress IP or proxy host: amount in currency every cycle_months of 30 days from start until end, or until now when end is 0. Unix seconds. */
+export type IPCost = {
+  name: string
+  amount: number
+  currency: 'CNY' | 'USD'
+  cycle_months: 1 | 3 | 6 | 12
+  start: number
+  end: number
+  note: string
 }
 
 /** A fee paid to a promotion channel: monthly_usd every 30 days from start until end, or until now when end is 0. Unix seconds. */

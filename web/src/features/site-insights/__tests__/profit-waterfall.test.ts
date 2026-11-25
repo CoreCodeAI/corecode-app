@@ -64,7 +64,7 @@ function waterfallOf(data: FinanceInsights) {
 }
 
 describe('profitWaterfall', () => {
-  it('reproduces the vendor panel gross margin after the first three steps', () => {
+  it('reproduces the vendor panel gross margin after the first four steps', () => {
     const { margins, waterfall } = waterfallOf(range)
     expect(waterfall).toBeDefined()
     if (!waterfall) return
@@ -74,6 +74,7 @@ describe('profitWaterfall', () => {
       'accounts',
       'bills',
       'fees',
+      'ips',
       'channels',
       'commission',
     ])
@@ -114,6 +115,30 @@ describe('profitWaterfall', () => {
     expect(waterfall.steps[1].amount).toBe(3823)
     expect(waterfall.steps[2].amount).toBe(21)
     expect(waterfall.grossMargin).toBeCloseTo(margins.margin, 6)
+  })
+
+  it('takes IP costs into the gross margin, dollars at the rate', () => {
+    const data = {
+      ...range,
+      ip_cost_cny: 300,
+      ip_cost_usd: 10,
+    } as unknown as FinanceInsights
+    const { margins, waterfall } = waterfallOf(data)
+    if (!waterfall) throw new Error('the waterfall is hidden')
+    expect(margins.ipCost).toBe(370)
+    expect(waterfall.steps[3]).toEqual({ key: 'ips', amount: 370 })
+    expect(waterfall.grossMargin).toBeCloseTo(margins.margin, 6)
+    expect(waterfall.grossMargin).toBeCloseTo(38655 - 3813 - 370, 6)
+  })
+
+  it('leaves the exempt accounts’ commission out', () => {
+    const data = {
+      ...range,
+      commission_exempt_usd: 3000,
+    } as unknown as FinanceInsights
+    const { waterfall } = waterfallOf(data)
+    if (!waterfall) throw new Error('the waterfall is hidden')
+    expect(waterfall.steps.at(-1)).toEqual({ key: 'commission', amount: 82 })
   })
 
   it('is hidden on a server that does not send channel_fee_usd', () => {
