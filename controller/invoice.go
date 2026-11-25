@@ -390,6 +390,11 @@ func InvoiceEpayNotify(c *gin.Context) {
 		fail()
 		return
 	}
+	if !epayCallbackPartnerMatches(client, params) {
+		logger.LogWarn(c.Request.Context(), common.LogText("Epay webhook partner id mismatch path=%q client_ip=%s callback_pid=%q", c.Request.URL.Path, c.ClientIP(), params["pid"]))
+		fail()
+		return
+	}
 	if verifyInfo.TradeStatus != epay.StatusTradeSuccess {
 		logger.LogInfo(c.Request.Context(), common.LogText("Invoice epay webhook ignored event trade_no=%s trade_status=%s", verifyInfo.ServiceTradeNo, verifyInfo.TradeStatus))
 		_, _ = c.Writer.Write([]byte("success"))
