@@ -50,7 +50,11 @@ import {
   formatRate,
   stripSummary,
 } from './lib/format'
-import { groupVendorKey, vendorCounts } from './lib/vendor'
+import {
+  groupVendorKey,
+  sortGroupsByVendor,
+  vendorCounts,
+} from './lib/vendor'
 import type { OverallStatus, StatusStripData } from './types'
 
 type BannerState = OverallStatus | 'unknown'
@@ -177,7 +181,7 @@ export function ServiceStatus() {
     })
   }
   const current = data?.current
-  const groups = data?.groups
+  const groups = data?.groups ? sortGroupsByVendor(data.groups) : undefined
   const vendors = groups ? vendorCounts(groups) : []
   // A vendor that left the data after a refresh shows every group again.
   const activeVendor = vendors.some((item) => item.key === vendor)
