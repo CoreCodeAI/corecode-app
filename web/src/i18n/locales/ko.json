@@ -2713,7 +2713,7 @@
     "Filter by task ID": "작업 ID로 필터",
     "Filter by user ID": "사용자 ID로 필터",
     "Filter by username": "사용자 이름으로 필터",
-    "Filter by username, name or email...": "사용자 이름, 이름 또는 이메일로 필터...",
+    "Filter by ID, username, name, email or remark...": "ID, 사용자 이름, 이름, 이메일 또는 메모로 필터...",
     "Filter mappings": "매핑 필터",
     "Filter models by provider, group, type, endpoint, and tags.": "제공자, 그룹, 유형, 엔드포인트, 태그로 모델을 필터링합니다.",
     "Filter models...": "모델 필터...",

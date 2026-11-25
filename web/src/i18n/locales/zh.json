@@ -2713,7 +2713,7 @@
     "Filter by task ID": "按任务 ID 筛选",
     "Filter by user ID": "按用户 ID 筛选",
     "Filter by username": "按用户名筛选",
-    "Filter by username, name or email...": "按用户名、姓名或邮箱筛选...",
+    "Filter by ID, username, name, email or remark...": "按 ID、用户名、姓名、邮箱或备注筛选...",
     "Filter mappings": "筛选映射",
     "Filter models by provider, group, type, endpoint, and tags.": "按供应商、分组、类型、端点和标签筛选模型。",
     "Filter models...": "筛选模型...",
