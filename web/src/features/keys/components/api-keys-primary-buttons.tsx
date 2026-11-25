@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { ChevronDown, Globe, Plus } from 'lucide-react'
+import { Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
@@ -39,7 +40,44 @@ import {
 import { useApiInfo } from '@/features/dashboard/hooks/use-status-data'
 import { useStatus } from '@/hooks/use-status'
 
+import {
+  addressAccent,
+  addressVendor,
+  VENDOR_STYLES,
+  type AddressVendor,
+} from '../lib/address-vendor'
 import { useApiKeys } from './api-keys-provider'
+
+function tint(color: string, percent: number) {
+  return `color-mix(in oklab, ${color} ${percent}%, transparent)`
+}
+
+/** The vendor's mark, or a globe, on a tile of the row's color. */
+function AddressMark(props: {
+  vendor: AddressVendor | null
+  accent: string | undefined
+}) {
+  const Mark = props.vendor ? VENDOR_STYLES[props.vendor].Mark : null
+  return (
+    <span
+      aria-hidden='true'
+      className='bg-muted flex size-7 shrink-0 items-center justify-center rounded-md'
+      style={
+        props.accent
+          ? { backgroundColor: tint(props.accent, 14), color: props.accent }
+          : undefined
+      }
+    >
+      {Mark ? (
+        <Suspense fallback={null}>
+          <Mark size={16} />
+        </Suspense>
+      ) : (
+        <Globe className='size-4' />
+      )}
+    </span>
+  )
+}
 
 export function ApiKeysPrimaryButtons() {
   const { t } = useTranslation()
@@ -57,6 +95,7 @@ export function ApiKeysPrimaryButtons() {
           url: serverAddress || window.location.origin,
           route: serverAddress ? t('Default API address') : t('Current domain'),
           description: '',
+          color: '',
         },
       ]
 
@@ -77,16 +116,28 @@ export function ApiKeysPrimaryButtons() {
             <LoadingState inline size='sm' message={t('Loading...')} />
           ) : (
             <ItemGroup>
-              {addresses.map((address) => (
+              {addresses.map((address) => {
+                const vendor = addressVendor(address)
+                const accent = addressAccent(vendor, address.color)
+                return (
                 <Item
                   key={address.url}
                   role='listitem'
                   variant='muted'
                   size='xs'
                   className='flex-nowrap items-start'
+                  style={
+                    accent
+                      ? {
+                          backgroundColor: tint(accent, 7),
+                          borderLeft: `3px solid ${accent}`,
+                        }
+                      : undefined
+                  }
                 >
+                  <AddressMark vendor={vendor} accent={accent} />
                   <ItemContent className='min-w-0 gap-1'>
-                    <ItemTitle className='line-clamp-none break-all'>
+                    <ItemTitle className='line-clamp-none break-words'>
                       {address.route}
                     </ItemTitle>
                     <code className='text-xs break-all select-text'>
@@ -107,7 +158,8 @@ export function ApiKeysPrimaryButtons() {
                     />
                   </ItemActions>
                 </Item>
-              ))}
+                )
+              })}
             </ItemGroup>
           )}
         </PopoverContent>
