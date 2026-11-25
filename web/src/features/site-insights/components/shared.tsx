@@ -17,6 +17,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -407,6 +410,35 @@ export function Meter(props: {
         />
       )}
     </div>
+  )
+}
+
+const SORT_ICONS = { asc: ArrowUp, desc: ArrowDown } as const
+const ARIA_SORT = { asc: 'ascending', desc: 'descending' } as const
+
+/**
+ * Sorts a table by its column. Kept beside the header's label, whose own
+ * button opens the column's help.
+ */
+function SortButton(props: {
+  label: string
+  dir: 'asc' | 'desc' | undefined
+  onClick: () => void
+}) {
+  const { t } = useTranslation()
+  const Icon = props.dir ? SORT_ICONS[props.dir] : ArrowUpDown
+  return (
+    <button
+      type='button'
+      onClick={props.onClick}
+      aria-label={t('Sort by {{column}}', { column: props.label })}
+      className={cn(
+        'hover:text-foreground focus-visible:ring-ring/50 -m-1 rounded-sm p-1 outline-none focus-visible:ring-2',
+        !props.dir && 'text-muted-foreground/60'
+      )}
+    >
+      <Icon className='size-3' aria-hidden />
+    </button>
   )
 }
 
@@ -1666,8 +1698,12 @@ export type Column<T> = {
   /** What the column means, shown when its header is hovered or focused. */
   hint?: string
   align?: 'right'
+  /** The header sorts the table through the table's onSort. */
+  sortable?: boolean
   render: (row: T) => ReactNode
 }
+
+export type TableSort = { key: string; dir: 'asc' | 'desc' }
 
 // Rows a table shows at once. A longer list pages, so a view with several
 // long tables stays short and renders only what is on screen.
@@ -1687,9 +1723,22 @@ export function SimpleTable<T>(props: {
   card?: (row: T) => ReactNode
   /** The source is loading or failed: shown instead of the empty sentence. Ignored once there are rows. */
   state?: TableState
+  /**
+   * The order the rows arrive in, marked on its column's header. The caller
+   * sorts the rows; a sortable header asks for an order through onSort.
+   */
+  sort?: TableSort
+  onSort?: (key: string) => void
 }) {
   const { t } = useTranslation()
   const [page, setPage] = useState(0)
+  // A new order starts from the first page.
+  const order = props.sort ? `${props.sort.key}:${props.sort.dir}` : ''
+  const [pagedOrder, setPagedOrder] = useState(order)
+  if (pagedOrder !== order) {
+    setPagedOrder(order)
+    setPage(0)
+  }
   const rows = props.rows ?? []
   if (rows.length === 0) {
     return <EmptyState state={props.state} empty={props.empty} />
@@ -1722,17 +1771,40 @@ export function SimpleTable<T>(props: {
         <Table>
           <TableHeader>
             <TableRow>
-              {props.columns.map((column) => (
-                <TableHead
-                  key={column.key}
-                  className={cn(
-                    'text-muted-foreground h-9 text-xs first:pl-4 last:pr-4',
-                    column.align === 'right' && 'text-right'
-                  )}
-                >
-                  <HelpLabel label={column.label} help={column.hint} />
-                </TableHead>
-              ))}
+              {props.columns.map((column) => {
+                const sorted =
+                  props.sort?.key === column.key ? props.sort.dir : undefined
+                const sortable = column.sortable && props.onSort
+                return (
+                  <TableHead
+                    key={column.key}
+                    aria-sort={sorted ? ARIA_SORT[sorted] : undefined}
+                    className={cn(
+                      'text-muted-foreground h-9 text-xs first:pl-4 last:pr-4',
+                      column.align === 'right' && 'text-right',
+                      sorted && 'text-foreground'
+                    )}
+                  >
+                    {sortable ? (
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-1',
+                          column.align === 'right' && 'flex-row-reverse'
+                        )}
+                      >
+                        <HelpLabel label={column.label} help={column.hint} />
+                        <SortButton
+                          label={column.label}
+                          dir={sorted}
+                          onClick={() => props.onSort?.(column.key)}
+                        />
+                      </span>
+                    ) : (
+                      <HelpLabel label={column.label} help={column.hint} />
+                    )}
+                  </TableHead>
+                )
+              })}
             </TableRow>
           </TableHeader>
           <TableBody className='[&>tr]:h-10'>

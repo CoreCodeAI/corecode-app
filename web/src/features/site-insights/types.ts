@@ -266,6 +266,10 @@ export type EngineAccount = {
   subscription_period_end_ms?: number
   /** Usable quota reset credits, one entry per credit; absent from an engine before them. */
   reset_credits?: EngineResetCredit[]
+  /** The account's size relative to the pool, by which quota_balanced scales its headroom; null while the engine does not know it, absent before the server's release. */
+  capacity_weight?: number | null
+  /** The account's manual weight, 1 to 100, 50 when none is set; quota_balanced scales its headroom by weight / 50. Absent before the server's release. */
+  weight?: number
 }
 
 /**

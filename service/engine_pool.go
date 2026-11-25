@@ -56,8 +56,15 @@ type EngineAccount struct {
 	Eligible bool `json:"eligible"`
 	// Active is requests in flight; Sessions the conversations the engine
 	// counts as running on the account.
-	Active        int    `json:"active"`
-	Sessions      int    `json:"sessions"`
+	Active   int `json:"active"`
+	Sessions int `json:"sessions"`
+	// CapacityWeight is the account's size relative to the pool, by which the
+	// engine's quota_balanced strategy scales its quota headroom; null while
+	// the engine does not know it, which it counts as 1.
+	CapacityWeight *float64 `json:"capacity_weight"`
+	// Weight is the account's manual weight, 1 to 100, and 50 when none is
+	// set: quota_balanced scales the account's headroom by Weight / 50.
+	Weight        int    `json:"weight"`
 	ObservedAt    int64  `json:"observed_at_ms"`
 	Observation   string `json:"observation"`
 	Successes     int64  `json:"successes"`
@@ -217,14 +224,18 @@ type engineGroup struct {
 	QuotaEffective  engineBudget   `json:"quota_effective"`
 	Counts          map[string]int `json:"counts"`
 	Credentials     []struct {
-		ID            int          `json:"id"`
-		Name          string       `json:"name"`
-		Status        string       `json:"status"`
-		FiveHour      engineWindow `json:"five_hour"`
-		SevenDay      engineWindow `json:"seven_day"`
-		Active        int          `json:"active"`
-		Sessions      int          `json:"sessions"`
-		CooldownUntil *int64       `json:"cooldown_until_ms"`
+		ID       int          `json:"id"`
+		Name     string       `json:"name"`
+		Status   string       `json:"status"`
+		FiveHour engineWindow `json:"five_hour"`
+		SevenDay engineWindow `json:"seven_day"`
+		Active   int          `json:"active"`
+		Sessions int          `json:"sessions"`
+		// An engine before capacity weights sends none.
+		CapacityWeight *float64 `json:"capacity_weight"`
+		// Weight is the account's manual weight, 50 when none is set.
+		Weight        int    `json:"weight"`
+		CooldownUntil *int64 `json:"cooldown_until_ms"`
 		Activity      *struct {
 			LastUsedAt    *int64 `json:"last_used_at_ms"`
 			LastFailure   string `json:"last_failure_summary"`
@@ -413,6 +424,28 @@ func SetEngineSubscriptionRenewal(ctx context.Context, organizationUUID, renewsO
 	return nil
 }
 
+// EngineWeightDefault is the engine's weight for an account with none set.
+const EngineWeightDefault = 50
+
+// SetEngineCredentialWeight sets an engine account's manual weight, 1 to 100,
+// or clears it with nil so the account returns to the default of 50. Under
+// quota_balanced the account takes new conversations in proportion to it. It
+// drops the cached pool so the next read shows it.
+func SetEngineCredentialWeight(ctx context.Context, groupID, credentialID int, weight *int) error {
+	base := strings.TrimRight(strings.TrimSpace(operation_setting.EngineControlURL), "/")
+	key := strings.TrimSpace(operation_setting.EngineControlKey)
+	if base == "" || key == "" {
+		return ErrEngineControlNotConfigured
+	}
+	path := fmt.Sprintf("/groups/%d/credentials/%d", groupID, credentialID)
+	// The engine reads a null weight as "clear it"; a pointer marshals as one.
+	_, err := engineRequest[any](ctx, http.MethodPut, base, key, path, map[string]*int{"weight_manual": weight})
+	enginePoolCache.mu.Lock()
+	enginePoolCache.readAt = time.Time{}
+	enginePoolCache.mu.Unlock()
+	return err
+}
+
 // ErrEngineControlNotConfigured means EngineControlURL or EngineControlKey is
 // empty, so nothing was sent to the engine.
 var ErrEngineControlNotConfigured = errors.New("engine control is not configured")
@@ -583,6 +616,8 @@ func readEnginePool(base, key string) EnginePool {
 				Active:        credential.Active,
 				Sessions:      credential.Sessions,
 			}
+			account.CapacityWeight = credential.CapacityWeight
+			account.Weight = credential.Weight
 			account.QuotaWindows = []EngineQuotaWindow{}
 			account.ResetCredits = []EngineResetCredit{}
 			if observed := credential.Account; observed != nil {

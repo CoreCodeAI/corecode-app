@@ -507,6 +507,27 @@ func SetEngineSubscriptionRenewal(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
+// SetEngineCredentialWeight sets an engine account's manual weight from the
+// pool page: a whole number from 1 to 100, or null for the default of 50.
+func SetEngineCredentialWeight(c *gin.Context) {
+	groupID, groupErr := strconv.Atoi(c.Param("group_id"))
+	credentialID, credentialErr := strconv.Atoi(c.Param("credential_id"))
+	var request struct {
+		Weight *int `json:"weight"`
+	}
+	if groupErr != nil || credentialErr != nil || groupID <= 0 || credentialID <= 0 ||
+		common.DecodeJson(c.Request.Body, &request) != nil ||
+		(request.Weight != nil && (*request.Weight < 1 || *request.Weight > 100)) {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	if err := service.SetEngineCredentialWeight(c.Request.Context(), groupID, credentialID, request.Weight); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
 // ConsumeEngineResetCredit redeems one quota reset credit of an engine
 // account. The body names the kind (full, partial, or empty to let the
 // provider pick) and the client's idempotency key, which a retry after an
