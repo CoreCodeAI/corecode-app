@@ -45,6 +45,28 @@ export function groupVendorKey(
   return groupVendor(group)?.name ?? ''
 }
 
+/**
+ * The page lists vendors in this order: Claude, GPT, Grok, then Seedance.
+ * Other known vendors follow, and groups of no known vendor come last.
+ */
+const VENDOR_ORDER = ['Anthropic', 'OpenAI', 'xAI', 'ByteDance']
+
+function vendorRank(key: string): number {
+  if (!key) return VENDOR_ORDER.length + 1
+  const rank = VENDOR_ORDER.indexOf(key)
+  return rank === -1 ? VENDOR_ORDER.length : rank
+}
+
+/** The groups in vendor order; groups of one vendor keep their order. */
+export function sortGroupsByVendor<T extends Pick<StatusGroup, 'name' | 'model'>>(
+  groups: readonly T[]
+): T[] {
+  return groups
+    .map((group, index) => ({ group, index, rank: vendorRank(groupVendorKey(group)) }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((item) => item.group)
+}
+
 export type VendorCount = {
   /** The vendor's name, or '' for groups no rule recognizes. */
   key: string
@@ -53,8 +75,8 @@ export type VendorCount = {
 }
 
 /**
- * Each vendor with its number of groups, the largest first; ties keep the
- * order the groups come in. Groups of no known vendor come last.
+ * Each vendor with its number of groups, in vendor order; vendors outside
+ * that order follow, the largest first. Groups of no known vendor come last.
  */
 export function vendorCounts(
   groups: readonly Pick<StatusGroup, 'name' | 'model'>[]
@@ -67,8 +89,7 @@ export function vendorCounts(
     if (entry) entry.count += 1
     else counts.set(key, { key, icon: vendor?.icon ?? null, count: 1 })
   }
-  return [...counts.values()].sort((a, b) => {
-    if (!a.key !== !b.key) return a.key ? -1 : 1
-    return b.count - a.count
-  })
+  return [...counts.values()].sort(
+    (a, b) => vendorRank(a.key) - vendorRank(b.key) || b.count - a.count
+  )
 }
