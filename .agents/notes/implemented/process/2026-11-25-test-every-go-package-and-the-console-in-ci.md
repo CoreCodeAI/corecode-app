@@ -17,13 +17,22 @@ and merge green.
 - The Go step runs `go vet ./...` and `go test ./...` in the root module,
   `tokenkit` and `relaykit`, and fails if any of them fails; the log handling
   and the race run of `pkg/deployment` and `pkg/riskpolicy` stay as they were.
-- The `web` job runs `bun run test` after the first-load check.
+- A `console-tests` job runs `bun run test` in three shards beside `web`.
+
+## Alternatives considered
+
+- **A Vitest step at the end of `web`.** The first run of this change did that:
+  the step took 7 min 5 s on the hosted runner, `web` grew from about 1.5 to
+  8.5 minutes, and corecode-infra's `release-app.yml` waits for `check` and
+  `web` before it deploys, so every app release would have started about 6
+  minutes later.
 
 ## Consequences
 
-- Local cost on 2026-11-25: the Go step ran 67 test packages in about a minute
-  with a warm build cache; Vitest ran 439 files and 4,617 tests in 96 s. The
-  first CI runs give the hosted runner's figure.
+- The deploy does not wait for the console tests; a pull request does. A main
+  commit whose tests fail still deploys, and its red run shows on main.
+- On the hosted runner the Go step took 2 min 48 s, against 81 s for the six
+  directories.
 - Two tests fail on a machine with `HTTP_PROXY` set
   (`TestUpstreamAddressesMaskOnlyConfiguredAddresses`,
   `TestPricingHKDPerCNYNeverWaitsAndFetchesInTheBackground`); hosted runners
@@ -34,4 +43,5 @@ and merge green.
 - `actionlint .github/workflows/ci.yml`: clean.
 - The Go step's script, run under bash with the proxy variables unset: exit 0,
   67 `ok` packages, no failure.
-- `bun run test` in `web/` on origin/main: 439 files, 4,617 tests passed.
+- `bun run test` in `web/` on origin/main: 439 files, 4,617 tests passed in
+  96 s on a 14-core laptop.

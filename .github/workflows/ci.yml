@@ -144,11 +144,37 @@ jobs:
         working-directory: web
         run: bun run first-load:check
 
-      # The console's Vitest suite: 439 files and 4,617 tests, 96 s on a laptop
-      # on 2026-11-25. Before this step nothing ran them on a pull request.
+  # The console's Vitest suite, which nothing ran on a pull request before
+  # 2026-11-25. Its 439 files took 7 minutes on one hosted runner (96 s on a
+  # 14-core laptop), so it runs in three shards beside web rather than as a step
+  # of it: corecode-infra's release-app.yml waits for check and web before it
+  # deploys, and a step there held every release back by those 7 minutes. These
+  # jobs gate the pull request; the deploy does not wait for them.
+  console-tests:
+    name: console tests ${{ matrix.shard }}/3
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
       - name: Test the console
         working-directory: web
-        run: bun run test
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -eu
+          bun install --frozen-lockfile
+          bun run test --shard="$SHARD/3"
 
   # Releases from main only. corecode-infra builds the commit while check and web
   # run, refuses a commit that is not on main, and deploys once both pass, so
