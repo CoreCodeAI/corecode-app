@@ -18,13 +18,14 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
-import { ReceiptText, RefreshCw } from 'lucide-react'
+import { CalendarClock, ReceiptText, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/empty-state'
 import { SectionPageLayout } from '@/components/layout'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SELF_QUERY_KEY, useSelf } from '@/hooks/use-self'
@@ -134,6 +135,12 @@ export function InvoiceCenter() {
   } else {
     content = (
       <div className='flex flex-col gap-4'>
+        <Alert>
+          <CalendarClock aria-hidden='true' />
+          <AlertDescription>
+            {t('Invoices are issued in one batch every Friday.')}
+          </AlertDescription>
+        </Alert>
         <InvoiceSummary
           summary={summary.data}
           loading={summary.isPending}

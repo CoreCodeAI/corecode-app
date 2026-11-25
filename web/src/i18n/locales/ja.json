@@ -8188,7 +8188,7 @@
     "Invoicing is not available": "請求書機能は利用できません",
     "Issue or reject invoice applications.": "請求書申請を発行または却下します。",
     "Issued at": "発行日時",
-    "Issuing an invoice can take up to 5 business days.": "請求書の発行には最大 5 営業日かかる場合があります。",
+    "Invoices are issued in one batch every Friday.": "請求書は毎週金曜日にまとめて発行します。",
     "Largest invoice file an administrator can upload.": "管理者がアップロードできる請求書ファイルの最大サイズ。",
     "My applications": "自分の申請",
     "No applications found": "申請が見つかりません",

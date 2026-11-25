@@ -8188,7 +8188,7 @@
     "Invoicing is not available": "暫未開放開票",
     "Issue or reject invoice applications.": "處理使用者的開票申請：開票或駁回。",
     "Issued at": "開票時間",
-    "Issuing an invoice can take up to 5 business days.": "申請開票最多可能需要 5 個工作天。",
+    "Invoices are issued in one batch every Friday.": "每週五統一開票。",
     "Largest invoice file an administrator can upload.": "管理員可上傳的發票檔案大小上限。",
     "My applications": "我的申請",
     "No applications found": "暫無開票申請",
