@@ -244,9 +244,8 @@ func setupEpayCallbackTest(t *testing.T) {
 	model.DB = nil
 }
 
-// assertEpayCallbacksVerifyBeforeSettlement sends each callback to the top-up
-// and subscription endpoints by GET and POST. Only a valid pending callback is
-// accepted; every other callback is rejected.
+// assertEpayCallbacksVerifyBeforeSettlement checks the pending and rejected
+// responses of each Epay endpoint by GET and POST.
 func assertEpayCallbacksVerifyBeforeSettlement(t *testing.T, cases []epayCallbackCase) {
 	t.Helper()
 	endpoints := []struct {
@@ -261,6 +260,10 @@ func assertEpayCallbacksVerifyBeforeSettlement(t *testing.T, cases []epayCallbac
 	}{
 		{
 			name: "topup notify", path: "/api/user/epay/notify", handler: EpayNotify,
+			status: http.StatusOK, rejectedBody: "fail", pendingBody: "success",
+		},
+		{
+			name: "invoice notify", path: "/api/invoice/epay/notify", handler: InvoiceEpayNotify,
 			status: http.StatusOK, rejectedBody: "fail", pendingBody: "success",
 		},
 		{
@@ -397,9 +400,16 @@ func TestEpayRSAModeSignsOrdersAndVerifiesCallbacks(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, verifiedOrder.VerifyStatus)
 
-	pending, err := platform.SignParams(map[string]string{
+	pendingFields := map[string]string{
 		"type": "alipay", "money": "1.00", "name": "item", "out_trade_no": "order", "trade_status": "WAIT_BUYER_PAY",
-	})
+	}
+	pending, err := platform.SignParams(pendingFields)
+	require.NoError(t, err)
+	otherConfig := *platform.Config
+	otherConfig.PartnerID = "another_merchant"
+	otherMerchantPlatform, err := epay.NewClient(&otherConfig, "https://pay.example.com")
+	require.NoError(t, err)
+	wrongMerchant, err := otherMerchantPlatform.SignParams(pendingFields)
 	require.NoError(t, err)
 	paidFields := map[string]string{
 		"type": "alipay", "money": "1.00", "name": "item", "out_trade_no": "order", "trade_status": epay.StatusTradeSuccess,
@@ -419,6 +429,7 @@ func TestEpayRSAModeSignsOrdersAndVerifiesCallbacks(t *testing.T) {
 
 	assertEpayCallbacksVerifyBeforeSettlement(t, []epayCallbackCase{
 		{name: "valid pending signed by platform", params: pending, validPending: true},
+		{name: "pending for another merchant", params: wrongMerchant},
 		{name: "tampered amount", params: tampered},
 		{name: "signed with merchant key", params: merchantSigned},
 		{name: "MD5 signature in RSA mode", params: md5Signed},

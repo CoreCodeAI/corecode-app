@@ -128,9 +128,24 @@ commits (N1–N5 and the theme) above upstream `633b4c5b1`, which is
   CoreCode's own pins and overrides. Upstream's router bump (router-core
   1.171.34) changed `router.getMatchedRoutes` to return a tuple, which only
   `bun run typecheck` caught in `src/main.tsx`.
+- **Test the protocol code outside the CI package list.** Run `go test
+  ./relay/...` and `go test ./...` in both `relaykit` and `tokenkit`. The
+  `6627f0e3f` sync caught a stale 403 assertion in the relay's retry test:
+  insufficient wallet balance is 402, and the fallback must not submit the
+  task to an upstream the wallet cannot pay for.
 - **A CoreCode page needs its prefix in `reservedRouteNamespaces`.**
   `TestReservedRouteNamespacesCoverConsolePages` was already failing on main
   for `/rival-prices`; the test is outside the packages CI runs.
+- **Check all CoreCode locales, including ones absent upstream.** The sync
+  through `6627f0e3f` adds fourteen marketplace strings. The seven upstream
+  dictionaries merge, but Korean has no upstream file to conflict with.
+  Translate the incoming keys there and run `src/i18n/locales.test.ts`.
+- **A new provider check also applies to CoreCode-only consumers.** The sync
+  through `6627f0e3f` brings merchant ID validation to RSA Epay callbacks.
+  The invoice callback shares the Epay client but is absent upstream, so it
+  applies the same check before settlement. The callback suite covers all four
+  endpoints with the store unavailable: rejection and pending events never
+  settle an order.
 - Dependabot's open pull requests (`corecode-app-pre-fork` #1–#5) stayed in the
   archived repository. Vulnerability alerts were off on the fork and are now on,
   matching the archived repository. Whether Dependabot version updates open pull
