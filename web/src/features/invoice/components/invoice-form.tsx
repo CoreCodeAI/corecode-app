@@ -384,7 +384,7 @@ export function InvoiceForm(props: {
             {!filing && (
               <p className='text-muted-foreground -mt-2 flex items-center justify-center gap-1.5 text-xs'>
                 <Clock className='size-3.5 shrink-0' aria-hidden='true' />
-                {t('Issuing an invoice can take up to 5 business days.')}
+                {t('Invoices are issued in one batch every Friday.')}
               </p>
             )}
           </form>
