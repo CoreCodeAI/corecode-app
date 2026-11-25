@@ -7227,6 +7227,7 @@
     "No groups": "No groups",
     "No quota reading": "No quota reading",
     "Not schedulable": "Not schedulable",
+    "{{group}} · {{eligible}} of {{accounts}} accounts schedulable": "{{group}} · {{eligible}} of {{accounts}} accounts schedulable",
     "Observed {{time}}": "Observed {{time}}",
     "Quota budget": "Quota budget",
     "Quota budget reached": "Quota budget reached",

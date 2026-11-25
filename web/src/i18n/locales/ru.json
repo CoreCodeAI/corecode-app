@@ -7227,6 +7227,7 @@
     "No groups": "Нет групп",
     "No quota reading": "Нет данных о квоте",
     "Not schedulable": "Недоступны для планирования",
+    "{{group}} · {{eligible}} of {{accounts}} accounts schedulable": "{{group}} · доступно для планирования {{eligible}} из {{accounts}} аккаунтов",
     "Observed {{time}}": "Замер {{time}}",
     "Quota budget": "Бюджет квоты",
     "Quota budget reached": "Бюджет квоты достигнут",

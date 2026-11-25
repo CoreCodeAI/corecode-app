@@ -7227,6 +7227,7 @@
     "No groups": "그룹 없음",
     "No quota reading": "한도 수치 없음",
     "Not schedulable": "스케줄 불가",
+    "{{group}} · {{eligible}} of {{accounts}} accounts schedulable": "{{group}} · 계정 {{accounts}}개 중 {{eligible}}개 스케줄 가능",
     "Observed {{time}}": "확인 시각 {{time}}",
     "Quota budget": "한도 예산",
     "Quota budget reached": "한도 예산 도달",

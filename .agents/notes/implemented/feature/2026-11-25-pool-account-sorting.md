@@ -19,7 +19,10 @@ operator sets did that.
   - then requests in flight.
 
   The Claude table gets a "Schedule order" column, showing each schedulable account's place
-  in its group as `n / total`. It is also the default sort. Affinity, the avoided
+  in its group as `n / total`. It is also the default sort. Ranks restart in every group,
+  so in this order `SimpleTable`'s `section` puts a heading row before each group ("name ·
+  n of m accounts schedulable") and one before the accounts the engine would not pick; a
+  page that starts inside a group repeats its heading. Affinity, the avoided
   organization and the round-robin tie-breaks depend on the request, so they are left out
   and the help says it is an estimate. Other providers have no column and default to the
   account id.

@@ -1703,6 +1703,9 @@ export type Column<T> = {
   render: (row: T) => ReactNode
 }
 
+/** A run of rows under one heading; rows with the same key share it. */
+export type TableSection = { key: string | number; label: ReactNode }
+
 export type TableSort = { key: string; dir: 'asc' | 'desc' }
 
 // Rows a table shows at once. A longer list pages, so a view with several
@@ -1729,6 +1732,11 @@ export function SimpleTable<T>(props: {
    */
   sort?: TableSort
   onSort?: (key: string) => void
+  /**
+   * Splits the rows into sections: a heading row goes before the first row of
+   * each section, and again at the top of a page that starts inside one.
+   */
+  section?: (row: T) => TableSection
 }) {
   const { t } = useTranslation()
   const [page, setPage] = useState(0)
@@ -1748,21 +1756,38 @@ export function SimpleTable<T>(props: {
   const current = Math.min(page, pages - 1)
   const offset = current * TABLE_PAGE_SIZE
   const visible = rows.slice(offset, offset + TABLE_PAGE_SIZE)
+  const sectionAt = (index: number): TableSection | undefined => {
+    if (!props.section) return undefined
+    const current = props.section(visible[index])
+    if (index > 0 && props.section(visible[index - 1]).key === current.key) {
+      return undefined
+    }
+    return current
+  }
   return (
     <TooltipProvider delay={HELP_DELAY}>
       {props.card && (
         <ul className='grid gap-2 sm:hidden'>
-          {visible.map((row, index) => (
-            <li
-              key={props.rowKey(row, offset + index)}
-              className={cn(
-                'rounded-md border p-3 tabular-nums',
-                props.faded?.(row) && 'text-muted-foreground'
-              )}
-            >
-              {props.card?.(row)}
-            </li>
-          ))}
+          {visible.map((row, index) => {
+            const section = sectionAt(index)
+            return (
+              <Fragment key={props.rowKey(row, offset + index)}>
+                {section && (
+                  <li className='text-muted-foreground pt-2 text-xs font-medium'>
+                    {section.label}
+                  </li>
+                )}
+                <li
+                  className={cn(
+                    'rounded-md border p-3 tabular-nums',
+                    props.faded?.(row) && 'text-muted-foreground'
+                  )}
+                >
+                  {props.card?.(row)}
+                </li>
+              </Fragment>
+            )
+          })}
         </ul>
       )}
       <div
@@ -1808,24 +1833,39 @@ export function SimpleTable<T>(props: {
             </TableRow>
           </TableHeader>
           <TableBody className='[&>tr]:h-10'>
-            {visible.map((row, index) => (
-              <TableRow
-                key={props.rowKey(row, offset + index)}
-                className={cn(props.faded?.(row) && 'text-muted-foreground')}
-              >
-                {props.columns.map((column) => (
-                  <TableCell
-                    key={column.key}
-                    className={cn(
-                      'py-1.5 tabular-nums first:pl-4 last:pr-4',
-                      column.align === 'right' && 'text-right'
-                    )}
+            {visible.map((row, index) => {
+              const section = sectionAt(index)
+              return (
+                <Fragment key={props.rowKey(row, offset + index)}>
+                  {section && (
+                    <TableRow className='bg-muted/50'>
+                      <TableHead
+                        scope='colgroup'
+                        colSpan={props.columns.length}
+                        className='h-8 pl-4 text-xs font-medium'
+                      >
+                        {section.label}
+                      </TableHead>
+                    </TableRow>
+                  )}
+                  <TableRow
+                    className={cn(props.faded?.(row) && 'text-muted-foreground')}
                   >
-                    {column.render(row)}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
+                    {props.columns.map((column) => (
+                      <TableCell
+                        key={column.key}
+                        className={cn(
+                          'py-1.5 tabular-nums first:pl-4 last:pr-4',
+                          column.align === 'right' && 'text-right'
+                        )}
+                      >
+                        {column.render(row)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </Fragment>
+              )
+            })}
           </TableBody>
         </Table>
       </div>

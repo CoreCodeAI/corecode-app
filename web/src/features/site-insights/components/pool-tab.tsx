@@ -72,6 +72,7 @@ import {
   Panel,
   ProviderSwitch,
   SimpleTable,
+  type TableSection,
   type MetricItem,
   type Tone,
 } from './shared'
@@ -218,6 +219,23 @@ export function PoolTab(props: {
       )
     }
   }
+  const accountsInGroup = new Map<number, number>()
+  for (const row of accounts) {
+    accountsInGroup.set(row.group_id, (accountsInGroup.get(row.group_id) ?? 0) + 1)
+  }
+  // In the engine's order each group ranks its own accounts, so each gets a
+  // heading; the accounts it would not pick come last, under one heading.
+  const scheduleSection = (row: EngineAccount): TableSection =>
+    ranks.has(row.credential_id)
+      ? {
+          key: row.group_id,
+          label: t('{{group}} · {{eligible}} of {{accounts}} accounts schedulable', {
+            group: row.group,
+            eligible: rankedInGroup.get(row.group_id) ?? 0,
+            accounts: accountsInGroup.get(row.group_id) ?? 0,
+          }),
+        }
+      : { key: 'unschedulable', label: t('Not schedulable') }
   const shown = sortPoolAccounts(
     accounts.filter(
       (account) =>
@@ -492,6 +510,7 @@ export function PoolTab(props: {
           rowKey={(row) => row.credential_id}
           empty={t('No accounts match')}
           sort={sortedColumn ? { key: sortedColumn, dir: sort.dir } : undefined}
+          section={sort.key === 'schedule' ? scheduleSection : undefined}
           onSort={(column) => {
             const key = columnSort[column]
             if (key) pickSort(key)
