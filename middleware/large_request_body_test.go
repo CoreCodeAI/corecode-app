@@ -69,6 +69,21 @@ func requireNotAdmitted(t *testing.T, admitted <-chan int64) {
 	}
 }
 
+// requireQueued waits until a request is queued on the gate. The semaphore
+// admits in order, so taking one byte fails while a request waits even with
+// room left. A wait measured before this can start before the request reaches
+// the gate on a loaded machine.
+func requireQueued(t *testing.T, gate *largeRequestBodyGate) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		if gate.held.TryAcquire(1) {
+			gate.held.Release(1)
+			return false
+		}
+		return true
+	}, 5*time.Second, time.Millisecond, "request was not queued")
+}
+
 func TestLargeBodyWaitsUntilAnEarlierOneFinishes(t *testing.T) {
 	gate := newLargeRequestBodyGate(40<<20, 5*time.Second)
 	admitted := make(chan int64, 4)
@@ -80,6 +95,7 @@ func TestLargeBodyWaitsUntilAnEarlierOneFinishes(t *testing.T) {
 
 	// 24 + 24 MiB exceeds the 40 MiB budget, so the second waits.
 	second := serveAsync(engine, largeBodyRequest(context.Background(), 24<<20))
+	requireQueued(t, gate)
 	requireNotAdmitted(t, admitted)
 
 	release <- struct{}{}

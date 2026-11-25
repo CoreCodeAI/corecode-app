@@ -74,11 +74,16 @@ jobs:
 
       - name: Vet and test the Go module
         run: |
-          # pipefail: the test output is piped to tail, and without it the step
-          # takes tail's exit status, so a failing test would pass the job.
+          # The full output runs to thousands of log lines, so it goes to a file.
+          # On failure print each failing test's own lines: the last 40 lines
+          # alone ended at "FAIL <package>" and never named the test.
           set -euo pipefail
           go vet ./...
-          go test ./common/... ./controller/... ./middleware/... ./model/... ./router/... ./service/... 2>&1 | tail -40
+          if ! go test ./common/... ./controller/... ./middleware/... ./model/... ./router/... ./service/... > "$RUNNER_TEMP/go-test.log" 2>&1; then
+            grep -E -A30 -- '^\s*--- FAIL|^panic:|^FAIL' "$RUNNER_TEMP/go-test.log" | head -400
+            exit 1
+          fi
+          tail -40 "$RUNNER_TEMP/go-test.log"
           go test -race ./pkg/deployment ./pkg/riskpolicy
 
       - name: Save Go caches
