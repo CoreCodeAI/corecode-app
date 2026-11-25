@@ -72,14 +72,22 @@ jobs:
           mkdir -p web/dist
           : > web/dist/index.html
 
-      - name: Vet and test the Go module
+      # Every package, relay/, setting/ and pkg/ included: a list of chosen
+      # directories left the relay converters, billing expressions and plugins
+      # untested. tokenkit and relaykit are modules of their own, which ./...
+      # from the root compiles through its replace lines but never tests.
+      - name: Vet and test the Go modules
         run: |
           # The full output runs to thousands of log lines, so it goes to a file.
           # On failure print each failing test's own lines: the last 40 lines
           # alone ended at "FAIL <package>" and never named the test.
           set -euo pipefail
-          go vet ./...
-          if ! go test ./common/... ./controller/... ./middleware/... ./model/... ./router/... ./service/... > "$RUNNER_TEMP/go-test.log" 2>&1; then
+          status=0
+          for module in . tokenkit relaykit; do
+            (cd "$module" && go vet ./...) || status=1
+            (cd "$module" && go test ./...) >> "$RUNNER_TEMP/go-test.log" 2>&1 || status=1
+          done
+          if [ "$status" -ne 0 ]; then
             grep -E -A30 -- '^\s*--- FAIL|^panic:|^FAIL' "$RUNNER_TEMP/go-test.log" | head -400
             exit 1
           fi
@@ -135,6 +143,12 @@ jobs:
       - name: Check the core pages' first-load size
         working-directory: web
         run: bun run first-load:check
+
+      # The console's Vitest suite: 439 files and 4,617 tests, 96 s on a laptop
+      # on 2026-11-25. Before this step nothing ran them on a pull request.
+      - name: Test the console
+        working-directory: web
+        run: bun run test
 
   # Releases from main only. corecode-infra builds the commit while check and web
   # run, refuses a commit that is not on main, and deploys once both pass, so
