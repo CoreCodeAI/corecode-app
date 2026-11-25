@@ -16,11 +16,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { TapTooltip, TapTooltipTrigger } from '@/components/tap-tooltip'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { TooltipContent } from '@/components/ui/tooltip'
@@ -32,6 +42,16 @@ import {
   PROVIDER_LABELS,
   useInsightsFormat,
 } from '../lib'
+import {
+  CLAUDE_ONLY_SORTS,
+  POOL_SORT_DEFAULT_DIR,
+  POOL_SORT_KEYS,
+  quotaHeadroom,
+  scheduleRanks,
+  sortPoolAccounts,
+  type PoolSort,
+  type PoolSortKey,
+} from '../pool-sort'
 import {
   POOL_PROVIDERS,
   type EngineAccount,
@@ -58,6 +78,7 @@ import {
 import { SubscriptionRenewalsPanel } from './subscription-renewals-panel'
 import { poolRunsShort } from './unused-quota'
 import { UnusedQuotaPanel } from './unused-quota-panel'
+import { WeightCell } from './weight-cell'
 
 function statusVariant(account: EngineAccount) {
   if (account.eligible) return 'outline'
@@ -103,6 +124,11 @@ export function PoolTab(props: {
   const statusLabel = useStatusLabel()
   const [group, setGroup] = useState('all')
   const [attentionOnly, setAttentionOnly] = useState(false)
+  const [picked, setSort] = useState<PoolSort>({
+    key: 'schedule',
+    dir: 'asc',
+  })
+  const sortLabels = usePoolSortLabels()
   const pool = props.data
 
   if (pool && !pool.configured) {
@@ -161,11 +187,66 @@ export function PoolTab(props: {
   )
   // A group picked under another provider is not one of these.
   const pickedGroup = groupIds.has(Number(group)) ? group : 'all'
-  const shown = accounts.filter(
-    (account) =>
-      (pickedGroup === 'all' || String(account.group_id) === pickedGroup) &&
-      (!attentionOnly || ATTENTION.has(account.status) || !account.eligible)
+  // The engine's order is worked out for Claude only, whose quota windows it
+  // reads; another provider falls back to the account id.
+  const sortKeys = POOL_SORT_KEYS.filter(
+    (key) => claude || !CLAUDE_ONLY_SORTS.has(key)
   )
+  const sort: PoolSort = sortKeys.includes(picked.key)
+    ? picked
+    : { key: 'account', dir: 'asc' }
+  const pickSort = (key: PoolSortKey) =>
+    setSort((current) => ({
+      key,
+      dir:
+        current.key === key ? flipDir(current.dir) : POOL_SORT_DEFAULT_DIR[key],
+    }))
+  const now = pool?.observed_at_ms || Date.now()
+  const headroom = (row: EngineAccount) =>
+    quotaHeadroom(
+      row,
+      { five: budgetOf(row, 'five'), seven: budgetOf(row, 'seven') },
+      now
+    )
+  const ranks = claude ? scheduleRanks(accounts, headroom) : new Map()
+  const rankedInGroup = new Map<number, number>()
+  for (const row of accounts) {
+    if (ranks.has(row.credential_id)) {
+      rankedInGroup.set(
+        row.group_id,
+        (rankedInGroup.get(row.group_id) ?? 0) + 1
+      )
+    }
+  }
+  const shown = sortPoolAccounts(
+    accounts.filter(
+      (account) =>
+        (pickedGroup === 'all' || String(account.group_id) === pickedGroup) &&
+        (!attentionOnly || ATTENTION.has(account.status) || !account.eligible)
+    ),
+    sort,
+    {
+      headroom,
+      ranks,
+      groupOrder: new Map(providerGroups.map((row, index) => [row.id, index])),
+      statusLabel,
+    }
+  )
+  // A header sorts by the key its column shows.
+  const columnSort: Record<string, PoolSortKey> = {
+    account: 'account',
+    status: 'status',
+    schedule: 'schedule',
+    weight: 'weight',
+    active: 'active',
+    five: 'five',
+    seven: 'seven',
+    burn: 'burn',
+    activity: 'last_used',
+  }
+  const sortedColumn = Object.entries(columnSort).find(
+    ([, key]) => key === sort.key
+  )?.[0]
 
   const summary: MetricItem[] = [
     {
@@ -381,6 +462,18 @@ export function PoolTab(props: {
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
+          <SortPicker
+            keys={sortKeys}
+            labels={sortLabels}
+            sort={sort}
+            onKey={(key) => setSort({ key, dir: POOL_SORT_DEFAULT_DIR[key] })}
+            onDir={() =>
+              setSort((current) => ({
+                key: sort.key,
+                dir: flipDir(current.dir),
+              }))
+            }
+          />
           <ToggleGroup
             variant='outline'
             size='sm'
@@ -398,17 +491,34 @@ export function PoolTab(props: {
           rows={shown}
           rowKey={(row) => row.credential_id}
           empty={t('No accounts match')}
+          sort={sortedColumn ? { key: sortedColumn, dir: sort.dir } : undefined}
+          onSort={(column) => {
+            const key = columnSort[column]
+            if (key) pickSort(key)
+          }}
           columns={[
             {
               key: 'account',
               label: t('Pool account'),
+              sortable: true,
               render: (row) => (
                 <span className='grid'>
                   <span className='font-mono text-xs'>
                     #{row.credential_id} {row.email_mask}
                   </span>
                   <span className='text-muted-foreground text-xs'>
-                    {[row.group, row.plan, row.tier]
+                    {[
+                      row.group,
+                      row.plan,
+                      row.tier,
+                      row.capacity_weight
+                        ? t('Size ×{{weight}}', {
+                            weight: fmt.num(
+                              Math.round(row.capacity_weight * 100) / 100
+                            ),
+                          })
+                        : '',
+                    ]
                       .filter(Boolean)
                       .join(' · ')}
                   </span>
@@ -418,6 +528,7 @@ export function PoolTab(props: {
             {
               key: 'status',
               label: t('Status'),
+              sortable: true,
               render: (row) => (
                 <span className='flex flex-col items-start gap-0.5'>
                   <Badge variant={statusVariant(row)}>
@@ -431,11 +542,54 @@ export function PoolTab(props: {
                 </span>
               ),
             },
+            ...(claude
+              ? [
+                  {
+                    key: 'schedule',
+                    label: t('Schedule order'),
+                    hint: t(
+                      'Where the engine would place the account for a new session in its group, by its quota_balanced score: fewest pinned sessions per unit of quota headroom first. Headroom is the 5-hour share left squared, times the 7-day share left over the hours until it resets, times the account size and its schedule weight. Sessions already bound to an account stay on it, and ties rotate, so this is an estimate.'
+                    ),
+                    align: 'right' as const,
+                    sortable: true,
+                    render: (row: EngineAccount) => {
+                      const rank = ranks.get(row.credential_id)
+                      if (rank == null) {
+                        return <span className='text-muted-foreground'>-</span>
+                      }
+                      return (
+                        <span className={cn(rank === 1 && 'font-medium')}>
+                          {rank}
+                          <span className='text-muted-foreground'>
+                            {' '}
+                            / {rankedInGroup.get(row.group_id) ?? 0}
+                          </span>
+                        </span>
+                      )
+                    },
+                  },
+                ]
+              : []),
+            ...(accounts.some((account) => account.weight != null)
+              ? [
+                  {
+                    key: 'weight',
+                    label: t('Schedule weight'),
+                    hint: t(
+                      'How many times its quota’s share of new conversations the account takes: at ×2 it takes twice the conversations of an equal account at ×1, at ×0.5 half. Conversations already bound to an account stay on it, and the quota budget still stops it at its line. Saved in corecode-engine as the account’s weight.'
+                    ),
+                    align: 'right' as const,
+                    sortable: true,
+                    render: (row: EngineAccount) => <WeightCell row={row} />,
+                  },
+                ]
+              : []),
             {
               key: 'active',
               label: t('In flight'),
               hint: t('Requests in flight / sessions pinned to the account'),
               align: 'right',
+              sortable: true,
               render: (row) => `${row.active} / ${row.sessions}`,
             },
             ...(claude
@@ -443,6 +597,7 @@ export function PoolTab(props: {
                   {
                     key: 'five',
                     label: t('5-hour'),
+                    sortable: true,
                     hint: t(
                       'The bar is the share of the window the account has used; the tick is its budget line, where the engine stops scheduling it.'
                     ),
@@ -460,6 +615,7 @@ export function PoolTab(props: {
                   {
                     key: 'seven',
                     label: t('7-day'),
+                    sortable: true,
                     hint: t(
                       'The bar is the share of the window the account has used; the tick is its budget line, where the engine stops scheduling it.'
                     ),
@@ -546,6 +702,7 @@ export function PoolTab(props: {
             {
               key: 'burn',
               label: t('Spend / hour'),
+              sortable: true,
               hint: t('Logged spend over the last 24 hours, per hour'),
               align: 'right',
               render: (row) =>
@@ -556,6 +713,7 @@ export function PoolTab(props: {
             {
               key: 'activity',
               label: t('Last 24 hours'),
+              sortable: true,
               align: 'right',
               render: (row) => <ActivityCell row={row} at={at} />,
             },
@@ -563,6 +721,84 @@ export function PoolTab(props: {
         />
       </Panel>
     </div>
+  )
+}
+
+function flipDir(dir: PoolSort['dir']): PoolSort['dir'] {
+  return dir === 'asc' ? 'desc' : 'asc'
+}
+
+function usePoolSortLabels(): Record<PoolSortKey, string> {
+  const { t } = useTranslation()
+  return {
+    schedule: t('Schedule order'),
+    account: t('Account ID'),
+    status: t('Status'),
+    active: t('Requests in flight'),
+    sessions: t('Pinned sessions'),
+    five: t('5-hour used'),
+    five_left: t('5-hour left ($)'),
+    five_reset: t('5-hour reset'),
+    seven: t('7-day used'),
+    seven_left: t('7-day left ($)'),
+    seven_reset: t('7-day reset'),
+    week_unused: t('Projected unused this week'),
+    capacity: t('Account size'),
+    weight: t('Schedule weight'),
+    burn: t('Spend / hour'),
+    last_used: t('Last used'),
+    failures: t('Failures (24h)'),
+    renewal: t('Renewal date'),
+  }
+}
+
+/** Picks the table's order, including the figures no column sorts by. */
+function SortPicker(props: {
+  keys: readonly PoolSortKey[]
+  labels: Record<PoolSortKey, string>
+  sort: PoolSort
+  onKey: (key: PoolSortKey) => void
+  onDir: () => void
+}) {
+  const { t } = useTranslation()
+  const items = props.keys.map((key) => ({
+    value: key,
+    label: props.labels[key],
+  }))
+  const Icon = props.sort.dir === 'asc' ? ArrowUp : ArrowDown
+  return (
+    <span className='flex items-center gap-1'>
+      <Select
+        items={items}
+        value={props.sort.key}
+        onValueChange={(value) => {
+          if (value !== null) props.onKey(value as PoolSortKey)
+        }}
+      >
+        <SelectTrigger className='h-8 text-xs' aria-label={t('Sort by')}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          <SelectGroup>
+            {items.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      <Button
+        type='button'
+        variant='outline'
+        size='icon'
+        className='size-8'
+        onClick={props.onDir}
+        aria-label={props.sort.dir === 'asc' ? t('Ascending') : t('Descending')}
+      >
+        <Icon className='size-3.5' aria-hidden />
+      </Button>
+    </span>
   )
 }
 

@@ -32,6 +32,8 @@ beforeAll(async () => {
   await i18next.use(initReactI18next).init({
     lng: 'en',
     fallbackLng: 'en',
+    // As in src/i18n/config.ts: React escapes, so i18next must not.
+    interpolation: { escapeValue: false },
     resources: {
       en: {
         translation: {},

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -31,7 +32,7 @@ func TestFetchEnginePool(t *testing.T) {
 					{"id":1,"name":"us-01","channel_id":"claude","enabled":true,"current":2,"override_limit":null,"effective_limit":0,"quota_supported":true,
 					 "quota_effective":{"enabled":true,"five_hour_percent":90,"seven_day_percent":95},"counts":{"total":1,"available":1},
 					 "credentials":[{"id":6,"name":"#6","status":"available","five_hour":{"utilization":0.05,"reset_at_ms":7},"seven_day":{"utilization":0.36,"reset_at_ms":8},
-					   "active":2,"sessions":3,"cooldown_until_ms":null,
+					   "active":2,"sessions":3,"capacity_weight":1.25,"weight":100,"cooldown_until_ms":null,
 					   "activity":{"last_used_at_ms":9,"last_failure_summary":"rate limited","last_failure_at_ms":10,"success_count":40,"failure_count":1},
 					   "account":{"state":"fresh","observed_at_ms":11,"email":"bob@x.com","plan":"Max","tier":"default_claude_max_5x",
 					     "organization":"bob@x.com's Organization","organization_uuid":"0f6c1a2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b","subscription_status":"active","subscription_state":"estimated","subscription_period_end_ms":1795000000000}}]},
@@ -87,6 +88,9 @@ func TestFetchEnginePool(t *testing.T) {
 	assert.Equal(t, 36.0, first.SevenDay)
 	assert.Equal(t, int64(8), first.SevenDayReset)
 	assert.Equal(t, 3, first.Sessions)
+	require.NotNil(t, first.CapacityWeight)
+	assert.InDelta(t, 1.25, *first.CapacityWeight, 1e-9)
+	assert.Equal(t, 100, first.Weight)
 	assert.Equal(t, int64(40), first.Successes)
 	assert.Equal(t, "rate limited", first.LastFailure)
 	assert.Equal(t, "Max", first.Plan)
@@ -96,6 +100,7 @@ func TestFetchEnginePool(t *testing.T) {
 	assert.Equal(t, "active", first.SubscriptionStatus)
 	assert.Equal(t, int64(1795000000000), first.SubscriptionPeriodEnd)
 	assert.Zero(t, pool.Accounts[1].SubscriptionPeriodEnd, "an account without an observation has no renewal")
+	assert.Nil(t, pool.Accounts[1].CapacityWeight, "a weight the engine does not know stays null")
 	assert.Equal(t, 150.0, *first.FiveHourRemainingUSD)
 	assert.Equal(t, 9.5, *first.BurnUSDPerHour)
 	require.NotNil(t, first.SevenDayUnusedUSD)
@@ -282,6 +287,43 @@ func TestSetEngineSubscriptionRenewal(t *testing.T) {
 	enginePoolCache.mu.Lock()
 	assert.True(t, enginePoolCache.readAt.IsZero(), "the next pool read asks the engine again")
 	enginePoolCache.mu.Unlock()
+}
+
+func TestSetEngineCredentialWeight(t *testing.T) {
+	var gotMethod, gotPath string
+	var gotBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		raw, _ := io.ReadAll(r.Body)
+		gotBody = string(raw)
+		_, _ = w.Write([]byte(`{"code":0,"data":{}}`))
+	}))
+	defer server.Close()
+	previousURL, previousKey := operation_setting.EngineControlURL, operation_setting.EngineControlKey
+	t.Cleanup(func() {
+		operation_setting.EngineControlURL, operation_setting.EngineControlKey = previousURL, previousKey
+	})
+
+	operation_setting.EngineControlURL, operation_setting.EngineControlKey = "", ""
+	assert.ErrorIs(t, SetEngineCredentialWeight(t.Context(), 7, 21, nil), ErrEngineControlNotConfigured)
+
+	operation_setting.EngineControlURL, operation_setting.EngineControlKey = server.URL, "secret"
+	weight := 100
+	enginePoolCache.mu.Lock()
+	enginePoolCache.readAt = time.Now()
+	enginePoolCache.mu.Unlock()
+	require.NoError(t, SetEngineCredentialWeight(t.Context(), 7, 21, &weight))
+	assert.Equal(t, http.MethodPut, gotMethod)
+	assert.Equal(t, "/api/groups/7/credentials/21", gotPath)
+	// Only the weight is sent, so the engine leaves the name, status and proxy alone.
+	assert.JSONEq(t, `{"weight_manual":100}`, gotBody)
+	enginePoolCache.mu.Lock()
+	assert.True(t, enginePoolCache.readAt.IsZero(), "the next pool read asks the engine again")
+	enginePoolCache.mu.Unlock()
+
+	// Clearing sends an explicit null, which the engine reads as the default.
+	require.NoError(t, SetEngineCredentialWeight(t.Context(), 7, 21, nil))
+	assert.JSONEq(t, `{"weight_manual":null}`, gotBody)
 }
 
 func TestEnginePoolCarriesResetCredits(t *testing.T) {

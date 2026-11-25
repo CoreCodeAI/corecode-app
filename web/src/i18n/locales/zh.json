@@ -10166,6 +10166,27 @@
     "A one-hour cache write costs more than a five-minute one; a read more than five minutes and at most an hour after the key's last request would have been a fresh write under five minutes. Both are estimates by API key, which may carry several conversations. It is a trade, not waste, and is not in the money wasted.": "1 小时缓存写入比 5 分钟的贵；而距同一密钥上次请求超过 5 分钟、不到 1 小时的读取，在 5 分钟缓存下会重新写入。两者都是按 API 密钥估算，一个密钥可能同时跑多个对话。这是一笔交换，不是浪费，不计入浪费金额。",
     "The one-hour writes cost customers more than their reads saved over this range.": "这个范围内，1 小时写入多花的钱超过了读取省下的钱。",
     "{{count}} requests lacked the prices to be valued and are left out.": "{{count}} 个请求缺少价格信息，无法计价，未计入。",
-    "No one-hour cache in this range": "这个范围内没有 1 小时缓存"
+    "No one-hour cache in this range": "这个范围内没有 1 小时缓存",
+    "Sort by": "排序",
+    "Sort by {{column}}": "按{{column}}排序",
+    "Schedule order": "调度顺位",
+    "Size ×{{weight}}": "规模 ×{{weight}}",
+    "Requests in flight": "进行中请求",
+    "Pinned sessions": "绑定会话数",
+    "5-hour used": "5 小时已用",
+    "5-hour left ($)": "5 小时剩余（$）",
+    "7-day used": "7 天已用",
+    "7-day left ($)": "7 天剩余（$）",
+    "7-day reset": "7 天重置时间",
+    "Projected unused this week": "本周预计用不完",
+    "Account size": "账号规模",
+    "Failures (24h)": "失败次数（24 小时）",
+    "Where the engine would place the account for a new session in its group, by its quota_balanced score: fewest pinned sessions per unit of quota headroom first. Headroom is the 5-hour share left squared, times the 7-day share left over the hours until it resets, times the account size and its schedule weight. Sessions already bound to an account stay on it, and ties rotate, so this is an estimate.": "新会话进入该分组时，引擎按 quota_balanced 打分给这个账号排的位置：每单位额度余量绑定的会话越少越靠前。余量 = 5 小时剩余比例的平方 × 7 天剩余比例 ÷ 距周重置的小时数 × 账号规模 × 调度倍率。已绑定的会话会留在原账号，并列时轮换，所以这是估算。",
+    "Schedule weight": "调度倍率",
+    "How many times its quota’s share of new conversations the account takes: at ×2 it takes twice the conversations of an equal account at ×1, at ×0.5 half. Conversations already bound to an account stay on it, and the quota budget still stops it at its line. Saved in corecode-engine as the account’s weight.": "账号按额度应得的新会话份额再乘以这个倍率：×2 接到的新会话是同等账号（×1）的两倍，×0.5 是一半。已绑定的会话留在原账号，额度预算照样在预算线停用它。保存在 corecode-engine 中，作为该账号的权重。",
+    "Account #{{id}} now takes {{factor}} new conversations": "账号 #{{id}} 的调度倍率已设为 {{factor}}",
+    "{{factor}} (default)": "{{factor}}（默认）",
+    "Schedule weight of account #{{id}}": "账号 #{{id}} 的调度倍率",
+    "Failed to save the schedule weight": "保存调度倍率失败"
   }
 }

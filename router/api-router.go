@@ -512,6 +512,7 @@ func SetApiRouter(router *gin.Engine) {
 			siteInsightsRoute.GET("/pool", controller.GetEnginePool)
 			siteInsightsRoute.PUT("/pool/subscription-renewals/:organization_uuid", controller.SetEngineSubscriptionRenewal)
 			siteInsightsRoute.POST("/pool/groups/:group_id/credentials/:credential_id/reset-credits", controller.ConsumeEngineResetCredit)
+			siteInsightsRoute.PUT("/pool/groups/:group_id/credentials/:credential_id/weight", controller.SetEngineCredentialWeight)
 			siteInsightsRoute.GET("/pool-usage", controller.GetPoolUsage)
 			siteInsightsRoute.GET("/pool-outlook", controller.GetPoolOutlook)
 			siteInsightsRoute.GET("/user-spend", controller.GetUserSpendInsights)

@@ -10166,6 +10166,27 @@
     "A one-hour cache write costs more than a five-minute one; a read more than five minutes and at most an hour after the key's last request would have been a fresh write under five minutes. Both are estimates by API key, which may carry several conversations. It is a trade, not waste, and is not in the money wasted.": "Запись в кэш на 1 ч дороже записи на 5 мин; чтение спустя более 5 минут и не более часа после прошлого запроса того же ключа при 5-минутном кэше было бы новой записью. Обе величины — оценки по API-ключу, через который могут идти несколько диалогов. Это обмен, а не потери, и в потери не входит.",
     "The one-hour writes cost customers more than their reads saved over this range.": "За этот период записи на 1 ч стоили клиентам больше, чем сэкономили чтения.",
     "{{count}} requests lacked the prices to be valued and are left out.": "У {{count}} запросов нет цен для оценки, они не учтены.",
-    "No one-hour cache in this range": "За этот период кэша на 1 ч нет"
+    "No one-hour cache in this range": "За этот период кэша на 1 ч нет",
+    "Sort by": "Сортировка",
+    "Sort by {{column}}": "Сортировать по: {{column}}",
+    "Schedule order": "Порядок выбора",
+    "Size ×{{weight}}": "Размер ×{{weight}}",
+    "Requests in flight": "Запросы в работе",
+    "Pinned sessions": "Закреплённые сессии",
+    "5-hour used": "Использовано за 5 ч",
+    "5-hour left ($)": "Остаток 5 ч ($)",
+    "7-day used": "Использовано за 7 дн",
+    "7-day left ($)": "Остаток 7 дн ($)",
+    "7-day reset": "Сброс 7 дн",
+    "Projected unused this week": "Прогноз неиспользованного за неделю",
+    "Account size": "Размер аккаунта",
+    "Failures (24h)": "Сбои (24 ч)",
+    "Where the engine would place the account for a new session in its group, by its quota_balanced score: fewest pinned sessions per unit of quota headroom first. Headroom is the 5-hour share left squared, times the 7-day share left over the hours until it resets, times the account size and its schedule weight. Sessions already bound to an account stay on it, and ties rotate, so this is an estimate.": "Место, которое движок отвёл бы аккаунту для новой сессии в его группе по оценке quota_balanced: сначала меньше закреплённых сессий на единицу запаса квоты. Запас = квадрат остатка 5-часового окна × остаток 7-дневного окна ÷ часы до сброса × размер аккаунта × вес выбора. Привязанные сессии остаются на своём аккаунте, равные чередуются, так что это оценка.",
+    "Schedule weight": "Вес выбора",
+    "How many times its quota’s share of new conversations the account takes: at ×2 it takes twice the conversations of an equal account at ×1, at ×0.5 half. Conversations already bound to an account stay on it, and the quota budget still stops it at its line. Saved in corecode-engine as the account’s weight.": "Во сколько раз больше новых разговоров, чем положено по квоте, получает аккаунт: при ×2 — вдвое больше, чем равный аккаунт с ×1, при ×0,5 — вдвое меньше. Привязанные разговоры остаются на своём аккаунте, а бюджет квоты по-прежнему останавливает его на своей черте. Хранится в corecode-engine как вес аккаунта.",
+    "Account #{{id}} now takes {{factor}} new conversations": "Аккаунт #{{id}} теперь получает {{factor}} новых разговоров",
+    "{{factor}} (default)": "{{factor}} (по умолчанию)",
+    "Schedule weight of account #{{id}}": "Вес выбора аккаунта #{{id}}",
+    "Failed to save the schedule weight": "Не удалось сохранить вес выбора"
   }
 }

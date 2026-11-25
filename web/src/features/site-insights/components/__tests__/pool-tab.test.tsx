@@ -539,3 +539,54 @@ describe('provider usage', () => {
     expect(screen.queryByText('Last hour')).not.toBeInTheDocument()
   })
 })
+
+describe('account order', () => {
+  const rows = () =>
+    screen.getAllByText(/^#\d+ /).map((cell) => cell.textContent?.split(' ')[0])
+
+  const data = () =>
+    pool(
+      [group({ id: 1, name: 'one' })],
+      [
+        account({ credential_id: 1, five_hour: 60, burn_usd_per_hour: 1 }),
+        account({ credential_id: 2, five_hour: 10, burn_usd_per_hour: 3 }),
+        account({
+          credential_id: 3,
+          eligible: false,
+          status: 'cooldown',
+          burn_usd_per_hour: 2,
+          capacity_weight: 1.5,
+        }),
+      ]
+    )
+
+  it('starts in the engine’s order and shows each account’s place', () => {
+    render(<PoolTab data={data()} />)
+    expect(rows()).toEqual(['#2', '#1', '#3'])
+    const header = screen.getByRole('columnheader', { name: /Schedule order/ })
+    expect(header).toHaveAttribute('aria-sort', 'ascending')
+    expect(screen.getByText(/Size ×1\.5/)).toBeInTheDocument()
+  })
+
+  it('sorts by a column from its header, and reverses on a second click', async () => {
+    const user = userEvent.setup()
+    render(<PoolTab data={data()} />)
+    const sortBurn = screen.getByRole('button', {
+      name: 'Sort by Spend / hour',
+    })
+    await user.click(sortBurn)
+    expect(rows()).toEqual(['#2', '#3', '#1'])
+    expect(
+      screen.getByRole('columnheader', { name: /Spend \/ hour/ })
+    ).toHaveAttribute('aria-sort', 'descending')
+    await user.click(sortBurn)
+    expect(rows()).toEqual(['#1', '#3', '#2'])
+  })
+
+  it('reverses the order from the direction button', async () => {
+    const user = userEvent.setup()
+    render(<PoolTab data={data()} />)
+    await user.click(screen.getByRole('button', { name: 'Ascending' }))
+    expect(rows()).toEqual(['#1', '#2', '#3'])
+  })
+})

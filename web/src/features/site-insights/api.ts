@@ -274,6 +274,24 @@ export async function saveSubscriptionRenewal(params: {
 }
 
 /**
+ * Sets an engine account's manual weight, 1 to 100, or clears it with null
+ * so the account returns to the default of 50.
+ */
+export async function saveCredentialWeight(params: {
+  groupId: number
+  credentialId: number
+  weight: number | null
+}): Promise<void> {
+  const res = await api.put<ApiResponse<unknown>>(
+    `/api/site-insights/pool/groups/${params.groupId}/credentials/${params.credentialId}/weight`,
+    { weight: params.weight }
+  )
+  if (!res.data.success) {
+    throw createServerError(res.data, 'Failed to save the schedule weight')
+  }
+}
+
+/**
  * Redeems one quota reset credit of an engine account: of the kind given, or
  * the one the provider picks without a kind. A retry after an unknown outcome
  * must reuse the idempotency key so the engine answers for the same redemption.

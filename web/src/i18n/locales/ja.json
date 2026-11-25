@@ -10166,6 +10166,27 @@
     "A one-hour cache write costs more than a five-minute one; a read more than five minutes and at most an hour after the key's last request would have been a fresh write under five minutes. Both are estimates by API key, which may carry several conversations. It is a trade, not waste, and is not in the money wasted.": "1 時間キャッシュの書き込みは 5 分より高い。一方、同じキーの前回リクエストから 5 分超〜1 時間以内の読み取りは、5 分キャッシュなら再書き込みになっていました。どちらも API キー単位の推定で、1 つのキーに複数の会話が混ざることがあります。これは取引であり無駄ではないため、無駄の金額には含みません。",
     "The one-hour writes cost customers more than their reads saved over this range.": "この期間、1 時間書き込みの追加コストが読み取りの節約を上回りました。",
     "{{count}} requests lacked the prices to be valued and are left out.": "{{count}} 件のリクエストは価格情報がなく、計算から除外。",
-    "No one-hour cache in this range": "この期間に 1 時間キャッシュはありません"
+    "No one-hour cache in this range": "この期間に 1 時間キャッシュはありません",
+    "Sort by": "並べ替え",
+    "Sort by {{column}}": "{{column}}で並べ替え",
+    "Schedule order": "スケジュール順位",
+    "Size ×{{weight}}": "規模 ×{{weight}}",
+    "Requests in flight": "処理中リクエスト",
+    "Pinned sessions": "固定セッション数",
+    "5-hour used": "5 時間の使用率",
+    "5-hour left ($)": "5 時間の残り（$）",
+    "7-day used": "7 日の使用率",
+    "7-day left ($)": "7 日の残り（$）",
+    "7-day reset": "7 日のリセット",
+    "Projected unused this week": "今週の未使用見込み",
+    "Account size": "アカウント規模",
+    "Failures (24h)": "失敗数（24 時間）",
+    "Where the engine would place the account for a new session in its group, by its quota_balanced score: fewest pinned sessions per unit of quota headroom first. Headroom is the 5-hour share left squared, times the 7-day share left over the hours until it resets, times the account size and its schedule weight. Sessions already bound to an account stay on it, and ties rotate, so this is an estimate.": "グループに新しいセッションが来たとき、エンジンが quota_balanced スコアでこのアカウントを置く順位：クォータ余裕 1 単位あたりの固定セッションが少ないほど先。余裕 = 5 時間の残り割合の二乗 × 7 日の残り割合 ÷ リセットまでの時間 × アカウント規模 × スケジュール倍率。既存セッションは元のアカウントに留まり、同点は順番に回すため推定値です。",
+    "Schedule weight": "スケジュール倍率",
+    "How many times its quota’s share of new conversations the account takes: at ×2 it takes twice the conversations of an equal account at ×1, at ×0.5 half. Conversations already bound to an account stay on it, and the quota budget still stops it at its line. Saved in corecode-engine as the account’s weight.": "クォータに応じた新規会話の取り分に掛ける倍率：×2 なら同等のアカウント（×1）の 2 倍、×0.5 なら半分の会話を受けます。既存の会話は元のアカウントに留まり、クォータ予算は引き続き上限で停止します。corecode-engine にアカウントの重みとして保存されます。",
+    "Account #{{id}} now takes {{factor}} new conversations": "アカウント #{{id}} の倍率を {{factor}} に設定しました",
+    "{{factor}} (default)": "{{factor}}（既定）",
+    "Schedule weight of account #{{id}}": "アカウント #{{id}} のスケジュール倍率",
+    "Failed to save the schedule weight": "スケジュール倍率を保存できませんでした"
   }
 }

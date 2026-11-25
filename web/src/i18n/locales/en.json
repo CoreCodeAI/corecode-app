@@ -10166,6 +10166,27 @@
     "A one-hour cache write costs more than a five-minute one; a read more than five minutes and at most an hour after the key's last request would have been a fresh write under five minutes. Both are estimates by API key, which may carry several conversations. It is a trade, not waste, and is not in the money wasted.": "A one-hour cache write costs more than a five-minute one; a read more than five minutes and at most an hour after the key's last request would have been a fresh write under five minutes. Both are estimates by API key, which may carry several conversations. It is a trade, not waste, and is not in the money wasted.",
     "The one-hour writes cost customers more than their reads saved over this range.": "The one-hour writes cost customers more than their reads saved over this range.",
     "{{count}} requests lacked the prices to be valued and are left out.": "{{count}} requests lacked the prices to be valued and are left out.",
-    "No one-hour cache in this range": "No one-hour cache in this range"
+    "No one-hour cache in this range": "No one-hour cache in this range",
+    "Sort by": "Sort by",
+    "Sort by {{column}}": "Sort by {{column}}",
+    "Schedule order": "Schedule order",
+    "Size ×{{weight}}": "Size ×{{weight}}",
+    "Requests in flight": "Requests in flight",
+    "Pinned sessions": "Pinned sessions",
+    "5-hour used": "5-hour used",
+    "5-hour left ($)": "5-hour left ($)",
+    "7-day used": "7-day used",
+    "7-day left ($)": "7-day left ($)",
+    "7-day reset": "7-day reset",
+    "Projected unused this week": "Projected unused this week",
+    "Account size": "Account size",
+    "Failures (24h)": "Failures (24h)",
+    "Where the engine would place the account for a new session in its group, by its quota_balanced score: fewest pinned sessions per unit of quota headroom first. Headroom is the 5-hour share left squared, times the 7-day share left over the hours until it resets, times the account size and its schedule weight. Sessions already bound to an account stay on it, and ties rotate, so this is an estimate.": "Where the engine would place the account for a new session in its group, by its quota_balanced score: fewest pinned sessions per unit of quota headroom first. Headroom is the 5-hour share left squared, times the 7-day share left over the hours until it resets, times the account size and its schedule weight. Sessions already bound to an account stay on it, and ties rotate, so this is an estimate.",
+    "Schedule weight": "Schedule weight",
+    "How many times its quota’s share of new conversations the account takes: at ×2 it takes twice the conversations of an equal account at ×1, at ×0.5 half. Conversations already bound to an account stay on it, and the quota budget still stops it at its line. Saved in corecode-engine as the account’s weight.": "How many times its quota’s share of new conversations the account takes: at ×2 it takes twice the conversations of an equal account at ×1, at ×0.5 half. Conversations already bound to an account stay on it, and the quota budget still stops it at its line. Saved in corecode-engine as the account’s weight.",
+    "Account #{{id}} now takes {{factor}} new conversations": "Account #{{id}} now takes {{factor}} new conversations",
+    "{{factor}} (default)": "{{factor}} (default)",
+    "Schedule weight of account #{{id}}": "Schedule weight of account #{{id}}",
+    "Failed to save the schedule weight": "Failed to save the schedule weight"
   }
 }
