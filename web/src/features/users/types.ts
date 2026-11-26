@@ -66,6 +66,10 @@ export const userSchema = z.object({
   admin_permissions: z
     .record(z.string(), z.record(z.string(), z.boolean()))
     .optional(),
+  /** Per-user concurrency override; null when the group and tiers apply */
+  concurrency_limit: z.number().nullable().optional(),
+  /** The concurrency limit in effect and where it comes from */
+  concurrency: z.object({ limit: z.number(), source: z.string() }).optional(),
 })
 export type User = z.infer<typeof userSchema>
 
@@ -130,6 +134,7 @@ export interface UserFormData {
   quota?: number // Only used when updating user
   group?: string // Only used when updating user
   remark?: string // Only used when updating user
+  concurrency_limit?: number | null // Only used when updating user; null clears it
   admin_permissions?: AdminPermissionMatrix
 }
 

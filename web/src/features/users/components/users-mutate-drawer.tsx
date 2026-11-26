@@ -118,6 +118,20 @@ export function UsersMutateDrawer({
   const currentUser = useAuthStore((s) => s.auth.user)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false)
+  // Kept with the user it was loaded for, since the drawer is reused.
+  const [loadedConcurrency, setLoadedConcurrency] = useState<{
+    userId: number
+    info: User['concurrency']
+  }>()
+  const concurrency =
+    loadedConcurrency?.userId === currentRow?.id
+      ? loadedConcurrency?.info
+      : undefined
+  let concurrencyInEffect: string | undefined
+  if (concurrency) {
+    concurrencyInEffect =
+      concurrency.limit === 0 ? t('Unlimited') : String(concurrency.limit)
+  }
   // Matrix as loaded from the server; an unchanged matrix is not resubmitted so
   // routine edits of an administrator do not require step-up verification.
   const loadedPermissions = useRef<AdminPermissionMatrix | undefined>(undefined)
@@ -151,6 +165,10 @@ export function UsersMutateDrawer({
         .then((result) => {
           if (result.success && result.data) {
             loadedPermissions.current = result.data.admin_permissions
+            setLoadedConcurrency({
+              userId: currentRow.id,
+              info: result.data.concurrency,
+            })
             form.reset(transformUserToFormDefaults(result.data))
           } else {
             handleServerError(result, t('Failed to load'))
@@ -266,6 +284,10 @@ export function UsersMutateDrawer({
       const result = requireServerSuccess(await getUser(currentRow.id))
       if (result.success && result.data) {
         loadedPermissions.current = result.data.admin_permissions
+        setLoadedConcurrency({
+          userId: currentRow.id,
+          info: result.data.concurrency,
+        })
         form.reset(transformUserToFormDefaults(result.data))
       }
       triggerRefresh()
@@ -485,6 +507,34 @@ export function UsersMutateDrawer({
                         </div>
                         <FormDescription>
                           {formatQuota(parseQuotaFromDollars(field.value || 0))}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='concurrency_limit'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Concurrency limit')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            value={field.value ?? ''}
+                            inputMode='numeric'
+                            placeholder={concurrencyInEffect}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Leave empty to follow the group limit and paid tiers. 0 removes the limit.'
+                          )}
+                          {concurrencyInEffect &&
+                            ` ${t('In effect now: {{limit}}', {
+                              limit: concurrencyInEffect,
+                            })}`}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

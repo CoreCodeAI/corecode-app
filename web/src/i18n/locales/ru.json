@@ -7296,6 +7296,8 @@
     "Paid {{amount}} in total": "Всего оплачено {{amount}}",
     "Total Paid": "Всего оплачено",
     "Concurrency limit": "Лимит одновременных запросов",
+    "Leave empty to follow the group limit and paid tiers. 0 removes the limit.": "Оставьте пустым, чтобы действовали лимит группы и уровни оплаты. 0 снимает ограничение.",
+    "In effect now: {{limit}}": "Сейчас действует: {{limit}}",
     "Requests at once, across all of your API keys": "Одновременные запросы по всем вашим API-ключам",
     "Your limit was set for your account.": "Ваш лимит задан для вашего аккаунта.",
     "Contact us if you need more requests at once.": "Свяжитесь с нами, если вам нужно больше одновременных запросов.",

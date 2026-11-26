@@ -7296,6 +7296,8 @@
     "Paid {{amount}} in total": "총 {{amount}} 결제함",
     "Total Paid": "총 결제액",
     "Concurrency limit": "동시성 한도",
+    "Leave empty to follow the group limit and paid tiers. 0 removes the limit.": "비워 두면 그룹 한도와 누적 결제 등급을 따릅니다. 0은 무제한입니다.",
+    "In effect now: {{limit}}": "현재 적용: {{limit}}",
     "Requests at once, across all of your API keys": "모든 API 키를 합산한 동시 요청 수",
     "Your limit was set for your account.": "한도는 내 계정에 설정되어 있습니다.",
     "Contact us if you need more requests at once.": "동시 요청이 더 필요하면 문의해 주세요.",
