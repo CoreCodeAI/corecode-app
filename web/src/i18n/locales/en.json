@@ -7296,6 +7296,8 @@
     "Paid {{amount}} in total": "Paid {{amount}} in total",
     "Total Paid": "Total Paid",
     "Concurrency limit": "Concurrency limit",
+    "Leave empty to follow the group limit and paid tiers. 0 removes the limit.": "Leave empty to follow the group limit and paid tiers. 0 removes the limit.",
+    "In effect now: {{limit}}": "In effect now: {{limit}}",
     "Requests at once, across all of your API keys": "Requests at once, across all of your API keys",
     "Your limit was set for your account.": "Your limit was set for your account.",
     "Contact us if you need more requests at once.": "Contact us if you need more requests at once.",

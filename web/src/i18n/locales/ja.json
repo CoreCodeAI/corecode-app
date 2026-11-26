@@ -7296,6 +7296,8 @@
     "Paid {{amount}} in total": "累計支払額 {{amount}}",
     "Total Paid": "累計支払額",
     "Concurrency limit": "同時実行数の上限",
+    "Leave empty to follow the group limit and paid tiers. 0 removes the limit.": "空欄の場合はグループの上限と累計支払いの段階に従います。0 で無制限になります。",
+    "In effect now: {{limit}}": "現在の適用値：{{limit}}",
     "Requests at once, across all of your API keys": "すべての API キーを合わせた同時リクエスト数",
     "Your limit was set for your account.": "上限はお客様のアカウント向けに設定されています。",
     "Contact us if you need more requests at once.": "同時リクエスト数を増やしたい場合はお問い合わせください。",

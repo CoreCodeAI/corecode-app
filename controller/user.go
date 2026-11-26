@@ -1,8 +1,11 @@
 package controller
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -450,12 +453,50 @@ func GetUser(c *gin.Context) {
 		return
 	}
 	user.AdminPermissions = authz.Capabilities(user.Id, user.Role)
+	override, hasOverride := operation_setting.UserConcurrencyOverride(user.Id)
+	view := adminUserView{User: user, Concurrency: userConcurrencyInfo(user.Id, user.Group)}
+	if hasOverride {
+		view.ConcurrencyLimit = &override
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    user,
+		"data":    view,
 	})
 	return
+}
+
+// adminUserView is a user as an administrator edits it: the user row plus
+// its concurrency override (null when none is set) and the limit in effect.
+type adminUserView struct {
+	*model.User
+	ConcurrencyLimit *int            `json:"concurrency_limit"`
+	Concurrency      UserConcurrency `json:"concurrency"`
+}
+
+// parseConcurrencyLimitUpdate reads the optional concurrency_limit of an
+// admin user update. An absent field leaves the override as it is, so a
+// console that does not send it changes nothing; null removes the override;
+// a whole number of at least 0 sets it, 0 meaning unlimited.
+func parseConcurrencyLimitUpdate(body []byte) (update bool, limit *int, err error) {
+	var request struct {
+		ConcurrencyLimit json.RawMessage `json:"concurrency_limit"`
+	}
+	if err := common.Unmarshal(body, &request); err != nil {
+		return false, nil, err
+	}
+	raw := bytes.TrimSpace(request.ConcurrencyLimit)
+	if len(raw) == 0 {
+		return false, nil, nil
+	}
+	if string(raw) == "null" {
+		return true, nil, nil
+	}
+	var value int
+	if err := common.Unmarshal(raw, &value); err != nil || value < 0 {
+		return false, nil, errors.New("concurrency_limit must be null or a whole number of at least 0")
+	}
+	return true, &value, nil
 }
 
 type TransferAffQuotaRequest struct {
@@ -701,9 +742,19 @@ func GetUserModels(c *gin.Context) {
 }
 
 func UpdateUser(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
 	var updatedUser model.User
-	err := common.DecodeJson(c.Request.Body, &updatedUser)
+	err = common.DecodeJson(bytes.NewReader(body), &updatedUser)
 	if err != nil || updatedUser.Id == 0 {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	updateConcurrency, concurrencyLimit, err := parseConcurrencyLimitUpdate(body)
+	if err != nil {
 		common.ApiErrorT(c, "Invalid parameters")
 		return
 	}
@@ -758,6 +809,20 @@ func UpdateUser(c *gin.Context) {
 	}); err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if updateConcurrency {
+		changed, err := model.SetUserConcurrencyLimit(updatedUser.Id, concurrencyLimit)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if changed {
+			if concurrencyLimit == nil {
+				auditParams["concurrency_limit"] = "default"
+			} else {
+				auditParams["concurrency_limit"] = *concurrencyLimit
+			}
+		}
 	}
 	if authzTouched {
 		model.BumpSyncTopic(model.SyncTopicAuthz)

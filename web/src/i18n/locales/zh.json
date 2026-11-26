@@ -7296,6 +7296,8 @@
     "Paid {{amount}} in total": "累计充值 {{amount}}",
     "Total Paid": "累计充值",
     "Concurrency limit": "并发上限",
+    "Leave empty to follow the group limit and paid tiers. 0 removes the limit.": "留空则按分组上限和累计充值档位；0 表示不限。",
+    "In effect now: {{limit}}": "当前生效：{{limit}}",
     "Requests at once, across all of your API keys": "所有 API 密钥合计可同时进行的请求数",
     "Your limit was set for your account.": "这是为你的账号单独设置的上限。",
     "Contact us if you need more requests at once.": "需要更高并发请联系我们。",
