@@ -156,6 +156,12 @@ func TestLogExportDatabaseMatrix(t *testing.T) {
 			assert.Equal(t, "primary", all[2]["channel_name"])
 			assert.Contains(t, all[2]["other"], "admin_info")
 			assert.Equal(t, true, all[3]["success"])
+
+			// A task refund comes off the consumed quota; the refund is not a request.
+			refund := model.Log{UserId: 2, Username: "bob", CreatedAt: now - 900, Type: model.LogTypeRefund, ModelName: "gpt-b", ChannelId: 9, Quota: 15, RequestId: "b-refund"}
+			require.NoError(t, model.LOG_DB.Create(&refund).Error)
+			stat = callLogHandler(t, GetLogsStat, 3, common.RoleAdminUser, query+"&user_id=2")[0]
+			assert.EqualValues(t, 5, stat["data"].(map[string]any)["quota"])
 		})
 	}
 }
