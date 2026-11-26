@@ -482,11 +482,15 @@ export const PRICE_MONTH_DAYS = 30
 
 /**
  * What one account of a vendor other than Claude costs a month, in US
- * dollars: Codex runs on ChatGPT Pro. A vendor missing here has no recorded
- * price, and its accounts count as free.
+ * dollars. Codex's ChatGPT Pro was cancelled in November 2026 and is not
+ * renewed, Grok's account costs nothing and Gemini has none, so all three are
+ * free on purpose. A vendor missing here has no recorded price, and its
+ * accounts count as free with a warning.
  */
 const VENDOR_ACCOUNT_MONTHLY_USD: Record<string, number> = {
-  codex: 200,
+  codex: 0,
+  grok: 0,
+  gemini: 0,
 }
 
 /**

@@ -23,8 +23,8 @@ import { clientFamilies, vendorMargins } from '../../lib'
 import type { BusinessInsights, FinanceInsights } from '../../types'
 import { ReferralPanel, VendorMarginPanel } from '../business-panels'
 
-// Thirty days at ¥7 a dollar: a $125 Team Tier 1 seat costs ¥875, and the
-// $200 Codex account ¥1,400.
+// Thirty days at ¥7 a dollar: a $125 Team Tier 1 seat costs ¥875, the Codex
+// account nothing, and the Kimi account has no recorded price.
 function finance(overrides: Partial<FinanceInsights> = {}): FinanceInsights {
   return {
     start_time: 0,
@@ -53,7 +53,7 @@ function finance(overrides: Partial<FinanceInsights> = {}): FinanceInsights {
         eligible: 2,
       },
       { vendor: 'codex', plan: '', tier: '', accounts: 1, eligible: 1 },
-      { vendor: 'grok', plan: '', tier: '', accounts: 1, eligible: 1 },
+      { vendor: 'kimi', plan: '', tier: '', accounts: 1, eligible: 1 },
     ],
     ...overrides,
   } as FinanceInsights
@@ -62,6 +62,14 @@ function finance(overrides: Partial<FinanceInsights> = {}): FinanceInsights {
 describe('vendor margins', () => {
   it('sets each vendor’s revenue against its accounts’ cost', () => {
     expect(vendorMargins(finance(), 7)).toEqual([
+      {
+        vendor: 'kimi',
+        revenue: 0,
+        cost: 0,
+        margin: 0,
+        accounts: 1,
+        unpriced: 1,
+      },
       {
         vendor: 'claude',
         revenue: 3000,
@@ -73,18 +81,10 @@ describe('vendor margins', () => {
       {
         vendor: 'codex',
         revenue: 1000,
-        cost: 1400,
-        margin: -400,
+        cost: 0,
+        margin: 1000,
         accounts: 1,
         unpriced: 0,
-      },
-      {
-        vendor: 'grok',
-        revenue: 0,
-        cost: 0,
-        margin: 0,
-        accounts: 1,
-        unpriced: 1,
       },
     ])
   })
@@ -93,18 +93,18 @@ describe('vendor margins', () => {
     render(<VendorMarginPanel data={finance()} />)
     expect(
       screen.getByText(
-        'Earned ¥4,000 against ¥3,150 of accounts: gross margin ¥850 (21.3%). GPT loses ¥400. No price is recorded for the Grok accounts; they count as free.'
+        'Earned ¥4,000 against ¥1,750 of accounts: gross margin ¥2,250 (56.3%). No price is recorded for the kimi accounts; they count as free.'
       )
     ).toBeInTheDocument()
     expect(screen.getByText('1 accounts, 1 unpriced')).toBeInTheDocument()
   })
 
   it('projects a range other than a month to 30 days', () => {
-    // Seven days: ¥4,000 earned against ¥735 of accounts.
+    // Seven days: ¥4,000 earned against ¥408.33 of accounts.
     render(<VendorMarginPanel data={finance({ end_time: 7 * 86400 })} />)
     expect(
       screen.getByText(
-        /At this pace a 30-day month earns ¥17,142\.86 against ¥3,150 of accounts, margin ¥13,992\.86 \(projected from 7 days\)\./
+        /At this pace a 30-day month earns ¥17,142\.86 against ¥1,750 of accounts, margin ¥15,392\.86 \(projected from 7 days\)\./
       )
     ).toBeInTheDocument()
   })

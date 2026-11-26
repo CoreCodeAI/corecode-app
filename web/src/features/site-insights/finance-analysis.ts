@@ -440,6 +440,13 @@ export type FinanceMargins = {
   unattributed: number
   /** The recorded egress IP costs over the range, yuan: part of cost, in no row. */
   ipCost: number
+  /**
+   * The payment processors' fees on recognized revenue, yuan: part of cost,
+   * in no row. The range's fees over the cash they were taken from, applied
+   * to recognized revenue, so cash and revenue recognized in different
+   * ranges are not mixed.
+   */
+  paymentFee: number
   /** The server sent upstream bills by vendor, so they are subtracted. */
   upstreamRead: boolean
   /** Accounts with no recorded price, counted as free. */
@@ -448,6 +455,18 @@ export type FinanceMargins = {
   ungroupedAccounts: number
   /** Vendors whose oldest channel bill was read over COST_STALE_SECONDS before the range's end. */
   staleBills: { vendor: string; at: number }[]
+}
+
+/**
+ * What the payment processors kept of the range's cash: their fees, refunded
+ * orders' included, over the money of the orders still paid. 0 without paid
+ * orders or on a server that does not send payment_fees.
+ */
+export function paymentFeeRate(data: FinanceInsights): number {
+  const fees = data.payment_fees ?? []
+  const money = fees.reduce((sum, row) => sum + row.money, 0)
+  const fee = fees.reduce((sum, row) => sum + row.fee, 0)
+  return money > 0 ? fee / money : 0
 }
 
 /**
@@ -507,8 +526,12 @@ export function financeMargins(
     (data.upstream_unattributed_fee_usd ?? 0) * rate
   const ipCost = (data.ip_cost_cny ?? 0) + (data.ip_cost_usd ?? 0) * rate
   const revenue = list.reduce((sum, row) => sum + row.revenue, 0)
+  const paymentFee = revenue * paymentFeeRate(data)
   const cost =
-    list.reduce((sum, row) => sum + row.cost, 0) + unattributed + ipCost
+    list.reduce((sum, row) => sum + row.cost, 0) +
+    unattributed +
+    ipCost +
+    paymentFee
   const margin = revenue - cost
   return {
     rows: list,
@@ -518,6 +541,7 @@ export function financeMargins(
     rate: revenue > 0 ? margin / revenue : null,
     unattributed,
     ipCost,
+    paymentFee,
     upstreamRead: data.vendor_upstream != null,
     unpricedAccounts: list.reduce((sum, row) => sum + row.unpriced, 0),
     ungroupedAccounts: (data.plan_accounts ?? []).reduce(
@@ -544,6 +568,7 @@ export type WaterfallCost =
   | 'bills'
   | 'fees'
   | 'ips'
+  | 'payments'
   | 'channels'
   | 'commission'
 
@@ -553,9 +578,9 @@ export type WaterfallStep = { key: WaterfallCost; amount: number }
 export type ProfitWaterfall = {
   /** The vendor panel's earned figure, in yuan. */
   revenue: number
-  /** Accounts, upstream bills, upstream fees, IP costs, channel fees, then commission. */
+  /** Accounts, upstream bills, upstream fees, IP costs, payment fees, channel fees, then commission. */
   steps: WaterfallStep[]
-  /** Revenue less the first four steps: the gross margin financeMargins reports. */
+  /** Revenue less the first five steps: the gross margin financeMargins reports. */
   grossMargin: number
   /** Revenue less every step. Not net profit: the panel lists what is still missing. */
   left: number
@@ -563,7 +588,7 @@ export type ProfitWaterfall = {
 
 /**
  * Revenue taken down to what is left, one cost the dashboard knows at a time.
- * Accounts, bills, fees and IP costs are the gross margin's; the channel fee
+ * Accounts, bills, fees, IP costs and payment fees are the gross margin's; the channel fee
  * (real US dollars, converted at the rate) and the commission credited as
  * wallet quota follow. Commission earned by the exempt accounts, the site's
  * own promotion accounts that never withdraw it, is not a cost. Undefined on a
@@ -590,7 +615,8 @@ export function profitWaterfall(
     0
   )
   const ips = margins.ipCost
-  const grossMargin = margins.revenue - accounts - bills - fees - ips
+  const payments = margins.paymentFee
+  const grossMargin = margins.revenue - accounts - bills - fees - ips - payments
   return {
     revenue: margins.revenue,
     steps: [
@@ -598,6 +624,7 @@ export function profitWaterfall(
       { key: 'bills', amount: bills },
       { key: 'fees', amount: fees },
       { key: 'ips', amount: ips },
+      { key: 'payments', amount: payments },
       { key: 'channels', amount: channels },
       { key: 'commission', amount: commission },
     ],

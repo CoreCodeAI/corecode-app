@@ -76,12 +76,13 @@ describe('ProfitWaterfallPanel', () => {
     const rows = screen
       .getAllByRole('listitem')
       .map((item) => item.textContent ?? '')
-    expect(rows).toHaveLength(9)
+    expect(rows).toHaveLength(10)
     expect(rows[0]).toContain('Recognized revenue')
-    expect(rows[5]).toContain('Gross margin')
-    expect(rows[5]).toContain('90.1%')
-    expect(rows[8]).toContain('Left after these costs')
-    expect(rows[8]).toContain('75.5%')
+    expect(rows[5]).toContain('Payment processing fees')
+    expect(rows[6]).toContain('Gross margin')
+    expect(rows[6]).toContain('90.1%')
+    expect(rows[9]).toContain('Left after these costs')
+    expect(rows[9]).toContain('75.5%')
     expect(screen.getByText(/not net profit/)).toBeInTheDocument()
   })
 
