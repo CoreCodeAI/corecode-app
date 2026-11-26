@@ -3102,3 +3102,100 @@ export function parseSubmitResponse(){return {taskId:"1"}} export function build
 		assert.Contains(t, err.Error(), "TASK_PLUGIN_FILE_URL_BUCKET")
 	})
 }
+
+func TestTaskAdaptorUploadsDataURLPlaceholders(t *testing.T) {
+	// The plugin passes the client's JSON field through as the placeholder's
+	// __dataUrl, the way a JSON video request carries an inline frame.
+	source := `
+export const meta = {apiVersion:1,key:"json-data-url",name:"JSON data URL",version:"1.0.0",author:{name:"Test"},models:["m"],fetchMode:"per_task"};
+export function buildSubmitRequest(ctx) {
+  const frame = ctx.requestBody.first_frame;
+  return {url:ctx.baseUrl+"/submit",body:{
+    prompt:"keep",
+    first_frame:{__dataUrl:frame,encoding:"url",maxBytes:16},
+    inline:{__dataUrl:frame,encoding:"dataUrl",mimeType:"image/webp"}
+  }};
+}
+export function parseSubmitResponse(){return {taskId:"1"}} export function buildQueryRequest(){return {url:"https://example.com"}} export function parseTaskResult(){return {status:"SUCCESS"}}
+`
+	plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
+	require.NoError(t, err)
+	newContext := func() *gin.Context {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", strings.NewReader(`{}`))
+		c.Request.Header.Set("Content-Type", "application/json")
+		return c
+	}
+	buildIn := func(c *gin.Context, frame string) (map[string]any, error) {
+		adaptor := New(plugin)
+		info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: "https://provider.example"}, TaskRelayInfo: &relaycommon.TaskRelayInfo{}}
+		adaptor.Init(info)
+		c.Set("task_request", map[string]any{"first_frame": frame})
+		body, err := adaptor.BuildRequestBody(c, info)
+		if err != nil {
+			return nil, err
+		}
+		raw, err := io.ReadAll(body)
+		require.NoError(t, err)
+		var decoded map[string]any
+		require.NoError(t, common.Unmarshal(raw, &decoded))
+		return decoded, nil
+	}
+	frame := "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString([]byte("frame-bytes"))
+
+	t.Run("uploads the decoded bytes and sends their URL", func(t *testing.T) {
+		store := &recordingFileURLStore{}
+		useFileURLStore(t, store)
+		decoded, err := buildIn(newContext(), frame)
+		require.NoError(t, err)
+		assert.Equal(t, "https://files.example/frame-bytes", decoded["first_frame"])
+		assert.Equal(t, "data:image/webp;base64,"+base64.StdEncoding.EncodeToString([]byte("frame-bytes")), decoded["inline"])
+		assert.Equal(t, "keep", decoded["prompt"])
+		assert.Equal(t, []string{"frame-bytes"}, store.data)
+		assert.Equal(t, []string{"image/jpeg"}, store.mimeTypes, "the data URL's media type is kept")
+	})
+
+	t.Run("a retry of the same request reuses the upload", func(t *testing.T) {
+		store := &recordingFileURLStore{}
+		useFileURLStore(t, store)
+		c := newContext()
+		first, err := buildIn(c, frame)
+		require.NoError(t, err)
+		second, err := buildIn(c, frame)
+		require.NoError(t, err)
+		assert.Equal(t, first["first_frame"], second["first_frame"])
+		assert.Equal(t, []string{"frame-bytes"}, store.data, "the file is stored once")
+	})
+
+	t.Run("accepts unpadded base64 and no media type", func(t *testing.T) {
+		store := &recordingFileURLStore{}
+		useFileURLStore(t, store)
+		decoded, err := buildIn(newContext(), "data:;base64,"+base64.StdEncoding.WithPadding(base64.NoPadding).EncodeToString([]byte("abcd")))
+		require.NoError(t, err)
+		assert.Equal(t, "https://files.example/abcd", decoded["first_frame"])
+		assert.Equal(t, []string{"application/octet-stream"}, store.mimeTypes)
+	})
+
+	for _, testCase := range []struct{ name, frame, wantError string }{
+		{name: "an https URL", frame: "https://example.com/a.png", wantError: "not a data: URL"},
+		{name: "percent-encoded data", frame: "data:text/plain,hello", wantError: "must be base64-encoded"},
+		{name: "bad base64", frame: "data:image/png;base64,@@@@", wantError: "not valid base64"},
+		{name: "over maxBytes", frame: "data:image/png;base64," + base64.StdEncoding.EncodeToString([]byte("seventeen-bytes!!")), wantError: "exceeds the 16 byte limit"},
+		{name: "empty", frame: "data:image/png;base64,", wantError: "is empty"},
+	} {
+		t.Run("refuses "+testCase.name, func(t *testing.T) {
+			store := &recordingFileURLStore{}
+			useFileURLStore(t, store)
+			_, err := buildIn(newContext(), testCase.frame)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), testCase.wantError)
+			assert.Empty(t, store.data)
+		})
+	}
+}
+
+func TestFilePlaceholderRefusesBothSources(t *testing.T) {
+	_, err := encodeFilePlaceholder(map[string]any{"__fileRef": "request_file:a", "__dataUrl": "data:;base64,YQ==", "encoding": "base64"}, nil, &filePlaceholderState{limit: 1 << 20})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid file placeholder")
+}

@@ -54,7 +54,8 @@ export type SigningInput = string | ArrayBuffer | ArrayBufferView;
 /** Lowercase hex, padded base64, unpadded base64url, or an ArrayBuffer. */
 export type DigestEncoding = "hex" | "base64" | "base64url" | "bytes";
 export type FileReference = Readonly<{ref: string; field: string; filename: string; mimeType: string; size: number}>;
-export type FilePlaceholder = Readonly<{__fileRef: string; encoding: "base64" | "dataUrl" | "url"; mimeType?: string; maxBytes?: number}>;
+/** Exactly one source: an uploaded multipart file (__fileRef) or a base64 data: URL from a JSON request (__dataUrl). */
+export type FilePlaceholder = Readonly<({__fileRef: string; __dataUrl?: never} | {__dataUrl: string; __fileRef?: never}) & {encoding: "base64" | "dataUrl" | "url"; mimeType?: string; maxBytes?: number}>;
 export type DecodedBody =
   | Readonly<{kind: "json"; value: JSONValue}>
   | Readonly<{kind: "form"; fields: Readonly<Record<string, readonly string[]>>}>
