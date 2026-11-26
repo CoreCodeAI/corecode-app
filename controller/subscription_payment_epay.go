@@ -109,7 +109,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		common.ApiErrorT(c, "Failed to start payment")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "success", "data": params, "url": uri})
+	c.JSON(http.StatusOK, gin.H{"message": "success", "data": params, "url": uri, "trade_no": tradeNo})
 }
 
 func SubscriptionEpayNotify(c *gin.Context) {

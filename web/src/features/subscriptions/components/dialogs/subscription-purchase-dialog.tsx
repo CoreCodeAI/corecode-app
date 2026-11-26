@@ -30,7 +30,7 @@ import { Separator } from '@/components/ui/separator'
 import {
   formatPaymentMoney,
   isStripePayment,
-  openPaymentPage,
+  openPendingPage,
   paysThroughEpay,
 } from '@/features/wallet/lib'
 import { bonusRateToPercent } from '@/features/wallet/lib/bonus'
@@ -79,6 +79,8 @@ interface Props {
   purchaseCount?: number
   userQuota?: number
   onPurchaseSuccess?: () => void | Promise<void>
+  /** Called with the order number once a hosted checkout is opened */
+  onPaymentStarted?: (tradeNo: string) => void
 }
 
 export function SubscriptionPurchaseDialog(props: Props) {
@@ -148,12 +150,18 @@ export function SubscriptionPurchaseDialog(props: Props) {
     (props.purchaseLimit || 0) > 0 &&
     (props.purchaseCount || 0) >= (props.purchaseLimit || 0)
 
+  // The tab opens inside the click, before the request, so Safari and iOS
+  // allow it; it is then pointed at the checkout URL or closed on failure.
   const handlePayStripe = async () => {
     setPaying(true)
+    const checkout = openPendingPage(t('Redirecting to payment page...'))
+    let handedOff = false
     try {
       const res = await paySubscriptionStripe({ plan_id: plan.id })
       if (res.message === 'success' && res.data?.pay_link) {
-        openPaymentPage(res.data.pay_link)
+        if (res.data.trade_no) props.onPaymentStarted?.(res.data.trade_no)
+        checkout.go(res.data.pay_link)
+        handedOff = true
         toast.success(t('Payment page opened'))
         props.onOpenChange(false)
       } else {
@@ -162,16 +170,22 @@ export function SubscriptionPurchaseDialog(props: Props) {
     } catch (error) {
       handleServerError(error, t('Payment request failed'))
     } finally {
+      if (!handedOff) checkout.close()
       setPaying(false)
     }
   }
 
   const handlePayCreem = async () => {
     setPaying(true)
+    const checkout = openPendingPage(t('Redirecting to payment page...'))
+    let handedOff = false
     try {
       const res = await paySubscriptionCreem({ plan_id: plan.id })
       if (res.message === 'success' && res.data?.checkout_url) {
-        openPaymentPage(res.data.checkout_url)
+        const orderId = res.data.order_id || res.data.trade_no
+        if (orderId) props.onPaymentStarted?.(orderId)
+        checkout.go(res.data.checkout_url)
+        handedOff = true
         toast.success(t('Payment page opened'))
         props.onOpenChange(false)
       } else {
@@ -180,6 +194,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
     } catch (error) {
       handleServerError(error, t('Payment request failed'))
     } finally {
+      if (!handedOff) checkout.close()
       setPaying(false)
     }
   }

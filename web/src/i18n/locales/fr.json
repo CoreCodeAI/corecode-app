@@ -10181,5 +10181,7 @@
     "{{percent}}% + {{fixed}}": "{{percent}} % + {{fixed}}",
     "No rate is recorded for {{methods}}; their fees count as nothing.": "Aucun taux n’est enregistré pour {{methods}} ; leurs frais comptent pour zéro.",
     "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "Ce que chaque prestataire de paiement retient sur une commande : un pourcentage de son montant plus un montant fixe en yuans. Une commande remboursée garde ses frais : ils comptent ici, mais pas son montant. La marge brute soustrait la part des frais dans l’encaissement, appliquée au revenu reconnu. Enregistrer un taux pour un moyen de paiement remplace l’ancien ; supprimer tous les taux rétablit les valeurs mesurées par défaut."
-  }
+  },
+  "Payment received!": "Paiement reçu !",
+  "Failed to load plans": "Échec du chargement des forfaits"
 }

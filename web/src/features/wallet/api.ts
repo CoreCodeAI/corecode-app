@@ -340,6 +340,31 @@ export async function completeOrder(
  * Get the Stripe receipt page of a paid Stripe order. Stripe's receipt links
  * expire after 30 days, so the server reads a fresh one on every call.
  */
+/** One order the caller opened, as the server reports it */
+export interface PaymentOrderStatus {
+  trade_no: string
+  kind: 'topup' | 'subscription'
+  status: string
+  /** Quota a settled top-up added; 0 while open and for a subscription */
+  credited_quota: number
+}
+
+/**
+ * Status of one of the caller's own orders by trade number. The server answers
+ * 404 for another user's order and for an unknown one.
+ */
+export async function getPaymentOrderStatus(
+  tradeNo: string
+): Promise<ApiResponse<PaymentOrderStatus>> {
+  const res = await api.get('/api/user/topup/order', {
+    params: { trade_no: tradeNo },
+    // Polled while the payment is open: a miss must not toast every few seconds.
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
+  return res.data
+}
+
 export async function getTopupReceipt(
   tradeNo: string
 ): Promise<ApiResponse<{ url: string }>> {

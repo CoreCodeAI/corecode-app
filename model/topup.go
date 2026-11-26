@@ -180,6 +180,28 @@ func GetTopUpByTradeNo(tradeNo string) *TopUp {
 	return topUp
 }
 
+// GetUserTopUpByTradeNo returns the caller's own top-up with this trade number,
+// or nil. Another user's order is never returned, so a guessed number reads as
+// missing.
+func GetUserTopUpByTradeNo(userId int, tradeNo string) *TopUp {
+	if tradeNo == "" {
+		return nil
+	}
+	var topUp TopUp
+	if err := DB.Where("trade_no = ? AND user_id = ?", tradeNo, userId).First(&topUp).Error; err != nil {
+		return nil
+	}
+	return &topUp
+}
+
+// CreditedQuota is the quota completeOnlineTopUp credits for a successful
+// order: the purchased amount plus the bonus fixed when the order was created.
+func (t *TopUp) CreditedQuota() (int, error) {
+	return common.WalletQuotaFromDecimalStrict(
+		decimal.NewFromInt(t.Amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).Add(decimal.NewFromInt(t.BonusQuota)),
+	)
+}
+
 func UpdatePendingTopUpStatus(tradeNo string, expectedPaymentProvider string, targetStatus string) error {
 	if tradeNo == "" {
 		return errors.New("payment order number not provided")

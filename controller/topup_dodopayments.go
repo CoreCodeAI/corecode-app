@@ -144,7 +144,7 @@ func RequestDodoPaymentsPay(c *gin.Context) {
 		return
 	}
 	logger.LogInfo(c.Request.Context(), common.LogText("Dodo Payments top-up order created user_id=%d trade_no=%s amount=%d money=%.2f test_mode=%t", id, tradeNo, req.Amount, payMoney, setting.DodoPaymentsTestMode))
-	c.JSON(http.StatusOK, gin.H{"message": "success", "data": gin.H{"pay_link": checkoutURL}})
+	c.JSON(http.StatusOK, gin.H{"message": "success", "data": gin.H{"pay_link": checkoutURL, "trade_no": tradeNo}})
 }
 
 // createDodoPaymentsCheckout opens a checkout charging fen in CNY on the

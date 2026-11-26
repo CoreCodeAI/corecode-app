@@ -41,6 +41,8 @@ export type RedemptionResponse = ApiResponse<number>
 export type AmountResponse = ApiResponse<string> & { hkd_amount?: string }
 export type PaymentResponse = ApiResponse<Record<string, unknown>> & {
   url?: string
+  /** The order this form pays; watched until it settles */
+  trade_no?: string
 }
 /** One token a deposit address accepts on one network */
 export interface ChainDepositToken {
@@ -116,12 +118,19 @@ export interface ChainDepositTransfer {
 export type ChainDepositActivityResponse = ApiResponse<{
   transfers: ChainDepositTransfer[]
 }>
-export type StripePaymentResponse = ApiResponse<{ pay_link: string }>
+export type StripePaymentResponse = ApiResponse<{
+  pay_link: string
+  /** The order this checkout pays; watched until it settles */
+  trade_no?: string
+}>
 export type AffiliateCodeResponse = ApiResponse<string>
 export type AffiliateTransferResponse = ApiResponse
-export type CreemPaymentResponse = ApiResponse<{ checkout_url: string }>
+export type CreemPaymentResponse = ApiResponse<{
+  checkout_url: string
+  order_id?: string
+}>
 export type WaffoPaymentResponse = ApiResponse<
-  { payment_url?: string } | string
+  { payment_url?: string; order_id?: string } | string
 >
 export type WaffoPancakePaymentResponse = ApiResponse<
   | {

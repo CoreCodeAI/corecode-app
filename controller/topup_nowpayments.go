@@ -164,7 +164,7 @@ func RequestNowPaymentsPay(c *gin.Context) {
 		return
 	}
 	logger.LogInfo(c.Request.Context(), common.LogText("NOWPayments top-up order created user_id=%d trade_no=%s amount=%d money=%.2f price_usd=%s pay_currency=%s", id, tradeNo, req.Amount, payMoney, priceUSD.StringFixed(2), payCurrency))
-	c.JSON(http.StatusOK, gin.H{"message": "success", "data": gin.H{"pay_link": invoiceURL}})
+	c.JSON(http.StatusOK, gin.H{"message": "success", "data": gin.H{"pay_link": invoiceURL, "trade_no": tradeNo}})
 }
 
 // nowPaymentsInvoiceError is what the customer reads when NOWPayments

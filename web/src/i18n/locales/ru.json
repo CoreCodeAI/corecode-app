@@ -10181,5 +10181,7 @@
     "{{percent}}% + {{fixed}}": "{{percent}}% + {{fixed}}",
     "No rate is recorded for {{methods}}; their fees count as nothing.": "Для {{methods}} ставка не записана; их комиссия считается нулевой.",
     "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "Сколько платёжная система удерживает с заказа: процент от суммы плюс фиксированная сумма в юанях. Комиссия за возвращённый заказ не возвращается, поэтому здесь учитывается его комиссия, но не сумма. Валовая маржа вычитает долю комиссий в поступлениях, применённую к признанной выручке. Новая ставка для способа оплаты заменяет старую; удаление всех ставок возвращает измеренные значения по умолчанию."
-  }
+  },
+  "Payment received!": "Платёж получен!",
+  "Failed to load plans": "Не удалось загрузить тарифы"
 }

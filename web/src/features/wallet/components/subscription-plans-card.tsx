@@ -18,10 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
 import { Crown, RefreshCw, Sparkles, Check } from 'lucide-react'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { ErrorState } from '@/components/error-state'
 import {
   StatusBadge,
   dotColorMap,
@@ -82,6 +83,7 @@ interface SubscriptionPlansCardProps {
   onAvailabilityChange?: (available: boolean) => void
   userQuota?: number
   onPurchaseSuccess?: () => void | Promise<void>
+  onPaymentStarted?: (tradeNo: string) => void
 }
 
 // The methods a plan is bought with from the method picker: the epay methods
@@ -130,11 +132,16 @@ export function SubscriptionPlansCard({
   onAvailabilityChange,
   userQuota,
   onPurchaseSuccess,
+  onPaymentStarted,
 }: SubscriptionPlansCardProps) {
   const { t } = useTranslation()
   const planGate = usePlanGateNotice().data
 
   const [plans, setPlans] = useState<PlanRecord[]>([])
+  // Set when the last plans fetch failed; plans keeps the last good list
+  const [plansError, setPlansError] = useState(false)
+  // Each billing change takes a number; only the newest one may roll back
+  const preferenceSeqRef = useRef(0)
   const [activeSubscriptions, setActiveSubscriptions] = useState<
     UserSubscriptionRecord[]
   >([])
@@ -168,10 +175,11 @@ export function SubscriptionPlansCard({
       const res = requireServerSuccess(await getPublicPlans())
       if (res.success) {
         setPlans(res.data || [])
+        setPlansError(false)
       }
     } catch (error) {
       handleServerError(error)
-      setPlans([])
+      setPlansError(true)
     }
   }, [])
 
@@ -202,28 +210,32 @@ export function SubscriptionPlansCard({
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
-      await fetchSelfSubscription()
+      await Promise.all([fetchPlans(), fetchSelfSubscription()])
     } finally {
       setRefreshing(false)
     }
   }
 
+  // The choice shows at once. A failed request does not restore a value it
+  // saw earlier: a newer choice may be in flight. It reloads the server value.
   const handlePreferenceChange = async (pref: string) => {
-    const previous = billingPreference
+    const seq = ++preferenceSeqRef.current
     setBillingPreference(pref)
     try {
       const res = await updateBillingPreference(pref)
+      if (seq !== preferenceSeqRef.current) return
       if (res.success) {
         toast.success(t('Updated successfully'))
         const normalized = res.data?.billing_preference || pref
         setBillingPreference(normalized)
       } else {
         handleServerError(res, t('Update failed'))
-        setBillingPreference(previous)
+        void fetchSelfSubscription()
       }
     } catch (error) {
+      if (seq !== preferenceSeqRef.current) return
       handleServerError(error, t('Request failed'))
-      setBillingPreference(previous)
+      void fetchSelfSubscription()
     }
   }
 
@@ -302,8 +314,23 @@ export function SubscriptionPlansCard({
     )
   }
 
-  if (plans.length === 0 && !hasAny) {
+  if (plans.length === 0 && !hasAny && !plansError) {
     return null
+  }
+
+  let emptyPlans = (
+    <p className='text-muted-foreground py-4 text-center text-sm'>
+      {t('No plans available')}
+    </p>
+  )
+  if (plans.length === 0 && plansError) {
+    emptyPlans = (
+      <ErrorState
+        title={t('Failed to load plans')}
+        onRetry={fetchPlans}
+        className='py-4'
+      />
+    )
   }
 
   return (
@@ -420,6 +447,7 @@ export function SubscriptionPlansCard({
                 className='h-8 w-8'
                 onClick={handleRefresh}
                 disabled={refreshing}
+                aria-label={t('Refresh')}
               >
                 <RefreshCw
                   className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`}
@@ -708,9 +736,7 @@ export function SubscriptionPlansCard({
             })}
           </div>
         ) : (
-          <p className='text-muted-foreground py-4 text-center text-sm'>
-            {t('No plans available')}
-          </p>
+          emptyPlans
         )}
       </TitledCard>
 
@@ -739,6 +765,7 @@ export function SubscriptionPlansCard({
         }
         userQuota={userQuota}
         onPurchaseSuccess={onPurchaseSuccess}
+        onPaymentStarted={onPaymentStarted}
         purchaseLimit={
           selectedPlan?.plan?.max_purchase_per_user
             ? Number(selectedPlan.plan.max_purchase_per_user)

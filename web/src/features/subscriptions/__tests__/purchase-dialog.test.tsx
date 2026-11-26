@@ -261,4 +261,80 @@ describe('subscription purchase dialog', () => {
     await waitFor(() => expect(stripePay).toHaveBeenCalled())
     expect(epayPay).not.toHaveBeenCalled()
   })
+
+  // Safari and iOS block a tab opened after the request answers, so the tab
+  // opens in the click and is pointed at the checkout once the URL arrives.
+  describe('Stripe checkout tab', () => {
+    function fakeTab() {
+      return {
+        opener: undefined,
+        closed: false,
+        document: {
+          title: '',
+          body: { style: { cssText: '' }, textContent: '' },
+        },
+        location: { href: '' },
+        close: vi.fn(),
+      }
+    }
+
+    function renderStripeDialog() {
+      return render(
+        <QueryClientProvider client={new QueryClient()}>
+          <SubscriptionPurchaseDialog
+            open
+            onOpenChange={vi.fn()}
+            plan={{ plan: { ...plan.plan, stripe_price_id: 'price_1' } }}
+            enableStripe
+            checkoutMethods={[]}
+          />
+        </QueryClientProvider>
+      )
+    }
+
+    it('opens the tab before the request and points it at the checkout', async () => {
+      let answer!: (value: unknown) => void
+      const pay = vi
+        .spyOn(subscriptionApi, 'paySubscriptionStripe')
+        .mockReturnValue(new Promise((resolve) => (answer = resolve)) as never)
+      const tab = fakeTab()
+      const open = vi
+        .spyOn(window, 'open')
+        .mockReturnValue(tab as unknown as Window)
+      renderStripeDialog()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Stripe' }))
+
+      expect(open).toHaveBeenCalledTimes(1)
+      expect(open.mock.invocationCallOrder[0]).toBeLessThan(
+        pay.mock.invocationCallOrder[0]
+      )
+      answer({
+        success: true,
+        message: 'success',
+        data: {
+          pay_link: 'https://checkout.stripe.com/c/pay/cs_2',
+          trade_no: 'T9',
+        },
+      })
+      await waitFor(() =>
+        expect(tab.location.href).toBe('https://checkout.stripe.com/c/pay/cs_2')
+      )
+      expect(tab.close).not.toHaveBeenCalled()
+    })
+
+    it('closes the tab when the request fails', async () => {
+      vi.spyOn(subscriptionApi, 'paySubscriptionStripe').mockRejectedValue(
+        new Error('network down')
+      )
+      const tab = fakeTab()
+      vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window)
+      renderStripeDialog()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Stripe' }))
+
+      await waitFor(() => expect(tab.close).toHaveBeenCalledTimes(1))
+      expect(tab.location.href).toBe('')
+    })
+  })
 })

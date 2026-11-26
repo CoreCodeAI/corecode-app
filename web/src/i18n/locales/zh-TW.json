@@ -10181,5 +10181,7 @@
     "{{percent}}% + {{fixed}}": "{{percent}}% + {{fixed}}",
     "No rate is recorded for {{methods}}; their fees count as nothing.": "{{methods}} 沒有記錄費率，其手續費按 0 計。",
     "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "每個支付渠道從一筆訂單中扣走的費用：訂單金額的百分比，加上每筆固定的若干元。已退款訂單的手續費不退，所以這裡計入它的手續費，但不計它的金額。毛利扣除的是手續費占現金的比例，套到確認收入上。為某個支付方式儲存費率會替換舊費率；刪除全部費率則恢復實測的預設值。"
-  }
+  },
+  "Payment received!": "已收到付款！",
+  "Failed to load plans": "載入方案失敗"
 }
