@@ -354,7 +354,7 @@ func NowPaymentsWebhook(c *gin.Context) {
 		c.AbortWithStatus(http.StatusServiceUnavailable)
 		return
 	}
-	logger.LogInfo(ctx, common.LogText("NOWPayments webhook received request client_ip=%s body=%q", callerIp, string(body)))
+	logger.LogInfo(ctx, common.LogText("NOWPayments webhook received request client_ip=%s body=%s", callerIp, payloadFingerprint(body)))
 	if !verifyNowPaymentsSignature(body, c.GetHeader("x-nowpayments-sig"), strings.TrimSpace(setting.NowPaymentsIpnSecret)) {
 		logger.LogWarn(ctx, common.LogText("NOWPayments webhook signature verification failed client_ip=%s", callerIp))
 		c.AbortWithStatus(http.StatusBadRequest)
