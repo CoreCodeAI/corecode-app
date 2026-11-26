@@ -23,7 +23,7 @@ import { toast } from 'sonner'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import { requestWaffoPayment, isApiSuccess } from '../api'
-import { getPaymentErrorTranslation, openPaymentPage } from '../lib'
+import { getPaymentErrorTranslation, openPendingPage } from '../lib'
 
 function getPaymentUrl(data: unknown): string | null {
   if (!data || typeof data !== 'object') {
@@ -48,14 +48,26 @@ function getErrorMessage(message: string | undefined, data: unknown): string {
   )
 }
 
+export interface WaffoPaymentHookOptions {
+  /** Called with the trade number of each order the wallet opens */
+  onOrderCreated?: (tradeNo: string) => void
+}
+
 /**
  * Hook for handling Waffo payment processing
  */
-export function useWaffoPayment() {
+export function useWaffoPayment({
+  onOrderCreated,
+}: WaffoPaymentHookOptions = {}) {
   const [processing, setProcessing] = useState(false)
 
   const processWaffoPayment = useCallback(
     async (topupAmount: number, payMethodIndex?: number) => {
+      // The checkout tab opens during the click, before the order request.
+      const checkout = openPendingPage(
+        i18next.t('Redirecting to payment page...')
+      )
+      let handedOff = false
       setProcessing(true)
 
       try {
@@ -68,7 +80,13 @@ export function useWaffoPayment() {
           const paymentUrl = getPaymentUrl(response.data)
 
           if (paymentUrl) {
-            openPaymentPage(paymentUrl)
+            const orderId =
+              response.data && typeof response.data === 'object'
+                ? response.data.order_id
+                : undefined
+            if (orderId) onOrderCreated?.(orderId)
+            handedOff = true
+            checkout.go(paymentUrl)
             toast.success(i18next.t('Redirecting to payment page...'))
             return true
           }
@@ -84,10 +102,11 @@ export function useWaffoPayment() {
         handleServerError(error, i18next.t('Payment request failed'))
         return false
       } finally {
+        if (!handedOff) checkout.close()
         setProcessing(false)
       }
     },
-    []
+    [onOrderCreated]
   )
 
   return { processing, processWaffoPayment }

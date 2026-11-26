@@ -101,7 +101,7 @@ func SubscriptionRequestNowPaymentsPay(c *gin.Context) {
 		return
 	}
 	logger.LogInfo(ctx, common.LogText("NOWPayments subscription order created user_id=%d plan_id=%d trade_no=%s money=%.2f price_usd=%s pay_currency=%s", userId, plan.Id, tradeNo, plan.PriceAmount, priceUSD.StringFixed(2), payCurrency))
-	c.JSON(http.StatusOK, gin.H{"message": "success", "data": gin.H{"pay_link": invoiceURL}})
+	c.JSON(http.StatusOK, gin.H{"message": "success", "data": gin.H{"pay_link": invoiceURL, "trade_no": tradeNo}})
 }
 
 // handleNowPaymentsSubscriptionNotification applies a signed IPN to a plan

@@ -124,10 +124,14 @@ export function Wallet(props: WalletProps) {
     processPayment,
     processNowPaymentsPayment,
     processDodoPayment,
-  } = usePayment()
+  } = usePayment({ onOrderCreated: rememberOrder })
   const { redeeming, redeemCode } = useRedemption()
-  const { processing: creemProcessing, processCreemPayment } = useCreemPayment()
-  const { processing: waffoProcessing, processWaffoPayment } = useWaffoPayment()
+  const { processing: creemProcessing, processCreemPayment } = useCreemPayment({
+    onOrderCreated: rememberOrder,
+  })
+  const { processing: waffoProcessing, processWaffoPayment } = useWaffoPayment({
+    onOrderCreated: rememberOrder,
+  })
   const { processing: pancakeProcessing, processWaffoPancakePayment } =
     useWaffoPancakePayment()
 
@@ -142,12 +146,33 @@ export function Wallet(props: WalletProps) {
     await refreshSelf()
   }, [refreshSelf])
 
-  // The payment was opened in another tab; watch for it to land. The balance
-  // is read fresh first so credit that arrived earlier is not mistaken for it.
+  // The order trade number of the payment being opened, from the payment hooks
+  const pendingOrderRef = useRef<string | null>(null)
+  function rememberOrder(tradeNo: string) {
+    pendingOrderRef.current = tradeNo
+  }
+
+  // The payment was opened in another tab; watch its order until it settles.
+  // A chain deposit has no order to watch, so it watches the balance, read
+  // fresh first so credit that arrived earlier is not mistaken for it.
+  const watchOrder = useCallback(
+    (tradeNo: string) => paymentWait.start({ tradeNo }),
+    [paymentWait]
+  )
+
   const awaitPayment = useCallback(
     async (kind: PaymentWaitKind = 'tab') => {
+      const tradeNo = kind === 'chain' ? null : pendingOrderRef.current
+      pendingOrderRef.current = null
+      if (tradeNo) {
+        paymentWait.start({ tradeNo }, kind)
+        return
+      }
       const fresh = await refreshSelf()
-      paymentWait.start(Number(fresh?.quota ?? user?.quota ?? 0), kind)
+      paymentWait.start(
+        { baselineQuota: Number(fresh?.quota ?? user?.quota ?? 0) },
+        kind
+      )
     },
     [refreshSelf, paymentWait, user?.quota]
   )
@@ -390,6 +415,7 @@ export function Wallet(props: WalletProps) {
                 onAvailabilityChange={handleSubscriptionAvailabilityChange}
                 userQuota={user?.quota}
                 onPurchaseSuccess={refreshBalance}
+                onPaymentStarted={watchOrder}
               />
             </div>
 

@@ -23,37 +23,55 @@ import { toast } from 'sonner'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import { requestCreemPayment, isApiSuccess } from '../api'
-import { openPaymentPage } from '../lib'
+import { openPendingPage } from '../lib'
+
+export interface CreemPaymentHookOptions {
+  /** Called with the trade number of each order the wallet opens */
+  onOrderCreated?: (tradeNo: string) => void
+}
 
 /**
  * Hook for handling Creem payment processing
  */
-export function useCreemPayment() {
+export function useCreemPayment({
+  onOrderCreated,
+}: CreemPaymentHookOptions = {}) {
   const [processing, setProcessing] = useState(false)
 
-  const processCreemPayment = useCallback(async (productId: string) => {
-    setProcessing(true)
-    try {
-      const response = await requestCreemPayment({
-        product_id: productId,
-        payment_method: 'creem',
-      })
+  const processCreemPayment = useCallback(
+    async (productId: string) => {
+      // The checkout tab opens during the click, before the order request.
+      const checkout = openPendingPage(
+        i18next.t('Redirecting to payment page...')
+      )
+      let handedOff = false
+      setProcessing(true)
+      try {
+        const response = await requestCreemPayment({
+          product_id: productId,
+          payment_method: 'creem',
+        })
 
-      if (isApiSuccess(response) && response.data?.checkout_url) {
-        openPaymentPage(response.data.checkout_url)
-        toast.success(i18next.t('Redirecting to Creem checkout...'))
-        return true
+        if (isApiSuccess(response) && response.data?.checkout_url) {
+          if (response.data.order_id) onOrderCreated?.(response.data.order_id)
+          handedOff = true
+          checkout.go(response.data.checkout_url)
+          toast.success(i18next.t('Redirecting to Creem checkout...'))
+          return true
+        }
+
+        handleServerError(response, i18next.t('Payment request failed'))
+        return false
+      } catch (_error) {
+        handleServerError(_error, i18next.t('Payment request failed'))
+        return false
+      } finally {
+        if (!handedOff) checkout.close()
+        setProcessing(false)
       }
-
-      handleServerError(response, i18next.t('Payment request failed'))
-      return false
-    } catch (_error) {
-      handleServerError(_error, i18next.t('Payment request failed'))
-      return false
-    } finally {
-      setProcessing(false)
-    }
-  }, [])
+    },
+    [onOrderCreated]
+  )
 
   return { processing, processCreemPayment }
 }

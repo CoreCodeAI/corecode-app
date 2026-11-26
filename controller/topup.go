@@ -526,7 +526,7 @@ func RequestEpay(c *gin.Context) {
 		return
 	}
 	logger.LogInfo(c.Request.Context(), common.LogText("Epay top-up order created user_id=%d trade_no=%s payment_method=%s amount=%d money=%.2f uri=%q params=%q", id, tradeNo, epayType, req.Amount, payMoney, uri, redactedPaymentParams(params)))
-	c.JSON(http.StatusOK, gin.H{"message": "success", "data": params, "url": uri})
+	c.JSON(http.StatusOK, gin.H{"message": "success", "data": params, "url": uri, "trade_no": tradeNo})
 }
 
 // tradeNo lock
@@ -722,6 +722,48 @@ func GetUserTopUps(c *gin.Context) {
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(topups)
 	common.ApiSuccess(c, pageInfo)
+}
+
+// PaymentOrderStatus is what the wallet reads to confirm one order it opened.
+type PaymentOrderStatus struct {
+	TradeNo string `json:"trade_no"`
+	// Kind is "topup" or "subscription".
+	Kind   string `json:"kind"`
+	Status string `json:"status"`
+	// CreditedQuota is the quota a settled top-up added; 0 while it is open, and
+	// for a subscription.
+	CreditedQuota int `json:"credited_quota"`
+}
+
+// GetUserPaymentOrder reports the status of one of the caller's own orders by
+// trade number. Other users' orders and unknown numbers both return 404.
+func GetUserPaymentOrder(c *gin.Context) {
+	userId := c.GetInt("id")
+	tradeNo := strings.TrimSpace(c.Query("trade_no"))
+	if tradeNo == "" {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+
+	if order := model.GetUserSubscriptionOrderByTradeNo(userId, tradeNo); order != nil {
+		common.ApiSuccess(c, PaymentOrderStatus{TradeNo: tradeNo, Kind: "subscription", Status: order.Status})
+		return
+	}
+	topUp := model.GetUserTopUpByTradeNo(userId, tradeNo)
+	if topUp == nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "order not found"})
+		return
+	}
+	// Only a settled order has credited anything; a pending one reports 0.
+	credited := 0
+	if topUp.Status == common.TopUpStatusSuccess {
+		var err error
+		if credited, err = topUp.CreditedQuota(); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
+	common.ApiSuccess(c, PaymentOrderStatus{TradeNo: tradeNo, Kind: "topup", Status: topUp.Status, CreditedQuota: credited})
 }
 
 // GetAllTopUps 管理员获取全平台充值记录

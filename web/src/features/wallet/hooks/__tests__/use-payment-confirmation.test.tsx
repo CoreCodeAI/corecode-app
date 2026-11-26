@@ -34,6 +34,7 @@ import {
 const QUOTA_PER_DOLLAR = 500_000
 let client: QueryClient
 let serverQuota = 0
+let orderStatus = { status: 'pending', credited_quota: 0 }
 
 function wrapper(props: { children: ReactNode }) {
   return (
@@ -44,16 +45,27 @@ function wrapper(props: { children: ReactNode }) {
 beforeEach(() => {
   vi.useFakeTimers()
   serverQuota = 0
+  orderStatus = { status: 'pending', credited_quota: 0 }
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   useAuthStore
     .getState()
     .auth.setUser({ id: 1, username: 'a', role: 1, quota: 0 })
-  vi.spyOn(api, 'get').mockImplementation(async () => ({
-    data: {
-      success: true,
-      data: { id: 1, username: 'a', role: 1, quota: serverQuota },
-    },
-  }))
+  vi.spyOn(api, 'get').mockImplementation(async (url) => {
+    if (String(url).includes('/api/user/topup/order')) {
+      return {
+        data: {
+          success: true,
+          data: { trade_no: 'T1', kind: 'topup', ...orderStatus },
+        },
+      }
+    }
+    return {
+      data: {
+        success: true,
+        data: { id: 1, username: 'a', role: 1, quota: serverQuota },
+      },
+    }
+  })
   vi.spyOn(toast, 'success').mockImplementation(() => 1)
 })
 
@@ -71,9 +83,51 @@ async function tick(ms: number) {
 }
 
 describe('waiting for a payment to land', () => {
+  it('confirms the watched order and toasts the amount that order credited', async () => {
+    const { result } = renderHook(() => usePaymentConfirmation(), { wrapper })
+    act(() => result.current.start({ tradeNo: 'T1' }))
+
+    await tick(PAYMENT_POLL_INTERVAL_MS * 2)
+    expect(toast.success).not.toHaveBeenCalled()
+
+    orderStatus = { status: 'success', credited_quota: 10 * QUOTA_PER_DOLLAR }
+    await tick(PAYMENT_POLL_INTERVAL_MS)
+
+    expect(toast.success).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(toast.success).mock.calls[0][0]).toContain('$10')
+    expect(result.current.status).toBe('idle')
+  })
+
+  it('does not confirm an order from a falling balance during a spend', async () => {
+    serverQuota = 20 * QUOTA_PER_DOLLAR
+    const { result } = renderHook(() => usePaymentConfirmation(), { wrapper })
+    act(() => result.current.start({ tradeNo: 'T1' }))
+
+    serverQuota = 12 * QUOTA_PER_DOLLAR
+    await tick(PAYMENT_POLL_INTERVAL_MS * 3)
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(result.current.status).toBe('waiting')
+
+    orderStatus = { status: 'success', credited_quota: 10 * QUOTA_PER_DOLLAR }
+    await tick(PAYMENT_POLL_INTERVAL_MS)
+
+    expect(toast.success).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(toast.success).mock.calls[0][0]).toContain('$10')
+  })
+
+  it('uses the plain message when a settled order credited nothing', async () => {
+    const { result } = renderHook(() => usePaymentConfirmation(), { wrapper })
+    act(() => result.current.start({ tradeNo: 'T1' }))
+
+    orderStatus = { status: 'success', credited_quota: 0 }
+    await tick(PAYMENT_POLL_INTERVAL_MS)
+
+    expect(toast.success).toHaveBeenCalledWith('Payment received!')
+  })
+
   it('toasts the added amount once and stops when the balance rises', async () => {
     const { result } = renderHook(() => usePaymentConfirmation(), { wrapper })
-    act(() => result.current.start(0))
+    act(() => result.current.start({ baselineQuota: 0 }))
     expect(result.current.status).toBe('waiting')
 
     await tick(PAYMENT_POLL_INTERVAL_MS)
@@ -90,7 +144,7 @@ describe('waiting for a payment to land', () => {
 
   it('polls again when the tab becomes visible', async () => {
     const { result } = renderHook(() => usePaymentConfirmation(), { wrapper })
-    act(() => result.current.start(0))
+    act(() => result.current.start({ baselineQuota: 0 }))
     serverQuota = QUOTA_PER_DOLLAR
 
     await act(async () => {
@@ -103,7 +157,7 @@ describe('waiting for a payment to land', () => {
 
   it('ends as pending after three minutes without credit and stops polling', async () => {
     const { result } = renderHook(() => usePaymentConfirmation(), { wrapper })
-    act(() => result.current.start(0))
+    act(() => result.current.start({ baselineQuota: 0 }))
 
     await tick(PAYMENT_WAIT_TIMEOUT_MS)
     expect(result.current.status).toBe('timeout')
@@ -116,7 +170,7 @@ describe('waiting for a payment to land', () => {
 
   it('stops watching when dismissed', async () => {
     const { result } = renderHook(() => usePaymentConfirmation(), { wrapper })
-    act(() => result.current.start(0))
+    act(() => result.current.start({ baselineQuota: 0 }))
     act(() => result.current.dismiss())
     serverQuota = QUOTA_PER_DOLLAR
 
@@ -130,7 +184,7 @@ describe('waiting for a payment to land', () => {
     const { result, unmount } = renderHook(() => usePaymentConfirmation(), {
       wrapper,
     })
-    act(() => result.current.start(0))
+    act(() => result.current.start({ baselineQuota: 0 }))
     unmount()
     serverQuota = QUOTA_PER_DOLLAR
 

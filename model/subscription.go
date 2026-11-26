@@ -255,6 +255,19 @@ func (p *SubscriptionPlan) NormalizeDefaults() {
 	}
 }
 
+// GetUserSubscriptionOrderByTradeNo returns the caller's own subscription order
+// with this trade number, or nil. Another user's order is never returned.
+func GetUserSubscriptionOrderByTradeNo(userId int, tradeNo string) *SubscriptionOrder {
+	if tradeNo == "" {
+		return nil
+	}
+	var order SubscriptionOrder
+	if err := DB.Where("trade_no = ? AND user_id = ?", tradeNo, userId).First(&order).Error; err != nil {
+		return nil
+	}
+	return &order
+}
+
 // Subscription order (payment -> webhook -> create UserSubscription)
 type SubscriptionOrder struct {
 	Id     int     `json:"id"`

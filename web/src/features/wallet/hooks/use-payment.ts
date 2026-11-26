@@ -39,10 +39,15 @@ import {
   isStripePayment,
   isWaffoPayment,
   isWaffoPancakePayment,
-  openPaymentPage,
+  openPendingPage,
   submitPaymentForm,
 } from '../lib'
-import type { AmountRequest, AmountResponse } from '../types'
+import type {
+  AmountRequest,
+  AmountResponse,
+  PaymentResponse,
+  StripePaymentResponse,
+} from '../types'
 
 // ============================================================================
 // Payment Hook
@@ -116,7 +121,12 @@ export async function requestPaymentAmount(
     .amount
 }
 
-export function usePayment() {
+export interface PaymentHookOptions {
+  /** Called with the trade number of each order the wallet opens */
+  onOrderCreated?: (tradeNo: string) => void
+}
+
+export function usePayment({ onOrderCreated }: PaymentHookOptions = {}) {
   const [amount, setAmount] = useState<number>(0)
   // What Stripe charges in HKD for `amount`, when the server quoted it
   const [hkdAmount, setHkdAmount] = useState<number | undefined>()
@@ -166,10 +176,15 @@ export function usePayment() {
   // epay under the same method name (paysThroughEpay).
   const processPayment = useCallback(
     async (topupAmount: number, paymentType: string, throughEpay = false) => {
+      const isStripe = isStripePayment(paymentType) && !throughEpay
+      // A Stripe checkout opens in a tab this click opens now; the await
+      // below would spend the click and the browser would block the popup.
+      const checkout = isStripe
+        ? openPendingPage(i18next.t('Redirecting to payment page...'))
+        : null
+      let handedOff = false
       try {
         setProcessing(true)
-
-        const isStripe = isStripePayment(paymentType) && !throughEpay
         const amount = Math.floor(topupAmount)
 
         const response = isStripe
@@ -188,8 +203,11 @@ export function usePayment() {
         }
 
         // Handle Stripe payment
-        if (isStripe && response.data?.pay_link) {
-          openPaymentPage(response.data.pay_link as string)
+        if (checkout && response.data?.pay_link) {
+          const stripeOrder = (response as StripePaymentResponse).data?.trade_no
+          if (stripeOrder) onOrderCreated?.(stripeOrder)
+          handedOff = true
+          checkout.go(response.data.pay_link as string)
           toast.success(i18next.t('Redirecting to payment page...'))
           return true
         }
@@ -198,6 +216,8 @@ export function usePayment() {
         if (!isStripe && response.data) {
           const url = (response as unknown as { url?: string }).url
           if (url) {
+            const formOrder = (response as PaymentResponse).trade_no
+            if (formOrder) onOrderCreated?.(formOrder)
             submitPaymentForm(url, response.data)
             toast.success(i18next.t('Redirecting to payment page...'))
             return true
@@ -209,10 +229,11 @@ export function usePayment() {
         handleServerError(error, i18next.t('Payment request failed'))
         return false
       } finally {
+        if (!handedOff) checkout?.close()
         setProcessing(false)
       }
     },
-    []
+    [onOrderCreated]
   )
 
   // Open a NOWPayments invoice in this tab; the invoice returns the customer
@@ -229,6 +250,7 @@ export function usePayment() {
           handleServerError(response, i18next.t('Payment request failed'))
           return false
         }
+        if (response.data.trade_no) onOrderCreated?.(response.data.trade_no)
         toast.success(i18next.t('Redirecting to payment page...'))
         window.location.assign(response.data.pay_link)
         return true
@@ -239,30 +261,41 @@ export function usePayment() {
         setProcessing(false)
       }
     },
-    []
+    [onOrderCreated]
   )
 
-  // Open a Dodo Payments checkout, which returns the customer to the wallet.
-  const processDodoPayment = useCallback(async (topupAmount: number) => {
-    try {
-      setProcessing(true)
-      const response = await requestDodoPayment({
-        amount: Math.floor(topupAmount),
-      })
-      if (!isApiSuccess(response) || !response.data?.pay_link) {
-        handleServerError(response, i18next.t('Payment request failed'))
+  // Open a Dodo Payments checkout in a new tab, which returns the customer to
+  // the wallet.
+  const processDodoPayment = useCallback(
+    async (topupAmount: number) => {
+      const checkout = openPendingPage(
+        i18next.t('Redirecting to payment page...')
+      )
+      let handedOff = false
+      try {
+        setProcessing(true)
+        const response = await requestDodoPayment({
+          amount: Math.floor(topupAmount),
+        })
+        if (!isApiSuccess(response) || !response.data?.pay_link) {
+          handleServerError(response, i18next.t('Payment request failed'))
+          return false
+        }
+        if (response.data.trade_no) onOrderCreated?.(response.data.trade_no)
+        handedOff = true
+        checkout.go(response.data.pay_link)
+        toast.success(i18next.t('Redirecting to payment page...'))
+        return true
+      } catch (error) {
+        handleServerError(error, i18next.t('Payment request failed'))
         return false
+      } finally {
+        if (!handedOff) checkout.close()
+        setProcessing(false)
       }
-      openPaymentPage(response.data.pay_link)
-      toast.success(i18next.t('Redirecting to payment page...'))
-      return true
-    } catch (error) {
-      handleServerError(error, i18next.t('Payment request failed'))
-      return false
-    } finally {
-      setProcessing(false)
-    }
-  }, [])
+    },
+    [onOrderCreated]
+  )
 
   return {
     amount,

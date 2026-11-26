@@ -18,8 +18,9 @@ For commercial licensing, please contact support@quantumnous.com
 */
 /**
  * CoreCode fork: a payment is paid in another tab, so the wallet cannot tell
- * when it lands. After a payment is handed off, this watches the balance and
- * says once when credit arrives, or says calmly that it is still pending.
+ * when it lands. After a payment is handed off, this watches the order it
+ * opened and says once when it is settled, or says calmly that it is still
+ * pending. A chain deposit has no order to watch, so it watches the balance.
  */
 import i18next from 'i18next'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -28,12 +29,19 @@ import { toast } from 'sonner'
 import { useRefreshSelf } from '@/hooks/use-self'
 import { formatQuota } from '@/lib/format'
 
+import { getPaymentOrderStatus } from '../api'
+
 export const PAYMENT_POLL_INTERVAL_MS = 4000
 export const PAYMENT_WAIT_TIMEOUT_MS = 3 * 60 * 1000
 
 export type PaymentWaitStatus = 'idle' | 'waiting' | 'timeout'
 /** "tab" for a payment page opened elsewhere, "chain" for an on-chain transfer */
 export type PaymentWaitKind = 'tab' | 'chain'
+/**
+ * What to watch: the order by its trade number, or, for a payment with no
+ * order number, the balance as it was before the payment.
+ */
+export type PaymentTarget = { tradeNo: string } | { baselineQuota: number }
 
 export function usePaymentConfirmation() {
   const refreshSelf = useRefreshSelf()
@@ -51,27 +59,46 @@ export function usePaymentConfirmation() {
   }, [])
 
   const start = useCallback(
-    (baselineQuota: number, waitKind: PaymentWaitKind = 'tab') => {
+    (target: PaymentTarget, waitKind: PaymentWaitKind = 'tab') => {
       stopRef.current()
       const session = ++sessionRef.current
       setKind(waitKind)
       setStatus('waiting')
 
       let polling = false
+      const settle = (credited: number | null) => {
+        end('idle')
+        void refreshSelf()
+        const message =
+          credited && credited > 0
+            ? i18next.t('Payment received! Added: {{quota}}', {
+                quota: formatQuota(credited),
+              })
+            : i18next.t('Payment received!')
+        toast.success(message)
+      }
+
       const poll = async () => {
         if (polling) return
         polling = true
-        const user = await refreshSelf()
-        polling = false
-        if (session !== sessionRef.current || !user) return
-        const added = Number(user.quota ?? 0) - baselineQuota
-        if (added <= 0) return
-        end('idle')
-        toast.success(
-          i18next.t('Payment received! Added: {{quota}}', {
-            quota: formatQuota(added),
-          })
-        )
+        try {
+          if ('tradeNo' in target) {
+            const res = await getPaymentOrderStatus(target.tradeNo).catch(
+              () => null
+            )
+            if (session !== sessionRef.current) return
+            if (res?.success && res.data?.status === 'success') {
+              settle(res.data.credited_quota)
+            }
+            return
+          }
+          const user = await refreshSelf()
+          if (session !== sessionRef.current || !user) return
+          const added = Number(user.quota ?? 0) - target.baselineQuota
+          if (added > 0) settle(added)
+        } finally {
+          polling = false
+        }
       }
 
       const interval = window.setInterval(poll, PAYMENT_POLL_INTERVAL_MS)
