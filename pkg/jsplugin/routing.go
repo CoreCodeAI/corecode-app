@@ -507,7 +507,6 @@ var reservedRouteNamespaces = []string{
 	"/invoice",
 	"/invoice-management",
 	"/risk-control",
-	"/rival-prices",
 	"/service-status",
 	"/site-insights",
 	"/topups",

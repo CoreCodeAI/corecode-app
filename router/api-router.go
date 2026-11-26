@@ -522,18 +522,6 @@ func SetApiRouter(router *gin.Engine) {
 			siteInsightsRoute.GET("/day-profile", controller.GetDayProfile)
 		}
 
-		rivalPricesRoute := apiRouter.Group("/rival-prices")
-		rivalPricesRoute.Use(middleware.DisableCache(), middleware.RootAuth())
-		{
-			rivalPricesRoute.GET("", controller.GetRivalPrices)
-			rivalPricesRoute.GET("/changes", controller.GetRivalPriceChanges)
-			rivalPricesRoute.GET("/sites", controller.GetRivalSites)
-			rivalPricesRoute.POST("/sites", controller.CreateRivalSite)
-			rivalPricesRoute.PUT("/sites/:id", controller.UpdateRivalSite)
-			rivalPricesRoute.POST("/sites/:id/check", controller.CheckRivalSite)
-			rivalPricesRoute.PUT("/group-kinds", controller.SetRivalGroupKind)
-		}
-
 		dataRoute := apiRouter.Group("/data")
 		dataRoute.GET("/perf-metrics/summary", middleware.DisableCache(), middleware.AdminAuth(), controller.GetDashboardPerfMetricsSummary)
 		dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
