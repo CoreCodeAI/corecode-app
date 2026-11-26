@@ -156,9 +156,11 @@
     "filePlaceholder": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["__fileRef", "encoding"],
+      "required": ["encoding"],
+      "oneOf": [{"required": ["__fileRef"]}, {"required": ["__dataUrl"]}],
       "properties": {
         "__fileRef": {"type": "string", "minLength": 1},
+        "__dataUrl": {"type": "string", "pattern": "^(data|DATA):"},
         "encoding": {"enum": ["base64", "dataUrl", "url"]},
         "mimeType": {"type": "string", "minLength": 1},
         "maxBytes": {"type": "integer", "exclusiveMinimum": 0}
