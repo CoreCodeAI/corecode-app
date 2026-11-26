@@ -32,7 +32,7 @@ import type {
   RiskInsights,
   TaskOutcome,
 } from '../../types'
-import { upstreamCost, type InsightsFormat } from '../overview-analysis'
+import { marginCard, type InsightsFormat } from '../overview-analysis'
 import {
   attemptsSentence,
   categoryCount,
@@ -187,18 +187,52 @@ describe('overview service signals', () => {
     expect(attemptsSentence(t, fmt, capacity(100))).toBeUndefined()
     expect(attemptsSentence(t, fmt, capacity())).toBeUndefined()
   })
+})
 
-  it('sums upstream bills one for one and fees at the exchange rate', () => {
-    const finance = {
-      vendor_upstream: [
-        { vendor: 'codex', bill_usd: 30, fee_usd: 2 },
-        { vendor: 'media', bill_usd: 5, fee_usd: 0 },
-      ],
-      upstream_unattributed_bill_usd: 1,
-      upstream_unattributed_fee_usd: 1,
-    } as unknown as FinanceInsights
-    expect(upstreamCost(finance, 7)).toBe(36 + 3 * 7)
-    expect(upstreamCost({} as FinanceInsights, 7)).toBeUndefined()
+describe('overview gross margin', () => {
+  const money = {
+    cny: (value: number) => `¥${value}`,
+    pct: (value: number) => `${Math.round(value * 100)}%`,
+  } as unknown as InsightsFormat
+  const finance = {
+    recognized_revenue: 1000,
+    vendor_revenue: [{ vendor: 'claude', recognized_revenue: 1000 }],
+    vendor_upstream: [
+      { vendor: 'claude', bill_usd: 100, fee_usd: 10, oldest_bill_at: 0 },
+    ],
+    ip_cost_cny: 50,
+    payment_fees: [
+      {
+        method: 'alipay',
+        orders: 1,
+        money: 2000,
+        refunded: 0,
+        fee: 100,
+        priced: true,
+      },
+    ],
+    channel_fee_usd: 20,
+    commission_usd: 30,
+    commission_exempt_usd: 10,
+  } as unknown as FinanceInsights
+
+  it('is the funds tab’s gross margin, with what promotion leaves', () => {
+    // 1000 less bills 100, fees 10 × 7, IP 50 and payment fees 5% of 1000;
+    // then channel fees 20 × 7 and commission 30 less the exempt 10.
+    const card = marginCard(t, money, finance, 7)
+    expect(card.value).toBe('¥730')
+    expect(card.hint).toBe('73% of ¥1000 earned; after promotion ¥570 (57%)')
+  })
+
+  it('leaves promotion out on a server that sends no channel fees', () => {
+    const card = marginCard(
+      t,
+      money,
+      { ...finance, channel_fee_usd: undefined },
+      7
+    )
+    expect(card.value).toBe('¥730')
+    expect(card.hint).toBe('73% of ¥1000 earned')
   })
 })
 
