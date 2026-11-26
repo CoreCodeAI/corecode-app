@@ -508,6 +508,7 @@ func SetApiRouter(router *gin.Engine) {
 			siteInsightsRoute.PUT("/channel-costs", controller.SetChannelCosts)
 			siteInsightsRoute.PUT("/ip-costs", controller.SetIPCosts)
 			siteInsightsRoute.PUT("/commission-exempt", controller.SetCommissionExempt)
+			siteInsightsRoute.PUT("/payment-fee-rates", controller.SetPaymentFeeRates)
 			siteInsightsRoute.GET("/upstream", controller.GetUpstreamInsights)
 			siteInsightsRoute.PUT("/upstream-fees", controller.SetUpstreamFees)
 			siteInsightsRoute.GET("/upstream-runway", controller.GetUpstreamRunway)

@@ -191,6 +191,13 @@ export function VendorMarginPanel(props: {
       })
     )
   }
+  if (margins && margins.paymentFee > 0) {
+    notes.push(
+      t('{{amount}} of payment fees is in the total, in no vendor’s row.', {
+        amount: fmt.cny(margins.paymentFee),
+      })
+    )
+  }
   // Only the pool now is known, so a long range sets past revenue against
   // today's accounts.
   if (data && days > SHORT_ROI_DAYS && rows.some((row) => row.accounts > 0)) {

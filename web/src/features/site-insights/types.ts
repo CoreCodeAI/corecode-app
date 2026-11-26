@@ -933,6 +933,10 @@ export type FinanceInsights = StaleHours & {
   /** The accounts whose commission is not a cost, and what they earned in the range (part of commission_usd). Absent before the server's release. */
   commission_exempt?: UserRef[] | null
   commission_exempt_usd?: number
+  /** What the processors kept of the range's paid orders, by method. Absent before the server's release. */
+  payment_fees?: PaymentFee[] | null
+  /** The rates payment_fees was priced at: the stored ones, or the measured defaults. */
+  payment_fee_rates?: PaymentFeeRate[] | null
   groups?: GroupConsumption[] | null
   /** Each group's revenue and cost share, with the staff and unattributed rows. Absent before the server's release. */
   group_allocations?: GroupAllocation[] | null
@@ -1136,6 +1140,27 @@ export type SilentPayers = {
 }
 
 /** An egress IP or proxy host: amount in currency every cycle_months of 30 days from start until end, or until now when end is 0. Unix seconds. */
+/** What one payment method's processor keeps of an order: percent of its money plus fixed yuan. */
+export type PaymentFeeRate = {
+  method: string
+  percent: number
+  fixed: number
+}
+
+/**
+ * What one payment method's processor kept of the range's orders. orders and
+ * money count those still paid; refunded counts those refunded since, whose
+ * fee is kept too. priced is false for a method with no rate, counted free.
+ */
+export type PaymentFee = {
+  method: string
+  orders: number
+  money: number
+  refunded: number
+  fee: number
+  priced: boolean
+}
+
 export type IPCost = {
   name: string
   amount: number

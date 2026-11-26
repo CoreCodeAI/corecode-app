@@ -27,6 +27,7 @@ import type {
   CapacityInsights,
   ChannelCost,
   IPCost,
+  PaymentFeeRate,
   ChannelInsights,
   CustomerInsights,
   EngineOutlook,
@@ -162,6 +163,16 @@ export async function saveCommissionExempt(userIDs: number[]) {
   )
   if (!res.data.success) {
     throw createServerError(res.data, 'Failed to save commission exemptions')
+  }
+}
+
+export async function savePaymentFeeRates(rates: PaymentFeeRate[]) {
+  const res = await api.put<ApiResponse<null>>(
+    '/api/site-insights/payment-fee-rates',
+    { rates }
+  )
+  if (!res.data.success) {
+    throw createServerError(res.data, 'Failed to save payment fee rates')
   }
 }
 

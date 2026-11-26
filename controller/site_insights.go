@@ -478,6 +478,24 @@ func SetCommissionExempt(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
+// SetPaymentFeeRates replaces what each payment method's processor keeps; an
+// empty list restores the measured defaults.
+func SetPaymentFeeRates(c *gin.Context) {
+	var request struct {
+		Rates []model.PaymentFeeRate `json:"rates"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.SavePaymentFeeRates(request.Rates); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	forgetSettledInsights()
+	common.ApiSuccess(c, nil)
+}
+
 // GetUpstreamInsights compares the channels requests went to.
 func GetUpstreamInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxLogDays, settledRead("upstream", model.GetUpstreamInsights))

@@ -274,6 +274,11 @@ type FinanceInsights struct {
 	// CommissionExemptUSD the part of CommissionUSD they earned in the range.
 	CommissionExempt    []UserRef `json:"commission_exempt"`
 	CommissionExemptUSD float64   `json:"commission_exempt_usd"`
+	// PaymentFees is what the processors kept of the orders paid in the
+	// range, by method (readPaymentFees), at PaymentFeeRates: the stored
+	// rates, or the defaults when none are stored.
+	PaymentFees     []PaymentFee     `json:"payment_fees"`
+	PaymentFeeRates []PaymentFeeRate `json:"payment_fee_rates"`
 }
 
 // OrderMethodFunnel is the checkouts opened with one payment method in the
@@ -598,6 +603,12 @@ func financeInsightsAt(r InsightsRange, now int64) (*FinanceInsights, error) {
 		return nil, err
 	}
 	if result.CommissionExempt, result.CommissionExemptUSD, err = readCommissionExempt(r, exempt); err != nil {
+		return nil, err
+	}
+	if result.PaymentFeeRates, err = ReadPaymentFeeRates(); err != nil {
+		return nil, err
+	}
+	if result.PaymentFees, err = readPaymentFees(r, result.PaymentFeeRates); err != nil {
 		return nil, err
 	}
 	result.RedemptionUSD = quotaUSD(redemption.Total)

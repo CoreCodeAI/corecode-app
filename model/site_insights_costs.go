@@ -165,3 +165,134 @@ func readCommissionExempt(r InsightsRange, ids []int) ([]UserRef, float64, error
 	}
 	return refs, quotaUSD(earned.Total), nil
 }
+
+// PaymentFeeRatesOptionKey stores, as JSON, what each payment method's
+// processor keeps of an order. An empty row means defaultPaymentFeeRates.
+const PaymentFeeRatesOptionKey = "PaymentFeeRates"
+
+const maxPaymentFeeRates = 50
+
+// PaymentFeeRate is what the processor of one payment method keeps of an
+// order: Percent of its money plus Fixed yuan.
+type PaymentFeeRate struct {
+	Method  string  `json:"method"`
+	Percent float64 `json:"percent"`
+	Fixed   float64 `json:"fixed"`
+}
+
+// defaultPaymentFeeRates are the rates measured in November 2026. Epay keeps
+// 8% of each order and 0.1% of the daily settlement. Stripe's Hong Kong
+// account keeps 2.2% + HK$2 of an Alipay or WeChat Pay charge and 3.4% +
+// HK$2.35 + 0.5% abroad of a card charge, at about ¥0.92 a Hong Kong dollar.
+// On-chain deposits and offline transfers cost nothing.
+var defaultPaymentFeeRates = []PaymentFeeRate{
+	{Method: "alipay", Percent: 8.11},
+	{Method: "wxpay", Percent: 8.11},
+	{Method: "stripe", Percent: 2.2, Fixed: 1.84},
+	{Method: "stripe_alipay", Percent: 2.2, Fixed: 1.84},
+	{Method: "stripe_wechat_pay", Percent: 2.2, Fixed: 1.84},
+	{Method: "stripe_card", Percent: 3.9, Fixed: 2.16},
+	{Method: "chain_deposit"},
+	{Method: "offline"},
+}
+
+// ReadPaymentFeeRates returns the stored rates, or the defaults when none
+// are stored.
+func ReadPaymentFeeRates() ([]PaymentFeeRate, error) {
+	rates := []PaymentFeeRate{}
+	if err := readOptionJSON(PaymentFeeRatesOptionKey, &rates); err != nil {
+		return nil, err
+	}
+	if len(rates) == 0 {
+		return slices.Clone(defaultPaymentFeeRates), nil
+	}
+	return rates, nil
+}
+
+var errInvalidPaymentFeeRate error = common.NewMessage("Invalid parameters")
+
+// SavePaymentFeeRates replaces the stored rates after checking each one. An
+// empty list restores the defaults.
+func SavePaymentFeeRates(rates []PaymentFeeRate) error {
+	if len(rates) > maxPaymentFeeRates {
+		return errInvalidPaymentFeeRate
+	}
+	seen := make(map[string]bool, len(rates))
+	for i := range rates {
+		rate := &rates[i]
+		rate.Method = strings.TrimSpace(rate.Method)
+		if rate.Method == "" || len(rate.Method) > 50 || seen[rate.Method] ||
+			math.IsNaN(rate.Percent) || rate.Percent < 0 || rate.Percent > 50 ||
+			math.IsNaN(rate.Fixed) || rate.Fixed < 0 || rate.Fixed > 1000 {
+			return errInvalidPaymentFeeRate
+		}
+		seen[rate.Method] = true
+	}
+	slices.SortFunc(rates, func(a, b PaymentFeeRate) int { return cmp.Compare(a.Method, b.Method) })
+	value, err := common.Marshal(rates)
+	if err != nil {
+		return err
+	}
+	return UpdateOption(PaymentFeeRatesOptionKey, string(value))
+}
+
+// PaymentFee is what one payment method's processor kept of the orders paid
+// in the range. Orders and Money count the orders still paid; Refunded counts
+// those refunded since, whose fee the processor keeps too. Priced is false
+// for a method with no recorded rate, whose fee counts as nothing.
+type PaymentFee struct {
+	Method   string  `json:"method"`
+	Orders   int64   `json:"orders"`
+	Money    float64 `json:"money"`
+	Refunded int64   `json:"refunded"`
+	Fee      float64 `json:"fee"`
+	Priced   bool    `json:"priced"`
+}
+
+// readPaymentFees prices the orders paid in the range, wallet orders left out,
+// by method, the largest fee first. Money is in the payment currency, yuan.
+func readPaymentFees(r InsightsRange, rates []PaymentFeeRate) ([]PaymentFee, error) {
+	var rows []struct {
+		PaymentMethod string
+		Status        string
+		Orders        int64
+		Money         float64
+	}
+	if err := DB.Model(&TopUp{}).
+		Select("payment_method, status, COUNT(*) AS orders, COALESCE(SUM(money), 0) AS money").
+		Where("create_time >= ? AND create_time < ? AND status IN ? AND (payment_provider IS NULL OR payment_provider <> ?)",
+			r.Start, r.End, []string{common.TopUpStatusSuccess, common.TopUpStatusRefunded}, PaymentProviderBalance).
+		Group("payment_method, status").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	byMethod := make(map[string]PaymentFeeRate, len(rates))
+	for _, rate := range rates {
+		byMethod[rate.Method] = rate
+	}
+	fees := map[string]*PaymentFee{}
+	for _, row := range rows {
+		fee := fees[row.PaymentMethod]
+		if fee == nil {
+			_, priced := byMethod[row.PaymentMethod]
+			fee = &PaymentFee{Method: row.PaymentMethod, Priced: priced}
+			fees[row.PaymentMethod] = fee
+		}
+		if row.Status == common.TopUpStatusSuccess {
+			fee.Orders += row.Orders
+			fee.Money += row.Money
+		} else {
+			fee.Refunded += row.Orders
+		}
+		rate := byMethod[row.PaymentMethod]
+		fee.Fee += row.Money*rate.Percent/100 + float64(row.Orders)*rate.Fixed
+	}
+	list := make([]PaymentFee, 0, len(fees))
+	for _, fee := range fees {
+		fee.Money, fee.Fee = roundTo(fee.Money, 2), roundTo(fee.Fee, 2)
+		list = append(list, *fee)
+	}
+	slices.SortFunc(list, func(a, b PaymentFee) int {
+		return cmp.Or(cmp.Compare(b.Fee, a.Fee), cmp.Compare(b.Money, a.Money), cmp.Compare(a.Method, b.Method))
+	})
+	return list, nil
+}

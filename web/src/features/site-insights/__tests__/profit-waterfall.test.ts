@@ -64,7 +64,7 @@ function waterfallOf(data: FinanceInsights) {
 }
 
 describe('profitWaterfall', () => {
-  it('reproduces the vendor panel gross margin after the first four steps', () => {
+  it('reproduces the vendor panel gross margin after the first five steps', () => {
     const { margins, waterfall } = waterfallOf(range)
     expect(waterfall).toBeDefined()
     if (!waterfall) return
@@ -75,6 +75,7 @@ describe('profitWaterfall', () => {
       'bills',
       'fees',
       'ips',
+      'payments',
       'channels',
       'commission',
     ])
@@ -129,6 +130,40 @@ describe('profitWaterfall', () => {
     expect(waterfall.steps[3]).toEqual({ key: 'ips', amount: 370 })
     expect(waterfall.grossMargin).toBeCloseTo(margins.margin, 6)
     expect(waterfall.grossMargin).toBeCloseTo(38655 - 3813 - 370, 6)
+  })
+
+  it('takes the processors’ share of the cash off recognized revenue', () => {
+    // ¥95 kept of ¥1,900 still paid: 5%, the refunded order's fee included.
+    const data = {
+      ...range,
+      payment_fees: [
+        {
+          method: 'alipay',
+          orders: 10,
+          money: 1000,
+          refunded: 0,
+          fee: 81.1,
+          priced: true,
+        },
+        {
+          method: 'stripe_card',
+          orders: 3,
+          money: 900,
+          refunded: 1,
+          fee: 13.9,
+          priced: true,
+        },
+      ],
+    } as unknown as FinanceInsights
+    const { margins, waterfall } = waterfallOf(data)
+    if (!waterfall) throw new Error('the waterfall is hidden')
+    expect(margins.paymentFee).toBeCloseTo(38655 * 0.05, 6)
+    expect(waterfall.steps[4]).toEqual({
+      key: 'payments',
+      amount: margins.paymentFee,
+    })
+    expect(waterfall.grossMargin).toBeCloseTo(margins.margin, 6)
+    expect(waterfall.grossMargin).toBeCloseTo(38655 * 0.95 - 3813, 6)
   })
 
   it('leaves the exempt accounts’ commission out', () => {

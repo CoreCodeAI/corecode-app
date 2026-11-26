@@ -22,13 +22,22 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { saveCommissionExempt, saveIPCosts } from '../../api'
+import {
+  saveCommissionExempt,
+  saveIPCosts,
+  savePaymentFeeRates,
+} from '../../api'
 import type { FinanceInsights } from '../../types'
-import { CommissionExemptPanel, IPCostsPanel } from '../cost-ledgers'
+import {
+  CommissionExemptPanel,
+  IPCostsPanel,
+  PaymentFeesPanel,
+} from '../cost-ledgers'
 
 vi.mock('../../api', () => ({
   saveIPCosts: vi.fn(),
   saveCommissionExempt: vi.fn(),
+  savePaymentFeeRates: vi.fn(),
 }))
 
 function withQuery(children: ReactNode) {
@@ -110,5 +119,62 @@ describe('CommissionExemptPanel', () => {
     await user.type(input, '964')
     await user.click(screen.getByRole('button', { name: 'Add' }))
     expect(vi.mocked(saveCommissionExempt).mock.calls[0][0]).toEqual([306, 964])
+  })
+})
+
+describe('PaymentFeesPanel', () => {
+  const fees = {
+    payment_fee_rates: [
+      { method: 'alipay', percent: 8.11, fixed: 0 },
+      { method: 'stripe_card', percent: 3.9, fixed: 2.16 },
+      { method: 'offline', percent: 0, fixed: 0 },
+    ],
+    payment_fees: [
+      {
+        method: 'stripe_card',
+        orders: 1,
+        money: 200,
+        refunded: 1,
+        fee: 23.82,
+        priced: true,
+      },
+      {
+        method: 'nowpayments',
+        orders: 2,
+        money: 80,
+        refunded: 0,
+        fee: 0,
+        priced: false,
+      },
+    ],
+  } as unknown as FinanceInsights
+
+  it('shows each method’s fee and rate, and names the unpriced ones', () => {
+    render(withQuery(<PaymentFeesPanel data={fees} />))
+    const cells = screen.getAllByRole('cell').map((cell) => cell.textContent)
+    expect(cells).toContain('1 + 1 refunded')
+    expect(cells).toContain('3.9% + ¥2.16')
+    expect(cells).toContain('No rate')
+    // Rates with no orders in the range are still listed, to be edited.
+    expect(cells).toContain('8.11%')
+    expect(screen.getByText(/No rate is recorded for/)).toBeInTheDocument()
+  })
+
+  it('replaces a method’s rate when one is saved for it', async () => {
+    const user = userEvent.setup()
+    vi.mocked(savePaymentFeeRates).mockResolvedValue(undefined)
+    const { container } = render(withQuery(<PaymentFeesPanel data={fees} />))
+    const [method, percent, fixed] = [
+      ...container.querySelectorAll('input'),
+    ] as HTMLInputElement[]
+    await user.type(method, 'alipay')
+    await user.type(percent, '6')
+    await user.type(fixed, '0.5')
+    await user.click(screen.getByRole('button', { name: 'Save rate' }))
+    expect(vi.mocked(savePaymentFeeRates).mock.calls[0][0]).toEqual([
+      { method: 'stripe_card', percent: 3.9, fixed: 2.16 },
+      { method: 'offline', percent: 0, fixed: 0 },
+      { method: 'alipay', percent: 6, fixed: 0.5 },
+    ])
   })
 })

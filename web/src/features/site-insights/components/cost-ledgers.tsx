@@ -25,10 +25,16 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import { paymentMethodLabel } from '@/features/wallet/lib/billing'
 
-import { saveCommissionExempt, saveIPCosts } from '../api'
+import { saveCommissionExempt, saveIPCosts, savePaymentFeeRates } from '../api'
 import { tableState, useInsightsFormat, type SourceState } from '../lib'
-import type { FinanceInsights, IPCost } from '../types'
+import type {
+  FinanceInsights,
+  IPCost,
+  PaymentFee,
+  PaymentFeeRate,
+} from '../types'
 import { Panel, SimpleTable, UserLabel } from './shared'
 
 const DAY_SECONDS = 86400
@@ -367,6 +373,235 @@ export function CommissionExemptPanel(props: {
             }
           >
             {t('Add')}
+          </Button>
+        </div>
+      </div>
+    </Panel>
+  )
+}
+
+/** One payment method's row: its fee in the range and the rate it was priced at. */
+type PaymentFeeRow = PaymentFee & { rate: PaymentFeeRate | undefined }
+
+/**
+ * What each payment method's processor kept of the range's paid orders, at a
+ * rate the operator can change. The gross margin subtracts the fees' share of
+ * the cash, applied to recognized revenue.
+ */
+export function PaymentFeesPanel(props: {
+  data: FinanceInsights | undefined
+  source?: SourceState
+}) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const [method, setMethod] = useState('')
+  const [percent, setPercent] = useState('')
+  const [fixed, setFixed] = useState('')
+  const save = useMutation({
+    mutationFn: savePaymentFeeRates,
+    ...useSavedToast('Payment fee rates saved'),
+  })
+  const rates = props.data?.payment_fee_rates ?? undefined
+  const fees = props.data?.payment_fees ?? undefined
+  const rows: PaymentFeeRow[] | undefined =
+    rates && fees
+      ? [
+          ...fees.map((fee) => ({
+            ...fee,
+            rate: rates.find((rate) => rate.method === fee.method),
+          })),
+          // Rates for methods with no orders in the range, so they can be edited.
+          ...rates
+            .filter((rate) => !fees.some((fee) => fee.method === rate.method))
+            .map((rate) => ({
+              method: rate.method,
+              orders: 0,
+              money: 0,
+              refunded: 0,
+              fee: 0,
+              priced: true,
+              rate,
+            })),
+        ]
+      : undefined
+  const percentValue = Number(percent)
+  const fixedValue = fixed === '' ? 0 : Number(fixed)
+  const valid =
+    rates != null &&
+    method.trim() !== '' &&
+    percent !== '' &&
+    Number.isFinite(percentValue) &&
+    percentValue >= 0 &&
+    percentValue <= 50 &&
+    Number.isFinite(fixedValue) &&
+    fixedValue >= 0
+  const put = () => {
+    if (!valid || !rates) return
+    const key = method.trim()
+    save.mutate(
+      [
+        ...rates.filter((rate) => rate.method !== key),
+        { method: key, percent: percentValue, fixed: fixedValue },
+      ],
+      {
+        onSuccess: () => {
+          setMethod('')
+          setPercent('')
+          setFixed('')
+        },
+      }
+    )
+  }
+  const cash = fees?.reduce((sum, row) => sum + row.money, 0) ?? 0
+  const total = fees?.reduce((sum, row) => sum + row.fee, 0) ?? 0
+  const unpriced = fees?.filter((row) => !row.priced && row.money > 0) ?? []
+  const description = fees
+    ? [
+        t('{{fee}} of {{cash}} cash in this range ({{rate}})', {
+          fee: fmt.cny(total),
+          cash: fmt.cny(cash),
+          rate: cash > 0 ? fmt.pct(total / cash) : '-',
+        }),
+        unpriced.length > 0 &&
+          t(
+            'No rate is recorded for {{methods}}; their fees count as nothing.',
+            {
+              methods: unpriced
+                .map((row) => paymentMethodLabel(row.method, t))
+                .join(t(', ')),
+            }
+          ),
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : undefined
+  const rateText = (rate: PaymentFeeRate | undefined) => {
+    if (!rate) return t('No rate')
+    if (rate.fixed <= 0) return `${rate.percent}%`
+    return t('{{percent}}% + {{fixed}}', {
+      percent: rate.percent,
+      fixed: fmt.cny(rate.fixed),
+    })
+  }
+
+  return (
+    <Panel
+      title={t('Payment fees')}
+      description={description}
+      help={t(
+        'What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.'
+      )}
+    >
+      <div className='grid gap-3'>
+        <SimpleTable<PaymentFeeRow>
+          rows={rows}
+          rowKey={(row) => row.method}
+          empty={t('No paid orders in this range')}
+          state={tableState(props.source, rows)}
+          columns={[
+            {
+              key: 'method',
+              label: t('Payment method'),
+              render: (row) => paymentMethodLabel(row.method, t),
+            },
+            {
+              key: 'orders',
+              label: t('Orders'),
+              align: 'right',
+              render: (row) =>
+                row.refunded > 0
+                  ? t('{{orders}} + {{refunded}} refunded', {
+                      orders: fmt.num(row.orders),
+                      refunded: fmt.num(row.refunded),
+                    })
+                  : fmt.num(row.orders),
+            },
+            {
+              key: 'money',
+              label: t('Cash'),
+              align: 'right',
+              render: (row) => fmt.cny(row.money),
+            },
+            {
+              key: 'rate',
+              label: t('Rate'),
+              align: 'right',
+              render: (row) => rateText(row.rate),
+            },
+            {
+              key: 'fee',
+              label: t('Fee'),
+              align: 'right',
+              render: (row) => fmt.cny(row.fee),
+            },
+            {
+              key: 'remove',
+              label: '',
+              align: 'right',
+              render: (row) =>
+                row.rate && (
+                  <Button
+                    variant='ghost'
+                    size='icon-sm'
+                    aria-label={t('Delete')}
+                    disabled={save.isPending}
+                    onClick={() => {
+                      if (rates) {
+                        save.mutate(
+                          rates.filter((rate) => rate.method !== row.method)
+                        )
+                      }
+                    }}
+                  >
+                    <Trash2 />
+                  </Button>
+                ),
+            },
+          ]}
+        />
+        <div className='flex flex-wrap items-end gap-2'>
+          <label className='grid gap-1 text-xs'>
+            <span className='text-muted-foreground'>{t('Payment method')}</span>
+            <Input
+              className='h-7 w-40'
+              maxLength={50}
+              list='payment-fee-methods'
+              value={method}
+              onChange={(event) => setMethod(event.target.value)}
+            />
+            <datalist id='payment-fee-methods'>
+              {rows?.map((row) => (
+                <option key={row.method} value={row.method} />
+              ))}
+            </datalist>
+          </label>
+          <label className='grid gap-1 text-xs'>
+            <span className='text-muted-foreground'>{t('Percent')}</span>
+            <Input
+              className='h-7 w-24'
+              type='number'
+              min={0}
+              max={50}
+              step='any'
+              value={percent}
+              onChange={(event) => setPercent(event.target.value)}
+            />
+          </label>
+          <label className='grid gap-1 text-xs'>
+            <span className='text-muted-foreground'>
+              {t('Fixed per order (yuan)')}
+            </span>
+            <Input
+              className='h-7 w-24'
+              type='number'
+              min={0}
+              step='any'
+              value={fixed}
+              onChange={(event) => setFixed(event.target.value)}
+            />
+          </label>
+          <Button size='sm' disabled={!valid || save.isPending} onClick={put}>
+            {t('Save rate')}
           </Button>
         </div>
       </div>
