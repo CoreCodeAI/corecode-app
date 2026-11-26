@@ -30,6 +30,7 @@ import {
   type Contribution,
   type Finding,
 } from '../analysis'
+import { financeMargins, profitWaterfall } from '../finance-analysis'
 import {
   costBehind,
   CONCENTRATION_SHARE,
@@ -41,7 +42,6 @@ import {
   SMALL_SAMPLE,
   SPIKE_FACTOR,
   SPIKE_FLOOR,
-  vendorMargins,
   type InsightsRangeInfo,
   type InsightsTab,
   type useInsightsFormat,
@@ -480,29 +480,10 @@ export function overviewExtraSignals(
 }
 
 /**
- * What the billed upstreams cost over the range, in yuan: bills in each
- * upstream's quota dollars, taken one for one, and fees in real US dollars
- * at rate. Cost on channels that earned nothing in the range is included.
- * Undefined from a server that does not send it.
- */
-export function upstreamCost(
-  finance: FinanceInsights | undefined,
-  rate: number
-): number | undefined {
-  if (!finance?.vendor_upstream) return undefined
-  let bill = finance.upstream_unattributed_bill_usd ?? 0
-  let fee = finance.upstream_unattributed_fee_usd ?? 0
-  for (const row of finance.vendor_upstream) {
-    bill += row.bill_usd
-    fee += row.fee_usd
-  }
-  return bill + fee * rate
-}
-
-/**
- * Revenue earned in the range and the gross margin on it after the pool
- * accounts' cost and, from a server that sends them, the upstreams' bills
- * and fees, colored as the funds tab's verdict. missing while finance has
+ * The funds tab's gross margin: revenue earned less pool accounts, upstream
+ * bills and fees, egress IP costs and payment fees (financeMargins). The hint
+ * adds what its profit waterfall leaves after promotion-channel fees and
+ * commission, from a server that sends channel fees. missing while finance has
  * not loaded.
  */
 export function marginCard(
@@ -512,19 +493,12 @@ export function marginCard(
   rate: number
 ): MetricItem {
   const label = t('Gross margin')
-  const upstream = upstreamCost(finance, rate)
-  const help =
-    upstream === undefined
-      ? t(
-          'Revenue earned from what customers used, less what the pool’s accounts cost over the range.'
-        )
-      : t(
-          'Revenue earned from what customers used, less what the pool’s accounts cost over the range and the upstreams’ bills and monthly fees. A bill is in that upstream’s own quota dollars, taken one for one; a fee is in US dollars at the site’s exchange rate.'
-        )
+  const help = t(
+    'The funds tab’s gross margin: revenue earned less the pool’s accounts, upstream bills and monthly fees, egress IP costs and payment fees over the range. After promotion is what its profit waterfall leaves once promotion-channel fees and referral commission are taken off too.'
+  )
   if (!finance) return { label, help, value: '-', missing: true }
-  const rows = vendorMargins(finance, rate)
-  const revenue = rows.reduce((sum, row) => sum + row.revenue, 0)
-  if (revenue <= 0) {
+  const margins = financeMargins(finance, rate)
+  if (margins.revenue <= 0) {
     return {
       label,
       help,
@@ -534,23 +508,26 @@ export function marginCard(
       }),
     }
   }
-  const pool = rows.reduce((sum, row) => sum + row.cost, 0)
-  const margin = revenue - pool - (upstream ?? 0)
+  const waterfall = profitWaterfall(finance, margins, rate)
+  const share = (amount: number) => fmt.pct(amount / margins.revenue)
   return {
     label,
     help,
-    value: fmt.cny(margin),
-    tone: marginTone(revenue, margin),
-    hint:
-      upstream === undefined
-        ? t('{{rate}} of {{earned}} earned', {
-            rate: fmt.pct(margin / revenue),
-            earned: fmt.cny(revenue),
-          })
-        : t('{{rate}} of {{earned}} earned; upstreams {{upstream}}', {
-            rate: fmt.pct(margin / revenue),
-            earned: fmt.cny(revenue),
-            upstream: fmt.cny(upstream),
-          }),
+    value: fmt.cny(margins.margin),
+    tone: marginTone(margins.revenue, margins.margin),
+    hint: waterfall
+      ? t(
+          '{{rate}} of {{earned}} earned; after promotion {{left}} ({{leftRate}})',
+          {
+            rate: share(margins.margin),
+            earned: fmt.cny(margins.revenue),
+            left: fmt.cny(waterfall.left),
+            leftRate: share(waterfall.left),
+          }
+        )
+      : t('{{rate}} of {{earned}} earned', {
+          rate: share(margins.margin),
+          earned: fmt.cny(margins.revenue),
+        }),
   }
 }
