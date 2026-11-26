@@ -411,11 +411,6 @@ func migrateDB() error {
 		&InsightExperienceHour{},
 		&UpstreamCost{},
 		&UpstreamBillDay{},
-		&RivalSite{},
-		&RivalPrice{},
-		&RivalPriceChange{},
-		&RivalDirectoryState{},
-		&RivalGroupKind{},
 	)
 	if err != nil {
 		return err

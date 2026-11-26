@@ -181,7 +181,6 @@ func main() {
 	middleware.StartUserConcurrencyRejectionFlush()
 	service.StartRiskGateTasks()
 	service.StartSiteInsightsRollupTask()
-	service.StartRivalPriceTask()
 	service.StartUpstreamCostTask()
 
 	// Report this process as a system instance so the System Info page can show
