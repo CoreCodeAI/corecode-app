@@ -2,6 +2,8 @@ package operation_setting
 
 import (
 	"fmt"
+	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -76,12 +78,59 @@ func TopUpBonusRate(amount int64) float64 {
 // TopUpBonusTier returns the tier TopUpBonusRate reads for amount: its
 // minimum and its rate, or 0 and 0 when no tier applies.
 func TopUpBonusTier(amount int64) (minAmount int64, rate float64) {
-	for tierMin, tierRate := range paymentSetting.AmountBonus {
+	return BonusTierIn(paymentSetting.AmountBonus, amount)
+}
+
+// BonusTierIn returns the tier of tiers that applies to amount: the one with
+// the highest minimum at or below it, as its minimum and rate, or 0 and 0.
+func BonusTierIn(tiers map[int]float64, amount int64) (minAmount int64, rate float64) {
+	for tierMin, tierRate := range tiers {
 		if int64(tierMin) <= amount && int64(tierMin) > minAmount && tierRate > 0 {
 			minAmount, rate = int64(tierMin), tierRate
 		}
 	}
 	return minAmount, rate
+}
+
+// BonusTiersWithContract returns the tiers a customer with a contract bonus
+// rate earns: at every amount, the contract rate or the site's tier,
+// whichever is higher. The two never add up. The contract rate starts at an
+// amount of 1, and a tier that would not raise the rate before it is left
+// out, so each tier's minimum is where its rate begins. A contract rate of 0
+// returns the site's tiers.
+func BonusTiersWithContract(contract float64) map[int]float64 {
+	site := paymentSetting.AmountBonus
+	if contract <= 0 {
+		return site
+	}
+	minimums := make([]int, 0, len(site)+1)
+	minimums = append(minimums, 1)
+	for tierMin, tierRate := range site {
+		if tierMin > 1 && tierRate > 0 {
+			minimums = append(minimums, tierMin)
+		}
+	}
+	sort.Ints(minimums)
+	merged := make(map[int]float64, len(minimums))
+	previous := 0.0
+	for _, tierMin := range minimums {
+		_, siteRate := BonusTierIn(site, int64(tierMin))
+		rate := math.Max(contract, siteRate)
+		if rate > previous {
+			merged[tierMin] = rate
+			previous = rate
+		}
+	}
+	return merged
+}
+
+// ValidateContractBonusRate checks a customer's contract bonus rate: 0 for
+// none, or a fraction above 0 and at most 1, like a site tier.
+func ValidateContractBonusRate(rate float64) error {
+	if math.IsNaN(rate) || rate < 0 || rate > 1 {
+		return fmt.Errorf("Contract bonus rate must be 0, or above 0 and at most 1")
+	}
+	return nil
 }
 
 // ValidateAmountBonus checks a payment_setting.amount_bonus value before it is

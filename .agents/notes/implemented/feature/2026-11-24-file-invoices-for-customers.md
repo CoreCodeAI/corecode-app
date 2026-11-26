@@ -23,6 +23,8 @@ back by hand.
 - **The tax is recorded as collected offline.** The new tax method `offline`
   stores the tax at the current rate, a paid time and no balance quota, and the
   application goes straight to review. Nothing is deducted.
+  Since 2026-11-27 the filing can deduct it from the balance instead; see
+  `2026-11-27-file-invoices-with-the-tax-from-balance.md`.
 - **Rejecting returns no tax.** `RejectInvoice` skips the refund for `offline`,
   because the tax never reached the balance. The rejection email then omits the
   tax-returned line, and the review dialog says the tax is not returned.

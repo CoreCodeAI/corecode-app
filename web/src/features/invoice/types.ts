@@ -138,9 +138,14 @@ export interface InvoiceSubmission extends InvoiceTitleSubmission {
   payment_method: InvoiceCustomerTaxMethod
 }
 
-/** An application an administrator files for a customer. */
+/**
+ * An application an administrator files for a customer. With
+ * tax_from_balance the tax is deducted from the customer's balance;
+ * otherwise it is recorded as collected offline.
+ */
 export interface InvoiceAdminSubmission extends InvoiceTitleSubmission {
   user_id: number
+  tax_from_balance?: boolean
 }
 
 /** A customer's account and invoiceable orders, for an administrator. */

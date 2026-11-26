@@ -30,6 +30,7 @@ import {
   CreditCard,
   Gift,
   KeySquare,
+  BadgePercent,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -67,6 +68,7 @@ import type { User } from '../types'
 import { UserAffiliateDialog } from './dialogs/user-affiliate-dialog'
 import { UserApiKeysDialog } from './dialogs/user-api-keys-dialog'
 import { UserBindingDialog } from './dialogs/user-binding-dialog'
+import { UserContractBonusDialog } from './dialogs/user-contract-bonus-dialog'
 import { useUsers } from './users-provider'
 
 const MANAGE_ACTION_TITLES: Record<AdminUserManageAction, string> = {
@@ -96,6 +98,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const [subscriptionsDialogOpen, setSubscriptionsDialogOpen] = useState(false)
   const [affiliateDialogOpen, setAffiliateDialogOpen] = useState(false)
   const [apiKeysDialogOpen, setApiKeysDialogOpen] = useState(false)
+  const [contractBonusDialogOpen, setContractBonusDialogOpen] = useState(false)
   // Managing the invitation program is root's.
   const viewerIsRoot = useAuthStore(
     (s) => s.auth.user?.role === ROLE.SUPER_ADMIN
@@ -313,6 +316,20 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           </DropdownMenuItem>
         )}
 
+        {viewerIsRoot && (
+          <DropdownMenuItem
+            onSelect={(event) => {
+              event.preventDefault()
+              setContractBonusDialogOpen(true)
+            }}
+          >
+            {t('Contract bonus')}
+            <DropdownMenuShortcut>
+              <BadgePercent size={16} />
+            </DropdownMenuShortcut>
+          </DropdownMenuItem>
+        )}
+
         <DropdownMenuSeparator />
 
         <DropdownMenuItem
@@ -390,6 +407,14 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         <UserAffiliateDialog
           open={affiliateDialogOpen}
           onOpenChange={setAffiliateDialogOpen}
+          user={{ id: user.id, username: user.username }}
+        />
+      )}
+
+      {contractBonusDialogOpen && (
+        <UserContractBonusDialog
+          open={contractBonusDialogOpen}
+          onOpenChange={setContractBonusDialogOpen}
           user={{ id: user.id, username: user.username }}
         />
       )}

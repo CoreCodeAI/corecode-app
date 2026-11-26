@@ -10088,7 +10088,6 @@
     "Collected offline": "오프라인 수령",
     "The tax is recorded as collected offline. Nothing is deducted from the user's balance.": "세금은 오프라인 수령으로 기록되며 사용자 잔액에서 차감되지 않습니다.",
     "File an application for a user": "사용자 대신 신청",
-    "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.": "콘솔에서 직접 신청할 수 없는 고객용입니다. 세금은 오프라인 수령으로 기록되며 사용자 잔액에서 차감되지 않습니다.",
     "Enter a user ID": "사용자 ID를 입력하세요",
     "File for a user": "대리 신청",
     "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.": "사용자는 인보이스 센터와 이메일에서 이 사유를 확인합니다. 세금은 오프라인으로 수령했으므로 잔액으로 환불되지 않습니다. 주문은 다시 발행 가능해집니다.",
@@ -10180,7 +10179,16 @@
     "{{orders}} + {{refunded}} refunded": "{{orders}} + 환불 {{refunded}}",
     "{{percent}}% + {{fixed}}": "{{percent}}% + {{fixed}}",
     "No rate is recorded for {{methods}}; their fees count as nothing.": "{{methods}}에는 요율이 기록되지 않아 수수료를 0으로 계산합니다.",
-    "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "각 결제사가 주문 한 건에서 가져가는 금액: 주문 금액의 일정 비율에 건당 고정 금액(위안)을 더합니다. 환불된 주문도 수수료는 돌려받지 못하므로, 금액은 빼고 수수료만 여기에 포함합니다. 매출총이익에서는 현금 대비 수수료 비율을 인식 매출에 적용해 뺍니다. 결제 수단의 요율을 저장하면 이전 요율을 대체하고, 모든 요율을 삭제하면 실측 기본값으로 돌아갑니다."
+    "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "각 결제사가 주문 한 건에서 가져가는 금액: 주문 금액의 일정 비율에 건당 고정 금액(위안)을 더합니다. 환불된 주문도 수수료는 돌려받지 못하므로, 금액은 빼고 수수료만 여기에 포함합니다. 매출총이익에서는 현금 대비 수수료 비율을 인식 매출에 적용해 뺍니다. 결제 수단의 요율을 저장하면 이전 요율을 대체하고, 모든 요율을 삭제하면 실측 기본값으로 돌아갑니다.",
+    "Contract bonus": "계약 보너스",
+    "Contract bonus saved": "계약 보너스를 저장했습니다",
+    "Bonus rate (%)": "보너스 비율(%)",
+    "{{username}} earns this bonus or the site's tier for the amount, whichever is higher, on every top-up, offline payments included. The two never add up. 0 removes it.": "{{username}}님은 오프라인 결제를 포함한 모든 충전에서 이 비율과 사이트의 해당 금액 구간 비율 중 높은 쪽을 받습니다. 두 비율은 합산되지 않습니다. 0이면 해제됩니다.",
+    "Deduct the tax from the user's balance": "세금을 사용자 잔액에서 차감",
+    "Turn it off only when the customer paid the tax with the transfer: it is then recorded as collected offline and nothing is deducted.": "고객이 이체로 세금까지 납부한 경우에만 끄세요. 세금은 오프라인 수납으로 기록되며 잔액에서 차감되지 않습니다.",
+    "For a customer who cannot apply in the console.": "콘솔에서 직접 신청할 수 없는 고객용입니다.",
+    "Failed to save the contract bonus": "계약 보너스를 저장하지 못했습니다",
+    "The tax is deducted from the user's balance.": "세금은 사용자 잔액에서 차감됩니다."
   },
   "Payment received!": "결제가 확인되었습니다!",
   "Failed to load plans": "플랜을 불러오지 못했습니다"

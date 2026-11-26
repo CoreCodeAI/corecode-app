@@ -189,7 +189,7 @@ func GetTopUpInfo(c *gin.Context) {
 		}(),
 		"amount_options": operation_setting.GetPaymentSetting().AmountOptions,
 		"discount":       operation_setting.GetPaymentSetting().AmountDiscount,
-		"bonus":          operation_setting.GetPaymentSetting().AmountBonus,
+		"bonus":          topUpInfoBonusTiers(c.GetInt("id")),
 		"bonus_campaign": operation_setting.GetPaymentSetting().BonusCampaign,
 		"topup_link":     common.TopUpLink,
 		"concurrency":    userConcurrencyInfo(c.GetInt("id"), c.GetString("group")),
@@ -342,11 +342,17 @@ func getTopUpQuota(amount int64) (int, error) {
 	return common.WalletQuotaFromDecimalStrict(quota)
 }
 
-// topUpBonusQuota is the extra quota an online top-up of amount earns under
-// payment_setting.amount_bonus. The order keeps it, so a tier changed while
-// the customer pays does not change what they were shown.
-func topUpBonusQuota(amount int64) (int, error) {
-	rate := operation_setting.TopUpBonusRate(amount)
+// topUpBonusQuota is the extra quota an online top-up of amount by the user
+// earns: payment_setting.amount_bonus, or the user's contract rate where it
+// is higher (model.TopUpBonusTiersFor). The order keeps it, so a tier changed
+// while the customer pays does not change what they were shown.
+func topUpBonusQuota(userId int, amount int64) (int, error) {
+	tiers, err := model.TopUpBonusTiersFor(userId)
+	if err != nil {
+		common.SysError(common.LogText("failed to read the contract bonus of user %d: %s", userId, err.Error()))
+		return 0, common.NewMessage("Failed to create order")
+	}
+	_, rate := operation_setting.BonusTierIn(tiers, amount)
 	if rate <= 0 {
 		return 0, nil
 	}
@@ -355,6 +361,18 @@ func topUpBonusQuota(amount int64) (int, error) {
 		return 0, err
 	}
 	return common.WalletQuotaFromDecimalStrict(decimal.NewFromInt(int64(quota)).Mul(decimal.NewFromFloat(rate)).Floor())
+}
+
+// topUpInfoBonusTiers is the bonus tiers the wallet shows the user: the
+// site's, raised to the user's contract rate. Reading the contract rate fails
+// to the site's tiers, which the user earns at least.
+func topUpInfoBonusTiers(userId int) map[int]float64 {
+	tiers, err := model.TopUpBonusTiersFor(userId)
+	if err != nil {
+		common.SysError(common.LogText("failed to read the contract bonus of user %d: %s", userId, err.Error()))
+		return operation_setting.GetPaymentSetting().AmountBonus
+	}
+	return tiers
 }
 
 func getMaxTopUpAmount() int64 {
@@ -449,7 +467,7 @@ func RequestEpay(c *gin.Context) {
 	if rejectInvalidTopUpQuota(c, id, req.Amount) {
 		return
 	}
-	bonusQuota, err := topUpBonusQuota(req.Amount)
+	bonusQuota, err := topUpBonusQuota(id, req.Amount)
 	if err == nil && bonusQuota > 0 {
 		quota, _ := getTopUpQuota(req.Amount)
 		err = model.ValidateTopUpQuotaCapacity(id, quota+bonusQuota)

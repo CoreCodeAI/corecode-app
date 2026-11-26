@@ -100,7 +100,7 @@ func RequestDodoPaymentsPay(c *gin.Context) {
 		paymentError(c, common.NewMessage("This payment method takes at most ¥{{max}} per order. Choose a smaller amount or another method.", map[string]any{"max": strconv.FormatFloat(maxMoney, 'f', -1, 64)}))
 		return
 	}
-	bonusQuota, err := topUpBonusQuota(req.Amount)
+	bonusQuota, err := topUpBonusQuota(id, req.Amount)
 	if err == nil && bonusQuota > 0 {
 		quota, _ := getTopUpQuota(req.Amount)
 		err = model.ValidateTopUpQuotaCapacity(id, quota+bonusQuota)

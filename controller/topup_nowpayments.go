@@ -125,7 +125,7 @@ func RequestNowPaymentsPay(c *gin.Context) {
 		return
 	}
 	id := c.GetInt("id")
-	bonusQuota, err := topUpBonusQuota(req.Amount)
+	bonusQuota, err := topUpBonusQuota(id, req.Amount)
 	if err == nil && bonusQuota > 0 {
 		quota, _ := getTopUpQuota(req.Amount)
 		err = model.ValidateTopUpQuotaCapacity(id, quota+bonusQuota)

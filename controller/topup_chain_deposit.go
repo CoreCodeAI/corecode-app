@@ -294,10 +294,10 @@ func chainDepositBonusRate(tierRate float64) decimal.Decimal {
 
 // chainDepositPrice prices a credited difference like a NOWPayments order:
 // dollars become CNY money at USDExchangeRate, money becomes top-up units
-// through the epay price, and the bonus is the rate of that amount's tier plus
-// the on-chain bonus. It keeps the fraction of a unit, so a difference of 1.5
-// dollars credits 1.5.
-func chainDepositPrice(dollars decimal.Decimal) (model.ChainDepositPrice, error) {
+// through the epay price, and the bonus is the rate of that amount's tier in
+// tiers (the depositor's, model.TopUpBonusTiersFor) plus the on-chain bonus.
+// It keeps the fraction of a unit, so a difference of 1.5 dollars credits 1.5.
+func chainDepositPrice(tiers map[int]float64, dollars decimal.Decimal) (model.ChainDepositPrice, error) {
 	exchangeRate := operation_setting.USDExchangeRate
 	price := operation_setting.Price
 	if exchangeRate <= 0 || price <= 0 || common.QuotaPerUnit <= 0 {
@@ -312,7 +312,8 @@ func chainDepositPrice(dollars decimal.Decimal) (model.ChainDepositPrice, error)
 	}
 	tierAmount := chainDepositTierAmount(units)
 	bonus := 0
-	if rate := chainDepositBonusRate(operation_setting.TopUpBonusRate(tierAmount.Floor().IntPart())); rate.IsPositive() {
+	_, tierRate := operation_setting.BonusTierIn(tiers, tierAmount.Floor().IntPart())
+	if rate := chainDepositBonusRate(tierRate); rate.IsPositive() {
 		bonus, err = common.WalletQuotaFromDecimalStrict(decimal.NewFromInt(int64(quota)).Mul(rate).Floor())
 		if err != nil {
 			return model.ChainDepositPrice{}, err
@@ -390,13 +391,13 @@ type ChainDepositQuote struct {
 	LowerRate float64 `json:"lower_rate"`
 }
 
-func chainDepositQuote(amount int64) (*ChainDepositQuote, error) {
+func chainDepositQuote(tiers map[int]float64, amount int64) (*ChainDepositQuote, error) {
 	dollars, err := chainDepositDollarsFor(amount)
 	if err != nil {
 		return nil, err
 	}
 	money := chainDepositUnitsFor(amount).Mul(decimal.NewFromFloat(operation_setting.Price)).Round(2)
-	tierMin, rate := operation_setting.TopUpBonusTier(amount)
+	tierMin, rate := operation_setting.BonusTierIn(tiers, amount)
 	quote := &ChainDepositQuote{
 		Amount:    amount,
 		Money:     money.InexactFloat64(),
@@ -404,13 +405,16 @@ func chainDepositQuote(amount int64) (*ChainDepositQuote, error) {
 		BonusRate: chainDepositBonusRate(rate).InexactFloat64(),
 		ChainRate: setting.ChainDepositBonusRate,
 	}
-	if rate > 0 {
+	// A contract rate's tier starts at 1: any transfer keeps it, so there is
+	// no least transfer to name.
+	if rate > 0 && tierMin > 1 {
 		tierDollars, err := chainDepositDollarsFor(tierMin)
 		if err != nil {
 			return nil, err
 		}
 		quote.BonusUSD = tierDollars.StringFixed(2)
-		quote.LowerRate = chainDepositBonusRate(operation_setting.TopUpBonusRate(tierMin - 1)).InexactFloat64()
+		_, lowerRate := operation_setting.BonusTierIn(tiers, tierMin-1)
+		quote.LowerRate = chainDepositBonusRate(lowerRate).InexactFloat64()
 	}
 	return quote, nil
 }
@@ -430,7 +434,13 @@ func RequestChainDepositQuote(c *gin.Context) {
 		paymentError(c, common.NewMessage("Invalid parameters"))
 		return
 	}
-	quote, err := chainDepositQuote(req.Amount)
+	tiers, err := model.TopUpBonusTiersFor(c.GetInt("id"))
+	if err != nil {
+		logger.LogError(c.Request.Context(), common.LogText("chain deposit quote failed to read the contract bonus user_id=%d error=%q", c.GetInt("id"), err.Error()))
+		paymentError(c, common.NewMessage("Invalid parameters"))
+		return
+	}
+	quote, err := chainDepositQuote(tiers, req.Amount)
 	if err != nil {
 		logger.LogError(c.Request.Context(), common.LogText("chain deposit quote failed amount=%d error=%q", req.Amount, err.Error()))
 		paymentError(c, common.NewMessage("Invalid parameters"))
@@ -489,7 +499,15 @@ func applyChainDepositTotal(item *chainDepositTotalItem) (alert string, err erro
 	if err != nil {
 		return fmt.Sprintf("⚠️ 链上充值告警: 无法处理的累计数据 用户 #%d %s %s received=%q", item.UserID, item.Network, item.Token, item.Received), nil
 	}
-	result, err := model.CreditChainDeposit(total, chainDepositPrice)
+	// The depositor's contract rate is read before the credit; one set while
+	// a deposit is credited applies from the next one.
+	tiers, err := model.TopUpBonusTiersFor(total.UserId)
+	if err != nil {
+		return "", err
+	}
+	result, err := model.CreditChainDeposit(total, func(dollars decimal.Decimal) (model.ChainDepositPrice, error) {
+		return chainDepositPrice(tiers, dollars)
+	})
 	switch {
 	case errors.Is(err, gorm.ErrRecordNotFound), errors.Is(err, model.ErrTopUpQuotaLimitExceeded), errors.Is(err, model.ErrInvalidTopUpQuota), errors.Is(err, model.ErrWalletQuotaLimitExceeded):
 		// Retrying cannot help: say so, and the next change of the total

@@ -10088,7 +10088,6 @@
     "Collected offline": "線下已收",
     "The tax is recorded as collected offline. Nothing is deducted from the user's balance.": "稅費按線下已收記錄，不扣使用者餘額。",
     "File an application for a user": "代使用者申請發票",
-    "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.": "用於無法在控制台自行申請的客戶。稅費按線下已收記錄，不扣使用者餘額。",
     "Enter a user ID": "請輸入使用者 ID",
     "File for a user": "代使用者申請",
     "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.": "使用者會在開票中心和通知電郵中看到該原因。稅費為線下收取，不會退回餘額，訂單恢復為可開票。",
@@ -10180,7 +10179,16 @@
     "{{orders}} + {{refunded}} refunded": "{{orders}} + {{refunded}} 筆已退款",
     "{{percent}}% + {{fixed}}": "{{percent}}% + {{fixed}}",
     "No rate is recorded for {{methods}}; their fees count as nothing.": "{{methods}} 沒有記錄費率，其手續費按 0 計。",
-    "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "每個支付渠道從一筆訂單中扣走的費用：訂單金額的百分比，加上每筆固定的若干元。已退款訂單的手續費不退，所以這裡計入它的手續費，但不計它的金額。毛利扣除的是手續費占現金的比例，套到確認收入上。為某個支付方式儲存費率會替換舊費率；刪除全部費率則恢復實測的預設值。"
+    "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "每個支付渠道從一筆訂單中扣走的費用：訂單金額的百分比，加上每筆固定的若干元。已退款訂單的手續費不退，所以這裡計入它的手續費，但不計它的金額。毛利扣除的是手續費占現金的比例，套到確認收入上。為某個支付方式儲存費率會替換舊費率；刪除全部費率則恢復實測的預設值。",
+    "Contract bonus": "協議贈送",
+    "Contract bonus saved": "協議贈送已儲存",
+    "Bonus rate (%)": "贈送比例（%）",
+    "{{username}} earns this bonus or the site's tier for the amount, whichever is higher, on every top-up, offline payments included. The two never add up. 0 removes it.": "{{username}} 每次儲值（含線下儲值）按此比例與網站同金額檔位中較高的一項贈送，兩者不疊加。填 0 取消。",
+    "Deduct the tax from the user's balance": "從使用者餘額扣除稅額",
+    "Turn it off only when the customer paid the tax with the transfer: it is then recorded as collected offline and nothing is deducted.": "僅當客戶已隨轉帳支付稅額時關閉：稅額將記為線下已收，不扣餘額。",
+    "For a customer who cannot apply in the console.": "適用於無法在主控台自行申請的客戶。",
+    "Failed to save the contract bonus": "儲存協議贈送失敗",
+    "The tax is deducted from the user's balance.": "稅額從使用者餘額中扣除。"
   },
   "Payment received!": "已收到付款！",
   "Failed to load plans": "載入方案失敗"
