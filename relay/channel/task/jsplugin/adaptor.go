@@ -683,12 +683,11 @@ func readFilePlaceholder(ref string, form *multipart.Form, maxBytes int64) (stri
 // is checked before decoding, so an oversized value is never decoded.
 func decodeDataURLPlaceholder(raw any, maxBytes int64) (string, []byte, error) {
 	value, _ := raw.(string)
-	rest, ok := strings.CutPrefix(value, "data:")
-	if !ok {
-		rest, ok = strings.CutPrefix(value, "DATA:")
+	if len(value) < 5 || !strings.EqualFold(value[:5], "data:") {
+		return "", nil, fmt.Errorf("inline data URL is not a data: URL")
 	}
-	header, payload, found := strings.Cut(rest, ",")
-	if !ok || !found {
+	header, payload, found := strings.Cut(value[5:], ",")
+	if !found {
 		return "", nil, fmt.Errorf("inline data URL is not a data: URL")
 	}
 	params := strings.Split(header, ";")
