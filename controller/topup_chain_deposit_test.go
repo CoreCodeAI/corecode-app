@@ -211,7 +211,7 @@ func setupChainDeposit(t *testing.T) (*chainDepositStub, *feishuRecorder, *gorm.
 	db := model.DB
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.TopUp{}, &model.Log{}, &model.ChainDepositCredit{}, &model.ChainDepositCursor{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.TopUp{}, &model.Log{}, &model.ChainDepositCredit{}, &model.ChainDepositCursor{}, &model.UserContractBonus{}))
 	model.LOG_DB = db
 	common.SetLogDatabaseType(common.MainDatabaseType())
 
@@ -485,6 +485,38 @@ func TestChainDepositUnderOneDollarWaitsThenCredits(t *testing.T) {
 	assert.Equal(t, 550000+500000, chainDepositQuota(t, db, user.Id))
 }
 
+// A depositor with a contract rate earns it or the tier, whichever is
+// higher, and the on-chain bonus on top of that; the quote says the same.
+func TestChainDepositEarnsTheContractRateAndTheOnChainBonus(t *testing.T) {
+	stub, _, db := setupChainDeposit(t)
+	setting.ChainDepositBonusRate = 0.01
+	user := chainDepositTestUser(t, db, "chain_contract", common.RoleCommonUser)
+	_, err := model.SetContractBonusRate(user.Id, 0.3, 1)
+	require.NoError(t, err)
+
+	// 5 dollars is under the site's tier at 10: 30% and 1% of 2,500,000.
+	stub.setItems(chainTotal(1, user.Id, "bsc", "USDT", 18, "5000000000000000000"))
+	require.NoError(t, RunChainDepositPass(context.Background()))
+	topUps := chainDepositTopUps(t, db, user.Id)
+	require.Len(t, topUps, 1)
+	assert.EqualValues(t, 775000, topUps[0].BonusQuota)
+
+	// 12.5 more reaches the site's 20%, which the contract's 30% beats.
+	stub.setItems(chainTotal(1, user.Id, "bsc", "USDT", 18, "5000000000000000000"), chainTotal(2, user.Id, "bsc", "USDT", 18, "17500000000000000000"))
+	require.NoError(t, RunChainDepositPass(context.Background()))
+	topUps = chainDepositTopUps(t, db, user.Id)
+	require.Len(t, topUps, 2)
+	assert.EqualValues(t, 1937500, topUps[1].BonusQuota)
+
+	tiers, err := model.TopUpBonusTiersFor(user.Id)
+	require.NoError(t, err)
+	quote, err := chainDepositQuote(tiers, 20)
+	require.NoError(t, err)
+	assert.Equal(t, 0.31, quote.BonusRate)
+	assert.Empty(t, quote.BonusUSD, "any transfer keeps the contract rate")
+	assert.Zero(t, quote.LowerRate)
+}
+
 func TestChainDepositBigAmountsKeepEveryDigit(t *testing.T) {
 	_, _, db := setupChainDeposit(t)
 	user := chainDepositTestUser(t, db, "chain_big", common.RoleCommonUser)
@@ -669,12 +701,12 @@ func TestChainDepositEarnsTheOnChainBonusOnTopOfTheTier(t *testing.T) {
 	assert.Equal(t, 2500000+25000+6250000+1312500, chainDepositQuota(t, db, user.Id))
 
 	// The quote names the same rates.
-	q, err := chainDepositQuote(5)
+	q, err := chainDepositQuote(operation_setting.GetPaymentSetting().AmountBonus, 5)
 	require.NoError(t, err)
 	assert.Equal(t, 0.01, q.BonusRate)
 	assert.Equal(t, 0.01, q.ChainRate)
 	assert.Empty(t, q.BonusUSD)
-	q, err = chainDepositQuote(20)
+	q, err = chainDepositQuote(operation_setting.GetPaymentSetting().AmountBonus, 20)
 	require.NoError(t, err)
 	assert.Equal(t, 0.21, q.BonusRate)
 	assert.Equal(t, 0.01, q.LowerRate)
@@ -843,7 +875,7 @@ func TestChainDepositQuoteIsTheLeastTransferThatKeepsTheTier(t *testing.T) {
 	operation_setting.GetPaymentSetting().AmountBonus = map[int]float64{300: 0.03, 1000: 0.05, 5000: 0.07, 10000: 0.1}
 
 	quote := func(amount int64) *ChainDepositQuote {
-		q, err := chainDepositQuote(amount)
+		q, err := chainDepositQuote(operation_setting.GetPaymentSetting().AmountBonus, amount)
 		require.NoError(t, err)
 		return q
 	}
@@ -873,7 +905,7 @@ func TestChainDepositQuoteIsTheLeastTransferThatKeepsTheTier(t *testing.T) {
 	for _, amount := range []int64{10, 50, 300, 999, 1000, 5000, 10000, 123457} {
 		q := quote(amount)
 		usd := decimal.RequireFromString(q.USD)
-		price, err := chainDepositPrice(usd)
+		price, err := chainDepositPrice(operation_setting.GetPaymentSetting().AmountBonus, usd)
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, price.Quota, int(amount)*500000-1, "amount %d", amount)
 		assert.Equal(t, int64(math.Floor(float64(price.Quota)*operation_setting.TopUpBonusRate(amount))), price.BonusQuota, "amount %d", amount)

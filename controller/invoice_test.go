@@ -639,3 +639,50 @@ func TestInvoiceFiledByAnAdministrator(t *testing.T) {
 		})
 	}
 }
+
+// TestInvoiceFiledByAnAdministratorTakesTheTaxFromTheBalance: with
+// tax_from_balance an administrator's filing deducts the tax from the
+// customer's balance, as the customer's own balance payment does, and records
+// it on the invoice; a balance short of the tax files nothing.
+func TestInvoiceFiledByAnAdministratorTakesTheTaxFromTheBalance(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			useInvoiceTestDB(t, dialect)
+			file := func(body string) map[string]any {
+				return invoiceJSON(t, callInvoice(t, CreateInvoiceAdmin, http.MethodPost, "/api/invoice/admin", body, 1))
+			}
+			body := `{"user_id":11,"tax_from_balance":true,` + strings.TrimPrefix(company(orderRef(model.InvoiceOrderTopUp, invoiceOrders.epay), ""), "{")
+
+			// ¥100 carries ¥4.00 of tax, 2,000,000 quota at ¥1 per dollar.
+			require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", 11).Update("quota", 1999999).Error)
+			response := file(body)
+			assert.Equal(t, "Insufficient balance", response["message_key"])
+			assert.Equal(t, 1999999, userQuota(t, 11))
+			assert.Contains(t, invoiceableKeys(t, 11), "topup:101", "a refused filing claims no order")
+
+			require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", 11).Update("quota", 5000000).Error)
+			id := submittedId(t, file(body))
+			invoice := storedInvoice(t, id)
+			assert.Equal(t, model.InvoiceStatusPendingReview, invoice.Status)
+			assert.Equal(t, model.InvoiceTaxBalance, invoice.TaxMethod)
+			assert.Equal(t, int64(400), invoice.TaxCents)
+			assert.Equal(t, int64(2000000), invoice.TaxQuota)
+			assert.NotZero(t, invoice.TaxPaidTime)
+			assert.Equal(t, 3000000, userQuota(t, 11))
+			assert.NotContains(t, invoiceableKeys(t, 11), "topup:101")
+
+			var audits []model.AuditLog
+			require.NoError(t, model.LOG_DB.Where("action = ?", "invoice.admin_create").Find(&audits).Error)
+			require.Len(t, audits, 1)
+			params, err := common.Marshal(audits[0].Other.Op.Params)
+			require.NoError(t, err)
+			assert.Contains(t, string(params), `"tax_method":"balance"`)
+			assert.Contains(t, string(params), `"tax_quota":2000000`)
+
+			// Rejecting returns the deducted tax, as for a customer's filing.
+			response = invoiceJSON(t, callInvoice(t, RejectInvoiceAdmin, http.MethodPost, "/api/invoice/admin/"+strconv.Itoa(id)+"/reject", `{"reason":"抬头有误"}`, 1))
+			require.Equal(t, true, response["success"], response)
+			assert.Equal(t, 5000000, userQuota(t, 11))
+		})
+	}
+}

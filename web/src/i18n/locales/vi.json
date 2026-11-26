@@ -10088,7 +10088,6 @@
     "Collected offline": "Đã thu ngoại tuyến",
     "The tax is recorded as collected offline. Nothing is deducted from the user's balance.": "Thuế được ghi nhận là đã thu ngoại tuyến. Không trừ vào số dư của người dùng.",
     "File an application for a user": "Nộp đơn thay người dùng",
-    "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.": "Dành cho khách hàng không thể tự nộp đơn trong bảng điều khiển. Thuế được ghi nhận là đã thu ngoại tuyến và không trừ vào số dư của người dùng.",
     "Enter a user ID": "Nhập ID người dùng",
     "File for a user": "Nộp thay người dùng",
     "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.": "Người dùng thấy lý do này trong trung tâm hóa đơn và email. Thuế đã được thu ngoại tuyến nên không hoàn vào số dư. Các đơn hàng có thể xuất hóa đơn trở lại.",
@@ -10180,7 +10179,16 @@
     "{{orders}} + {{refunded}} refunded": "{{orders}} + {{refunded}} đã hoàn",
     "{{percent}}% + {{fixed}}": "{{percent}}% + {{fixed}}",
     "No rate is recorded for {{methods}}; their fees count as nothing.": "Chưa ghi mức phí cho {{methods}}; phí của chúng được tính bằng 0.",
-    "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "Khoản mỗi cổng thanh toán giữ lại trên một đơn: một phần trăm số tiền cộng một khoản cố định bằng tệ. Đơn đã hoàn tiền vẫn mất phí, nên phí của nó được tính ở đây dù số tiền thì không. Biên lợi nhuận gộp trừ tỷ lệ phí trên tiền mặt, áp vào doanh thu ghi nhận. Lưu mức phí cho một phương thức sẽ thay mức cũ; xóa mọi mức phí sẽ khôi phục giá trị mặc định đo được."
+    "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "Khoản mỗi cổng thanh toán giữ lại trên một đơn: một phần trăm số tiền cộng một khoản cố định bằng tệ. Đơn đã hoàn tiền vẫn mất phí, nên phí của nó được tính ở đây dù số tiền thì không. Biên lợi nhuận gộp trừ tỷ lệ phí trên tiền mặt, áp vào doanh thu ghi nhận. Lưu mức phí cho một phương thức sẽ thay mức cũ; xóa mọi mức phí sẽ khôi phục giá trị mặc định đo được.",
+    "Contract bonus": "Thưởng theo hợp đồng",
+    "Contract bonus saved": "Đã lưu thưởng theo hợp đồng",
+    "Bonus rate (%)": "Tỷ lệ thưởng (%)",
+    "{{username}} earns this bonus or the site's tier for the amount, whichever is higher, on every top-up, offline payments included. The two never add up. 0 removes it.": "{{username}} nhận mức thưởng này hoặc mức của bậc trên trang cho số tiền đó, lấy mức cao hơn, ở mọi lần nạp, kể cả thanh toán ngoại tuyến. Hai mức không cộng dồn. Nhập 0 để xóa.",
+    "Deduct the tax from the user's balance": "Trừ thuế vào số dư của người dùng",
+    "Turn it off only when the customer paid the tax with the transfer: it is then recorded as collected offline and nothing is deducted.": "Chỉ tắt khi khách đã trả thuế cùng khoản chuyển khoản: thuế được ghi là đã thu ngoại tuyến và không trừ gì.",
+    "For a customer who cannot apply in the console.": "Dành cho khách hàng không thể tự gửi yêu cầu trong bảng điều khiển.",
+    "Failed to save the contract bonus": "Không lưu được thưởng theo hợp đồng",
+    "The tax is deducted from the user's balance.": "Thuế được trừ vào số dư của người dùng."
   },
   "Payment received!": "Đã nhận thanh toán!",
   "Failed to load plans": "Không tải được danh sách gói"

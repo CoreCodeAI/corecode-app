@@ -111,7 +111,7 @@ func TestDodoPaymentsCheckoutAndWebhookCreditOnce(t *testing.T) {
 	db := model.DB
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.TopUp{}, &model.Log{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.TopUp{}, &model.Log{}, &model.UserContractBonus{}))
 	model.LOG_DB = db
 	common.SetLogDatabaseType(common.MainDatabaseType())
 

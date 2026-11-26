@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import {
   createInvoiceAdmin,
   getInvoiceConfig,
@@ -49,7 +50,8 @@ import { handleServerError } from '@/lib/handle-server-error'
 /**
  * An administrator files an application for a customer who cannot apply in
  * the console: find the account, pick its orders and fill in the title. The
- * tax is recorded as collected offline.
+ * tax is deducted from the customer's balance, or, for a transfer that
+ * included it, recorded as collected offline.
  */
 export function FileInvoiceDialog(props: { onClose: () => void }) {
   const { t } = useTranslation()
@@ -58,6 +60,7 @@ export function FileInvoiceDialog(props: { onClose: () => void }) {
   const [loading, setLoading] = useState(false)
   const [account, setAccount] = useState<InvoiceUserOrders | null>(null)
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  const [taxFromBalance, setTaxFromBalance] = useState(true)
   const config = useQuery({
     queryKey: [...INVOICE_KEY, 'config'],
     queryFn: getInvoiceConfig,
@@ -101,9 +104,7 @@ export function FileInvoiceDialog(props: { onClose: () => void }) {
       open
       onOpenChange={(open) => !open && props.onClose()}
       title={t('File an application for a user')}
-      description={t(
-        "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance."
-      )}
+      description={t('For a customer who cannot apply in the console.')}
       contentClassName='sm:max-w-5xl'
     >
       <form
@@ -139,6 +140,23 @@ export function FileInvoiceDialog(props: { onClose: () => void }) {
           </p>
         )}
       </form>
+      <div className='flex items-start gap-3 rounded-lg border p-3'>
+        <Switch
+          id='invoice-tax-from-balance'
+          checked={taxFromBalance}
+          onCheckedChange={setTaxFromBalance}
+        />
+        <div className='grid gap-1'>
+          <Label htmlFor='invoice-tax-from-balance'>
+            {t("Deduct the tax from the user's balance")}
+          </Label>
+          <p className='text-muted-foreground text-xs'>
+            {t(
+              'Turn it off only when the customer paid the tax with the transfer: it is then recorded as collected offline and nothing is deducted.'
+            )}
+          </p>
+        </div>
+      </div>
       {config.isPending && <Skeleton className='h-60' />}
       {account && config.data && (
         <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)] lg:items-start'>
@@ -157,8 +175,13 @@ export function FileInvoiceDialog(props: { onClose: () => void }) {
             orders={chosen}
             defaultEmail={account.user.email}
             balance={0}
+            filingTaxFromBalance={taxFromBalance}
             onFile={(submission) =>
-              createInvoiceAdmin({ ...submission, user_id: account.user.id })
+              createInvoiceAdmin({
+                ...submission,
+                user_id: account.user.id,
+                tax_from_balance: taxFromBalance,
+              })
             }
             onSubmitted={() => {
               void queryClient.invalidateQueries({ queryKey: INVOICE_KEY })

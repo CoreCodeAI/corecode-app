@@ -28,6 +28,7 @@ var auditContentTemplates = map[string]string{
 	"user.quota_override":       "Overrode user quota from ${from} to ${to}",
 	"user.quota_replay":         "Replayed a user quota adjustment without changing the balance",
 	"user.topup_offline":        "Recorded an offline payment of ${money} for ${amount} quota dollars",
+	"user.contract_bonus":       "Changed the contract top-up bonus rate from ${from} to ${to}",
 	"user.topup_refund":         "Marked ${count} top-up orders refunded (${money})",
 	"invoice.admin_create":      "Filed invoice application ${invoice_id} for the user",
 	"user.binding_clear":        "Cleared ${bindingType} binding for user ${username}",

@@ -393,6 +393,7 @@ func migrateDB() error {
 		&AffiliateSignupGift{},
 		&AffiliateInviteBonus{},
 		&AffiliateRetiredCode{},
+		&UserContractBonus{},
 		&EnterpriseApplication{},
 		&Feedback{},
 		&Invoice{},

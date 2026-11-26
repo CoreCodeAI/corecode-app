@@ -459,13 +459,19 @@ func GetInvoiceOrdersAdmin(c *gin.Context) {
 
 type adminInvoiceRequest struct {
 	UserId int `json:"user_id"`
+	// TaxFromBalance deducts the tax from the customer's balance, as a
+	// customer paying from balance would. Without it the tax is recorded as
+	// collected offline.
+	TaxFromBalance bool `json:"tax_from_balance"`
 	invoiceRequest
 }
 
 // CreateInvoiceAdmin files an application for a customer who cannot apply
-// in the console, such as an enterprise whose payment, tax included, came by
-// bank transfer. The tax is recorded as collected offline: nothing is
-// deducted from the balance, and the application goes straight to review.
+// in the console, such as an enterprise that paid by bank transfer. The
+// application goes straight to review. The tax is deducted from the
+// customer's balance when TaxFromBalance is set; otherwise it is recorded as
+// collected offline, for a transfer that included it, and nothing is
+// deducted.
 func CreateInvoiceAdmin(c *gin.Context) {
 	setting := operation_setting.GetInvoiceSetting()
 	if !setting.Enabled {
@@ -485,7 +491,7 @@ func CreateInvoiceAdmin(c *gin.Context) {
 		common.ApiError(c, message)
 		return
 	}
-	if application.TaxMethod != "" {
+	if application.TaxMethod != "" && !request.TaxFromBalance {
 		application.TaxMethod = model.InvoiceTaxOffline
 	}
 	result, err := model.CreateInvoice(request.UserId, application)
@@ -500,6 +506,7 @@ func CreateInvoiceAdmin(c *gin.Context) {
 		"order_cents": invoice.OrderCents,
 		"tax_cents":   invoice.TaxCents,
 		"tax_method":  invoice.TaxMethod,
+		"tax_quota":   invoice.TaxQuota,
 	})
 	logger.LogInfo(c.Request.Context(), common.LogText("Invoice application filed by an administrator admin_id=%d user_id=%d invoice_id=%d order_cents=%d tax_cents=%d", c.GetInt("id"), invoice.UserId, invoice.Id, invoice.OrderCents, invoice.TaxCents))
 	common.ApiSuccess(c, gin.H{"invoice": invoice})

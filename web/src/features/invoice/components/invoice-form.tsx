@@ -67,8 +67,9 @@ import type {
 
 /**
  * The title, recipient and tax payment of an application. With `onFile`, an
- * administrator files it for a customer and the tax is recorded as collected
- * offline, so no payment is asked for.
+ * administrator files it for a customer and no payment is asked for: the tax
+ * is deducted from the customer's balance when `filingTaxFromBalance` is set,
+ * and recorded as collected offline otherwise.
  */
 export function InvoiceForm(props: {
   config: InvoiceConfig
@@ -77,6 +78,7 @@ export function InvoiceForm(props: {
   balance: number
   onSubmitted: () => void
   onFile?: (submission: InvoiceTitleSubmission) => Promise<void>
+  filingTaxFromBalance?: boolean
 }) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
@@ -304,9 +306,11 @@ export function InvoiceForm(props: {
             </dl>
             {filing && hasTax && (
               <p className='text-muted-foreground text-xs'>
-                {t(
-                  "The tax is recorded as collected offline. Nothing is deducted from the user's balance."
-                )}
+                {props.filingTaxFromBalance
+                  ? t("The tax is deducted from the user's balance.")
+                  : t(
+                      "The tax is recorded as collected offline. Nothing is deducted from the user's balance."
+                    )}
               </p>
             )}
             {!filing && hasTax && (

@@ -10088,7 +10088,6 @@
     "Collected offline": "Collected offline",
     "The tax is recorded as collected offline. Nothing is deducted from the user's balance.": "The tax is recorded as collected offline. Nothing is deducted from the user's balance.",
     "File an application for a user": "File an application for a user",
-    "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.": "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.",
     "Enter a user ID": "Enter a user ID",
     "File for a user": "File for a user",
     "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.": "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.",
@@ -10180,7 +10179,16 @@
     "{{orders}} + {{refunded}} refunded": "{{orders}} + {{refunded}} refunded",
     "{{percent}}% + {{fixed}}": "{{percent}}% + {{fixed}}",
     "No rate is recorded for {{methods}}; their fees count as nothing.": "No rate is recorded for {{methods}}; their fees count as nothing.",
-    "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults."
+    "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.",
+    "Contract bonus": "Contract bonus",
+    "Contract bonus saved": "Contract bonus saved",
+    "Bonus rate (%)": "Bonus rate (%)",
+    "{{username}} earns this bonus or the site's tier for the amount, whichever is higher, on every top-up, offline payments included. The two never add up. 0 removes it.": "{{username}} earns this bonus or the site's tier for the amount, whichever is higher, on every top-up, offline payments included. The two never add up. 0 removes it.",
+    "Deduct the tax from the user's balance": "Deduct the tax from the user's balance",
+    "Turn it off only when the customer paid the tax with the transfer: it is then recorded as collected offline and nothing is deducted.": "Turn it off only when the customer paid the tax with the transfer: it is then recorded as collected offline and nothing is deducted.",
+    "For a customer who cannot apply in the console.": "For a customer who cannot apply in the console.",
+    "Failed to save the contract bonus": "Failed to save the contract bonus",
+    "The tax is deducted from the user's balance.": "The tax is deducted from the user's balance."
   },
   "Payment received!": "Payment received!",
   "Failed to load plans": "Failed to load plans"

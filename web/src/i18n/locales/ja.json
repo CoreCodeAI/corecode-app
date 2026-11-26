@@ -10088,7 +10088,6 @@
     "Collected offline": "オフラインで受領",
     "The tax is recorded as collected offline. Nothing is deducted from the user's balance.": "税金はオフラインで受領済みとして記録され、ユーザーの残高からは差し引かれません。",
     "File an application for a user": "ユーザーに代わって申請",
-    "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.": "コンソールで申請できない顧客向けです。税金はオフラインで受領済みとして記録され、ユーザーの残高からは差し引かれません。",
     "Enter a user ID": "ユーザー ID を入力してください",
     "File for a user": "代理申請",
     "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.": "ユーザーは請求書センターとメールでこの理由を確認できます。税金はオフラインで受領したため残高には返金されません。注文は再び請求可能になります。",
@@ -10180,7 +10179,16 @@
     "{{orders}} + {{refunded}} refunded": "{{orders}} + 返金済み {{refunded}}",
     "{{percent}}% + {{fixed}}": "{{percent}}% + {{fixed}}",
     "No rate is recorded for {{methods}}; their fees count as nothing.": "{{methods}} には料率が記録されていないため、手数料は 0 として扱います。",
-    "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "各決済事業者が 1 件の注文から差し引く額：注文金額のパーセントに、1 件あたりの固定額（元）を加えたものです。返金した注文の手数料は戻らないため、金額は含めず手数料だけをここに数えます。粗利からは、入金に対する手数料の割合を認識収益に適用して差し引きます。支払い方法の料率を保存すると古い料率を置き換え、すべて削除すると実測の既定値に戻ります。"
+    "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "各決済事業者が 1 件の注文から差し引く額：注文金額のパーセントに、1 件あたりの固定額（元）を加えたものです。返金した注文の手数料は戻らないため、金額は含めず手数料だけをここに数えます。粗利からは、入金に対する手数料の割合を認識収益に適用して差し引きます。支払い方法の料率を保存すると古い料率を置き換え、すべて削除すると実測の既定値に戻ります。",
+    "Contract bonus": "契約ボーナス",
+    "Contract bonus saved": "契約ボーナスを保存しました",
+    "Bonus rate (%)": "ボーナス率（%）",
+    "{{username}} earns this bonus or the site's tier for the amount, whichever is higher, on every top-up, offline payments included. The two never add up. 0 removes it.": "{{username}} はオフライン入金を含むすべてのチャージで、この率とサイトの該当金額ティアのうち高い方を受け取ります。両者は合算されません。0 で解除します。",
+    "Deduct the tax from the user's balance": "税額をユーザーの残高から差し引く",
+    "Turn it off only when the customer paid the tax with the transfer: it is then recorded as collected offline and nothing is deducted.": "顧客が振込で税額も支払った場合のみオフにしてください。税額はオフライン回収として記録され、残高から差し引かれません。",
+    "For a customer who cannot apply in the console.": "コンソールで自ら申請できない顧客向けです。",
+    "Failed to save the contract bonus": "契約ボーナスの保存に失敗しました",
+    "The tax is deducted from the user's balance.": "税額はユーザーの残高から差し引かれます。"
   },
   "Payment received!": "お支払いを受け付けました！",
   "Failed to load plans": "プランの読み込みに失敗しました"

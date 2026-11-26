@@ -10088,7 +10088,6 @@
     "Collected offline": "Encaissée hors ligne",
     "The tax is recorded as collected offline. Nothing is deducted from the user's balance.": "La taxe est enregistrée comme encaissée hors ligne. Rien n’est déduit du solde de l’utilisateur.",
     "File an application for a user": "Déposer une demande pour un utilisateur",
-    "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.": "Pour un client qui ne peut pas faire la demande dans la console. La taxe est enregistrée comme encaissée hors ligne et rien n’est déduit du solde de l’utilisateur.",
     "Enter a user ID": "Saisissez un ID utilisateur",
     "File for a user": "Demande pour un utilisateur",
     "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.": "L’utilisateur voit ce motif dans le centre de facturation et dans l’e-mail. La taxe a été encaissée hors ligne et n’est pas restituée sur le solde. Les commandes redeviennent facturables.",
@@ -10180,7 +10179,16 @@
     "{{orders}} + {{refunded}} refunded": "{{orders}} + {{refunded}} remboursées",
     "{{percent}}% + {{fixed}}": "{{percent}} % + {{fixed}}",
     "No rate is recorded for {{methods}}; their fees count as nothing.": "Aucun taux n’est enregistré pour {{methods}} ; leurs frais comptent pour zéro.",
-    "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "Ce que chaque prestataire de paiement retient sur une commande : un pourcentage de son montant plus un montant fixe en yuans. Une commande remboursée garde ses frais : ils comptent ici, mais pas son montant. La marge brute soustrait la part des frais dans l’encaissement, appliquée au revenu reconnu. Enregistrer un taux pour un moyen de paiement remplace l’ancien ; supprimer tous les taux rétablit les valeurs mesurées par défaut."
+    "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "Ce que chaque prestataire de paiement retient sur une commande : un pourcentage de son montant plus un montant fixe en yuans. Une commande remboursée garde ses frais : ils comptent ici, mais pas son montant. La marge brute soustrait la part des frais dans l’encaissement, appliquée au revenu reconnu. Enregistrer un taux pour un moyen de paiement remplace l’ancien ; supprimer tous les taux rétablit les valeurs mesurées par défaut.",
+    "Contract bonus": "Bonus contractuel",
+    "Contract bonus saved": "Bonus contractuel enregistré",
+    "Bonus rate (%)": "Taux de bonus (%)",
+    "{{username}} earns this bonus or the site's tier for the amount, whichever is higher, on every top-up, offline payments included. The two never add up. 0 removes it.": "{{username}} reçoit ce bonus ou celui du palier du site pour le montant, le plus élevé des deux, à chaque recharge, paiements hors ligne compris. Les deux ne se cumulent jamais. 0 le supprime.",
+    "Deduct the tax from the user's balance": "Déduire la taxe du solde de l'utilisateur",
+    "Turn it off only when the customer paid the tax with the transfer: it is then recorded as collected offline and nothing is deducted.": "Désactivez seulement si le client a payé la taxe avec le virement : elle est alors enregistrée comme perçue hors ligne et rien n'est déduit.",
+    "For a customer who cannot apply in the console.": "Pour un client qui ne peut pas faire la demande dans la console.",
+    "Failed to save the contract bonus": "Échec de l'enregistrement du bonus contractuel",
+    "The tax is deducted from the user's balance.": "La taxe est déduite du solde de l'utilisateur."
   },
   "Payment received!": "Paiement reçu !",
   "Failed to load plans": "Échec du chargement des forfaits"

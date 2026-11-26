@@ -10088,7 +10088,6 @@
     "Collected offline": "Получен офлайн",
     "The tax is recorded as collected offline. Nothing is deducted from the user's balance.": "Налог учтён как полученный офлайн. С баланса пользователя ничего не списывается.",
     "File an application for a user": "Подать заявку за пользователя",
-    "For a customer who cannot apply in the console. The tax is recorded as collected offline and nothing is deducted from the user's balance.": "Для клиента, который не может подать заявку в консоли. Налог учитывается как полученный офлайн, с баланса пользователя ничего не списывается.",
     "Enter a user ID": "Введите ID пользователя",
     "File for a user": "Заявка за пользователя",
     "The user sees this reason in the invoice center and the email. The tax was collected offline and is not returned to the balance. The orders become invoiceable again.": "Пользователь увидит эту причину в центре счетов и в письме. Налог получен офлайн и не возвращается на баланс. Заказы снова станут доступны для счёта.",
@@ -10180,7 +10179,16 @@
     "{{orders}} + {{refunded}} refunded": "{{orders}} + {{refunded}} возвращено",
     "{{percent}}% + {{fixed}}": "{{percent}}% + {{fixed}}",
     "No rate is recorded for {{methods}}; their fees count as nothing.": "Для {{methods}} ставка не записана; их комиссия считается нулевой.",
-    "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "Сколько платёжная система удерживает с заказа: процент от суммы плюс фиксированная сумма в юанях. Комиссия за возвращённый заказ не возвращается, поэтому здесь учитывается его комиссия, но не сумма. Валовая маржа вычитает долю комиссий в поступлениях, применённую к признанной выручке. Новая ставка для способа оплаты заменяет старую; удаление всех ставок возвращает измеренные значения по умолчанию."
+    "What each payment processor keeps of an order: a percentage of its money plus a fixed amount in yuan. A refunded order keeps its fee, so it counts here though its money does not. The gross margin subtracts the fees’ share of the cash, applied to recognized revenue. Saving a rate for a method replaces its old one; deleting every rate restores the measured defaults.": "Сколько платёжная система удерживает с заказа: процент от суммы плюс фиксированная сумма в юанях. Комиссия за возвращённый заказ не возвращается, поэтому здесь учитывается его комиссия, но не сумма. Валовая маржа вычитает долю комиссий в поступлениях, применённую к признанной выручке. Новая ставка для способа оплаты заменяет старую; удаление всех ставок возвращает измеренные значения по умолчанию.",
+    "Contract bonus": "Бонус по договору",
+    "Contract bonus saved": "Бонус по договору сохранён",
+    "Bonus rate (%)": "Ставка бонуса (%)",
+    "{{username}} earns this bonus or the site's tier for the amount, whichever is higher, on every top-up, offline payments included. The two never add up. 0 removes it.": "{{username}} получает этот бонус или бонус уровня сайта для суммы — что больше — при каждом пополнении, включая офлайн-платежи. Они не суммируются. 0 отменяет бонус.",
+    "Deduct the tax from the user's balance": "Списать налог с баланса пользователя",
+    "Turn it off only when the customer paid the tax with the transfer: it is then recorded as collected offline and nothing is deducted.": "Отключайте, только если клиент оплатил налог вместе с переводом: тогда он учитывается как полученный офлайн и ничего не списывается.",
+    "For a customer who cannot apply in the console.": "Для клиента, который не может подать заявку в консоли.",
+    "Failed to save the contract bonus": "Не удалось сохранить бонус по договору",
+    "The tax is deducted from the user's balance.": "Налог списывается с баланса пользователя."
   },
   "Payment received!": "Платёж получен!",
   "Failed to load plans": "Не удалось загрузить тарифы"
