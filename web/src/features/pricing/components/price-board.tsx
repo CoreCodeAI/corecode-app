@@ -78,7 +78,7 @@ import {
   UNIT_PRICE_KEYS,
   type UnitPriceKey,
 } from '../lib/unit-prices'
-import type { PricingModel } from '../types'
+import type { ModelOrder, PricingModel } from '../types'
 import { BillingExplainer } from './billing-explainer'
 
 const COLUMN_LABEL: Record<UnitPriceKey, string> = {
@@ -89,6 +89,9 @@ const COLUMN_LABEL: Record<UnitPriceKey, string> = {
 }
 
 const SORT_LABEL: Record<BoardSort, string> = {
+  recommended: 'Recommended',
+  requests: 'Most requests',
+  tokens: 'Most tokens',
   input: 'Input price: low to high',
   output: 'Output price: low to high',
   savings: 'Biggest savings first',
@@ -222,6 +225,8 @@ export function PriceBoard(props: {
   onSearchChange: (value: string) => void
   sort: BoardSort
   onSortChange: (value: BoardSort) => void
+  /** The server's order for the recommended and usage sorts. */
+  modelOrder?: ModelOrder
   onModelClick: (modelName: string) => void
 }) {
   const { t } = useTranslation()
@@ -283,7 +288,8 @@ export function PriceBoard(props: {
         markup: getOfficialPriceMarkup(model),
       }))
       .filter((row): row is BoardRow => Boolean(row.base)),
-    props.sort
+    props.sort,
+    props.modelOrder
   )
   const requestRows = matchedModels
     .filter(

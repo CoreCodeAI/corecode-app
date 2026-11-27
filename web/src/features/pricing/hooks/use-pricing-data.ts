@@ -72,6 +72,7 @@ export function usePricingData(enabled = true) {
     endpointMap: data?.supported_endpoint ?? {},
     autoGroups: data?.auto_groups ?? [],
     hkdPerCny: data?.hkd_per_cny ?? 0,
+    modelOrder: data?.model_order,
     isLoading,
     error,
     refetch,

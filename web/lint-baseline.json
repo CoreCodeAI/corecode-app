@@ -251,9 +251,6 @@
   "src/features/pricing/components/model-details-apps.tsx": {
     "eslint(no-nested-ternary)": 4
   },
-  "src/features/pricing/constants.ts": {
-    "typescript(no-import-type-side-effects)": 1
-  },
   "src/features/pricing/lib/mock-stats.ts": {
     "eslint(curly)": 1,
     "eslint(no-nested-ternary)": 3,

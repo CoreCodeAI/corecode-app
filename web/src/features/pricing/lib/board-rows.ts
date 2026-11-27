@@ -21,14 +21,22 @@ For commercial licensing, please contact support@quantumnous.com
  * `sort` URL params of /pricing carry the query and the sort key, so a filtered
  * list is a shareable link.
  */
-import type { PricingModel } from '../types'
+import type { ModelOrder, PricingModel } from '../types'
+import { MODEL_ORDER_SORTS } from '../constants'
 import type { ParsedTaskTier } from './billing-expr'
 import { compileBillingExpression } from './billing-expression/parser'
 import { evaluateBillingExpression } from './billing-expression/runtime'
 import { getDynamicPricingTiers, hasDynamicRequestRules } from './dynamic-price'
 import type { BaseUnitPrices } from './unit-prices'
 
-export const BOARD_SORTS = ['input', 'output', 'savings'] as const
+export const BOARD_SORTS = [
+  'recommended',
+  'requests',
+  'tokens',
+  'input',
+  'output',
+  'savings',
+] as const
 export type BoardSort = (typeof BOARD_SORTS)[number]
 
 export const DEFAULT_BOARD_SORT: BoardSort = 'input'
@@ -60,8 +68,20 @@ function priceOrInfinity(value: number): number {
 /** Cheapest first for a price; the biggest saving first for `savings`. */
 export function sortBoardRows<Row extends BoardRow>(
   rows: Row[],
-  sort: BoardSort
+  sort: BoardSort,
+  modelOrder?: ModelOrder
 ): Row[] {
+  if (MODEL_ORDER_SORTS.has(sort)) {
+    // Models missing from the order follow it by name.
+    const order = modelOrder?.[sort as keyof ModelOrder] ?? []
+    const rank = new Map(order.map((name, index) => [name, index]))
+    return [...rows].sort(
+      (a, b) =>
+        (rank.get(a.model.model_name) ?? order.length) -
+          (rank.get(b.model.model_name) ?? order.length) ||
+        a.model.model_name.localeCompare(b.model.model_name)
+    )
+  }
   const byInput = (a: Row, b: Row) => a.base.prices.input - b.base.prices.input
   const compare = (a: Row, b: Row): number => {
     if (sort === 'output') {
