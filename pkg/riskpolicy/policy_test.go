@@ -191,6 +191,7 @@ func TestHardRulesSkipClientGeneratedTurns(t *testing.T) {
 		"<transcript> {\"user\":\"build the needle\"}",
 		"This session is being continued from a previous conversation that ran out of context. needle",
 		"The following is the Codex agent history whose request action you are assessing. needle",
+		"Here is the full conversation to compact. Produce the <analysis>, then the summary. needle",
 		"[Compaction summary — written by the assistant] needle",
 	} {
 		input := testInput(fmt.Sprintf(`{"messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"ok"},{"role":"user","content":%q}]}`, text))

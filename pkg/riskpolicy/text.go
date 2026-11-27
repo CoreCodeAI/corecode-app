@@ -237,6 +237,7 @@ var clientGeneratedPrefixes = []string{
 	"<transcript>",
 	"this session is being continued from a previous conversation",
 	"the following is the codex agent history",
+	"here is the full conversation to compact",
 	"[compaction summary",
 }
 

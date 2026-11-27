@@ -30,7 +30,8 @@ type ViolationGuardSetting struct {
 	// same strike.
 	SuspendHours int `json:"suspend_hours"`
 	// BanStrikes disables the account when its strikes within the window
-	// reach this number; 0 never disables.
+	// reach this number; 0 never disables. Reaching it by a lenient category
+	// only suspends: the operators are told and decide on the ban.
 	BanStrikes       int `json:"ban_strikes"`
 	StrikeWindowDays int `json:"strike_window_days"`
 	// LenientCategories lists upstream refusal categories, separated by commas
@@ -57,6 +58,12 @@ type ViolationGuardSetting struct {
 	// uncounted models once the upstream has refused this many of them within
 	// ModelRefusalWindowSeconds; 0 always forwards them.
 	ModelRefusalLimit int `json:"model_refusal_limit"`
+	// FeishuWebhook is the custom bot told about each suspension, each ban
+	// and each customer who reached BanStrikes by a lenient category; empty
+	// sends nothing. FeishuSecret signs the message when the bot asks for a
+	// signature.
+	FeishuWebhook string `json:"feishu_webhook"`
+	FeishuSecret  string `json:"feishu_secret"`
 }
 
 // ClientCheckWindowSeconds is how long a refused client check counts toward
