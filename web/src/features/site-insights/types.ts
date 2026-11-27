@@ -1433,6 +1433,50 @@ export type CustomerInsights = {
   top: CustomerProfile[]
   watched: number
   churn: ChurnWarning[]
+  /** Absent on a server older than the movers block. */
+  movers?: UsageMovers
+}
+
+/** Why a customer's spend moved: registered in the range (new), in the baseline (recent), back after spending nothing in the baseline (returning), or above or below their usual level. */
+export type UsageMoverKind =
+  | 'new'
+  | 'recent'
+  | 'returning'
+  | 'growing'
+  | 'shrinking'
+
+/** The customers of one kind; money is in quota dollars. */
+export type UsageMoverGroup = {
+  kind: UsageMoverKind
+  customers: number
+  current_usd: number
+  baseline_usd: number
+  delta_usd: number
+}
+
+/** A customer whose spend grew most over their usual level; paid figures are in the payment currency, the rest quota dollars. inviter_id is 0 when no one invited them. */
+export type UsageMover = UserRef & {
+  kind: UsageMoverKind
+  remark: string
+  registered_at: number
+  inviter_id: number
+  topup_paid: number
+  subscription_paid: number
+  current_usd: number
+  baseline_usd: number
+  delta_usd: number
+  main_model: string
+}
+
+/** The range's spend against each customer's usual level: the baseline's average over the range's length, the baseline being the longer of the range and seven days before it. */
+export type UsageMovers = {
+  baseline_start: number
+  baseline_days: number
+  current_usd: number
+  baseline_usd: number
+  delta_usd: number
+  groups: UsageMoverGroup[]
+  risers: UsageMover[]
 }
 
 /** One model of an API key over the range; quota_usd is in quota dollars (yuan), as the activity view's. */

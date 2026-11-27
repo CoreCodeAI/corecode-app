@@ -14,7 +14,8 @@ import (
 // by customer (one row each), and the same thirty days by hour for only the
 // customers shown or watched (at most seventy). The rows stay in the database
 // and only their sums arrive. The twenty customers shown cost four small reads
-// more (accounts, payments, keys, names).
+// more (accounts, payments, keys, names). The movers block (site_insights_movers.go)
+// adds one grouped read of the baseline and the reads for its risers.
 const (
 	// customersListed is how many customers the profile table names.
 	customersListed = 20
@@ -85,7 +86,7 @@ type ChurnWarning struct {
 // customers with spend in the range and TotalUSD what they spent; Top5Share,
 // Top10Share and Top20Share are the largest customers' share of it. Watched is
 // how many customers the churn list chose from (up to churnWatched, fewer on a
-// small site).
+// small site). Movers weighs each customer's spend against their usual level.
 type CustomerInsights struct {
 	CustomersSpending int64             `json:"customers_spending"`
 	TotalUSD          float64           `json:"total_usd"`
@@ -95,6 +96,7 @@ type CustomerInsights struct {
 	Top               []CustomerProfile `json:"top"`
 	Watched           int64             `json:"watched"`
 	Churn             []ChurnWarning    `json:"churn"`
+	Movers            *UsageMovers      `json:"movers"`
 }
 
 type customerRangeRow struct {
@@ -178,8 +180,12 @@ func GetCustomerInsights(r InsightsRange) (*CustomerInsights, error) {
 		}
 	}
 
+	movers, err := readUsageMovers(r, staff, rangeQuota, modelQuota)
+	if err != nil {
+		return nil, err
+	}
 	result := &CustomerInsights{CustomersSpending: int64(len(rangeQuota)), TotalUSD: quotaUSD(total),
-		Top: []CustomerProfile{}, Churn: []ChurnWarning{}}
+		Top: []CustomerProfile{}, Churn: []ChurnWarning{}, Movers: movers}
 	ranked := make([]int, 0, len(rangeQuota))
 	for id := range rangeQuota {
 		ranked = append(ranked, id)
