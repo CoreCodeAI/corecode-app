@@ -57,12 +57,17 @@ describe('groupVendor', () => {
     const models = [
       model('claude-haiku-5-5', ['CC']),
       model('gpt-6-luna', ['GPT']),
+      model('deepseek-flash', ['DeepSeek（官Key）']),
     ]
     expect(groupVendor(models, 'CC')).toEqual({
       name: 'Anthropic',
       icon: 'Claude.Color',
     })
     expect(groupVendor(models, 'GPT')?.name).toBe('OpenAI')
+    expect(groupVendor(models, 'DeepSeek（官Key）')).toEqual({
+      name: 'DeepSeek',
+      icon: 'DeepSeek.Color',
+    })
   })
 })
 

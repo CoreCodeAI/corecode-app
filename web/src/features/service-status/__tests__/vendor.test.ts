@@ -18,11 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { describe, expect, it } from 'vitest'
 
-import {
-  groupVendorKey,
-  sortGroupsByVendor,
-  vendorCounts,
-} from '../lib/vendor'
+import { groupVendorKey, sortGroupsByVendor, vendorCounts } from '../lib/vendor'
 
 const GROUPS = [
   { name: 'Claude 满血（仅限CC）', model: 'claude-opus-5-5' },
@@ -30,19 +26,24 @@ const GROUPS = [
   { name: 'GPT（仅限Codex）', model: 'gpt-6.1-sol' },
   { name: 'GPT', model: 'gpt-6.1-sol' },
   { name: 'Grok', model: 'grok-4.7' },
+  { name: 'DeepSeek（官Key）', model: 'deepseek-flash' },
   { name: 'GPT生图1-4K', model: 'gpt-image-2.5-sunburst' },
   { name: 'Seedance视频', model: 'seedance-2.5-720p-fixed' },
   { name: 'GPT 福利', model: 'gpt-6.1-sol' },
 ]
 
 describe('vendorCounts', () => {
-  it('counts the live groups by vendor: Claude, GPT, Grok, Seedance', () => {
+  it('counts the live groups by vendor: Claude, GPT, Grok, DeepSeek, Seedance', () => {
     expect(vendorCounts(GROUPS).map((item) => [item.key, item.count])).toEqual([
       ['Anthropic', 2],
       ['OpenAI', 4],
       ['xAI', 1],
+      ['DeepSeek', 1],
       ['ByteDance', 1],
     ])
+    expect(
+      vendorCounts(GROUPS).find((item) => item.key === 'DeepSeek')?.icon
+    ).toBe('DeepSeek.Color')
   })
 
   it('names a group with no traffic by its own name', () => {
@@ -62,10 +63,11 @@ describe('vendorCounts', () => {
 })
 
 describe('sortGroupsByVendor', () => {
-  it('orders Claude, GPT, Grok, Seedance, then unknown, keeping order within a vendor', () => {
+  it('orders Claude, GPT, Grok, DeepSeek, Seedance, then unknown, keeping order within a vendor', () => {
     const shuffled = [
       { name: '神秘分组', model: null },
       { name: 'Seedance视频', model: 'seedance-2.5-720p-fixed' },
+      { name: 'DeepSeek（官Key）', model: null },
       { name: 'GPT', model: 'gpt-6.1-sol' },
       { name: 'Grok', model: 'grok-4.7' },
       { name: 'Claude 满血（可外接）', model: 'claude-opus-5-5' },
@@ -78,6 +80,7 @@ describe('sortGroupsByVendor', () => {
       'GPT',
       'GPT 福利',
       'Grok',
+      'DeepSeek（官Key）',
       'Seedance视频',
       '神秘分组',
     ])

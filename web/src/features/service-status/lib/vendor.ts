@@ -46,10 +46,11 @@ export function groupVendorKey(
 }
 
 /**
- * The page lists vendors in this order: Claude, GPT, Grok, then Seedance.
+ * The page lists vendors in this order: Claude, GPT, Grok, DeepSeek, then
+ * Seedance.
  * Other known vendors follow, and groups of no known vendor come last.
  */
-const VENDOR_ORDER = ['Anthropic', 'OpenAI', 'xAI', 'ByteDance']
+const VENDOR_ORDER = ['Anthropic', 'OpenAI', 'xAI', 'DeepSeek', 'ByteDance']
 
 function vendorRank(key: string): number {
   if (!key) return VENDOR_ORDER.length + 1
@@ -58,11 +59,15 @@ function vendorRank(key: string): number {
 }
 
 /** The groups in vendor order; groups of one vendor keep their order. */
-export function sortGroupsByVendor<T extends Pick<StatusGroup, 'name' | 'model'>>(
-  groups: readonly T[]
-): T[] {
+export function sortGroupsByVendor<
+  T extends Pick<StatusGroup, 'name' | 'model'>,
+>(groups: readonly T[]): T[] {
   return groups
-    .map((group, index) => ({ group, index, rank: vendorRank(groupVendorKey(group)) }))
+    .map((group, index) => ({
+      group,
+      index,
+      rank: vendorRank(groupVendorKey(group)),
+    }))
     .sort((a, b) => a.rank - b.rank || a.index - b.index)
     .map((item) => item.group)
 }
