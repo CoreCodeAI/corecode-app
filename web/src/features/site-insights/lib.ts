@@ -56,7 +56,14 @@ export const INSIGHTS_TAB_GROUPS: { key: string; tabs: InsightsTab[] }[] = [
   { key: 'operations', tabs: ['capacity', 'pool', 'quality', 'upstream'] },
   {
     key: 'business',
-    tabs: ['finance', 'growth', 'channels', 'activity', 'experience'],
+    tabs: [
+      'finance',
+      'growth',
+      'channels',
+      'activity',
+      'experience',
+      'personas',
+    ],
   },
   { key: 'risk', tabs: ['risk'] },
 ]
@@ -369,6 +376,7 @@ export function useTabLabel(): (tab: InsightsTab) => string {
     upstream: t('Upstreams'),
     activity: t('Activity & retention'),
     experience: t('Customer experience'),
+    personas: t('Customer personas'),
     risk: t('Risk'),
   }
   return (tab) => labels[tab]

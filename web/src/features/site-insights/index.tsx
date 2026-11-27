@@ -93,6 +93,7 @@ const TAB_MODULES = {
   experience: () => import('./components/experience-tab'),
   channels: () => import('./components/channels-tab'),
   risk: () => import('./components/risk-tab'),
+  personas: () => import('./components/personas-tab'),
 } satisfies Record<InsightsTab, () => Promise<unknown>>
 
 const OverviewTab = lazy(() =>
@@ -129,6 +130,9 @@ const ChannelsTab = lazy(() =>
 )
 const RiskTab = lazy(() =>
   TAB_MODULES.risk().then((module) => ({ default: module.RiskTab }))
+)
+const PersonasTab = lazy(() =>
+  TAB_MODULES.personas().then((module) => ({ default: module.PersonasTab }))
 )
 
 /** How long a tab opened at a panel waits for that panel to be drawn. */
@@ -420,7 +424,7 @@ export function SiteInsights() {
   // The pool is live and has no earlier period.
   const previous = useQuery({
     ...previousQuery(view ?? 'capacity'),
-    enabled: view !== undefined && view !== 'pool',
+    enabled: view !== undefined && view !== 'pool' && view !== 'personas',
   })
   const prefetch = (next: InsightsTab) => {
     if (next === tab) return
@@ -428,7 +432,9 @@ export function SiteInsights() {
     void TAB_MODULES[next]()
     if (next === 'overview') return
     void queryClient.prefetchQuery(insightsQuery(next))
-    if (next !== 'pool') void queryClient.prefetchQuery(previousQuery(next))
+    if (next !== 'pool' && next !== 'personas') {
+      void queryClient.prefetchQuery(previousQuery(next))
+    }
     if (next === 'channels' || next === 'risk') {
       void queryClient.prefetchQuery({
         ...insightsQuery(next === 'channels' ? 'campaigns' : 'gate'),
@@ -458,6 +464,7 @@ export function SiteInsights() {
     upstream: t('Upstreams'),
     activity: t('Activity & retention'),
     experience: t('Customer experience'),
+    personas: t('Customer personas'),
     risk: t('Risk'),
   }
   const groupLabels: Record<string, string> = {
@@ -807,6 +814,8 @@ function InsightsView(props: {
           {...states}
         />
       )
+    case 'personas':
+      return <PersonasTab data={props.data as never} />
     case 'risk':
       return (
         <RiskTab

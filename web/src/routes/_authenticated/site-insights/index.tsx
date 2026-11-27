@@ -33,6 +33,7 @@ const siteInsightsSearchSchema = z.object({
       'growth',
       'activity',
       'experience',
+      'personas',
       'quality',
       // The business tab was split up: its models went to funds, referrals
       // and groups to growth, clients to quality. An old link opens funds.

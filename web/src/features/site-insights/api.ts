@@ -41,6 +41,7 @@ import type {
   KeyInsights,
   ModelBehavior,
   PoolProvider,
+  PersonaInsights,
   PoolUsage,
   QualityInsights,
   RiskInsights,
@@ -63,6 +64,7 @@ export type InsightsView =
   | 'channels'
   | 'upstream'
   | 'customers'
+  | 'personas'
   | 'model-behavior'
   | 'experience'
   | 'campaigns'
@@ -81,6 +83,7 @@ export type InsightsByView = {
   channels: ChannelInsights
   upstream: UpstreamInsights
   customers: CustomerInsights
+  personas: PersonaInsights
   'model-behavior': ModelBehavior
   experience: ExperienceInsights
   campaigns: CampaignInsights
@@ -102,6 +105,9 @@ export const VIEW_MAX_DAYS: Record<InsightsView, number> = {
   channels: 366,
   upstream: 92,
   customers: 366,
+  // The spend is always the 30 days that end at the range's end; the range
+  // only sets where they end.
+  personas: 366,
   'model-behavior': 92,
   // Its logs reach back 30 days at most; the range may be longer.
   experience: 92,
