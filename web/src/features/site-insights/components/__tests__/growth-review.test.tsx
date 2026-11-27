@@ -39,6 +39,7 @@ import {
   ChurnWatchPanel,
   CustomersPanel,
   SpendTiersPanel,
+  UsageMoversPanel,
 } from '../growth-customers'
 import { WeeklyRetentionPanel } from '../retention-weeks'
 
@@ -349,6 +350,105 @@ describe('churn watch', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByText('No customer among the biggest has dropped off')
+    ).toBeInTheDocument()
+  })
+})
+
+describe('usage movers', () => {
+  const movers: CustomerInsights = {
+    ...customers,
+    movers: {
+      baseline_start: midnight(-7),
+      baseline_days: 7,
+      current_usd: 200,
+      baseline_usd: 100,
+      delta_usd: 100,
+      groups: [
+        {
+          kind: 'new',
+          customers: 2,
+          current_usd: 30,
+          baseline_usd: 0,
+          delta_usd: 30,
+        },
+        {
+          kind: 'recent',
+          customers: 1,
+          current_usd: 25,
+          baseline_usd: 5,
+          delta_usd: 20,
+        },
+        {
+          kind: 'returning',
+          customers: 0,
+          current_usd: 0,
+          baseline_usd: 0,
+          delta_usd: 0,
+        },
+        {
+          kind: 'growing',
+          customers: 3,
+          current_usd: 120,
+          baseline_usd: 40,
+          delta_usd: 80,
+        },
+        {
+          kind: 'shrinking',
+          customers: 4,
+          current_usd: 25,
+          baseline_usd: 55,
+          delta_usd: -30,
+        },
+      ],
+      risers: [
+        {
+          user_id: 41,
+          username: 'carol',
+          kind: 'growing',
+          remark: 'studio lead',
+          registered_at: midnight(-60),
+          inviter_id: 306,
+          topup_paid: 500,
+          subscription_paid: 0,
+          current_usd: 90,
+          baseline_usd: 10,
+          delta_usd: 80,
+          main_model: 'claude-fable-5-2',
+        },
+      ],
+    },
+  }
+
+  it('weighs the range against the usual level and names who grew', () => {
+    render(<UsageMoversPanel data={movers} />)
+    expect(screen.getByText('Usage movers')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /^Spend came to .*200.* against a usual .*100.* \(100%\); accounts registered in the range or the baseline brought \+.*50.* of the difference\.$/
+      )
+    ).toBeInTheDocument()
+    expect(screen.getAllByText('Spending more').length).toBeGreaterThan(0)
+    expect(screen.getByText('Spending less')).toBeInTheDocument()
+    expect(screen.getAllByText('carol').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('#306').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('claude-fable-5-2').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('800%').length).toBeGreaterThan(0)
+  })
+
+  it('leaves the panel out for a server without the block', () => {
+    const { container } = render(<UsageMoversPanel data={customers} />)
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('says so when no one spent more than usual', () => {
+    if (!movers.movers) throw new Error('fixture has movers')
+    render(
+      <UsageMoversPanel
+        data={{ ...movers, movers: { ...movers.movers, risers: [] } }}
+      />
+    )
+    expect(
+      screen.getByText('No customer spent more than usual')
     ).toBeInTheDocument()
   })
 })

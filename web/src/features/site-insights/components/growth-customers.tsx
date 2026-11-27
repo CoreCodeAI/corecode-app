@@ -37,6 +37,9 @@ import type {
   SpendTier,
   SpendTierGroup,
   SpendTierVendor,
+  UsageMover,
+  UsageMoverGroup,
+  UsageMoverKind,
 } from '../types'
 import { ShareDonut, type ShareSlice } from './share-donut'
 import {
@@ -484,6 +487,255 @@ export function ChurnWatchPanel(props: {
           },
         ]}
       />
+    </Panel>
+  )
+}
+
+/** The name of each kind of mover, as the movers panel prints it. */
+function useMoverKindLabel() {
+  const { t } = useTranslation()
+  const labels: Record<UsageMoverKind, string> = {
+    new: t('Registered in the range'),
+    recent: t('Registered in the baseline'),
+    returning: t('Back after a pause'),
+    growing: t('Spending more'),
+    shrinking: t('Spending less'),
+  }
+  return (kind: UsageMoverKind) => labels[kind] ?? kind
+}
+
+/**
+ * Where a change in spending came from: the range against each customer's
+ * usual level, the customers grouped by why they moved, then the customers
+ * who grew the most. Money is in quota dollars except what they paid.
+ */
+export function UsageMoversPanel(props: {
+  data: CustomerInsights | undefined
+  source?: SourceState
+}) {
+  const { t } = useTranslation()
+  const fmt = useInsightsFormat()
+  const date = useDateFormat()
+  const kindLabel = useMoverKindLabel()
+  const data = props.data
+  const movers = data?.movers
+  // An older server sends the customers view without the block: the panel is
+  // left out rather than shown empty.
+  if (data && !movers) return null
+  const state =
+    tableState(props.source, movers?.risers) ?? (movers ? undefined : 'loading')
+  const signed = (usd: number) => {
+    if (usd > 0) return `+${fmt.usd(usd)}`
+    if (usd < 0) return `-${fmt.usd(-usd)}`
+    return fmt.usd(0)
+  }
+  const tone = (usd: number) => {
+    if (usd > 0) return TONES.good
+    if (usd < 0) return TONES.warning
+    return ''
+  }
+  const change = (current: number, baseline: number) =>
+    baseline > 0 ? fmt.pct(current / baseline - 1) : undefined
+  let sentence: string | undefined
+  if (movers && movers.baseline_usd > 0) {
+    const fresh = movers.groups
+      .filter((group) => group.kind === 'new' || group.kind === 'recent')
+      .reduce((sum, group) => sum + group.delta_usd, 0)
+    sentence = t(
+      'Spend came to {{current}} against a usual {{baseline}} ({{change}}); accounts registered in the range or the baseline brought {{fresh}} of the difference.',
+      {
+        current: fmt.usd(movers.current_usd),
+        baseline: fmt.usd(movers.baseline_usd),
+        change: change(movers.current_usd, movers.baseline_usd),
+        fresh: signed(fresh),
+      }
+    )
+  }
+  const days = movers?.baseline_days ?? 7
+  return (
+    <Panel
+      title={t('Usage movers')}
+      id='usage-movers'
+      help={t(
+        'Each customer’s spend in the range against their usual level: what they spent in the {{days}} days before the range, scaled to the range’s length, so a 24-hour range is weighed against the average day of the week before it. The baseline is the range’s length or seven days, whichever is longer. Customers registered in the range or the baseline are counted apart, since their usual level counts days before they existed; returning ones spent nothing in the baseline. Staff are left out. Money is in quota dollars except what they paid, which is in the payment currency.',
+        { days: fmt.num(days) }
+      )}
+      error={
+        !data && props.source?.status === 'error'
+          ? (props.source.error ?? t('Could not be read'))
+          : undefined
+      }
+      description={sentence}
+    >
+      <div className='grid gap-4'>
+        {movers && (
+          <SimpleTable<UsageMoverGroup>
+            rows={movers.groups}
+            rowKey={(row) => row.kind}
+            empty={t('No consumption in this range')}
+            columns={[
+              {
+                key: 'kind',
+                label: t('Customers'),
+                render: (row) => kindLabel(row.kind),
+              },
+              {
+                key: 'count',
+                label: t('Count'),
+                align: 'right',
+                render: (row) => fmt.num(row.customers),
+              },
+              {
+                key: 'current',
+                label: t('Range use'),
+                align: 'right',
+                render: (row) => fmt.usd(row.current_usd),
+              },
+              {
+                key: 'baseline',
+                label: t('Usual level'),
+                align: 'right',
+                render: (row) => fmt.usd(row.baseline_usd),
+              },
+              {
+                key: 'delta',
+                label: t('Change'),
+                align: 'right',
+                render: (row) => (
+                  <span className={cn('tabular-nums', tone(row.delta_usd))}>
+                    {signed(row.delta_usd)}
+                  </span>
+                ),
+              },
+            ]}
+          />
+        )}
+        <SimpleTable<UsageMover>
+          rows={movers?.risers}
+          rowKey={(row) => row.user_id}
+          empty={t('No customer spent more than usual')}
+          state={state}
+          card={(row) => (
+            <div className='grid gap-1 text-sm'>
+              <div className='flex items-baseline justify-between gap-2'>
+                <UserLabel user_id={row.user_id} username={row.username} />
+                <span className={cn('font-medium', TONES.good)}>
+                  {signed(row.delta_usd)}
+                </span>
+              </div>
+              {row.remark && (
+                <p className='text-muted-foreground truncate text-xs'>
+                  {row.remark}
+                </p>
+              )}
+              <p className='text-muted-foreground text-xs tabular-nums'>
+                {kindLabel(row.kind)} · {fmt.usd(row.current_usd)} /{' '}
+                {fmt.usd(row.baseline_usd)}
+              </p>
+            </div>
+          )}
+          columns={[
+            {
+              key: 'user',
+              label: t('User'),
+              render: (row) => (
+                <UserLabel user_id={row.user_id} username={row.username} />
+              ),
+            },
+            {
+              key: 'kind',
+              label: t('Why'),
+              render: (row) => kindLabel(row.kind),
+            },
+            {
+              key: 'remark',
+              label: t('Remark'),
+              render: (row) =>
+                row.remark ? (
+                  <span className='block max-w-32 truncate' title={row.remark}>
+                    {row.remark}
+                  </span>
+                ) : (
+                  '-'
+                ),
+            },
+            {
+              key: 'registered',
+              label: t('Registered'),
+              render: (row) => date(row.registered_at),
+            },
+            {
+              key: 'inviter',
+              label: t('Inviter'),
+              render: (row) =>
+                row.inviter_id > 0 ? (
+                  <span className='font-mono text-xs'>#{row.inviter_id}</span>
+                ) : (
+                  '-'
+                ),
+            },
+            {
+              key: 'paid',
+              label: t('Top-ups paid'),
+              align: 'right',
+              hint: t(
+                'Money paid for top-ups, in the payment currency; plans bought with money are shown below it.'
+              ),
+              render: (row) => (
+                <span className='tabular-nums'>
+                  {fmt.cny(row.topup_paid)}
+                  {row.subscription_paid > 0 && (
+                    <span className='text-muted-foreground block text-xs'>
+                      {t('plans {{amount}}', {
+                        amount: fmt.cny(row.subscription_paid),
+                      })}
+                    </span>
+                  )}
+                </span>
+              ),
+            },
+            {
+              key: 'current',
+              label: t('Range use'),
+              align: 'right',
+              render: (row) => fmt.usd(row.current_usd),
+            },
+            {
+              key: 'baseline',
+              label: t('Usual level'),
+              align: 'right',
+              render: (row) => fmt.usd(row.baseline_usd),
+            },
+            {
+              key: 'delta',
+              label: t('Change'),
+              align: 'right',
+              render: (row) => (
+                <span className='tabular-nums'>
+                  <span className={TONES.good}>{signed(row.delta_usd)}</span>
+                  {change(row.current_usd, row.baseline_usd) && (
+                    <span className='text-muted-foreground block text-xs'>
+                      {change(row.current_usd, row.baseline_usd)}
+                    </span>
+                  )}
+                </span>
+              ),
+            },
+            {
+              key: 'model',
+              label: t('Main model'),
+              render: (row) => (
+                <span
+                  className='block max-w-36 truncate'
+                  title={row.main_model}
+                >
+                  {row.main_model || '-'}
+                </span>
+              ),
+            },
+          ]}
+        />
+      </div>
     </Panel>
   )
 }

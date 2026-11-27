@@ -75,6 +75,7 @@ import {
 import {
   ChurnWatchPanel,
   CustomersPanel,
+  UsageMoversPanel,
   SpendTiersPanel,
 } from './growth-customers'
 import {
@@ -977,6 +978,10 @@ export function ActivityTab(props: {
       />
       <SilentPayersPanel silent={data?.silent_payers} error={viewError} />
       <CustomersPanel
+        data={props.customers}
+        source={props.sources?.customers}
+      />
+      <UsageMoversPanel
         data={props.customers}
         source={props.sources?.customers}
       />
