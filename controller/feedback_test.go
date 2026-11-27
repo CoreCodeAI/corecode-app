@@ -97,6 +97,13 @@ func userQuota(t *testing.T, id int) int {
 	return user.Quota
 }
 
+func openFeedbackCount(t *testing.T) any {
+	t.Helper()
+	_, response := callFeedback(t, GetOpenFeedbackCount, http.MethodGet, "/api/feedback/admin/open-count", "", 1)
+	require.Equal(t, true, response["success"], response)
+	return response["data"].(map[string]any)["count"]
+}
+
 func TestFeedbackFlow(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
@@ -131,17 +138,20 @@ func TestFeedbackFlow(t *testing.T) {
 			items := response["data"].(map[string]any)["items"].([]any)
 			require.Len(t, items, 1)
 			assert.EqualValues(t, 12, items[0].(map[string]any)["user_id"])
+			assert.EqualValues(t, 2, openFeedbackCount(t), "both pending reports are open")
 
 			// Status and reply, then a one-time reward.
 			target := "/api/feedback/admin/" + strconv.Itoa(saved.Id)
 			_, response = callFeedback(t, UpdateFeedback, http.MethodPatch, target, `{"status":"processing","admin_reply":"Looking into it"}`, 1)
 			require.Equal(t, true, response["success"], response)
 			assert.Equal(t, 1000, userQuota(t, 11))
+			assert.EqualValues(t, 2, openFeedbackCount(t), "a report being processed is still open")
 
 			_, response = callFeedback(t, UpdateFeedback, http.MethodPatch, target, `{"status":"resolved","admin_reply":"Fixed, thanks","reward_usd":5}`, 1)
 			require.Equal(t, true, response["success"], response)
 			reward := int(5 * common.QuotaPerUnit)
 			assert.Equal(t, 1000+reward, userQuota(t, 11))
+			assert.EqualValues(t, 1, openFeedbackCount(t), "a resolved report is closed")
 
 			_, response = callFeedback(t, UpdateFeedback, http.MethodPatch, target, `{"status":"resolved","admin_reply":"Fixed, thanks","reward_usd":5}`, 1)
 			assert.Equal(t, false, response["success"])

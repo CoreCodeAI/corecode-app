@@ -141,6 +141,17 @@ func MarkSelfFeedbackSeen(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
+// GetOpenFeedbackCount returns how many reports wait on an administrator, for
+// the sidebar badge.
+func GetOpenFeedbackCount(c *gin.Context) {
+	count, err := model.CountOpenFeedback()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"count": count})
+}
+
 // GetAllFeedback pages every account's reports for administrators, filtered
 // by status, category and a keyword on the title or description.
 func GetAllFeedback(c *gin.Context) {
