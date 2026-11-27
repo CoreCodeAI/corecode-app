@@ -22,7 +22,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 import { PriceBoard } from '../components/price-board'
 import type { BoardSort } from '../lib/board-rows'
-import type { PricingModel } from '../types'
+import type { ModelOrder, PricingModel } from '../types'
 
 const GROUP = 'Claude 满血'
 const CHEAP = 'Claude 特价'
@@ -57,7 +57,8 @@ afterEach(cleanup)
 function renderBoard(
   sort: BoardSort = 'input',
   onSearchChange = vi.fn(),
-  boardModels = models
+  boardModels = models,
+  modelOrder?: ModelOrder
 ) {
   render(
     <PriceBoard
@@ -70,6 +71,7 @@ function renderBoard(
       onSearchChange={onSearchChange}
       sort={sort}
       onSortChange={vi.fn()}
+      modelOrder={modelOrder}
       onModelClick={vi.fn()}
     />
   )
@@ -136,6 +138,19 @@ it('sorts the biggest savings first, and a marked-up model last', () => {
   expect(listedModels()).toEqual([
     'claude-sonnet-5',
     'claude-opus-5-5',
+    'claude-haiku-5',
+  ])
+})
+
+it('follows the server order for the recommended sort', () => {
+  renderBoard('recommended', vi.fn(), models, {
+    recommended: ['claude-opus-5-5', 'claude-sonnet-5'],
+    requests: [],
+    tokens: [],
+  })
+  expect(listedModels()).toEqual([
+    'claude-opus-5-5',
+    'claude-sonnet-5',
     'claude-haiku-5',
   ])
 })

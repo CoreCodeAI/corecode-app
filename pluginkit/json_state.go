@@ -1,4 +1,4 @@
-package jsplugin
+package pluginkit
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/MoeForge/moejs/engine"
-	"github.com/QuantumNous/new-api/common"
 )
 
 const (
@@ -16,7 +15,8 @@ const (
 	CapabilitySubmitSSEDelta = "submit-sse-delta@1"
 	CapabilityJSONOrder      = "json-order@1"
 	CapabilityDurationAuto   = "duration-auto@1"
-	MaxJSONToolBytes         = 1 << 20
+	MaxJSONToolBytes         = 1 << 20 // Encoded JSON held by the submit SSE accumulator.
+	maxJSONCloneBytes        = 4 << 20
 	maxJSONToolDepth         = 32
 	maxJSONToolNodes         = 32768
 	maxJSONChanges           = 256
@@ -182,7 +182,7 @@ func newJSONStateNode(value any, depth int, budget *jsonStateBudget) (*jsonState
 			if !utf8.ValidString(key) || len(key) > budget.bytes {
 				return nil, fmt.Errorf("invalid or oversized JSON object key")
 			}
-			encoded, err := common.Marshal(key)
+			encoded, err := marshalJSON(key)
 			if err != nil {
 				return nil, err
 			}
@@ -236,7 +236,7 @@ func newJSONStateNode(value any, depth int, budget *jsonStateBudget) (*jsonState
 		default:
 			return nil, fmt.Errorf("value must contain only JSON objects, arrays and scalars")
 		}
-		encoded, err := common.Marshal(value)
+		encoded, err := marshalJSON(value)
 		if err != nil {
 			return nil, err
 		}
@@ -336,7 +336,7 @@ func (s *JSONState) Apply(ctx context.Context, changes any) (err error) {
 			if target != nil {
 				oldBytes, oldNodes = target.bytes, target.nodes
 			} else {
-				encodedKey, err := common.Marshal(key)
+				encodedKey, err := marshalJSON(key)
 				if err != nil {
 					return err
 				}
@@ -385,7 +385,7 @@ func (s *JSONState) Apply(ctx context.Context, changes any) (err error) {
 			if !utf8.ValidString(text) {
 				text = string([]rune(text))
 			}
-			encoded, err := common.Marshal(text)
+			encoded, err := marshalJSON(text)
 			if err != nil {
 				return err
 			}
@@ -418,7 +418,7 @@ func (s *JSONState) Value() (any, error) {
 		return nil, s.failed
 	}
 	value := s.root.value()
-	encoded, err := common.Marshal(value)
+	encoded, err := marshalJSON(value)
 	if err != nil {
 		return nil, err
 	}

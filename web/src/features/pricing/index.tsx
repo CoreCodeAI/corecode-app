@@ -47,6 +47,7 @@ export function Pricing() {
     usableGroup,
     endpointMap,
     autoGroups,
+    modelOrder,
     isLoading,
     priceRate,
     usdExchangeRate,
@@ -141,6 +142,7 @@ export function Pricing() {
               onSearchChange={url.setSearch}
               sort={url.sort}
               onSortChange={url.setSort}
+              modelOrder={modelOrder}
               onModelClick={url.openModel}
             />
           </main>

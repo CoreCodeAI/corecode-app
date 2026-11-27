@@ -28,10 +28,12 @@ ENV GOEXPERIMENT=greenteagc
 WORKDIR /build
 
 ADD go.mod go.sum ./
-# relaykit and tokenkit are local submodules referenced via replace; their
-# go.mod files must be present for go mod download to resolve the main module graph.
+# relaykit, tokenkit and pluginkit are local submodules referenced via replace;
+# their go.mod files must be present for go mod download to resolve the main
+# module graph.
 ADD relaykit/go.mod ./relaykit/go.mod
 ADD tokenkit/go.mod ./tokenkit/go.mod
+ADD pluginkit/go.mod ./pluginkit/go.mod
 # The module cache and the build cache are the two costs of a Go build: the
 # first avoids re-downloading dependencies, the second reuses compiled packages.
 # `go mod download` fetches the module graph, which is what gives the module a

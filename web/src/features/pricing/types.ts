@@ -134,6 +134,9 @@ export type ModelCapability =
   | 'caching'
   | 'embeddings'
 
+/** Model names in each server-ordered sort; unlisted models follow by name. */
+export type ModelOrder = Record<'recommended' | 'requests' | 'tokens', string[]>
+
 export type PricingData = {
   success: boolean
   message?: string
@@ -145,6 +148,7 @@ export type PricingData = {
   auto_groups: string[]
   /** CoreCode fork: HKD charged per yuan; 0 while the server has no rate. */
   hkd_per_cny?: number
+  model_order?: ModelOrder
 }
 
 export type TokenUnit = 'M' | 'K'

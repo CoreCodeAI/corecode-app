@@ -74,8 +74,9 @@ jobs:
 
       # Every package, relay/, setting/ and pkg/ included: a list of chosen
       # directories left the relay converters, billing expressions and plugins
-      # untested. tokenkit and relaykit are modules of their own, which ./...
-      # from the root compiles through its replace lines but never tests.
+      # untested. tokenkit, relaykit and pluginkit are modules of their own,
+      # which ./... from the root compiles through its replace lines but never
+      # tests.
       - name: Vet and test the Go modules
         run: |
           # The full output runs to thousands of log lines, so it goes to a file.
@@ -83,7 +84,7 @@ jobs:
           # alone ended at "FAIL <package>" and never named the test.
           set -euo pipefail
           status=0
-          for module in . tokenkit relaykit; do
+          for module in . tokenkit relaykit pluginkit; do
             (cd "$module" && go vet ./...) || status=1
             (cd "$module" && go test ./...) >> "$RUNNER_TEMP/go-test.log" 2>&1 || status=1
           done

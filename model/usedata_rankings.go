@@ -35,6 +35,25 @@ func GetRankingQuotaTotals(startTime int64, endTime int64) ([]RankingQuotaTotal,
 	return rows, err
 }
 
+type ModelUsageTotal struct {
+	ModelName string `json:"model_name"`
+	Requests  int64  `json:"requests"`
+	Tokens    int64  `json:"tokens"`
+}
+
+// GetModelUsageTotals sums requests and tokens per model, including models
+// that used no tokens.
+func GetModelUsageTotals(startTime int64, endTime int64) ([]ModelUsageTotal, error) {
+	var rows []ModelUsageTotal
+	query := DB.Table("quota_data").
+		Select("model_name, sum(count) as requests, sum(token_used) as tokens").
+		Where("model_name <> ''").
+		Group("model_name")
+	query = applyRankingQuotaTimeRange(query, startTime, endTime)
+	err := query.Find(&rows).Error
+	return rows, err
+}
+
 // GetRankingQuotaBuckets groups usage into buckets of bucketSize seconds whose
 // boundaries fall on multiples of bucketSize in the zone offsetSeconds east of
 // UTC, so a day bucket starts at the viewer's midnight. Bucket keeps the UTC
