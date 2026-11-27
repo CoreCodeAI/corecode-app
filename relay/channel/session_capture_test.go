@@ -369,6 +369,34 @@ func TestSessionCaptureFailoverKeepsEveryAttemptInOrder(t *testing.T) {
 	}
 }
 
+// TestSessionCaptureFailoverToUnlistedChannelServesNoCapturedAttempt covers a
+// listed channel that fails before an unlisted one serves: the only captured
+// attempt failed, so it must not read as the one the client got.
+func TestSessionCaptureFailoverToUnlistedChannelServesNoCapturedAttempt(t *testing.T) {
+	fixture := newCaptureFixture(t, sessioncapture.Config{})
+
+	body := []byte(`{"model":"gpt-test","messages":[{"role":"user","content":"unlisted-failover"}]}`)
+	first := newCaptureUpstream(t, http.StatusInternalServerError, []byte(`{"error":{"message":"listed channel failed"}}`))
+	second := newCaptureUpstream(t, http.StatusOK, []byte(`{"id":"chatcmpl-4"}`))
+
+	c := newCaptureContext(t, body, "req-capture-unlisted-failover")
+	request := service.StartSessionCapture(c)
+	require.NotNil(t, request)
+
+	runCaptureAttempt(t, c, first.URL, captureChannelID, constant.ChannelTypeOpenAI, "gpt-client", "gpt-first", http.StatusInternalServerError, "upstream_error")
+	runCaptureAttempt(t, c, second.URL, captureFailoverID, constant.ChannelTypeOpenAI, "gpt-client", "gpt-second", http.StatusOK, "ok")
+	completeCapture(c, request, types.RelayFormatOpenAI, http.StatusOK, false)
+	fixture.drain()
+
+	published := fixture.publisher.published()
+	require.Len(t, published, 1)
+	var event sessioncapture.Envelope
+	require.NoError(t, json.Unmarshal(published[0], &event))
+	require.Len(t, event.Attempts, 1)
+	assert.Equal(t, uint(captureChannelID), event.Attempts[0].CredentialID)
+	assert.False(t, event.Attempts[0].Served)
+}
+
 // TestSessionCaptureCopiesNothingWhenNotSelected covers the four ways a
 // request must leave no object and no message: an unlisted channel, the
 // switch off, an unsampled customer, and no pipeline.

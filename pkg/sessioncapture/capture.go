@@ -288,7 +288,15 @@ func (request *Request) Complete(c *gin.Context, completion Completion) {
 	}
 	request.mu.Unlock()
 
+	// A body over the cap is dropped before Bytes, which would read a body
+	// kept on disk into memory. In memory, Bytes returns the stored slice,
+	// which is never written again, so holding it copies nothing.
 	storage, err := common.GetBodyStorage(c)
+	if err == nil && storage.Size() > request.pipeline.maxRequestBytes {
+		request.pipeline.stats.oversizeDrops.Add(1)
+		request.abandon()
+		return
+	}
 	var body []byte
 	if err == nil {
 		body, err = storage.Bytes()
@@ -378,7 +386,7 @@ func (request *Request) envelope(completion Completion, body []byte, header http
 			Status:            attempt.status,
 			FailureCategory:   failureCategory,
 			ResponseStarted:   attempt.responseStarted,
-			Served:            succeeded && index == len(request.attempts)-1,
+			Served:            succeeded && index == len(request.attempts)-1 && failureCategory == "ok",
 			Response:          Response{Omitted: OmittedNotObserved},
 		})
 	}
