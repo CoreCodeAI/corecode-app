@@ -31,6 +31,7 @@ const PREFIX_VENDORS: [RegExp, GroupVendor][] = [
   [/^claude-/i, { name: CLAUDE_VENDOR, icon: 'Claude.Color' }],
   [/^(gpt-|codex-|o\d)/i, { name: 'OpenAI', icon: 'OpenAI' }],
   [/^grok-/i, { name: 'xAI', icon: 'XAI' }],
+  [/^deepseek-/i, { name: 'DeepSeek', icon: 'DeepSeek.Color' }],
   [/^gemini-/i, { name: 'Google', icon: 'Gemini.Color' }],
   [/^seedance-/i, { name: 'ByteDance', icon: 'ByteDance.Color' }],
   [/^wan-/i, { name: 'Wan', icon: 'Wan' }],

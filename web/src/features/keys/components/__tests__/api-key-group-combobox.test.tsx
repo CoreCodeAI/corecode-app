@@ -244,3 +244,30 @@ describe('API key group combobox Auto effect', () => {
     expect(labels).toEqual(['auto', 'Claude-Max', 'Codex', 'default'])
   })
 })
+
+describe('API key group combobox trigger width', () => {
+  test('lets the trigger shrink so a long description truncates inside the drawer', () => {
+    const description =
+      'DeepSeek 官方 API，0.6 倍率：deepseek-flash 峰谷计价（工作日 9–12、14–18 点为峰时，其余时段半价），deepseek-v4.1-flash 与 deepseek-v4-pro 为固定价'
+    render(
+      <Harness
+        initialValue='deepseek'
+        options={[
+          ...options,
+          {
+            value: 'deepseek',
+            label: 'DeepSeek（官Key）',
+            desc: description,
+            ratio: 0.6,
+          },
+        ]}
+      />
+    )
+
+    // The trigger is a grid item in the form: without min-w-0 its nowrap
+    // description sets its minimum width and it overflows the drawer.
+    const trigger = getTrigger()
+    expect(trigger).toHaveClass('w-full', 'min-w-0')
+    expect(within(trigger).getByText(description)).toHaveClass('truncate')
+  })
+})
