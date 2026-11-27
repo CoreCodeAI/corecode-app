@@ -166,6 +166,21 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 	relayInfo.SetRequestPluginIngress(ingressSteps, ingressRecord)
 
+	// Copy this request and each listed attempt's response for the session
+	// audit. The capture completes once, after the final attempt, and never
+	// changes what the client receives.
+	sessionCapture := service.StartSessionCapture(c)
+	defer func() {
+		status := http.StatusOK
+		if newAPIError != nil {
+			status = newAPIError.StatusCode
+			if c.Writer.Written() {
+				status = c.Writer.Status()
+			}
+		}
+		service.CompleteSessionCapture(c, sessionCapture, relayInfo, relayFormat, status)
+	}()
+
 	defer func() {
 		recovered := recover()
 		resultErr := newAPIError
@@ -244,6 +259,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			break
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
+		service.BeginSessionCaptureAttempt(c, channel)
 
 		// The request plugins' reply checks read the answer this attempt
 		// writes; without a reply instance nothing changes.
@@ -259,6 +275,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			newAPIError = relayHandler(c, relayInfo)
 		}
 		finishReply()
+		if newAPIError == nil {
+			service.EndSessionCaptureAttempt(c, relayInfo.UpstreamModelName, http.StatusOK, "ok")
+		} else {
+			service.EndSessionCaptureAttempt(c, relayInfo.UpstreamModelName, newAPIError.StatusCode, string(newAPIError.GetErrorCode()))
+		}
 
 		if newAPIError == nil {
 			service.MarkRequestPolicySuccess(c, relayInfo.StreamStatus)
@@ -579,6 +600,17 @@ func RelayTask(c *gin.Context) {
 		relayInfo.Action = action
 	}
 
+	// Copy the submission and each listed attempt's response for the session
+	// audit; it completes once, after the retry loop settled.
+	sessionCapture := service.StartSessionCapture(c)
+	defer func() {
+		status := http.StatusOK
+		if taskErr != nil {
+			status = taskErr.StatusCode
+		}
+		service.CompleteSessionCapture(c, sessionCapture, relayInfo, types.RelayFormatTask, status)
+	}()
+
 	if taskErr = relay.ResolveOriginTask(c, relayInfo); taskErr != nil {
 		respondTaskSubmissionError(c, taskErr)
 		return
@@ -736,9 +768,15 @@ func executeTaskSubmissionWith(
 			break
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
+		service.BeginSessionCaptureAttempt(c, channel)
 
 		stage = "submit"
 		result, taskErr = submit(c, relayInfo)
+		if taskErr == nil {
+			service.EndSessionCaptureAttempt(c, relayInfo.UpstreamModelName, http.StatusOK, "ok")
+		} else {
+			service.EndSessionCaptureAttempt(c, relayInfo.UpstreamModelName, taskErr.StatusCode, taskErr.Code)
+		}
 		if requestErr := c.Request.Context().Err(); requestErr != nil {
 			diagnostics.cancelled("after_submit", retryParam.GetRetry()+1)
 			taskErr = service.TaskErrorWrapperLocal(requestErr, "request_cancelled", http.StatusRequestTimeout)
