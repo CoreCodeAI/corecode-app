@@ -26,6 +26,7 @@ import (
 	"github.com/QuantumNous/new-api/pkg/deployment"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
+	"github.com/QuantumNous/new-api/pkg/sessioncapture"
 	"github.com/QuantumNous/new-api/pkg/wsmanager"
 	"github.com/QuantumNous/new-api/relay"
 	"github.com/QuantumNous/new-api/relay/requestplugin"
@@ -187,6 +188,15 @@ func main() {
 	// all currently alive nodes in multi-instance deployments.
 	service.StartSystemInstanceReporter()
 
+	// The session capture pipeline copies audited relay traffic off the
+	// request path; without the deployment's bucket and topic it stays off.
+	if pipeline, captureErr := sessioncapture.NewFromEnv(); captureErr != nil {
+		common.SysError(common.LogText("session capture unavailable: %s", captureErr.Error()))
+	} else if pipeline != nil {
+		sessioncapture.Install(pipeline)
+		common.SysLog(common.LogText("session capture available"))
+	}
+
 	// Wire task polling adaptor factory (breaks service -> relay import cycle).
 	// Must run before the system task runner starts: the async_task_poll handler
 	// calls service.RunTaskPollingOnce, which needs this factory set.
@@ -289,6 +299,9 @@ func main() {
 	}
 	middleware.FlushUserConcurrencyRejections()
 	service.FlushRiskGateCounts()
+	// Drain the queued captures for a bounded time; a lost capture is
+	// accepted, a delayed shutdown is not.
+	sessioncapture.Shutdown(30 * time.Second)
 	// 内存中的看板数据保存入库，避免重启丢失未落库数据 (issue #5679)
 	if common.DataExportEnabled {
 		model.SaveQuotaDataCache()

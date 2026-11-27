@@ -15,6 +15,7 @@ import (
 	common2 "github.com/QuantumNous/new-api/common"
 	appconstant "github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/pkg/sessioncapture"
 	"github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
@@ -616,6 +617,9 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	if gptloadID := resp.Header.Get(common2.GPTLoadRequestIdKey); gptloadID != "" {
 		c.Set(common2.UpstreamGPTLoadRequestIdKey, gptloadID)
 	}
+	// Copy what the handler reads off this response for the session capture;
+	// without an open attempt on a listed channel the tap does nothing.
+	sessioncapture.Tap(c, resp)
 
 	// The transport closes req.Body once it has written it. Closing it here
 	// would abort a body still being written after an early response and
