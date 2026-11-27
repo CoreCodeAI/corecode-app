@@ -307,6 +307,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/site-insights/growth":                                                          accessTokenScopeRule("user:read"),
 	"GET /api/site-insights/activity":                                                        accessTokenScopeRule("user:read"),
 	"GET /api/site-insights/customers":                                                       accessTokenScopeRule("user:read"),
+	"GET /api/site-insights/personas":                                                        accessTokenScopeRule("user:read"),
 	"GET /api/site-insights/experience":                                                      accessTokenScopeRule("user:read"),
 	"GET /api/site-insights/campaigns":                                                       accessTokenScopeRule("user:read"),
 	"GET /api/site-insights/gate":                                                            accessTokenScopeRule("user:read"),
