@@ -355,7 +355,9 @@ func violationExempt(role int) bool {
 // Each category has its own warnings. A lenient refusal only holds its
 // conversation, so the customer can continue it; a second refusal of a held
 // conversation merges into the first and blocks it. A refusal of any other
-// category blocks its conversation at once. Administrators are not recorded.
+// category blocks its conversation at once. Reaching BanStrikes by a lenient
+// category suspends instead of disabling the account, and the operators are
+// told to decide. Administrators are not recorded.
 func applyViolationStrike(setting operation_setting.ViolationGuardSetting, record model.ViolationRecord, now int64) error {
 	user, err := model.GetUserCache(record.UserId)
 	if err != nil {
@@ -373,6 +375,7 @@ func applyViolationStrike(setting operation_setting.ViolationGuardSetting, recor
 	record.Mode = setting.Mode
 
 	mergeSeconds := max(int64(setting.SuspendHours)*3600, minViolationMergeSeconds)
+	banReview := false
 	// A refused client check, or a lenient refusal by an uncounted model, is
 	// recorded and its conversation held, but it neither starts nor joins an
 	// incident.
@@ -416,16 +419,21 @@ func applyViolationStrike(setting operation_setting.ViolationGuardSetting, recor
 			if err != nil {
 				return err
 			}
+			banDue := setting.BanStrikes > 0 && strikes+1 >= int64(setting.BanStrikes)
 			switch {
 			case warn:
 				record.Action = model.ViolationActionWarn
-			case setting.BanStrikes > 0 && strikes+1 >= int64(setting.BanStrikes):
+			case banDue && !lenient:
 				record.Action = model.ViolationActionBan
 			case setting.SuspendHours > 0:
 				record.Action = model.ViolationActionSuspend
 			default:
 				record.Action = model.ViolationActionStrike
 			}
+			// The upstream classifier over-refuses lenient categories, so a
+			// customer who reaches the ban count by them is suspended and an
+			// operator decides on the ban.
+			banReview = banDue && lenient && !warn
 		}
 	}
 	if err := model.CreateViolationRecord(&record); err != nil {
@@ -492,6 +500,9 @@ func applyViolationStrike(setting operation_setting.ViolationGuardSetting, recor
 		if err := model.InvalidateUserTokensCache(record.UserId); err != nil {
 			common.SysError(common.LogText("violation guard: failed to invalidate tokens cache for user %d: %s", record.UserId, err.Error()))
 		}
+	}
+	if record.Action == model.ViolationActionSuspend || record.Action == model.ViolationActionBan || banReview {
+		notifyViolationGuard(setting, user, record, banReview)
 	}
 	return nil
 }

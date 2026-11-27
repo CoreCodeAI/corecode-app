@@ -218,7 +218,7 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 	}
-	if option.Key == "topup_watch_setting.feishu_webhook" || option.Key == "site_insights_digest_setting.feishu_webhook" {
+	if option.Key == "topup_watch_setting.feishu_webhook" || option.Key == "site_insights_digest_setting.feishu_webhook" || option.Key == "violation_guard_setting.feishu_webhook" {
 		if err := service.ValidateFeishuBotWebhook(strings.TrimSpace(option.Value.(string))); err != nil {
 			common.ApiErrorT(c, "Invalid parameters")
 			return

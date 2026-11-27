@@ -228,7 +228,7 @@ func TestViolationStrikePolicy(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
 			useViolationTestDB(t, dialect)
-			for id, role := range map[int]int{1: common.RoleCommonUser, 2: common.RoleCommonUser, 3: common.RoleAdminUser, 4: common.RoleCommonUser, 5: common.RoleCommonUser, 6: common.RoleCommonUser, 7: common.RoleCommonUser, 8: common.RoleCommonUser, 9: common.RoleCommonUser, 10: common.RoleCommonUser, 11: common.RoleCommonUser, 12: common.RoleCommonUser, 13: common.RoleCommonUser, 14: common.RoleCommonUser, 15: common.RoleCommonUser, 16: common.RoleCommonUser, 17: common.RoleCommonUser, 18: common.RoleCommonUser, 19: common.RoleCommonUser, 20: common.RoleRootUser, 21: common.RoleCommonUser} {
+			for id, role := range map[int]int{1: common.RoleCommonUser, 2: common.RoleCommonUser, 3: common.RoleAdminUser, 4: common.RoleCommonUser, 5: common.RoleCommonUser, 6: common.RoleCommonUser, 7: common.RoleCommonUser, 8: common.RoleCommonUser, 9: common.RoleCommonUser, 10: common.RoleCommonUser, 11: common.RoleCommonUser, 12: common.RoleCommonUser, 13: common.RoleCommonUser, 14: common.RoleCommonUser, 15: common.RoleCommonUser, 16: common.RoleCommonUser, 17: common.RoleCommonUser, 18: common.RoleCommonUser, 19: common.RoleCommonUser, 20: common.RoleRootUser, 21: common.RoleCommonUser, 22: common.RoleCommonUser, 23: common.RoleCommonUser, 24: common.RoleCommonUser} {
 				require.NoError(t, model.DB.Create(&model.User{Id: id, Username: fmt.Sprintf("violation-user-%d", id), AffCode: fmt.Sprintf("vg%d", id), Password: "unused", Role: role, Status: common.UserStatusEnabled, Group: "default"}).Error)
 			}
 
@@ -286,10 +286,70 @@ func TestViolationStrikePolicy(t *testing.T) {
 				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 8, Category: "reasoning_extraction", ConversationKey: "second"}, now+90))
 				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 8, Category: "reasoning_extraction", ConversationKey: "third"}, now+3600))
 				// A day later the warnings start over, but the strike still counts
-				// toward disabling the account.
+				// toward the ban count, which a lenient category never completes.
 				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 8, Category: "reasoning_extraction", ConversationKey: "fourth"}, now+day+7200))
 				require.NoError(t, applyViolationStrike(lenient, model.ViolationRecord{UserId: 8, Category: "reasoning_extraction", ConversationKey: "fifth"}, now+day+8400))
-				assert.Equal(t, []string{"enforce:merged", "enforce:suspend", "enforce:warn", "enforce:ban"}, violationActions(t, 8)[8:])
+				assert.Equal(t, []string{"enforce:merged", "enforce:suspend", "enforce:warn", "enforce:suspend"}, violationActions(t, 8)[8:])
+				user, err := model.GetUserById(8, false)
+				require.NoError(t, err)
+				assert.Equal(t, common.UserStatusEnabled, user.Status, "refusals of a lenient category never disable the account")
+			})
+
+			t.Run("the ban is left to the operators for a lenient category, and they are told of each restriction", func(t *testing.T) {
+				resetViolationGuardState()
+				alerting := lenient
+				alerting.SuspendHours = 3
+				alerting.LenientWarnings = 0
+				alerting.FeishuWebhook = "https://open.feishu.cn/open-apis/bot/v2/hook/test"
+				*operation_setting.GetViolationGuardSetting() = alerting
+				var alerts []string
+				previousSend := sendViolationGuardFeishu
+				sendViolationGuardFeishu = func(_, _, text string) error {
+					alerts = append(alerts, text)
+					return nil
+				}
+				t.Cleanup(func() { sendViolationGuardFeishu = previousSend })
+				now := common.GetTimestamp()
+
+				// User 4831 on 2026-11-25: three reasoning_extraction incidents
+				// disabled the account.
+				for i := range 3 {
+					require.NoError(t, applyViolationStrike(alerting, model.ViolationRecord{UserId: 22, Category: "reasoning_extraction", ModelName: "claude-opus-5-5", RequestId: fmt.Sprintf("lenient-%d", i), ConversationKey: fmt.Sprintf("lenient-%d", i), Excerpt: "line one\nline two"}, now+int64(i)*day))
+				}
+				assert.Equal(t, []string{"enforce:suspend", "enforce:suspend", "enforce:suspend"}, violationActions(t, 22))
+				user, err := model.GetUserById(22, false)
+				require.NoError(t, err)
+				assert.Equal(t, common.UserStatusEnabled, user.Status)
+				require.Len(t, alerts, 3)
+				assert.Contains(t, alerts[0], "已暂停 3 小时")
+				assert.NotContains(t, alerts[0], "人工确认")
+				for _, alert := range alerts[1:] {
+					assert.Contains(t, alert, "人工确认是否封禁")
+					assert.Contains(t, alert, "violation-user-22")
+					assert.Contains(t, alert, "claude-opus-5-5")
+					assert.Contains(t, alert, "line one line two")
+				}
+				assert.Contains(t, alerts[2], "lenient-2")
+
+				// A category that is not lenient still disables the account at the
+				// ban count, and says so.
+				alerts = nil
+				for i := range 2 {
+					require.NoError(t, applyViolationStrike(alerting, model.ViolationRecord{UserId: 23, Category: "bio", RequestId: fmt.Sprintf("bio-%d", i), ConversationKey: fmt.Sprintf("bio-%d", i)}, now+int64(i)*day))
+				}
+				assert.Equal(t, []string{"enforce:suspend", "enforce:ban"}, violationActions(t, 23))
+				user, err = model.GetUserById(23, false)
+				require.NoError(t, err)
+				assert.Equal(t, common.UserStatusDisabled, user.Status)
+				require.Len(t, alerts, 2)
+				assert.Contains(t, alerts[1], "已封禁账号")
+
+				// Without a webhook nothing is sent.
+				alerts = nil
+				silent := alerting
+				silent.FeishuWebhook = ""
+				require.NoError(t, applyViolationStrike(silent, model.ViolationRecord{UserId: 24, Category: "bio", ConversationKey: "silent"}, now))
+				assert.Empty(t, alerts)
 			})
 
 			t.Run("new conversations refused minutes after a warning are new incidents", func(t *testing.T) {
