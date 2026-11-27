@@ -24,6 +24,8 @@ const (
 	VendorCodex  = "codex"
 	VendorGrok   = "grok"
 	VendorGemini = "gemini"
+	// VendorDeepSeek is served through DeepSeek's own API keys, not a pool.
+	VendorDeepSeek = "deepseek"
 	// VendorMedia is image and video generation, sold per call through
 	// media suppliers rather than any pool.
 	VendorMedia = "media"
@@ -58,6 +60,7 @@ var vendorPrefixes = []struct{ prefix, vendor string }{
 	{"codex-", VendorCodex},
 	{"grok-", VendorGrok},
 	{"gemini-", VendorGemini},
+	{"deepseek-", VendorDeepSeek},
 }
 
 // VendorPrefixes lists the model name prefixes sold under vendor.

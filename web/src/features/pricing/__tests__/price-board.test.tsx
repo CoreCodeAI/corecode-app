@@ -185,7 +185,7 @@ it('puts Claude first and selects it even when another pool is cheaper', () => {
   expect(radios[0]).toHaveAttribute('aria-checked', 'true')
   expect(within(radios[0]).getByText('Claude Code')).toBeVisible()
   expect(screen.getByText('Claude, made for Claude Code')).toBeVisible()
-  expect(screen.getByText('More models')).toBeVisible()
+  expect(screen.getByText('OpenAI')).toBeVisible()
 })
 
 it('shows a marked-up model at its official price and explains its saving', async () => {

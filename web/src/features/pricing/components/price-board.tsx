@@ -64,7 +64,9 @@ import {
   groupVendor,
   modelVendor,
   orderGroups,
+  vendorSections,
   type GroupVendor,
+  type VendorSection,
 } from '../lib/group-vendors'
 import { getConfiguredGroupRatio } from '../lib/model-helpers'
 import {
@@ -126,7 +128,7 @@ function tokenPricedGroups(models: PricingModel[]): Set<string> {
   return names
 }
 
-/** Groups any listed model is enabled in: Claude first, cheapest first within. */
+/** Groups any listed model is enabled in, ordered by orderGroups. */
 function listGroups(
   models: PricingModel[],
   groupRatio: Record<string, number>,
@@ -143,8 +145,12 @@ function listGroups(
   const vendors = new Map(
     [...names].map((name) => [name, groupVendor(models, name)])
   )
-  const groups = orderGroups([...names], vendors, (name) =>
-    getConfiguredGroupRatio(groupRatio, name)
+  const tokenGroups = tokenPricedGroups(models)
+  const groups = orderGroups(
+    [...names],
+    vendors,
+    (name) => getConfiguredGroupRatio(groupRatio, name),
+    (name) => tokenGroups.has(name)
   )
   return { groups, vendors }
 }
@@ -239,9 +245,12 @@ export function PriceBoard(props: {
   // The group discount compares token prices with the official ones, so a group
   // with none has nothing to claim it for.
   const tokenGroups = tokenPricedGroups(props.models)
-  const isClaude = (name: string) => vendors.get(name)?.name === CLAUDE_VENDOR
-  const claudeGroups = groups.filter(isClaude)
-  const otherGroups = groups.filter((name) => !isClaude(name))
+  const sections = vendorSections(groups, vendors)
+  const sectionTitle = (vendor: GroupVendor | null) => {
+    if (!vendor) return t('More models')
+    if (vendor.name === CLAUDE_VENDOR) return t('Claude, made for Claude Code')
+    return vendor.name
+  }
   const [selected, setSelected] = useState<string | null>(null)
   const [query, setQuery] = useState(props.search)
   const group = selected && groups.includes(selected) ? selected : groups[0]
@@ -506,6 +515,29 @@ export function PriceBoard(props: {
       </button>
     )
   }
+  const renderSection = (
+    section: VendorSection,
+    gridClassName: string,
+    className?: string
+  ) => {
+    const claude = section.vendor?.name === CLAUDE_VENDOR
+    return (
+      <div
+        key={section.groups[0]}
+        className={cn('flex min-w-0 flex-col gap-2', className)}
+      >
+        {sections.length > 1 && (
+          <p className='flex items-center gap-2 text-sm font-semibold'>
+            <VendorIcon icon={section.vendor?.icon} size={18} />
+            {sectionTitle(section.vendor)}
+          </p>
+        )}
+        <div className={gridClassName}>
+          {section.groups.map((name) => renderGroup(name, claude))}
+        </div>
+      </div>
+    )
+  }
   const tierNote = (
     <span className='text-muted-foreground mt-0.5 block text-xs'>
       {t('Base tier; longer contexts cost more')}
@@ -572,18 +604,33 @@ export function PriceBoard(props: {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent alignItemWithTrigger={false}>
-                  <SelectGroup>
-                    {groups.map((name) => (
-                      <SelectItem key={name} value={name}>
-                        {groupText(t, name)}
-                        {showsDiscount(name, groupDiscountAt(name)) && (
-                          <span className='text-primary ml-2 font-mono text-xs'>
-                            {discountLabel(groupDiscountAt(name))}
-                          </span>
-                        )}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
+                  {sections.map((section) => (
+                    <SelectGroup
+                      key={section.groups[0]}
+                      aria-label={sectionTitle(section.vendor)}
+                    >
+                      {/* Not SelectLabel: its Base UI part would join the
+                          select chunk every core page loads. */}
+                      {sections.length > 1 && (
+                        <div
+                          aria-hidden
+                          className='text-muted-foreground px-1.5 py-1 text-xs'
+                        >
+                          {sectionTitle(section.vendor)}
+                        </div>
+                      )}
+                      {section.groups.map((name) => (
+                        <SelectItem key={name} value={name}>
+                          {groupText(t, name)}
+                          {showsDiscount(name, groupDiscountAt(name)) && (
+                            <span className='text-primary ml-2 font-mono text-xs'>
+                              {discountLabel(groupDiscountAt(name))}
+                            </span>
+                          )}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -595,29 +642,33 @@ export function PriceBoard(props: {
               aria-label={t('Group')}
               className='hidden flex-col gap-4 md:flex'
             >
-              {claudeGroups.length > 0 && (
-                <div className='flex flex-col gap-2'>
-                  {otherGroups.length > 0 && (
-                    <p className='flex items-center gap-2 text-sm font-semibold'>
-                      <VendorIcon icon='Claude.Color' size={18} />
-                      {t('Claude, made for Claude Code')}
-                    </p>
-                  )}
-                  <div className='grid gap-3 sm:grid-cols-2'>
-                    {claudeGroups.map((name) => renderGroup(name, true))}
-                  </div>
-                </div>
+              {sections.map((section) =>
+                section.vendor?.name === CLAUDE_VENDOR
+                  ? renderSection(section, 'grid gap-3 sm:grid-cols-2')
+                  : null
               )}
-              {otherGroups.length > 0 && (
-                <div className='flex flex-col gap-2'>
-                  {claudeGroups.length > 0 && (
-                    <p className='text-muted-foreground text-sm font-medium'>
-                      {t('More models')}
-                    </p>
-                  )}
-                  <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
-                    {otherGroups.map((name) => renderGroup(name, false))}
-                  </div>
+              {/* A vendor spans a column per group, so small ones share a row. */}
+              {sections.some(
+                (section) => section.vendor?.name !== CLAUDE_VENDOR
+              ) && (
+                <div className='grid gap-x-3 gap-y-4 sm:grid-cols-2 lg:grid-cols-3'>
+                  {sections.map((section) => {
+                    if (section.vendor?.name === CLAUDE_VENDOR) return null
+                    const count = section.groups.length
+                    return renderSection(
+                      section,
+                      cn(
+                        'grid gap-3',
+                        count > 1 && 'sm:grid-cols-2',
+                        count > 2 && 'lg:grid-cols-3'
+                      ),
+                      cn(
+                        count > 1 && 'sm:col-span-2',
+                        count === 2 && 'lg:col-span-2',
+                        count > 2 && 'lg:col-span-3'
+                      )
+                    )
+                  })}
                 </div>
               )}
             </div>

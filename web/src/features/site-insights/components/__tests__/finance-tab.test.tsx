@@ -461,14 +461,21 @@ describe('usage by vendor on the funds view', () => {
   it('names each vendor with its charge and opens on Claude', () => {
     render(<FinanceTab data={vendors()} />)
     const tabs = screen.getAllByRole('tab').map((tab) => tab.textContent)
-    expect(tabs).toEqual(['Claude$200', 'Codex$30', 'Grok$5', 'Gemini$0'])
+    expect(tabs).toEqual([
+      'Claude$200',
+      'GPT$30',
+      'DeepSeek$0',
+      'Grok$5',
+      'Gemini$0',
+      'Image and video$0',
+    ])
     expect(screen.getByText('Account cost in this range')).toBeInTheDocument()
   })
 
   it('shows only new-api’s charge for a vendor without account cost', async () => {
     render(<FinanceTab data={vendors()} />)
-    fireEvent.click(screen.getByRole('tab', { name: /Codex/ }))
-    expect(await screen.findByText('Codex: new-api usage')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: /GPT/ }))
+    expect(await screen.findByText('GPT: new-api usage')).toBeInTheDocument()
     expect(figure('Requests')).toBe('Requests42')
     expect(figure('Charge per request')).toBe(
       'Charge per request$0.7143(¥0.7143)'
@@ -488,7 +495,7 @@ describe('usage by vendor on the funds view', () => {
       '80%',
     ])
     const bars = screen
-      .getByRole('list', { name: 'Daily Codex charge' })
+      .getByRole('list', { name: 'Daily GPT charge' })
       .querySelectorAll('[tabindex="0"]')
     expect(bars[1].getAttribute('aria-label')).toMatch(
       /new-api charge \$18\.00/
@@ -508,6 +515,27 @@ describe('usage by vendor on the funds view', () => {
     cleanup()
     render(<FinanceTab data={vendors()} />)
     expect(screen.queryByRole('tab', { name: /Other models/ })).toBeNull()
+  })
+
+  it('gives DeepSeek and image and video models their own tabs', async () => {
+    const data = vendors()
+    data.vendor_models = [
+      ...(data.vendor_models ?? []),
+      { vendor: 'deepseek', model: 'deepseek-v4-pro', usd: 3, requests: 6 },
+      { vendor: 'media', model: 'seedance-2.5-720p', usd: 7, requests: 1 },
+    ]
+    render(<FinanceTab data={data} />)
+    expect(screen.getByRole('tab', { name: /DeepSeek/ }).textContent).toBe(
+      'DeepSeek$3'
+    )
+    fireEvent.click(screen.getByRole('tab', { name: /Image and video/ }))
+    expect(
+      await screen.findByText('Image and video: new-api usage')
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('row', { name: /seedance-2\.5-720p/ })
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('row', { name: /deepseek-v4-pro/ })).toBeNull()
   })
 })
 
@@ -547,11 +575,13 @@ describe('new-api’s charge in dollars', () => {
     render(<FinanceTab data={data} />)
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       'Claude$29',
-      'Codex$4',
+      'GPT$4',
+      'DeepSeek$0',
       'Grok$1',
       'Gemini$0',
+      'Image and video$0',
     ])
-    fireEvent.click(screen.getByRole('tab', { name: /Codex/ }))
+    fireEvent.click(screen.getByRole('tab', { name: /GPT/ }))
     expect(figure('new-api charge')).toBe('new-api charge$4.41(¥30)')
     // ¥30 over 42 requests is ¥0.7143, or $0.105.
     expect(figure('Charge per request')).toBe(
