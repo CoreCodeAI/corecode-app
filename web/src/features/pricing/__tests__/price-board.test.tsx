@@ -234,6 +234,44 @@ it('shows a marked-up model at its official price and explains its saving', asyn
   await waitFor(() => expect(screen.queryByText(MARKUP_HELP)).toBeNull())
 })
 
+it('counts the markup every model in a group carries in the group figure', () => {
+  // 「DeepSeek（官Key）」 at 0.6x: each model is priced at about 6.7× the
+  // official price, so ¥1 per $1 at 6.8 is 5.9 of the official price, not 0.9.
+  const deepseek = 'DeepSeek（官Key）'
+  const marked = (name: string, markup: number): PricingModel => ({
+    id: 0,
+    model_name: name,
+    quota_type: 0,
+    model_ratio: 1,
+    completion_ratio: 4,
+    cache_ratio: 0.02,
+    enable_groups: [deepseek],
+    official_price_markup: markup,
+  })
+  render(
+    <PriceBoard
+      models={[
+        opus,
+        marked('deepseek-v4.1-flash', 6.666667),
+        { ...marked('deepseek-v4-pro', 6.818182), model_ratio: 4.5 },
+      ]}
+      groupRatio={{ [GROUP]: 1.5, [deepseek]: 0.6 }}
+      usableGroup={{ [GROUP]: '', [deepseek]: '' }}
+      priceRate={1}
+      usdExchangeRate={6.8}
+      {...boardControls()}
+      onModelClick={vi.fn()}
+    />
+  )
+
+  const card = screen.getByRole('radio', { name: new RegExp(deepseek) })
+  expect(within(card).getByText('5.9 of official price')).toBeVisible()
+  expect(within(card).queryByText('0.9 of official price')).toBeNull()
+  // A Claude group with an unmarked model keeps its plain figure.
+  const claude = screen.getByRole('radio', { name: new RegExp(GROUP) })
+  expect(within(claude).getByText('2.2 of official price')).toBeVisible()
+})
+
 const MARKUP_HELP =
   'This model costs more to serve, so it is priced at 1.5× the official price before the group discount.'
 

@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import type { PricingModel } from '../types'
+import { getBaseUnitPrices } from './unit-prices'
 
 /**
  * What a customer pays relative to the provider's official price, split into
@@ -67,6 +68,24 @@ export function getOfficialPriceMarkup(model: PricingModel): number {
 /** Whether a markup changes any figure at two decimals. */
 export function hasMarkup(markup: number): boolean {
   return Math.round(markup * 100) !== 100
+}
+
+/**
+ * CoreCode fork: the markup a group's own figure ("about N of official
+ * price", the saving banner) is multiplied by. Card prices include each
+ * model's markup, so a group whose every token-priced model is marked up
+ * claims too large a saving without it. The floor is 1 when any of the
+ * group's token-priced models has no markup (a Claude group: Fable at 1.5
+ * beside Opus at 1), else the smallest markup among them, so the group never
+ * claims more than its cheapest-to-us model saves. infra's render-pricing.py
+ * applies the same rule.
+ */
+export function getGroupMarkupFloor(models: PricingModel[]): number {
+  const markups = models
+    .filter((model) => getBaseUnitPrices(model))
+    .map(getOfficialPriceMarkup)
+  if (markups.length === 0 || !markups.every(hasMarkup)) return 1
+  return Math.min(...markups)
 }
 
 /**

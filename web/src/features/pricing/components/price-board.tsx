@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils'
 import { EXCLUDED_GROUPS, QUOTA_TYPE_VALUES } from '../constants'
 import {
   getBillingDiscount,
+  getGroupMarkupFloor,
   getDiscountKind,
   getOfficialPriceMarkup,
   hasMarkup,
@@ -246,15 +247,25 @@ export function PriceBoard(props: {
       usdExchangeRate: props.usdExchangeRate,
       groupRatio,
     }).combined
+  // A group's own figure includes the markup every one of its models
+  // carries; a model's own saving multiplies in its markup instead.
+  const groupDiscountAt = (name: string) =>
+    discountAt(getConfiguredGroupRatio(props.groupRatio, name)) *
+    getGroupMarkupFloor(
+      props.models.filter((model) => (model.enable_groups ?? []).includes(name))
+    )
   const discountLabel = (combined: number) =>
     t('{{tenths}} of official price', {
       tenths: trimNumber(combined * 10, 1),
       percent: `${Math.round(combined * 100)}%`,
     })
   const combined = discountAt(ratio)
+  const groupCombined = group ? groupDiscountAt(group) : combined
   const saving =
-    group && tokenGroups.has(group) && getDiscountKind(combined) === 'discount'
-      ? 1 - combined
+    group &&
+    tokenGroups.has(group) &&
+    getDiscountKind(groupCombined) === 'discount'
+      ? 1 - groupCombined
       : 0
 
   const groupModels = props.models.filter(
@@ -307,8 +318,8 @@ export function PriceBoard(props: {
   const groupYuan = (usd: number) => usd * ratio * props.priceRate
   const officialYuan = (usd: number, markup: number) =>
     (usd / markup) * props.usdExchangeRate
-  const showsDiscount = (name: string, groupCombined: number) =>
-    tokenGroups.has(name) && getDiscountKind(groupCombined) === 'discount'
+  const showsDiscount = (name: string, figure: number) =>
+    tokenGroups.has(name) && getDiscountKind(figure) === 'discount'
   const rawDescription = group ? groupDescription(props.usableGroup[group]) : ''
   const description = rawDescription ? groupText(t, rawDescription) : ''
 
@@ -428,8 +439,8 @@ export function PriceBoard(props: {
   )
   const renderGroup = (name: string, featured: boolean) => {
     const groupRatio = getConfiguredGroupRatio(props.groupRatio, name)
-    const groupCombined = discountAt(groupRatio)
-    const isDiscount = showsDiscount(name, groupCombined)
+    const cardCombined = groupDiscountAt(name)
+    const isDiscount = showsDiscount(name, cardCombined)
     const active = name === group
     const forClaudeCode = /claude code/i.test(
       groupDescription(props.usableGroup[name])
@@ -457,7 +468,7 @@ export function PriceBoard(props: {
           </span>
           {isDiscount && (
             <span className='bg-primary/10 text-primary shrink-0 rounded px-1.5 py-0.5 font-mono text-xs font-semibold'>
-              {discountLabel(groupCombined)}
+              {discountLabel(cardCombined)}
             </span>
           )}
           {active && (
@@ -477,7 +488,7 @@ export function PriceBoard(props: {
             {t('{{ratio}}x ratio', { ratio: trimNumber(groupRatio, 2) })}
             {isDiscount &&
               ` · ${t('About {{discount}}', {
-                discount: discountLabel(groupCombined),
+                discount: discountLabel(cardCombined),
               })}`}
           </span>
         </span>
@@ -530,7 +541,7 @@ export function PriceBoard(props: {
               </span>
               {saving > 0 && (
                 <span className='bg-primary/10 text-primary shrink-0 rounded px-2 py-0.5 font-mono text-sm font-semibold'>
-                  {discountLabel(combined)}
+                  {discountLabel(groupCombined)}
                 </span>
               )}
             </div>
@@ -554,18 +565,9 @@ export function PriceBoard(props: {
                     {groups.map((name) => (
                       <SelectItem key={name} value={name}>
                         {groupText(t, name)}
-                        {showsDiscount(
-                          name,
-                          discountAt(
-                            getConfiguredGroupRatio(props.groupRatio, name)
-                          )
-                        ) && (
+                        {showsDiscount(name, groupDiscountAt(name)) && (
                           <span className='text-primary ml-2 font-mono text-xs'>
-                            {discountLabel(
-                              discountAt(
-                                getConfiguredGroupRatio(props.groupRatio, name)
-                              )
-                            )}
+                            {discountLabel(groupDiscountAt(name))}
                           </span>
                         )}
                       </SelectItem>
