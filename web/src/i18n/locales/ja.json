@@ -7740,6 +7740,8 @@
     "This vendor’s charge as a share of new-api’s charge for every model.": "このベンダーの請求が new-api の全モデル請求に占める割合。",
     "Model markup": "モデル加算",
     "This model costs more to serve, so it is priced at {{markup}}× the official price before the group discount.": "このモデルは提供コストが高いため、グループ割引の前に公式価格の {{markup}} 倍で計算されます。",
+    "Official CNY price": "公式人民元価格",
+    "This model's official price is the vendor's own CNY list price, so this step undoes the dollar conversion.": "このモデルの公式価格はベンダー公式サイトの人民元表示価格なので、このステップでドル換算を打ち消します。",
     "Warning (not counted)": "警告（カウントなし）",
     "Client check (not counted)": "クライアント自身のリクエスト（カウントなし）",
     "View refused message": "拒否されたメッセージを表示",

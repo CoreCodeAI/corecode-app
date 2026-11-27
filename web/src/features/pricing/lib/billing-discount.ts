@@ -71,6 +71,17 @@ export function hasMarkup(markup: number): boolean {
 }
 
 /**
+ * CoreCode fork: whether a model's base price is the vendor's own CNY list
+ * price rather than a USD one. Its markup then equals the site's exchange
+ * rate, so the official figure comes out as that CNY price; the markup undoes
+ * the dollar conversion and is not a surcharge. infra's render-pricing.py
+ * calls the same test cny_listed.
+ */
+export function isCnyListed(markup: number, usdExchangeRate: number): boolean {
+  return Math.abs(markup - usdExchangeRate) < 0.005
+}
+
+/**
  * CoreCode fork: the markup a group's own figure ("about N of official
  * price", the saving banner) is multiplied by. Card prices include each
  * model's markup, so a group whose every token-priced model is marked up

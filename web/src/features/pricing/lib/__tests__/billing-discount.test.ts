@@ -23,6 +23,7 @@ import {
   getBillingDiscount,
   getDiscountKind,
   getGroupMarkupFloor,
+  isCnyListed,
 } from '../billing-discount'
 
 describe('getBillingDiscount', () => {
@@ -83,10 +84,10 @@ describe('getGroupMarkupFloor', () => {
   test('is the smallest markup when every token-priced model carries one', () => {
     expect(
       getGroupMarkupFloor([
-        tokenModel('deepseek-flash', 6.666667),
-        tokenModel('deepseek-v4-pro', 6.818182),
+        tokenModel('deepseek-flash', 6.8),
+        tokenModel('claude-fable-5-2', 7.5),
       ])
-    ).toBe(6.666667)
+    ).toBe(6.8)
   })
 
   test('is 1 for a group with no token-priced model', () => {
@@ -100,5 +101,18 @@ describe('getGroupMarkupFloor', () => {
     } as PricingModel
     expect(getGroupMarkupFloor([image])).toBe(1)
     expect(getGroupMarkupFloor([])).toBe(1)
+  })
+})
+
+describe('isCnyListed', () => {
+  test('is true when the markup is the exchange rate, within half a cent', () => {
+    expect(isCnyListed(6.8, 6.8)).toBe(true)
+    expect(isCnyListed(6.804, 6.8)).toBe(true)
+  })
+
+  test('is false for a real surcharge or a slightly different rate', () => {
+    expect(isCnyListed(1.5, 6.8)).toBe(false)
+    expect(isCnyListed(6.666667, 6.8)).toBe(false)
+    expect(isCnyListed(6.8, 6.9)).toBe(false)
   })
 })

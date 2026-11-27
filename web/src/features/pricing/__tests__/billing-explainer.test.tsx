@@ -84,3 +84,47 @@ it('shows the discount a cheaper recharge earns', async () => {
   expect(screen.getByText('≈ 0.145')).toBeVisible()
   expect(screen.getByText('3.6 of official price')).toBeVisible()
 })
+
+it('explains a CNY-listed model as undoing the dollar conversion, not a surcharge', async () => {
+  const deepseek: PricingModel = {
+    ...sonnet,
+    model_name: 'deepseek-v4.1-flash',
+    completion_ratio: 4,
+    cache_ratio: 0.02,
+    enable_groups: ['DeepSeek'],
+    group_ratio: { DeepSeek: 0.6 },
+    official_price_markup: 6.8,
+  }
+  render(
+    <BillingExplainer models={[deepseek]} priceRate={1} usdExchangeRate={6.8} />
+  )
+  await open()
+
+  expect(screen.getByText('Official CNY price')).toBeVisible()
+  expect(screen.getByText('× 6.8')).toBeVisible()
+  expect(
+    screen.getByText(
+      "This model's official price is the vendor's own CNY list price, so this step undoes the dollar conversion."
+    )
+  ).toBeVisible()
+  expect(screen.queryByText('Model markup')).toBeNull()
+  expect(screen.getByText('6 of official price')).toBeVisible()
+})
+
+it('keeps the surcharge explanation for a marked-up model', async () => {
+  render(
+    <BillingExplainer
+      models={[{ ...sonnet, official_price_markup: 1.5 }]}
+      priceRate={1}
+      usdExchangeRate={6.8}
+    />
+  )
+  await open()
+
+  expect(screen.getByText('Model markup')).toBeVisible()
+  expect(
+    screen.getByText(
+      'This model costs more to serve, so it is priced at 1.5× the official price before the group discount.'
+    )
+  ).toBeVisible()
+})

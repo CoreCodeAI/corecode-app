@@ -46,6 +46,7 @@ import {
   getDiscountKind,
   getOfficialPriceMarkup,
   hasMarkup,
+  isCnyListed,
 } from '../lib/billing-discount'
 import {
   getConfiguredGroupRatio,
@@ -132,6 +133,7 @@ export function BillingExplainer(props: {
     markup: getOfficialPriceMarkup(model),
   })
   const kind = getDiscountKind(discount.combined)
+  const cnyListed = isCnyListed(discount.markup, props.usdExchangeRate)
   const price = trimNumber(props.priceRate, 2)
   const rate = trimNumber(props.usdExchangeRate, 2)
   const verdicts = {
@@ -318,14 +320,20 @@ export function BillingExplainer(props: {
                   <div>
                     <StepLabel
                       index={3}
-                      title={t('Model markup')}
+                      title={
+                        cnyListed ? t('Official CNY price') : t('Model markup')
+                      }
                       value={`× ${trimNumber(discount.markup, 2)}`}
                     />
                     <p className='text-muted-foreground mt-1 pl-7 text-xs text-pretty'>
-                      {t(
-                        'This model costs more to serve, so it is priced at {{markup}}× the official price before the group discount.',
-                        { markup: trimNumber(discount.markup, 2) }
-                      )}
+                      {cnyListed
+                        ? t(
+                            "This model's official price is the vendor's own CNY list price, so this step undoes the dollar conversion."
+                          )
+                        : t(
+                            'This model costs more to serve, so it is priced at {{markup}}× the official price before the group discount.',
+                            { markup: trimNumber(discount.markup, 2) }
+                          )}
                     </p>
                   </div>
                 )}

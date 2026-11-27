@@ -7740,6 +7740,8 @@
     "This vendor’s charge as a share of new-api’s charge for every model.": "This vendor’s charge as a share of new-api’s charge for every model.",
     "Model markup": "Model markup",
     "This model costs more to serve, so it is priced at {{markup}}× the official price before the group discount.": "This model costs more to serve, so it is priced at {{markup}}× the official price before the group discount.",
+    "Official CNY price": "Official CNY price",
+    "This model's official price is the vendor's own CNY list price, so this step undoes the dollar conversion.": "This model's official price is the vendor's own CNY list price, so this step undoes the dollar conversion.",
     "Warning (not counted)": "Warning (not counted)",
     "Client check (not counted)": "Client check (not counted)",
     "View refused message": "View refused message",

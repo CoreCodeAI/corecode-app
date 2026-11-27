@@ -46,6 +46,7 @@ import {
   getDiscountKind,
   getOfficialPriceMarkup,
   hasMarkup,
+  isCnyListed,
 } from '../lib/billing-discount'
 import {
   BOARD_SORTS,
@@ -379,10 +380,14 @@ export function PriceBoard(props: {
           side='top'
           className='text-muted-foreground w-auto max-w-64 p-3 text-xs leading-relaxed'
         >
-          {t(
-            'This model costs more to serve, so it is priced at {{markup}}× the official price before the group discount.',
-            { markup: trimNumber(markup, 2) }
-          )}
+          {isCnyListed(markup, props.usdExchangeRate)
+            ? t(
+                "This model's official price is the vendor's own CNY list price, so this step undoes the dollar conversion."
+              )
+            : t(
+                'This model costs more to serve, so it is priced at {{markup}}× the official price before the group discount.',
+                { markup: trimNumber(markup, 2) }
+              )}
         </PopoverContent>
       </Popover>
     )

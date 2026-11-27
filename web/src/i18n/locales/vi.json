@@ -7740,6 +7740,8 @@
     "This vendor’s charge as a share of new-api’s charge for every model.": "Tỷ trọng phí của nhà cung cấp này trong tổng phí new-api của mọi mô hình.",
     "Model markup": "Phụ phí mô hình",
     "This model costs more to serve, so it is priced at {{markup}}× the official price before the group discount.": "Mô hình này có chi phí phục vụ cao hơn nên được tính theo {{markup}}× giá chính thức trước khi áp dụng chiết khấu nhóm.",
+    "Official CNY price": "Giá chính hãng bằng CNY",
+    "This model's official price is the vendor's own CNY list price, so this step undoes the dollar conversion.": "Giá chính hãng của mô hình này là giá niêm yết bằng CNY của nhà cung cấp, nên bước này bù lại phép quy đổi sang đô la.",
     "Warning (not counted)": "Cảnh báo (không tính)",
     "Client check (not counted)": "Yêu cầu của chính ứng dụng (không tính)",
     "View refused message": "Xem tin nhắn bị từ chối",

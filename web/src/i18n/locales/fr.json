@@ -7740,6 +7740,8 @@
     "This vendor’s charge as a share of new-api’s charge for every model.": "La part de ce fournisseur dans la facturation new-api de tous les modèles.",
     "Model markup": "Majoration du modèle",
     "This model costs more to serve, so it is priced at {{markup}}× the official price before the group discount.": "Ce modèle coûte plus cher à servir : son prix est de {{markup}}× le prix officiel avant la remise du groupe.",
+    "Official CNY price": "Prix officiel en CNY",
+    "This model's official price is the vendor's own CNY list price, so this step undoes the dollar conversion.": "Le prix officiel de ce modèle est le tarif en CNY affiché par le fournisseur ; cette étape annule donc la conversion en dollars.",
     "Warning (not counted)": "Avertissement (non compté)",
     "Client check (not counted)": "Requête du client lui-même (non comptée)",
     "View refused message": "Voir le message refusé",

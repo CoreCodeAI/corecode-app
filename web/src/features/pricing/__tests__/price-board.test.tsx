@@ -235,8 +235,9 @@ it('shows a marked-up model at its official price and explains its saving', asyn
 })
 
 it('counts the markup every model in a group carries in the group figure', () => {
-  // 「DeepSeek（官Key）」 at 0.6x: each model is priced at about 6.7× the
-  // official price, so ¥1 per $1 at 6.8 is 5.9 of the official price, not 0.9.
+  // 「DeepSeek（官Key）」 at 0.6x: each model's base price is DeepSeek's CNY
+  // list price, so its markup is the exchange rate, 6.8, and ¥1 per $1 is
+  // 6 of the official price, not 0.9.
   const deepseek = 'DeepSeek（官Key）'
   const marked = (name: string, markup: number): PricingModel => ({
     id: 0,
@@ -252,8 +253,8 @@ it('counts the markup every model in a group carries in the group figure', () =>
     <PriceBoard
       models={[
         opus,
-        marked('deepseek-v4.1-flash', 6.666667),
-        { ...marked('deepseek-v4-pro', 6.818182), model_ratio: 4.5 },
+        marked('deepseek-v4.1-flash', 6.8),
+        { ...marked('deepseek-v4-pro', 6.8), model_ratio: 4.5 },
       ]}
       groupRatio={{ [GROUP]: 1.5, [deepseek]: 0.6 }}
       usableGroup={{ [GROUP]: '', [deepseek]: '' }}
@@ -265,7 +266,7 @@ it('counts the markup every model in a group carries in the group figure', () =>
   )
 
   const card = screen.getByRole('radio', { name: new RegExp(deepseek) })
-  expect(within(card).getByText('5.9 of official price')).toBeVisible()
+  expect(within(card).getByText('6 of official price')).toBeVisible()
   expect(within(card).queryByText('0.9 of official price')).toBeNull()
   // A Claude group with an unmarked model keeps its plain figure.
   const claude = screen.getByRole('radio', { name: new RegExp(GROUP) })

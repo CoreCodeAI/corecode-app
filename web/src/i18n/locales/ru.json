@@ -7740,6 +7740,8 @@
     "This vendor’s charge as a share of new-api’s charge for every model.": "Доля этого поставщика во всех списаниях new-api.",
     "Model markup": "Наценка модели",
     "This model costs more to serve, so it is priced at {{markup}}× the official price before the group discount.": "Эта модель дороже в обслуживании, поэтому её цена — {{markup}}× от официальной до скидки группы.",
+    "Official CNY price": "Официальная цена в юанях",
+    "This model's official price is the vendor's own CNY list price, so this step undoes the dollar conversion.": "Официальная цена этой модели — прайс поставщика в юанях, поэтому этот шаг отменяет пересчёт в доллары.",
     "Warning (not counted)": "Предупреждение (не засчитано)",
     "Client check (not counted)": "Собственный запрос клиента (не засчитано)",
     "View refused message": "Показать отклонённое сообщение",

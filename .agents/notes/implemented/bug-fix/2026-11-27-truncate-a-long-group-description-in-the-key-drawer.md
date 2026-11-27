@@ -17,9 +17,12 @@ vendor, behind Seedance.
 
 The price board's group figure ("about N of official price" on the group card, in the mobile
 picker, and on the lone-group banner) multiplied only the exchange rate and the group ratio.
-Every model of 「DeepSeek（官Key）」 carries `official_price_markup` (deepseek-flash and
-deepseek-v4.1-flash 6.666667, deepseek-v4-pro 6.818182), so at ratio 0.6 the card claimed
-0.9 of the official price when the truth is about 5.9.
+Every model of 「DeepSeek（官Key）」 carries `official_price_markup` 6.8: its base price is
+DeepSeek's own CNY list price (¥2/¥8, ¥9/¥27) and the site's exchange rate is 6.8, so the
+markup turns the dollar figure back into that CNY price. At ratio 0.6 the card claimed 0.9 of
+the official price when the truth is 6. The billing explainer and the saving chip's popover
+also called that markup a surcharge ("costs more to serve, priced at 6.8× the official
+price"), which is false for a CNY-listed model.
 
 ## Decision
 
@@ -35,6 +38,10 @@ deepseek-v4.1-flash 6.666667, deepseek-v4-pro 6.818182), so at ratio 0.6 the car
   sits beside unmarked Opus, keeps its figure; a group whose every model is marked up never
   claims more than its least marked-up model saves. Each model's own saving chip still
   multiplies in its own markup.
+- `isCnyListed(markup, usdExchangeRate)` (`|markup − rate| < 0.005`, infra's `cny_listed`)
+  marks a markup that only undoes the dollar conversion. The explainer's step 3 then reads
+  "Official CNY price × 6.8" with that explanation, and the price board's saving popover
+  uses the same explanation. A real surcharge such as Fable's 1.5 keeps its text.
 
 ## Alternatives considered
 
@@ -52,6 +59,9 @@ FormItem, an inline-flex `whitespace-nowrap` button, and the production descript
 the trigger at 1012 px in a 400 px drawer without `min-w-0`, and 400 px with it. The combobox
 test asserts the class and the truncating span. The vendor tests cover the DeepSeek group in
 both maps. `getGroupMarkupFloor` is tested on a Claude-like mix (1), an all-marked group
-(6.666667) and a group with no token-priced model (1). A price-board test renders a DeepSeek-like
-group at 0.6x beside a Claude group and expects 5.9 and 2.2 of the official price; against the
-old board it fails, finding no 5.9.
+(the smallest, 6.8 beside 7.5) and a group with no token-priced model (1). A price-board test
+renders a DeepSeek-like group at 0.6x beside a Claude group and expects 6 and 2.2 of the
+official price; against the old board it fails, finding no 6. `isCnyListed` is tested at and
+off the rate. An explainer test renders a CNY-listed model and expects the CNY step and 6 of
+the official price; against the old explainer it fails, and a second test keeps the surcharge
+text for a 1.5 markup.

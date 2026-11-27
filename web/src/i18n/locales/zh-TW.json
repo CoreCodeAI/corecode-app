@@ -7740,6 +7740,8 @@
     "This vendor’s charge as a share of new-api’s charge for every model.": "該廠商消費佔 new-api 全部模型消費的比例。",
     "Model markup": "模型加價",
     "This model costs more to serve, so it is priced at {{markup}}× the official price before the group discount.": "該模型的成本較高，價格先按官方價的 {{markup}} 倍計算，再享受分組折扣。",
+    "Official CNY price": "官網人民幣價",
+    "This model's official price is the vendor's own CNY list price, so this step undoes the dollar conversion.": "這個模型的官方價取廠商官網的人民幣標價，這一步抵消美元換算。",
     "Warning (not counted)": "警告（不計次）",
     "Client check (not counted)": "用戶端自身請求（不計次）",
     "View refused message": "查看被拒絕的訊息",
