@@ -172,3 +172,47 @@ of upstream `main`. A `workflow_dispatch` run of `ci.yml` on the fork passed
 Registry. `deploy` runs only on push. Its key was checked by running
 `scripts/deploy-service.sh` with that key and the tag production runs; it
 printed "already runs …; nothing to restart" and restarted nothing.
+
+## 2026-11-27 sync: upstream main 50a976702
+
+No newer release tag followed `v1.0.0-rc.51`, so this sync merges upstream
+`main` at `50a976702` (16 commits from `6627f0e3f`) for `00056f5db`, the
+password-reset and exact email matching security advisory fix: it compares
+normalized addresses in Go instead of trusting the database collation, sends
+the reset link to the stored address, and consumes the token atomically.
+`go.mod` now requires the new `pluginkit` module that the same commits split
+out of `pkg/jsplugin`.
+
+Conflict resolutions:
+
+- `Dockerfile` and `.github/workflows/ci.yml` take the `pluginkit` module and
+  keep the fork's cache-mount and module-loop structure; `makefile` tests it.
+  `pluginkit/go.mod` needed `go mod tidy` because this repository's `relaykit`
+  already requires `golang.org/x/text` 0.41.0.
+- `reservedRouteNamespaces` moved to `pkg/jsplugin/host.go`. The fork's console
+  pages move with it, and `pluginkit`'s `newAPIReservedKeys` gains their keys;
+  `TestNewAPIReservedKeysMatchHostRoutes` derives both lists.
+- The new 404 for a model no eligible group configures meets
+  `refuseUnservableModel`, which keeps the fork's own 404 copy and Anthropic
+  error shape. Upstream's `TestDistributeModelAvailability` now asserts the
+  status and the shape, not upstream's wording.
+- The fork's price board stays. Upstream's `model_order` is wired into it as
+  the `recommended`, `requests` and `tokens` sorts; upstream's `use-filters.ts`,
+  `pricing-toolbar.tsx` and their tests stay deleted. `sorting.test.ts` keeps
+  the new model-order tests without the deleted hook.
+- `relay/channel/task/jsplugin/adaptor.go` keeps the fork's placeholder
+  encoding, which supports `__dataUrl` and `encoding: "url"` uploads that
+  `pluginkit.EncodeFilePlaceholders` does not, and restores the `moego/base64`
+  import the split removed.
+- Twenty new console keys are translated into all eight locales, Korean
+  included; `bun run lint:check -- --update` drops one fixed baseline entry.
+
+Verification run on the merged tree: `go build ./...` and `go vet ./...` (root
+and all three submodules) pass; `go test ./...` (relay included) and
+`go test ./...` in `relaykit`, `tokenkit` and `pluginkit` pass except
+`TestUpstreamAddressesMaskOnlyConfiguredAddresses` in `service`, which fails
+identically on `origin/main` in a detached worktree. Console: `bun run
+typecheck`, `bun run build` and `src/i18n/locales.test.ts` pass; the full
+`bun run test` reports 96 failing tests in 23 files, the same set as
+`origin/main`, and the new model-order tests pass. The merge is not deployed:
+it lands as a merge commit and production follows the maintainer's merge.
