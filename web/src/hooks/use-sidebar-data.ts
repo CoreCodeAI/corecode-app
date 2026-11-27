@@ -55,6 +55,7 @@ import { useTranslation } from 'react-i18next'
 import type { SidebarBadges, SidebarData } from '@/components/layout/types'
 import { usePendingWithdrawalCount } from '@/features/affiliates/hooks/use-pending-withdrawal-count'
 import { useFeedbackUnreadCount } from '@/features/feedback/hooks/use-feedback-unread'
+import { useOpenFeedbackCount } from '@/features/feedback-admin/hooks/use-open-feedback-count'
 import { useInvoiceReviewCount } from '@/features/invoice/hooks/use-invoice-review-count'
 import { useStatus } from '@/hooks/use-status'
 import { ROLE } from '@/lib/roles'
@@ -69,6 +70,7 @@ import { useAuthStore } from '@/stores/auth-store'
 export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
   const { t } = useTranslation()
   const unreadFeedback = useFeedbackUnreadCount()
+  const openFeedback = useOpenFeedbackCount()
   const invoiceReviews = useInvoiceReviewCount()
   const pendingWithdrawals = usePendingWithdrawalCount()
   const { status } = useStatus()
@@ -204,6 +206,7 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             title: t('Feedback Review'),
             url: '/feedback-admin',
             icon: MessageSquareText,
+            badge: openFeedback > 0 ? String(openFeedback) : undefined,
           },
           {
             title: t('Enterprise Applications'),

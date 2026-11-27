@@ -159,6 +159,16 @@ func MarkFeedbackSeen(userId int, until int64) error {
 		Update("seen_time", gorm.Expr("replied_time")).Error
 }
 
+// CountOpenFeedback counts reports an administrator has not closed: those
+// still pending or being processed.
+func CountOpenFeedback() (int64, error) {
+	var count int64
+	err := DB.Model(&Feedback{}).
+		Where("status IN ?", []string{FeedbackStatusPending, FeedbackStatusProcessing}).
+		Count(&count).Error
+	return count, err
+}
+
 // ListFeedback pages reports, newest first.
 func ListFeedback(filter FeedbackFilter, pageInfo *common.PageInfo) ([]*Feedback, int64, error) {
 	query := DB.Model(&Feedback{})

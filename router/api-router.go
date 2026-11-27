@@ -60,6 +60,7 @@ func SetApiRouter(router *gin.Engine) {
 		feedbackAdminRoute := apiRouter.Group("/feedback/admin", middleware.DisableCache(), middleware.AdminAuth())
 		{
 			feedbackAdminRoute.GET("", controller.GetAllFeedback)
+			feedbackAdminRoute.GET("/open-count", controller.GetOpenFeedbackCount)
 			feedbackAdminRoute.PATCH("/:id", controller.UpdateFeedback)
 		}
 		apiRouter.GET("/invoice/epay/notify", controller.InvoiceEpayNotify)

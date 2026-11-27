@@ -63,12 +63,13 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"POST /api/verify/email":                 accessTokenAnyRule,
 
 	// router/api-router.go: /api/feedback
-	"POST /api/feedback":            accessTokenSessionRule,
-	"GET /api/feedback/self":        accessTokenSessionRule,
-	"GET /api/feedback/self/unread": accessTokenSessionRule,
-	"POST /api/feedback/self/seen":  accessTokenSessionRule,
-	"GET /api/feedback/admin":       accessTokenSessionRule,
-	"PATCH /api/feedback/admin/:id": accessTokenSessionRule,
+	"POST /api/feedback":                 accessTokenSessionRule,
+	"GET /api/feedback/self":             accessTokenSessionRule,
+	"GET /api/feedback/self/unread":      accessTokenSessionRule,
+	"POST /api/feedback/self/seen":       accessTokenSessionRule,
+	"GET /api/feedback/admin":            accessTokenSessionRule,
+	"GET /api/feedback/admin/open-count": accessTokenSessionRule,
+	"PATCH /api/feedback/admin/:id":      accessTokenSessionRule,
 
 	// router/api-router.go: /api/invoice
 	"GET /api/invoice/config":             accessTokenSessionRule,
