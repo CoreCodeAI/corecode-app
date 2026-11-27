@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { describe, expect, it } from 'vitest'
 
 import type { PricingModel } from '../../types'
-import { groupVendor, orderGroups } from '../group-vendors'
+import { groupVendor, orderGroups, vendorSections } from '../group-vendors'
 
 function model(
   model_name: string,
@@ -88,5 +88,71 @@ describe('orderGroups', () => {
     expect(
       orderGroups(['Open', 'Grok', 'GPT', 'CC'], vendors, (g) => ratios[g])
     ).toEqual(['CC', 'Open', 'GPT', 'Grok'])
+  })
+})
+
+describe('orderGroups by vendor', () => {
+  // The live board on 2026-11-27, which interleaved GPT with DeepSeek by
+  // ratio; the image group is made cheaper here to test the per-call rule.
+  const openai = { name: 'OpenAI', icon: 'OpenAI' }
+  const vendors = new Map([
+    ['CC', { name: 'Anthropic', icon: 'Claude.Color' }],
+    ['GPT 福利', openai],
+    ['DeepSeek（官Key）', { name: 'DeepSeek', icon: 'DeepSeek.Color' }],
+    ['GPT', openai],
+    ['GPT（UltraFast）', openai],
+    ['Seedance视频', { name: 'ByteDance', icon: 'ByteDance.Color' }],
+    ['GPT生图1-4K', openai],
+    ['Grok', { name: 'xAI', icon: 'XAI' }],
+    ['root', null],
+  ])
+  const ratios: Record<string, number> = {
+    CC: 1.9,
+    'GPT 福利': 0.5,
+    'DeepSeek（官Key）': 0.6,
+    GPT: 0.7,
+    'GPT（UltraFast）': 1,
+    Seedance视频: 1,
+    'GPT生图1-4K': 0.9,
+    Grok: 1.2,
+    root: 0.1,
+  }
+  const perCall = new Set(['Seedance视频', 'GPT生图1-4K'])
+  const ordered = orderGroups(
+    [...vendors.keys()].reverse(),
+    vendors,
+    (g) => ratios[g],
+    (g) => !perCall.has(g)
+  )
+
+  // The image group is cheaper than UltraFast yet follows it, priced per call.
+  it('keeps each vendor together, cheapest vendor first', () => {
+    expect(ordered).toEqual([
+      'CC',
+      'GPT 福利',
+      'GPT',
+      'GPT（UltraFast）',
+      'GPT生图1-4K',
+      'DeepSeek（官Key）',
+      'Seedance视频',
+      'Grok',
+      'root',
+    ])
+  })
+
+  it('splits the order into one section per vendor', () => {
+    expect(
+      vendorSections(ordered, vendors).map((section) => [
+        section.vendor?.name ?? null,
+        section.groups.length,
+      ])
+    ).toEqual([
+      ['Anthropic', 1],
+      ['OpenAI', 4],
+      ['DeepSeek', 1],
+      ['ByteDance', 1],
+      ['xAI', 1],
+      [null, 1],
+    ])
   })
 })

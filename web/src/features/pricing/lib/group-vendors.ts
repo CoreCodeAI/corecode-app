@@ -77,14 +77,61 @@ export function groupVendor(
   return best?.vendor ?? null
 }
 
-/** Claude groups first, then the rest; cheapest first within each. */
+/**
+ * Claude groups first, then each other vendor's groups together: the vendor
+ * whose cheapest group is cheapest first. Within a vendor, groups priced by
+ * the token come before those priced per call (images, video), each cheapest
+ * first. Groups no vendor claims come last.
+ */
 export function orderGroups(
   groups: string[],
   vendors: Map<string, GroupVendor | null>,
-  ratio: (group: string) => number
+  ratio: (group: string) => number,
+  tokenPriced: (group: string) => boolean = () => true
 ): string[] {
-  const isClaude = (group: string) => vendors.get(group)?.name === CLAUDE_VENDOR
+  const vendorOf = (group: string) => vendors.get(group)?.name
+  const cheapest = new Map<string, number>()
+  for (const group of groups) {
+    const vendor = vendorOf(group)
+    if (vendor === undefined) continue
+    cheapest.set(
+      vendor,
+      Math.min(cheapest.get(vendor) ?? Infinity, ratio(group))
+    )
+  }
+  // Ratios are never negative, so -1 puts Claude ahead of every vendor.
+  const rank = (group: string) => {
+    const vendor = vendorOf(group)
+    if (vendor === CLAUDE_VENDOR) return -1
+    if (vendor === undefined) return Number.MAX_VALUE
+    return cheapest.get(vendor) ?? Number.MAX_VALUE
+  }
   return [...groups].sort(
-    (a, b) => Number(isClaude(b)) - Number(isClaude(a)) || ratio(a) - ratio(b)
+    (a, b) =>
+      rank(a) - rank(b) ||
+      (vendorOf(a) ?? '').localeCompare(vendorOf(b) ?? '') ||
+      Number(tokenPriced(b)) - Number(tokenPriced(a)) ||
+      ratio(a) - ratio(b)
   )
+}
+
+export interface VendorSection {
+  /** Null for groups no vendor claims. */
+  vendor: GroupVendor | null
+  groups: string[]
+}
+
+/** Ordered groups split into runs of one vendor each, keeping their order. */
+export function vendorSections(
+  groups: string[],
+  vendors: Map<string, GroupVendor | null>
+): VendorSection[] {
+  const sections: VendorSection[] = []
+  for (const group of groups) {
+    const vendor = vendors.get(group) ?? null
+    const last = sections.at(-1)
+    if (last && last.vendor?.name === vendor?.name) last.groups.push(group)
+    else sections.push({ vendor, groups: [group] })
+  }
+  return sections
 }

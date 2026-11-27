@@ -1337,6 +1337,9 @@ func TestMediaVendorMatchesRealModels(t *testing.T) {
 	}
 	assert.Equal(t, VendorCodex, ModelVendor("gpt-6"))
 	assert.Equal(t, VendorGrok, ModelVendor("grok-4.7"))
+	for _, name := range []string{"deepseek-v4-pro", "deepseek-v4.1-flash", "deepseek-flash"} {
+		assert.Equal(t, VendorDeepSeek, ModelVendor(name), name)
+	}
 }
 
 // Uncached input is prompt tokens less the cache only where billing counts

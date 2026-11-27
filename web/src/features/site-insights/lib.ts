@@ -749,14 +749,15 @@ export const OTHER_COLOR: SeriesColor =
   'color-mix(in oklab, var(--muted-foreground) 45%, transparent)'
 
 /**
- * Each vendor keeps its color whatever else is on the chart. media is image
- * and video models, sold apart from the pool's vendors.
+ * Each vendor keeps its color whatever else is on the chart. DeepSeek and
+ * media (image and video models) are sold apart from the pool's vendors.
  */
 export const VENDOR_ORDER = [
   'claude',
   'codex',
   'grok',
   'gemini',
+  'deepseek',
   'media',
   'other',
 ]
@@ -765,9 +766,13 @@ export const VENDOR_ORDER = [
 // by lightness, since Grok and media rarely share a chart.
 const MEDIA_COLOR: SeriesColor =
   'color-mix(in oklab, var(--series-3) 60%, var(--foreground))'
+// Likewise a deeper step of the fourth, told from Gemini by lightness.
+const DEEPSEEK_COLOR: SeriesColor =
+  'color-mix(in oklab, var(--series-4) 60%, var(--foreground))'
 
 export function vendorColor(vendor: string): SeriesColor {
   if (vendor === 'media') return MEDIA_COLOR
+  if (vendor === 'deepseek') return DEEPSEEK_COLOR
   const index = VENDOR_ORDER.indexOf(vendor)
   return index >= 0 && index < SERIES_COLORS.length
     ? SERIES_COLORS[index]
@@ -841,6 +846,7 @@ export function useVendorName() {
     codex: 'GPT',
     grok: 'Grok',
     gemini: 'Gemini',
+    deepseek: 'DeepSeek',
     media: t('Image and video'),
     other: t('Other models'),
   }
@@ -873,6 +879,7 @@ export const MARGIN_VENDORS = [
   'codex',
   'grok',
   'gemini',
+  'deepseek',
   'media',
   'other',
 ] as const

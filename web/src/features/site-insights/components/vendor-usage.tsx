@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { beforeLogs } from '../analysis'
-import { useChargeFormat, useInsightsFormat } from '../lib'
+import { useChargeFormat, useInsightsFormat, useVendorName } from '../lib'
 import { usePartialDays } from '../partial-days'
 import type { FinanceInsights } from '../types'
 import { ChargeValue, ClaudeEconomics, Figure } from './claude-economics'
@@ -32,12 +32,7 @@ import { BarSeries, Panel, SimpleTable } from './shared'
  * The vendors the server splits new-api's charge by (model.ModelVendor),
  * in the order shown. Only Claude has accounts whose cost is counted.
  */
-const VENDORS = [
-  { key: 'claude', label: 'Claude' },
-  { key: 'codex', label: 'Codex' },
-  { key: 'grok', label: 'Grok' },
-  { key: 'gemini', label: 'Gemini' },
-] as const
+const VENDORS = ['claude', 'codex', 'deepseek', 'grok', 'gemini', 'media']
 
 const OTHER = 'other'
 
@@ -46,6 +41,7 @@ export function VendorTabs(props: { data: FinanceInsights | undefined }) {
   const { t } = useTranslation()
   const fmt = useInsightsFormat()
   const charge = useChargeFormat(props.data)
+  const name = useVendorName()
   const [vendor, setVendor] = useState<string>('claude')
   const models = props.data?.vendor_models ?? []
   const totals = new Map<string, { usd: number; requests: number }>()
@@ -58,10 +54,8 @@ export function VendorTabs(props: { data: FinanceInsights | undefined }) {
   // An unrecognised model gets a tab only when it was charged for.
   const tabs = [
     ...VENDORS,
-    ...((totals.get(OTHER)?.usd ?? 0) > 0
-      ? [{ key: OTHER, label: t('Other models') }]
-      : []),
-  ]
+    ...((totals.get(OTHER)?.usd ?? 0) > 0 ? [OTHER] : []),
+  ].map((key) => ({ key, label: name(key) }))
 
   return (
     <Tabs
@@ -136,7 +130,7 @@ function VendorCharge(props: {
     <Panel
       title={t('{{vendor}}: new-api usage', { vendor: props.label })}
       help={t(
-        'What new-api deducted for this vendor’s models at its own ratios, root and staff included, gifted and paid balance alike. Customers pay ¥1 for each new-api dollar, so it is shown in dollars at the site’s USD exchange rate, with the yuan beside it. A model belongs to a vendor by its name: claude-, gpt- and codex-, grok-, gemini-. No account cost is counted for this vendor yet.'
+        'What new-api deducted for this vendor’s models at its own ratios, root and staff included, gifted and paid balance alike. Customers pay ¥1 for each new-api dollar, so it is shown in dollars at the site’s USD exchange rate, with the yuan beside it. A model belongs to a vendor by its name: claude-, gpt- and codex-, deepseek-, grok-, gemini-; image and video models, such as gpt-image-, seedance- and veo-, are their own tab. No account cost is counted for this vendor yet.'
       )}
     >
       <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
