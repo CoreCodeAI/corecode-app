@@ -304,6 +304,13 @@ func GetCustomerInsights(c *gin.Context) {
 	serveInsights(c, model.InsightsMaxDays, settledRead("customers", model.GetCustomerInsights))
 }
 
+// GetPersonaInsights answers the personas view: the customer personas kept in
+// the admin remarks, with each customer's spend over the last 30 days. It reads
+// the remarks live, so it is not kept as a settled answer.
+func GetPersonaInsights(c *gin.Context) {
+	serveInsights(c, model.InsightsMaxDays, model.GetPersonaInsights)
+}
+
 // GetExperienceInsights answers the experience view: the money customers spent
 // on refused, failed and misbilled requests, and the reports and replies that
 // followed. It reads up to InsightsMaxLogDays; the request logs it scans are

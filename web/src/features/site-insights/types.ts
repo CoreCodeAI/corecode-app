@@ -2117,3 +2117,50 @@ export type UpstreamRunway = {
   accounts: UpstreamAccount[]
   pools: UpstreamPool[]
 }
+
+/**
+ * A customer with a persona block in the admin remark. Spend is quota dollars
+ * over the 30 days that end at the page's end: a dollar is ¥1 to the customer.
+ */
+export type PersonaCustomer = {
+  user_id: number
+  username: string
+  display_name: string
+  /** One of the block's sectors, or `unidentified`. */
+  sector: string
+  detail: string
+  tags: string[]
+  /** The human note before the block. */
+  remark: string
+  spend_usd: number
+  /** Unix seconds of the last hour with a request; 0 when there was none. */
+  last_active: number
+  /** The MM-DD the block was written. */
+  persona_date: string
+}
+
+/** One sector's customers, and their share of the persona customers' spend. */
+export type PersonaSector = {
+  sector: string
+  customers: number
+  spend_usd: number
+  share: number
+}
+
+/** A customer at or above the whale floor who has no persona block. */
+export type PersonaWhale = {
+  user_id: number
+  username: string
+  spend_usd: number
+  last_active: number
+}
+
+/** The personas view. */
+export type PersonaInsights = {
+  window_days: number
+  total_spend_usd: number
+  sectors: PersonaSector[]
+  customers: PersonaCustomer[]
+  whale_floor_usd: number
+  whales: PersonaWhale[]
+}
