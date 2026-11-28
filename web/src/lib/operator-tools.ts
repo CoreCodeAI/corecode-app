@@ -19,11 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 
 // A decoy for scripts that mine this bundle for a way in. The credentials open
 // nothing and the routes do not exist; the server logs every request that uses
-// one (middleware/decoy.go), and keeps the values in DecoyCredentials. Only a
-// browser whose localStorage holds OPERATOR_FLAG = '1' sends them, which no
-// customer's does.
-const OPERATOR_FLAG = 'cc_operator_tools'
-
+// one (middleware/decoy.go), and keeps the values in DecoyCredentials. The
+// request interceptor loads this chunk only when localStorage holds
+// cc_operator_tools = '1', which no customer's browser does, so it costs no
+// page anything; a script that fetches every chunk still finds it.
 const operatorTools = {
   userId: 1,
   accessToken: 'nap_o3Ty9RaSZ1oFc9vjLYPExhw3wucJcCgl9YvJiIWmxbO',
@@ -42,13 +41,7 @@ declare global {
   }
 }
 
-/** The operator headers, or null in every customer's browser. */
-export function operatorHeaders(): Record<string, string> | null {
-  try {
-    if (window.localStorage.getItem(OPERATOR_FLAG) !== '1') return null
-  } catch {
-    return null
-  }
+export function operatorHeaders(): Record<string, string> {
   // Publishing the whole object keeps the minifier from dropping any field.
   window.__operatorTools = operatorTools
   return {

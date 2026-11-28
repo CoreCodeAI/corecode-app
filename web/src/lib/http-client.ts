@@ -27,7 +27,6 @@ import {
 } from '@/lib/auth-session'
 import { takeBootData } from '@/lib/boot-requests'
 import { handleServerError } from '@/lib/handle-server-error'
-import { operatorHeaders } from '@/lib/operator-tools'
 import {
   getServerErrorMessage,
   safeServerErrorMessage,
@@ -192,6 +191,15 @@ api.interceptors.response.use(
   }
 )
 
+// The decoy in lib/operator-tools.ts, behind a flag no customer sets.
+function operatorToolsOn(): boolean {
+  try {
+    return window.localStorage.getItem('cc_operator_tools') === '1'
+  } catch {
+    return false
+  }
+}
+
 api.interceptors.request.use(async (config) => {
   if (config.singleUseAuthorization || config.headers.has('X-Security-Proof')) {
     // Refresh before spending a proof/flow, never by replaying its request.
@@ -206,9 +214,9 @@ api.interceptors.request.use(async (config) => {
     }
     return config
   }
-  const operator = operatorHeaders()
-  if (operator) {
-    for (const [name, value] of Object.entries(operator)) {
+  if (operatorToolsOn()) {
+    const { operatorHeaders } = await import('@/lib/operator-tools')
+    for (const [name, value] of Object.entries(operatorHeaders())) {
       config.headers.set(name, value)
     }
     return config
