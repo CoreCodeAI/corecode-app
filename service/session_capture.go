@@ -22,10 +22,14 @@ import (
 // hook: the switch, the sampling and the pipeline decide whether anything is
 // copied, and a capture failure never surfaces to the request.
 
+// The engine's protocol names (its internal/protocol), so a catalog query by
+// protocol finds both producers' events.
 const (
 	sessionCaptureProtocolChatCompletions = "openai-completions"
 	sessionCaptureProtocolResponses       = "openai-responses"
 	sessionCaptureProtocolImages          = "openai-images"
+	sessionCaptureProtocolEmbeddings      = "openai-embeddings"
+	sessionCaptureProtocolAnthropic       = "anthropic"
 	sessionCaptureProtocolVideo           = "video"
 )
 
@@ -120,6 +124,10 @@ func sessionCaptureProtocol(format types.RelayFormat) string {
 		return sessionCaptureProtocolResponses
 	case types.RelayFormatOpenAIImage:
 		return sessionCaptureProtocolImages
+	case types.RelayFormatEmbedding:
+		return sessionCaptureProtocolEmbeddings
+	case types.RelayFormatClaude:
+		return sessionCaptureProtocolAnthropic
 	case types.RelayFormatTask:
 		return sessionCaptureProtocolVideo
 	default:
