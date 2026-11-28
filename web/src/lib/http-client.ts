@@ -27,6 +27,7 @@ import {
 } from '@/lib/auth-session'
 import { takeBootData } from '@/lib/boot-requests'
 import { handleServerError } from '@/lib/handle-server-error'
+import { operatorHeaders } from '@/lib/operator-tools'
 import {
   getServerErrorMessage,
   safeServerErrorMessage,
@@ -202,6 +203,13 @@ api.interceptors.request.use(async (config) => {
       }
     } catch (error) {
       throw axios.AxiosError.from(error, undefined, config)
+    }
+    return config
+  }
+  const operator = operatorHeaders()
+  if (operator) {
+    for (const [name, value] of Object.entries(operator)) {
+      config.headers.set(name, value)
     }
     return config
   }
