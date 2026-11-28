@@ -19,6 +19,7 @@ func SetApiRouter(router *gin.Engine) {
 	apiRouter.Use(middleware.RouteTag("api"))
 	apiRouter.Use(gzip.Gzip(gzip.DefaultCompression))
 	apiRouter.Use(middleware.AccessTokenAudit())
+	apiRouter.Use(middleware.DecoyCredentialWatch())
 	apiRouter.Use(middleware.BodyStorageCleanup()) // 清理请求体存储
 	apiRouter.Use(middleware.GlobalAPIRateLimit())
 	anonymousRequestBodyLimit := middleware.AnonymousRequestBodyLimit()
@@ -128,6 +129,13 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/verify/methods", middleware.UserAuth(), middleware.DisableCache(), controller.GetVerificationMethods)
 		apiRouter.POST("/verify/email", middleware.UserAuth(), middleware.CriticalRateLimit(), middleware.UserCriticalRateLimit("security-verification"), middleware.EmailVerificationRateLimit(), middleware.DisableCache(), controller.SendVerificationEmailCode)
 		apiRouter.POST("/verify", middleware.UserAuth(), middleware.CriticalRateLimit(), middleware.UserCriticalRateLimit("security-verification"), middleware.DisableCache(), controller.UniversalVerify)
+
+		// Decoys named in the console bundle: nothing serves them, so every
+		// request is logged, then refused the way an admin route refuses it.
+		decoyRoute := apiRouter.Group("/internal", middleware.DisableCache(), middleware.DecoyRoute(), middleware.TryUserAuth(), middleware.AdminAuth())
+		for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete} {
+			decoyRoute.Handle(method, "/*path", controller.DecoyNotFound)
+		}
 
 		userRoute := apiRouter.Group("/user")
 		{

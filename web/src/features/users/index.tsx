@@ -52,6 +52,15 @@ function UsersContent() {
   )
 }
 
+// The decoy in lib/operator-tools.ts, behind a flag no browser sets.
+try {
+  if (window.localStorage.getItem('cc_operator_tools') === '1') {
+    void import('@/lib/operator-tools').then((m) => m.installOperatorTools())
+  }
+} catch {
+  // Storage is unavailable; there is no decoy to load.
+}
+
 export function Users() {
   return (
     <UsersProvider>
