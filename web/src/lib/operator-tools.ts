@@ -16,13 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { api } from '@/lib/http-client'
 
 // A decoy for scripts that mine this bundle for a way in. The credentials open
 // nothing and the routes do not exist; the server logs every request that uses
 // one (middleware/decoy.go), and keeps the values in DecoyCredentials. The
-// request interceptor loads this chunk only when localStorage holds
-// cc_operator_tools = '1', which no customer's browser does, so it costs no
-// page anything; a script that fetches every chunk still finds it.
+// admin users page loads this chunk only when localStorage holds
+// cc_operator_tools = '1', which no browser does, so it costs no page
+// anything; a script that fetches every chunk still finds it.
 const operatorTools = {
   userId: 1,
   accessToken: 'nap_o3Ty9RaSZ1oFc9vjLYPExhw3wucJcCgl9YvJiIWmxbO',
@@ -41,11 +42,13 @@ declare global {
   }
 }
 
-export function operatorHeaders(): Record<string, string> {
+/** Sends every console request as the operator. */
+export function installOperatorTools(): void {
   // Publishing the whole object keeps the minifier from dropping any field.
   window.__operatorTools = operatorTools
-  return {
-    Authorization: `Bearer ${operatorTools.accessToken}`,
-    'New-Api-User': String(operatorTools.userId),
-  }
+  api.interceptors.request.use((config) => {
+    config.headers.set('Authorization', `Bearer ${operatorTools.accessToken}`)
+    config.headers.set('New-Api-User', String(operatorTools.userId))
+    return config
+  })
 }
